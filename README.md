@@ -1,2 +1,2 @@
-# TF_PV
+# TFPV
 DESI Tully Fisher Peculiar Velocity
