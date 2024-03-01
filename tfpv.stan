@@ -38,7 +38,7 @@ transformed parameters {
 model {
   V_0p4R26 ~ normal(V_fiber(V,epsilon), V_0p4R26_err);
   // G_MAG_SB26 ~ normal(mu + aG + bG*logV, G_MAG_SB26_ERR);
-  mR ~ normal(mu + aR + bR*logV, sigR);
+  mR ~ normal(mu + bR + aR*logV, sigR);
   // Z_MAG_SB26 ~ normal(mu + aZ + bZ*logV, Z_MAG_SB26_ERR);
   // G_MAG_SB26 ~ normal(mu + aG + bG*logV, G_MAG_SB26_ERR);
   R_MAG_SB26 ~ normal(mR, R_MAG_SB26_ERR);
