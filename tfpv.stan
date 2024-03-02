@@ -31,11 +31,9 @@ parameters {
   // real<lower=0> sigZ
   vector[N] mR;
 }
-transformed parameters {
+model {
   vector[N] logV;
   logV = log10(V);
-}
-model {
   V_0p4R26 ~ normal(V_fiber(V,epsilon), V_0p4R26_err);
   // G_MAG_SB26 ~ normal(mu + aG + bG*logV, G_MAG_SB26_ERR);
   mR ~ normal(mu + bR + aR*logV, sigR);
