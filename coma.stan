@@ -10,10 +10,10 @@ data {
   vector[N] R_MAG_SB26;
   vector[N] R_MAG_SB26_ERR;
 }
-  transformed data {
-    vector<lower=-1, upper=1>[2] cor;
-    cor[1]=0; cor[2]=0;
-  }
+  // transformed data {
+  //   vector<lower=-1, upper=1>[2] cor;
+  //   cor[1]=0; cor[2]=0;
+  // }
 parameters {
   vector[N] epsilon;
   vector[N] logL;
@@ -24,7 +24,7 @@ parameters {
 // parameters that describe each distribution
   vector[2] aR;
   vector[2] bR;
-  // vector<lower=-1, upper=1>[2] cor;
+  vector<lower=-1, upper=1>[2] cor;
   vector<lower=0>[2] sigR;
   vector<lower=0>[2] siglogL;
 }
@@ -40,7 +40,7 @@ model {
   vector[N] L;
 
   int angle_error = 0;
-  int LisV = 1;
+  int LisV = 0;
 
   lnpDs[1]=log(1-pD);
   lnpDs[2]=log(pD);
