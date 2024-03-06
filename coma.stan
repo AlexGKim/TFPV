@@ -10,10 +10,10 @@ data {
   vector[N] R_MAG_SB26;
   vector[N] R_MAG_SB26_ERR;
 }
-  transformed data {
-    vector<lower=-1, upper=1>[2] cor;
-    cor[1]=0; cor[2]=0;
-  }
+  // transformed data {
+  //   vector<lower=-1, upper=1>[2] cor;
+  //   cor[1]=0; cor[2]=0;
+  // }
 parameters {
   vector[N] epsilon;
   vector[N] logL;
@@ -40,7 +40,7 @@ model {
   vector[N] L;
 
   int angle_error = 0;
-  int LisV = 1;
+  int LisV = 0;
 
   lnpDs[1]=log(1-pD);
   lnpDs[2]=log(pD);
@@ -63,16 +63,19 @@ model {
   } else
   {
     for (n in 1:N){
-      RV_data[1]=Rmag[n];
-      RV_data[2]=logVr[n];
+      // RV_data[1]=Rmag[n];
+      // RV_data[2]=logVr[n];
       for (m in 1:2){
-        cov[1,1]=sigR[m]*sigR[m];
-        cov[2,2]=siglogL[m]*siglogL[m];
-        cov[1,2]=cor[m]*sigR[m]*siglogL[m];
-        cov[2,1]=cov[1,2];
-        RV_model[1]=bR[m] + aR[m]*logL[n];
-        RV_model[2]=logL[n];
-        logexp[m] =  lnpDs[m] + multi_normal_lpdf(RV_data | RV_model, cov);
+        // cov[1,1]=sigR[m]*sigR[m];
+        // cov[2,2]=siglogL[m]*siglogL[m];
+        // cov[1,2]=cor[m]*sigR[m]*siglogL[m];
+        // cov[2,1]=cov[1,2];
+        // RV_model[1]=bR[m] + aR[m]*logL[n];
+        // RV_model[2]=logL[n];
+        // logexp[m] =  lnpDs[m] + multi_normal_lpdf(RV_data | RV_model, cov);
+        logexp[m] =  lnpDs[m] + cauchy_lpdf(Rmag[n] |  bR[m] + aR[m]*logL[n], sigR[m])
+                        + cauchy_lpdf(logVr[n] |  logL[n], siglogL[m]) ;
+
       }
       target += log_sum_exp(logexp);
     }
