@@ -112,4 +112,6 @@ if __name__ == '__main__':
     # _json()
     # coma_json()
     #segev_json()
-    segev_plot()
+    for i in range(1,11):
+        segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
+    # segev_plot()
