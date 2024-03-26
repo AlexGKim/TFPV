@@ -6,6 +6,7 @@ import  matplotlib.pyplot as plt
 
 fn = "SGA-2020_iron_Vrot"
 fn_sga = "SGA-2020_fuji_Vrot"
+fn_segev2 = "SGA_TFR_simtest_20240307"
 
 def coma_json():
     fits=fitsio.FITS(fn_sga+".fits")
@@ -70,6 +71,26 @@ def to_json():
     with open(fn+".json", 'w') as f:
         f.write(json_object)
 
+def segev_json(fn='SGA_TFR_simtest_20240307'):
+
+
+
+    fits=fitsio.FITS(fn+".fits")
+    data=fits[1].read()
+
+
+    data_dic=dict()
+    for k in data.dtype.names:
+        data_dic[k]=data[k].tolist()
+
+    data_dic['N'] = len(data_dic['R_MAG_SB26'])
+
+
+    json_object = json.dumps(data_dic)
+
+    with open(fn+".json", 'w') as f:
+        f.write(json_object)
+
 def plot():
     fits=fitsio.FITS(fn+".fits")
     data=fits[1].read()
@@ -78,5 +99,19 @@ def plot():
     plt.ylabel('R_MAG_SB26')
     plt.show()
 
+def segev_plot(fn = fn_segev2):
+    fits=fitsio.FITS(fn+".fits")
+    data=fits[1].read()
+    plt.errorbar(numpy.log10(data['V_0p33R26']),data['R_MAG_SB26'],yerr=data['R_MAG_SB26_ERR'], xerr=data['V_0p33R26_err']/data['V_0p33R26']/numpy.log(10),fmt='.')
+    plt.xlabel('V_0p33R26')
+    plt.ylabel('R_MAG_SB26')
+    plt.ylim((19,12))
+    plt.show()
+
 if __name__ == '__main__':
-    coma_json()
+    # _json()
+    # coma_json()
+    #segev_json()
+    for i in range(1,11):
+        segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
+    # segev_plot()
