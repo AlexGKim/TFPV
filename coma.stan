@@ -18,12 +18,12 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=4;
+  int dispersion_case=1;
 
   int pure = 1;
   int angle_error = 0;
 
-  real dwarf_mag=-17.;
+  real dwarf_mag=-17. + 34.7;
 
 }
 
@@ -81,8 +81,8 @@ model {
     V_0p33R26 ~ normal(VtoUse, V_0p33R26_err);
   } else
   {
-    real lnpDs1 = log(1-pD);
-    real lnpDs2 = log(pD);
+    vector[N] lnpDs1 = log(1-pD);
+    vector[N] lnpDs2 = log(pD);
     vector[N] VtoUse2 = pow(10, costh2*logL2  + (random_realization2)*sinth2 );
     if (angle_error == 1){
         VtoUse2 = V_fiber(VtoUse2,epsilon);
@@ -99,15 +99,13 @@ model {
     }
     bR + sinth*logL ~ uniform(dwarf_mag-10, dwarf_mag);
     bR2 + sinth2*logL2 ~ uniform(dwarf_mag, dwarf_mag+10);
+    random_realization2 ~ normal (0, sigR2);
+    sigR2 ~ cauchy(0.,1);
   }
 
   random_realization ~ normal (0, sigR);
   sigR ~ cauchy(0.,1);
  
-  random_realization2 ~ normal (0, sigR2);
-  sigR2 ~ cauchy(0.,1);
-
-
   epsilon ~ normal(0,pi()/64.);
 }
 generated quantities {
