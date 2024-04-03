@@ -1,6 +1,6 @@
 functions {
   vector V_fiber(vector V, vector epsilon) {
-    return V.*cos(epsilon);
+    return V./cos(epsilon);
   }
 }
 
@@ -18,17 +18,22 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=1;
+  int dispersion_case=4;
 
   int pure = 1;
-  int angle_error = 0;
+  int angle_error = 1;
 
   real dwarf_mag=-17. + 34.7;
+
+  // Kelly finds standard deviation between 14.2 deg between MANGA and SGA
+  // real angle_dispersion_deg = 14.2;
+  real angle_dispersion_deg = 5.;
+  real angle_dispersion = angle_dispersion_deg/180*pi();
 
 }
 
 parameters {
-  // vector[N] epsilon;    // angle error
+  vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
   // vector <lower=0, upper=1>[N] pD;   // dwarf population fraction
 
   // population 1
@@ -74,9 +79,9 @@ model {
 
   // velocity model with or without axis error
   vector[N] VtoUse = pow(10, costh*logL  + (random_realization)*costh_r );
-  // if (angle_error == 1){
-  //     VtoUse = V_fiber(VtoUse,epsilon);
-  // } 
+  if (angle_error == 1){
+      VtoUse = V_fiber(VtoUse,epsilon);
+  } 
 
   if (pure == 1)
   {
@@ -110,7 +115,8 @@ model {
   random_realization ~ normal (0, sigR);
   sigR ~ cauchy(0.,1);
  
-  // epsilon ~ normal(0,pi()/64.);
+  if (angle_error==1)
+    epsilon ~ normal(0,angle_dispersion);
 }
 generated quantities {
    real aR=tan(atanAR);
