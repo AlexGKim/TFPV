@@ -18,7 +18,7 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=4;
+  int dispersion_case=2;
 
   int pure = 0;
   int angle_error = 0;
@@ -32,6 +32,8 @@ transformed data {
 
   vector[N] logV = log10(V_0p33R26);
 
+  vector[N] looseLogL = sqrt(0.5*0.5 + 9* V_0p33R26_err.*V_0p33R26_err./V_0p33R26_err./V_0p33R26_err);
+
 }
 
 parameters {
@@ -40,23 +42,23 @@ parameters {
 
   // population 1
   vector[N] logL;       // latent parameter
-  real<lower=-pi()/2, upper= 0 > atanAR;
+  real<lower=pi()*(-1./2+1./16), upper= 0 > atanAR;
   real bR;
 
   vector[N] random_realization;
   real<lower=0> sigR;
 
   // population 2
-  // real<lower=0, upper=0.15> pD;   // dwarf population fraction
-  // simplex[2] pD;
   vector[N] logL2;       // latent parameter
   // real<lower=pi()/4, upper=5*pi()/4> atanAR2;
-  real<lower=-pi()/2, upper=0> atanAR2;
+  real<lower=pi()*(-1./2+1./8), upper= 0 > atanAR2;
   real bR2;
 
   vector[N] random_realization2;
   real<lower=0> sigR2;
 
+  real<lower=0, upper=0.15> pD;   // dwarf population fraction
+  // simplex[2] pD;
 }
 model {
   // slope of TF Relation
@@ -65,9 +67,6 @@ model {
 
   real sinth2 = sin(atanAR2);
   real costh2 = cos(atanAR2);
-
-  vector[N] logL_ = logL+logV;
-  vector[N] logL2_ = logL2+logV;
 
   // slope of redsidual dispersion
   real sinth_r; real costh_r; real sinth2_r; real costh2_r; 
@@ -89,47 +88,43 @@ model {
   }
 
   // velocity model with or without axis error
-  vector[N] VtoUse = pow(10, costh*logL_  + random_realization*costh_r );
+  vector[N] VtoUse = pow(10, costh*logL  + random_realization*costh_r );
   // if (angle_error == 1){
   //     VtoUse = V_fiber(VtoUse,epsilon);
   // } 
 
   if (pure == 1)
   {
-    R_MAG_SB26 ~ normal(bR + sinth*logL_  + random_realization*sinth_r, R_MAG_SB26_ERR);
+    R_MAG_SB26 ~ normal(bR + sinth*logL  + random_realization*sinth_r, R_MAG_SB26_ERR);
     V_0p33R26 ~ normal(VtoUse, V_0p33R26_err);
   }
   else
   {
-    real pD=0.05;
+    // real pD=0.05;
     real lnpDs1 = log(1-pD);
     real lnpDs2 = log(pD);
-    vector[N] VtoUse2 = pow(10, costh2*logL2_  + random_realization2*costh2_r );
+    vector[N] VtoUse2 = pow(10, costh2*logL2  + random_realization2*costh2_r );
     // if (angle_error == 1){
     //     VtoUse2 = V_fiber(VtoUse2,epsilon);
     // } 
     vector[2] logexp;
     for (n in 1:N)
     {
-      logexp[1] =  lnpDs1 + normal_lpdf(R_MAG_SB26[n] |  bR + sinth*logL_[n]  + random_realization[n]*sinth_r, R_MAG_SB26_ERR[n])
+      logexp[1] =  lnpDs1 + normal_lpdf(R_MAG_SB26[n] |  bR + sinth*logL[n]  + random_realization[n]*sinth_r, R_MAG_SB26_ERR[n])
                       + normal_lpdf(V_0p33R26[n]| VtoUse[n], V_0p33R26_err[n]) ;
 
-      logexp[2] =  lnpDs2 + normal_lpdf(R_MAG_SB26[n] |  bR2 + sinth2*logL2_[n]  + random_realization2[n]*sinth2_r, R_MAG_SB26_ERR[n])
+      logexp[2] =  lnpDs2 + normal_lpdf(R_MAG_SB26[n] |  bR2 + sinth2*logL2[n]  + random_realization2[n]*sinth2_r, R_MAG_SB26_ERR[n])
                       + normal_lpdf(V_0p33R26[n]| VtoUse2[n], V_0p33R26_err[n]) ;
       // print(pD," ",logexp);
       target += log_sum_exp(logexp);
     }
 
-    // real alpha = 40;
-    // real omega = 10;
-    // bR + sinth*logL ~ skew_normal(dwarf_mag, omega, -alpha);
-    // bR2 + sinth2*logL2 ~ skew_normal(dwarf_mag, omega, alpha);
-
     random_realization2 ~ normal (0, sigR2);
     sigR2 ~ cauchy(0.,1);
     // print((atanAR2-atanAR)*180/pi());
     // print(costh*mean(logL_)," ", bR+sinth*mean(logL_), " ", costh2*mean(logL2_)," ", bR2+sinth2*mean(logL2_));
-    // sin(atanAR2-atanAR) ~ normal (0,0.5);
+    // print(atanAR2-atanAR);
+    2*(atanAR2-atanAR) ~ von_mises(pi(), 2); // ~ beta (2,1.5);  // avoid degenerate solutions between 2 components
 
   }
 
@@ -137,8 +132,8 @@ model {
   sigR ~ cauchy(0.,1);
 
   // this light constraint helps!
-  logL ~ normal(0,10/costh);
-  logL2 ~ normal(0,10/costh2);
+  logV-costh*logL ~ normal(0,looseLogL);
+  logV-costh2*logL2 ~ normal(0,looseLogL);
  
   // if (angle_error==1)
   //   epsilon ~ normal(0,angle_dispersion);
