@@ -53,9 +53,10 @@ parameters {
 
 
   // population 1
-  // vector<lower=2.14/cos(atan(-6.1))-2, upper=2.14/cos(atan(-6.1))+1.5>[N] logL;       // latent parameter
   // vector<lower=-.4/cos(atan(-6.1)), upper=.4/cos(atan(-6.1))>[N] logL_;
   vector<lower=pow(10,-.4/cos(atan(-6.1))), upper=pow(10,.4/cos(atan(-6.1)))>[N] L_;
+  vector<lower=0>[N] V_; // V = V_^costh
+
   real<lower=-7.1-2, upper=-7.1+2> bR;
   // vector[N] logL;       // latent parameter
   // real bR;
@@ -81,7 +82,8 @@ model {
   real costh = cos(atanAR);
 
   // vector[N] logL = logVovercosth + logL_;
-  vector[N] logL = logVovercosth + log(L_);
+  // vector[N] logL = logVovercosth + log(L_);
+  vector[N] logL = log(L_);
 
   // real sinth2 = sin(atanAR2);
   // real costh2 = cos(atanAR2);
@@ -109,7 +111,8 @@ model {
   // velocity model with or without axis error
   vector[N] VtoUse;
   if (dispersion_case ==1) {
-    VtoUse = pow(10, costh*logL );
+    // VtoUse = pow(10, costh*logL );
+    VtoUse = pow(V_,costh);
   }
   else {    
     VtoUse = pow(10, costh*logL  + random_realization*costh_r );
