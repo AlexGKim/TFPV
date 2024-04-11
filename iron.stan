@@ -54,7 +54,8 @@ parameters {
 
   // population 1
   // vector<lower=2.14/cos(atan(-6.1))-2, upper=2.14/cos(atan(-6.1))+1.5>[N] logL;       // latent parameter
-  vector<lower=-.4/cos(atan(-6.1)), upper=.4/cos(atan(-6.1))>[N] logL_;
+  // vector<lower=-.4/cos(atan(-6.1)), upper=.4/cos(atan(-6.1))>[N] logL_;
+  vector<lower=pow(10,-.4/cos(atan(-6.1))), upper=pow(10,.4/cos(atan(-6.1)))>[N] L_;
   real<lower=-7.1-2, upper=-7.1+2> bR;
   // vector[N] logL;       // latent parameter
   // real bR;
@@ -79,7 +80,8 @@ model {
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
 
-  vector[N] logL = logVovercosth + logL_;
+  // vector[N] logL = logVovercosth + logL_;
+  vector[N] logL = logVovercosth + log(L_);
 
   // real sinth2 = sin(atanAR2);
   // real costh2 = cos(atanAR2);
@@ -128,7 +130,7 @@ model {
     else {
         mint = bR + mu + sinth*logL  + random_realization*sinth_r;
     }
-    R_MAG_SB26 ~ cauchy(mint, dR);
+    R_MAG_SB26 ~ normal(mint, dR);
     V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
     // print(mint-Rlim);
     // print(max(mint-Rlim));
@@ -175,8 +177,8 @@ model {
 }
 generated quantities {
    real aR=tan(atanAR);
-   real minLogL = min(logL_);
-   real maxLogL = max(logL_);
+   // real minLogL = min(logL_);
+   // real maxLogL = max(logL_);
    // if (pure !=1) 
    //  real aR2=tan(atanAR2);
 }
