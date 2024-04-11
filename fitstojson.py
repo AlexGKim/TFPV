@@ -82,7 +82,7 @@ def to_json(frac=1):
     if frac==1:
         outname = fn+".json"
     else:
-        outname =  fn+"_sub.json"
+        outname =  fn+"_sub_{:4.2f}.json".format(frac)
 
     with open("data/"+outname, 'w') as f:
         f.write(json_object)
@@ -125,7 +125,7 @@ def segev_plot(fn = fn_segev2):
     plt.show()
 
 if __name__ == '__main__':
-    to_json(0.1)
+    to_json(0.02)
     # # coma_json()
     # #segev_json()
     # for i in range(1,11):
