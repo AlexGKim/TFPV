@@ -65,7 +65,7 @@ def to_json(frac=1):
     z = numpy.array(data_dic["Z_DESI"])
     dv = 300
     dm = (5/numpy.log(10)*(1+z)**2*dv/cosmo.H(z)/cosmo.luminosity_distance(z)).value
-    data_dic['dm_v'] = dm
+    data_dic['dm_v'] = dm.tolist()
 
     N_all = len(data_dic['Z_DESI'])
     if frac !=1 :
@@ -84,7 +84,7 @@ def to_json(frac=1):
     else:
         outname =  fn+"_sub.json"
 
-    with open(outname, 'w') as f:
+    with open("data/"+outname, 'w') as f:
         f.write(json_object)
 
 def segev_json(fn='SGA_TFR_simtest_20240307'):
