@@ -51,10 +51,12 @@ parameters {
 
 
   // population 1
-  vector<lower=2.14/cos(atan(-6.1))-2, upper=2.14/cos(atan(-6.1))+2>[N] logL;       // latent parameter
+  // vector<lower=2.14/cos(atan(-6.1))-2, upper=2.14/cos(atan(-6.1))+2>[N] logL;       // latent parameter
+  // real<lower=-7.1-2, upper=-7.1+2> bR;
+  vector[N] logL;       // latent parameter
+  real bR;
   // real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR;
   real<lower=atan(-6.1)-.1 , upper=atan(-6.1)+.1> atanAR;
-  real<lower=-7.1-2, upper=-7.1+2> bR;
 
   vector[N] random_realization;
   real<lower=0> sigR;
