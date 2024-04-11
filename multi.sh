@@ -27,6 +27,5 @@ stansummary_batch(){
 }
 
 iron(){
-        ./iron sample algorithm=hmc engine=nuts max_depth=19 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 \ 
-                data file=data/SGA-2020_iron_Vrot.json output file=output/iron_410.csv
+        ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 data file=data/SGA-2020_iron_Vrot_sub.json output file=output/iron_210_sub.csv
 }

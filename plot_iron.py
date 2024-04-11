@@ -29,7 +29,9 @@ plt.ylabel("V_0p4R26")
 plt.show()
 
 x=[10,800]
-plt.errorbar(data["V_0p4R26"], numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"]),yerr=numpy.sqrt(dm**2+numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p4R26_err"], fmt=".")
+MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"])
+plt.errorbar(data["V_0p4R26"], MR ,yerr=numpy.sqrt(dm**2+numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p4R26_err"], fmt=".")
 plt.plot(x,-7.1 - 6.1* numpy.log10(x))
 plt.xscale('log',base=10)
+plt.ylim((MR.max()+.5,MR.min()-.5))
 plt.show()
