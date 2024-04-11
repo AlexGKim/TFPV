@@ -15,6 +15,7 @@ data {
 
   //for iron
   vector[N] mu;
+  vector[N] dm_v;
   real Rlim;
 }
 
@@ -37,6 +38,8 @@ transformed data {
   // real angle_dispersion_deg = 14.2;
   real angle_dispersion_deg = 5.;
   real angle_dispersion = angle_dispersion_deg/180*pi();
+
+  vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR+dm_v.*dm_v);
 
 }
 
@@ -118,7 +121,7 @@ model {
     else {
         mint = bR + mu + sinth*logL  + random_realization*sinth_r;
     }
-    R_MAG_SB26 ~ cauchy(mint, R_MAG_SB26_ERR);
+    R_MAG_SB26 ~ cauchy(mint, dR);
     V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
     // print(mint-Rlim);
     // print(max(mint-Rlim));
@@ -157,7 +160,7 @@ model {
 
   // }
 
-  random_realization ~ normal (0, sigR);
+  random_realization ~ cauchy (0, sigR);
   sigR ~ cauchy(0.,1);
  
   // if (angle_error==1)

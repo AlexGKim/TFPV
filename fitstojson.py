@@ -62,6 +62,11 @@ def to_json(frac=1):
 
     data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
 
+    z = numpy.array(data_dic["Z_DESI"])
+    dv = 300
+    dm = (5/numpy.log(10)*(1+z)**2*dv/cosmo.H(z)/cosmo.luminosity_distance(z)).value
+    data_dic['dm_v'] = dm
+
     N_all = len(data_dic['Z_DESI'])
     if frac !=1 :
         ind = numpy.random.randint(0, high=N_all, size=int(N_all*frac))
