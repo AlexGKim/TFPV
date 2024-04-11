@@ -41,11 +41,11 @@ def coma_json():
         f.write(json_object)
 
 
-def to_json():
-
+def to_json(frac=1):
+    fn = "SGA-2020_iron_Vrot"
     Rlim = 17.75
 
-    fits=fitsio.FITS(fn+".fits")
+    fits=fitsio.FITS("data/"+fn+".fits")
     data=fits[1].read()
 
 
@@ -60,15 +60,26 @@ def to_json():
 
             data_dic[k]=data[k][select].tolist()
 
+    data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
+
+    N_all = len(data_dic['Z_DESI'])
+    if frac !=1 :
+        ind = numpy.random.randint(0, high=N_all, size=int(N_all*frac))
+        for key, value in data_dic.items():
+            value=numpy.array(value)[ind]
+            data_dic[key] = value.tolist()
+
     data_dic['N'] = len(data_dic['SGA_ID'])
     data_dic['Rlim'] = Rlim
 
-
-    data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
-
     json_object = json.dumps(data_dic)
 
-    with open(fn+".json", 'w') as f:
+    if frac==1:
+        outname = fn+".json"
+    else:
+        outname =  fn+"_sub.json"
+
+    with open(outname, 'w') as f:
         f.write(json_object)
 
 def segev_json(fn='SGA_TFR_simtest_20240307'):
@@ -109,9 +120,9 @@ def segev_plot(fn = fn_segev2):
     plt.show()
 
 if __name__ == '__main__':
-    # _json()
-    # coma_json()
-    #segev_json()
-    for i in range(1,11):
-        segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
-    # segev_plot()
+    to_json(0.1)
+    # # coma_json()
+    # #segev_json()
+    # for i in range(1,11):
+    #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
+    # # segev_plot()

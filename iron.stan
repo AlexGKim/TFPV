@@ -41,17 +41,17 @@ transformed data {
 }
 
 
-// from eyeball look at data expect b ~ -6, a ~ -6.8
+// from eyeball look at data expect b ~ -7.1, a ~ -6.1
 // average logV ~ 2.14
 parameters {
   // vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
 
 
   // population 1
-  vector<lower=2.14/0.145-1, upper=2.14/0.145+1>[N] logL;       // latent parameter
+  vector<lower=2.14/cos(atan(-6.1))-2, upper=2.14/cos(atan(-6.1))+2>[N] logL;       // latent parameter
   // real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR;
-  real<lower=-1.42-.1 , upper=-1.42+.1> atanAR;
-  real<lower=-7, upper=-5> bR;
+  real<lower=atan(-6.1)-.1 , upper=atan(-6.1)+.1> atanAR;
+  real<lower=-7.1-2, upper=-7.1+2> bR;
 
   vector[N] random_realization;
   real<lower=0> sigR;
@@ -106,8 +106,8 @@ model {
   //     VtoUse = V_fiber(VtoUse,epsilon);
   // } 
 
-  print(mean(log10(V_0p4R26))," ",mean(costh*logL));
-  print(mean(R_MAG_SB26)," ",mean(bR + mu + sinth*logL));
+  // print(mean(log10(V_0p4R26))," ",mean(costh*logL));
+  // print(mean(R_MAG_SB26)," ",mean(bR + mu + sinth*logL));
   if (pure == 1)
   {
 
@@ -120,11 +120,11 @@ model {
     }
     R_MAG_SB26 ~ cauchy(mint, R_MAG_SB26_ERR);
     V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
-    print(mint-Rlim);
+    // print(mint-Rlim);
     // print(max(mint-Rlim));
-    print(log(erfc((mint-Rlim)./R_MAG_SB26_ERR/sqrt(2))));
+    // print(log(erfc((mint-Rlim)./R_MAG_SB26_ERR/sqrt(2))));
     // print(-sum(log(erfc((mint-Rlim)./R_MAG_SB26_ERR/sqrt(2)))));
-    target += - sum(log(erfc((mint-Rlim)./R_MAG_SB26_ERR/sqrt(2))));
+    // target += - sum(log(erfc((mint-Rlim)./R_MAG_SB26_ERR/sqrt(2))));
   }
   // else
   // {
