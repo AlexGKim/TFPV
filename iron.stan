@@ -81,7 +81,7 @@ model {
   real costh = cos(atanAR);
 
   // vector[N] logL = logVovercosth + logL_;
-  vector[N] logL = logVovercosth + log(L_);
+  vector[N] logL = logVovercosth + log10(L_);
 
   // real sinth2 = sin(atanAR2);
   // real costh2 = cos(atanAR2);
@@ -177,8 +177,9 @@ model {
 }
 generated quantities {
    real aR=tan(atanAR);
-   // real minLogL = min(logL_);
-   // real maxLogL = max(logL_);
+   vector[N] logL_=log10(L_);
+   real minLogL = min(logL_);
+   real maxLogL = max(logL_);
    // if (pure !=1) 
    //  real aR2=tan(atanAR2);
 }
