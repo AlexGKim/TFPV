@@ -32,16 +32,16 @@ transformed data {
   int pure = 1;
   int angle_error = 0;
 
-  real dwarf_mag=-17. + 34.7;
+  // real dwarf_mag=-17. + 34.7;
 
   // Kelly finds standard deviation between 14.2 deg between MANGA and SGA
   // real angle_dispersion_deg = 14.2;
-  real angle_dispersion_deg = 5.;
-  real angle_dispersion = angle_dispersion_deg/180*pi();
+  // real angle_dispersion_deg = 5.;
+  // real angle_dispersion = angle_dispersion_deg/180*pi();
 
   vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR+dm_v.*dm_v);
 
-  vector[N] logVovercosth = log10(V_0p4R26)/cos(atan(-6.1));
+  // vector[N] logVovercosth = log10(V_0p4R26)/cos(atan(-6.1));
 
 }
 
@@ -54,8 +54,9 @@ parameters {
 
   // population 1
   // vector<lower=-.4/cos(atan(-6.1)), upper=.4/cos(atan(-6.1))>[N] logL_;
-  vector<lower=pow(10,-.4/cos(atan(-6.1))), upper=pow(10,.4/cos(atan(-6.1)))>[N] L_;
-  vector<lower=0>[N] V_; // V = V_^costh
+  // vector<lower=pow(10,-.4/cos(atan(-6.1))), upper=pow(10,.4/cos(atan(-6.1)))>[N] L_;
+  // vector<lower=0>[N] V_; // V = V_^costh
+  vector[N] v_raw;
 
   real<lower=-7.1-2, upper=-7.1+2> bR;
   // vector[N] logL;       // latent parameter
@@ -83,7 +84,11 @@ model {
 
   // vector[N] logL = logVovercosth + logL_;
   // vector[N] logL = logVovercosth + log(L_);
-  vector[N] logL = log(L_);
+  // vector[N] logL = log(L_);
+  // vector[N] logL = -4*log10(4)+2*log10(u);
+
+  vector[N] v = 139.35728557650154*v_raw;
+  vector[N] logL = log10(v)/costh;
 
   // real sinth2 = sin(atanAR2);
   // real costh2 = cos(atanAR2);
@@ -107,12 +112,13 @@ model {
     sinth_r=-costh; costh_r=sinth; //sinth2_r=-costh2; costh2_r=sinth2;
   }
 
+
   // vector[N] random_realization;
   // velocity model with or without axis error
   vector[N] VtoUse;
   if (dispersion_case ==1) {
-    // VtoUse = pow(10, costh*logL );
-    VtoUse = pow(V_,costh);
+    VtoUse = pow(10, costh*logL );
+    // VtoUse = pow(V_,costh);
   }
   else {    
     VtoUse = pow(10, costh*logL  + random_realization*costh_r );
@@ -135,6 +141,8 @@ model {
     }
     R_MAG_SB26 ~ normal(mint, dR);
     V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
+
+
     // print(mint-Rlim);
     // print(max(mint-Rlim));
     // print(log(erfc((mint-Rlim)./R_MAG_SB26_ERR/sqrt(2))));
@@ -171,7 +179,7 @@ model {
   //   // sin(atanAR2-atanAR) ~ normal (0,0.5);
 
   // }
-
+  v_raw ~ lognormal(0, 0.5326792343583239);
   random_realization ~ cauchy (0, sigR);
   sigR ~ cauchy(0.,1);
  

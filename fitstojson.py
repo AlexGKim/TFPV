@@ -81,11 +81,21 @@ def to_json(frac=1):
 
     if frac==1:
         outname = fn+".json"
+        outname2 = "init.json"
     else:
         outname =  fn+"_sub_{:4.2f}.json".format(frac)
+        outname2 = "init"+"_sub_{:4.2f}.json".format(frac)
 
     with open("data/"+outname, 'w') as f:
         f.write(json_object)
+
+#  vector[N] v = 373.137*v_raw + 222.371;
+    init = dict()
+    init["v_raw"]=(numpy.array(data_dic["V_0p4R26"])/139.35728557650154).tolist()
+    with open("data/"+outname2, 'w') as f:
+        f.write(json.dumps(init))
+
+    
 
 def segev_json(fn='SGA_TFR_simtest_20240307'):
 
@@ -123,6 +133,7 @@ def segev_plot(fn = fn_segev2):
     plt.ylabel('R_MAG_SB26')
     plt.ylim((19,12))
     plt.show()
+
 
 if __name__ == '__main__':
     to_json(0.02)

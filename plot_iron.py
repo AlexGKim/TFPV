@@ -4,7 +4,7 @@ import json
 from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
 
-fn = "data/SGA-2020_iron_Vrot_sub.json"
+fn = "data/SGA-2020_iron_Vrot_sub_0.02.json"
 
 with open(fn, 'r') as f:
     data = json.load(f)
@@ -28,10 +28,17 @@ plt.xlabel("Z_DESI")
 plt.ylabel("V_0p4R26")
 plt.show()
 
+import scipy.stats
+x=numpy.linspace(0.1,1000,100)
+ans = scipy.stats.lognorm.fit(data["V_0p4R26"],floc=0)
+plt.plot(x, scipy.stats.lognorm.pdf(x, *ans))
+plt.show()
+
 x=[10,800]
 MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"])
 plt.errorbar(data["V_0p4R26"], MR ,yerr=numpy.sqrt(dm**2+numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p4R26_err"], fmt=".")
-plt.plot(x,-7.1 - 6.1* numpy.log10(x))
+plt.plot(x,-8.1 - 5.8* numpy.log10(x))
 plt.xscale('log',base=10)
 plt.ylim((MR.max()+.5,MR.min()-.5))
 plt.show()
+
