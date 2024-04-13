@@ -1,4 +1,4 @@
-// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/iron_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_sub_0.10.json output file=output/X.csv
+// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_sub_0.10.json output file=output/iron_210_sub_0.10_test.csv
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -62,11 +62,12 @@ parameters {
   real<lower=0> s_dist;
   real<lower=0> scale_dist;
 
-  real<lower=-7.1-2, upper=-7.1+2> bR;
+  real bR;
+  // real<lower=-7.1-2, upper=-7.1+2> bR;
   // vector[N] logL;       // latent parameter
   // real bR;
-  // real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR;
-  real<lower=atan(-6.1)-.1 , upper=atan(-6.1)+.1> atanAR;
+  real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR;
+  // real<lower=atan(-6.1)-.1 , upper=atan(-6.1)+.1> atanAR;
 
   vector[N] random_realization;
   real<lower=0> sigR;
@@ -83,16 +84,18 @@ parameters {
 }
 model {
   // slope of TF Relation
+  real tanth = tan(atanAR);
+
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
+
+  vector[N] v = scale_dist*v_raw;
+  vector[N] logv = log10(v);
 
   // vector[N] logL = logVovercosth + logL_;
   // vector[N] logL = logVovercosth + log(L_);
   // vector[N] logL = log(L_);
   // vector[N] logL = -4*log10(4)+2*log10(u);
-
-  vector[N] v = scale_dist*v_raw;
-  vector[N] logL = log10(v)/costh;
 
   // real sinth2 = sin(atanAR2);
   // real costh2 = cos(atanAR2);
@@ -121,11 +124,11 @@ model {
   // velocity model with or without axis error
   vector[N] VtoUse;
   if (dispersion_case ==1) {
-    VtoUse = pow(10, costh*logL );
+    VtoUse = pow(10, logv );
     // VtoUse = pow(V_,costh);
   }
   else {    
-    VtoUse = pow(10, costh*logL  + random_realization*costh_r );
+    VtoUse = pow(10, logv  + random_realization*costh_r );
   }
   // if (angle_error == 1){
   //     VtoUse = V_fiber(VtoUse,epsilon);
@@ -138,10 +141,10 @@ model {
 
     vector[N] mint;
     if (dispersion_case ==1){
-        mint = bR + mu + sinth*logL;
+        mint = bR + mu +  tanth*logv;
     }
     else {
-        mint = bR + mu + sinth*logL  + random_realization*sinth_r;
+        mint = bR + mu + tanth*logv  + random_realization*sinth_r;
     }
     R_MAG_SB26 ~ normal(mint, dR);
     V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);

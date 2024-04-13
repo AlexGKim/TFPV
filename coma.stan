@@ -1,4 +1,4 @@
-// ./coma sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_210_test.csv
+// ./coma sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_510_test.csv
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -20,10 +20,13 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=2;
+  // 5 : free dispersion
+  int dispersion_case=4;
 
   int pure = 1;
   int angle_error = 0;
+
+  int flatDistribution = 0;
 
   real mu_coma=34.7;
 
@@ -39,7 +42,6 @@ transformed data {
 parameters {
   // vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
 
-
   // population 1
   // vector[N] logL;       // latent parameter
 
@@ -47,8 +49,10 @@ parameters {
   real<lower=0> s_dist;
   real<lower=0> scale_dist;
 
-  real<lower=pi()*(1./2.+1./32.), upper=pi()*2./3.> atanAR;
+  real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
   real bR;
+
+  // real<lower=-pi()*.5 , upper=pi()*0.5> atanARr;
 
   vector[N] random_realization;
   real<lower=0> sigR;
@@ -65,11 +69,25 @@ parameters {
 }
 model {
   // slope of TF Relation
+  real tanth = tan(atanAR);
+
+
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
 
-  vector[N] v = scale_dist*v_raw;
-  vector[N] logL = log10(v)/costh;
+
+  vector[N] v;
+  if (flatDistribution==0)
+  {
+      v = scale_dist*v_raw;
+  } else if (flatDistribution==1)
+  {
+      v= 139.35728557650154 * v_raw;
+  }
+
+
+  vector[N] logv = log10(v);
+  // vector[N] logL = log10(v)/costh;
 
   // real sinth2 = sin(atanAR2);
   // real costh2 = cos(atanAR2);
@@ -92,16 +110,20 @@ model {
   {
     sinth_r=-costh; costh_r=sinth; //sinth2_r=-costh2; costh2_r=sinth2;
   }
+  else if (dispersion_case==5)
+  {
+    // sinth_r=sin(atanARr); costh_r=cos(atanARr); //sinth2_r=-costh2; costh2_r=sinth2;
+  }
 
   // velocity model with or without axis error
-  vector[N] VtoUse = pow(10, costh*logL  + (random_realization)*costh_r );
+  vector[N] VtoUse = pow(10, logv  + (random_realization)*costh_r );
   // if (angle_error == 1){
   //     VtoUse = V_fiber(VtoUse,epsilon);
   // } 
 
   if (pure == 1)
   {
-    R_MAG_SB26 ~ normal(bR + mu_coma+ sinth*logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
+    R_MAG_SB26 ~ normal(bR + mu_coma+ tanth * logv  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
     V_0p33R26 ~ normal(VtoUse, V_0p33R26_err);
   }
   // else
@@ -134,7 +156,13 @@ model {
   //   // sin(atanAR2-atanAR) ~ normal (0,0.5);
 
   // }
-  v_raw ~ lognormal(0, s_dist);
+  if (flatDistribution==0)
+  {
+      v_raw ~ lognormal(0, s_dist);
+  } else if (flatDistribution==1)
+  {
+      log10(v_raw) ~ uniform(-3,5);
+  }
   random_realization ~ normal (0, sigR);
   sigR ~ cauchy(0.,1);
  
@@ -143,6 +171,7 @@ model {
 }
 generated quantities {
    real aR=tan(atanAR);
+   // real aRr = tan(atanARr);
    // if (pure !=1) 
    //  real aR2=tan(atanAR2);
 }
