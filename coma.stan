@@ -1,3 +1,5 @@
+// ./coma sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_210_test.csv
+
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
 //     return V./cos(epsilon);
@@ -18,10 +20,12 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=4;
+  int dispersion_case=2;
 
   int pure = 1;
   int angle_error = 0;
+
+  real mu_coma=34.7;
 
   real dwarf_mag=-17. + 34.7;
 
@@ -37,7 +41,12 @@ parameters {
 
 
   // population 1
-  vector[N] logL;       // latent parameter
+  // vector[N] logL;       // latent parameter
+
+  vector[N] v_raw;
+  real<lower=0> s_dist;
+  real<lower=0> scale_dist;
+
   real<lower=pi()*(1./2.+1./32.), upper=pi()*2./3.> atanAR;
   real bR;
 
@@ -58,6 +67,9 @@ model {
   // slope of TF Relation
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
+
+  vector[N] v = scale_dist*v_raw;
+  vector[N] logL = log10(v)/costh;
 
   // real sinth2 = sin(atanAR2);
   // real costh2 = cos(atanAR2);
@@ -89,7 +101,7 @@ model {
 
   if (pure == 1)
   {
-    R_MAG_SB26 ~ normal(bR + sinth*logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
+    R_MAG_SB26 ~ normal(bR + mu_coma+ sinth*logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
     V_0p33R26 ~ normal(VtoUse, V_0p33R26_err);
   }
   // else
@@ -122,7 +134,7 @@ model {
   //   // sin(atanAR2-atanAR) ~ normal (0,0.5);
 
   // }
-
+  v_raw ~ lognormal(0, s_dist);
   random_realization ~ normal (0, sigR);
   sigR ~ cauchy(0.,1);
  

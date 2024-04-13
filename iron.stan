@@ -1,3 +1,5 @@
+// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/iron_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_sub_0.10.json output file=output/X.csv
+
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
 //     return V./cos(epsilon);
@@ -57,6 +59,8 @@ parameters {
   // vector<lower=pow(10,-.4/cos(atan(-6.1))), upper=pow(10,.4/cos(atan(-6.1)))>[N] L_;
   // vector<lower=0>[N] V_; // V = V_^costh
   vector[N] v_raw;
+  real<lower=0> s_dist;
+  real<lower=0> scale_dist;
 
   real<lower=-7.1-2, upper=-7.1+2> bR;
   // vector[N] logL;       // latent parameter
@@ -87,7 +91,7 @@ model {
   // vector[N] logL = log(L_);
   // vector[N] logL = -4*log10(4)+2*log10(u);
 
-  vector[N] v = 139.35728557650154*v_raw;
+  vector[N] v = scale_dist*v_raw;
   vector[N] logL = log10(v)/costh;
 
   // real sinth2 = sin(atanAR2);
@@ -179,7 +183,7 @@ model {
   //   // sin(atanAR2-atanAR) ~ normal (0,0.5);
 
   // }
-  v_raw ~ lognormal(0, 0.5326792343583239);
+  v_raw ~ lognormal(0, s_dist);
   random_realization ~ cauchy (0, sigR);
   sigR ~ cauchy(0.,1);
  
@@ -188,9 +192,9 @@ model {
 }
 generated quantities {
    real aR=tan(atanAR);
-   vector[N] logL_=log10(L_);
-   real minLogL = min(logL_);
-   real maxLogL = max(logL_);
+   // vector[N] logL_=log10(L_);
+   // real minLogL = min(logL_);
+   // real maxLogL = max(logL_);
    // if (pure !=1) 
    //  real aR2=tan(atanAR2);
 }

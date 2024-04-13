@@ -5,7 +5,7 @@ from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
 
 fn = "SGA-2020_iron_Vrot"
-fn_sga = "SGA-2020_fuji_Vrot"
+fn_sga = "data/SGA-2020_fuji_Vrot"
 fn_segev2 = "SGA_TFR_simtest_20240307"
 
 def coma_json():
@@ -40,6 +40,12 @@ def coma_json():
     with open(fn_sga+".json", 'w') as f:
         f.write(json_object)
 
+    init = dict()
+    init["v_raw"]=(numpy.array(data_dic["V_0p33R26"])/139.35728557650154).tolist()
+    init["s_dist"]=0.5326792343583239
+    init["scale_dist"]=139.35728557650154
+    with open(fn_sga+"_init.json", 'w') as f:
+        f.write(json.dumps(init))
 
 def to_json(frac=1):
     fn = "SGA-2020_iron_Vrot"
@@ -81,10 +87,10 @@ def to_json(frac=1):
 
     if frac==1:
         outname = fn+".json"
-        outname2 = "init.json"
+        outname2 = fn+"_init.json"
     else:
         outname =  fn+"_sub_{:4.2f}.json".format(frac)
-        outname2 = "init"+"_sub_{:4.2f}.json".format(frac)
+        outname2 = fn+"_init"+"_sub_{:4.2f}.json".format(frac)
 
     with open("data/"+outname, 'w') as f:
         f.write(json_object)
@@ -92,6 +98,8 @@ def to_json(frac=1):
 #  vector[N] v = 373.137*v_raw + 222.371;
     init = dict()
     init["v_raw"]=(numpy.array(data_dic["V_0p4R26"])/139.35728557650154).tolist()
+    init["s_dist"]=0.5326792343583239
+    init["scale_dist"]=139.35728557650154
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
 
@@ -136,8 +144,8 @@ def segev_plot(fn = fn_segev2):
 
 
 if __name__ == '__main__':
-    to_json(0.02)
-    # # coma_json()
+    # to_json(0.02)
+    coma_json()
     # #segev_json()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
