@@ -30,22 +30,24 @@ plt.ylabel("V_0p4R26")
 plt.show()
 
 
-x=numpy.linspace(0.1,1000,100)
-ans = scipy.stats.lognorm.fit(data["V_0p4R26"],floc=0)
+x=numpy.linspace(0.1,1e16,100)
+ans = scipy.stats.lognorm.fit(numpy.array(data["V_0p4R26"]),floc=0) # (0.5521701970150247, 0, 135.42611665436885)
+
+
+ans = scipy.stats.lognorm.fit(numpy.array(data["V_0p4R26"])**(1/numpy.cos(numpy.arctan(-6.1))),floc=0) # (3.413197988760724, 0, 15029899349402.74)
 plt.plot(x, scipy.stats.lognorm.pdf(x, *ans))
 plt.show()
 
-plt.hist(data["V_0p4R26"])
+plt.hist(numpy.array(data["V_0p4R26"]))
+plt.show()
+plt.hist(numpy.array(data["V_0p4R26"])**(1/numpy.cos(numpy.arctan(-6.1))),range=(0,1e10),bins=20)
 plt.show()
 
-MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"])
+plt.hist(1/numpy.cos(numpy.arctan(-6.1)) * numpy.log10(numpy.array(data["V_0p4R26"])))
+plt.show()
 
-plt.hist(MR)
-plt.show()
-ans = scipy.stats.lognorm.fit(MR) # (0.3203771381830672, -24.483252891972377, 3.8906505354308463)
-x=numpy.linspace(-23,-14,100)
-plt.plot(x, scipy.stats.lognorm.pdf(x, *ans))
-plt.show()
+ans = scipy.stats.norm.fit(1/numpy.cos(numpy.arctan(-6.1)) * numpy.log10(numpy.array(data["V_0p4R26"]))) # (13.176956072260538, 1.48233305216206)
+
 
 x=[10,800]
 MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"])

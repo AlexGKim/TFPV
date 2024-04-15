@@ -129,11 +129,23 @@ def segev_json(fn='SGA_TFR_simtest_20240307'):
     init["v_raw"]=(numpy.array(data_dic["V_0p33R26"])/139.35728557650154).tolist()
     init["s_dist"]=0.5326792343583239
     init["scale_dist"]=139.35728557650154
+    init["L_raw"]=((numpy.array(data_dic["V_0p33R26"])/139.35728557650154)**(1/numpy.cos(numpy.arctan(-6.1)))).tolist()
 
-    init["r_raw"]=((numpy.array(data_dic["V_0p33R26"])+24.483252891972377)/3.8906505354308463).tolist()
-    init["r_s_dist"]=0.3203771381830672
-    init["r_offset_dist"]=-24.483252891972377
-    init["r_scale_dist"]=3.8906505354308463
+
+    # init["L_raw"]=(numpy.array(data_dic["V_0p33R26"])**(1/numpy.cos(numpy.arctan(-6.1)))/15029899349402.74).tolist()
+    # init["L_s_dist"]=3.413197988760724
+    # init["L_scale_dist"]=15029899349402.74
+
+    # init["L_raw"]=(1/numpy.cos(numpy.arctan(-6.1)) * numpy.log10(data_dic["V_0p33R26"])).tolist()
+    # init["L_mu_dist"]=13.176956072260538
+    # init["L_s_dist"]=1.48233305216206
+
+    # init["r_raw"]=((numpy.array(data_dic["V_0p33R26"])+24.483252891972377)/3.8906505354308463).tolist()
+    # init["r_s_dist"]=0.3203771381830672
+    # init["r_offset_dist"]=-24.483252891972377
+    # init["r_scale_dist"]=3.8906505354308463
+
+
     with open(fn+"_init.json", 'w') as f:
         f.write(json.dumps(init))
 

@@ -45,9 +45,14 @@ parameters {
   // population 1
   // vector[N] logL;       // latent parameter
 
-  vector[N] v_raw;
+  // vector[N] v_raw;
+  vector[N] L_raw;
   real<lower=0> s_dist;
   real<lower=0> scale_dist;
+  // real L_mu_dist;
+  // real<lower=0> L_s_dist;
+  // real<lower=0> L_scale_dist;
+
 
   real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
   real bR;
@@ -69,24 +74,25 @@ parameters {
 }
 model {
   // slope of TF Relation
-  real tanth = tan(atanAR);
-
+  // real tanth = tan(atanAR);
 
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
 
 
-  vector[N] v;
-  if (flatDistribution==0)
-  {
-      v = scale_dist*v_raw;
-  } else if (flatDistribution==1)
-  {
-      v= 139.35728557650154 * v_raw;
-  }
+  // vector[N] v;
+  // if (flatDistribution==0)
+  // {
+  //     v = scale_dist*v_raw;
+  // } else if (flatDistribution==1)
+  // {
+  //     v= 139.35728557650154 * v_raw;
+  // }
 
+  vector[N] logL = log10(scale_dist)/costh + log10(L_raw);
+  // vector[N] logL = log10(L_raw*L_scale_dist);
+  // vector[N] logv = log10(v);
 
-  vector[N] logv = log10(v);
   // vector[N] logL = log10(v)/costh;
 
   // real sinth2 = sin(atanAR2);
@@ -116,14 +122,14 @@ model {
   }
 
   // velocity model with or without axis error
-  vector[N] VtoUse = pow(10, logv  + (random_realization)*costh_r );
+  vector[N] VtoUse = pow(10, costh *logL  + (random_realization)*costh_r );
   // if (angle_error == 1){
   //     VtoUse = V_fiber(VtoUse,epsilon);
   // } 
 
   if (pure == 1)
   {
-    R_MAG_SB26 ~ normal(bR + mu_coma+ tanth * logv  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
+    R_MAG_SB26 ~ normal(bR + mu_coma+ sinth * logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
     V_0p33R26 ~ normal(VtoUse, V_0p33R26_err);
   }
   // else
@@ -158,10 +164,14 @@ model {
   // }
   if (flatDistribution==0)
   {
-      v_raw ~ lognormal(0, s_dist);
+      // L_raw ~ normal(L_mu_dist, L_s_dist);
+      L_raw ~ lognormal(0, s_dist);
+      print(sum(log(costh * pow(L_raw,costh-1))));
+      target += sum(log(costh * pow(L_raw,costh-1)));
   } else if (flatDistribution==1)
   {
-      log10(v_raw) ~ uniform(-3,5);
+      // logv ~ uniform(-3,5);
+      logL ~ uniform(-3/.16,5/.16);
   }
   random_realization ~ normal (0, sigR);
   sigR ~ cauchy(0.,1);
