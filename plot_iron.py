@@ -29,13 +29,22 @@ plt.xlabel("Z_DESI")
 plt.ylabel("V_0p4R26")
 plt.show()
 
-
-x=numpy.linspace(0.1,1000,100)
-ans = scipy.stats.lognorm.fit(data["V_0p4R26"],floc=0)
-plt.plot(x, scipy.stats.lognorm.pdf(x, *ans))
+plt.hist(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
 plt.show()
 
-plt.hist(data["V_0p4R26"])
+ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
+ans # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
+x=numpy.linspace(6,18,100)
+plt.plot(x, scipy.stats.skewnorm.pdf(x, *ans))
+plt.show()
+
+plt.hist(numpy.log10(data["V_0p4R26"]))
+plt.show()
+
+
+
+
+plt.plot(x, scipy.stats.lognorm.pdf(x, *ans))
 plt.show()
 
 MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"])

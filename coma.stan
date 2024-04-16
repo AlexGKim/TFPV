@@ -21,7 +21,7 @@ transformed data {
   // 3 : mag dispersion
   // 4 : perp dispersion
   // 5 : free dispersion
-  int dispersion_case=4;
+  int dispersion_case=2;
 
   int pure = 1;
   int angle_error = 0;
@@ -43,11 +43,12 @@ parameters {
   // vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
 
   // population 1
-  // vector[N] logL;       // latent parameter
+  vector[N] logL;       // latent parameter
 
-  vector[N] v_raw;
-  real<lower=0> s_dist;
-  real<lower=0> scale_dist;
+  // vector[N] v_raw;
+  real alpha_dist;
+  real<lower=0> omega_dist;
+  real xi_dist;
 
   real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
   real bR;
@@ -69,24 +70,24 @@ parameters {
 }
 model {
   // slope of TF Relation
-  real tanth = tan(atanAR);
+  // real tanth = tan(atanAR);
 
 
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
 
 
-  vector[N] v;
-  if (flatDistribution==0)
-  {
-      v = scale_dist*v_raw;
-  } else if (flatDistribution==1)
-  {
-      v= 139.35728557650154 * v_raw;
-  }
+  // vector[N] v;
+  // if (flatDistribution==0)
+  // {
+  //     v = scale_dist*v_raw;
+  // } else if (flatDistribution==1)
+  // {
+  //     v= 139.35728557650154 * v_raw;
+  // }
 
 
-  vector[N] logv = log10(v);
+  // vector[N] logv = log10(v);
   // vector[N] logL = log10(v)/costh;
 
   // real sinth2 = sin(atanAR2);
@@ -116,14 +117,14 @@ model {
   }
 
   // velocity model with or without axis error
-  vector[N] VtoUse = pow(10, logv  + (random_realization)*costh_r );
+  vector[N] VtoUse = pow(10, costh*logL  + (random_realization)*costh_r );
   // if (angle_error == 1){
   //     VtoUse = V_fiber(VtoUse,epsilon);
   // } 
 
   if (pure == 1)
   {
-    R_MAG_SB26 ~ normal(bR + mu_coma+ tanth * logv  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
+    R_MAG_SB26 ~ normal(bR + mu_coma+ sinth * logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
     V_0p33R26 ~ normal(VtoUse, V_0p33R26_err);
   }
   // else
@@ -158,10 +159,10 @@ model {
   // }
   if (flatDistribution==0)
   {
-      v_raw ~ lognormal(0, s_dist);
+      logL ~ skew_normal(xi_dist, omega_dist,alpha_dist);
   } else if (flatDistribution==1)
   {
-      log10(v_raw) ~ uniform(-3,5);
+      // log10(v_raw) ~ uniform(-3,5);
   }
   random_realization ~ normal (0, sigR);
   sigR ~ cauchy(0.,1);
