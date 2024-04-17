@@ -32,6 +32,10 @@ plt.show()
 plt.hist(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
 plt.show()
 
+ans = scipy.stats.norm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
+ans # (13.133570672711606, 1.5160651053079683)
+
+
 ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
 ans # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
 x=numpy.linspace(6,18,100)

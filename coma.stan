@@ -1,4 +1,4 @@
-// ./coma sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_510_test.csv
+// ./coma sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_410n.csv
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -43,10 +43,11 @@ parameters {
   // vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
 
   // population 1
-  vector[N] logL;       // latent parameter
+  vector[N] logL_raw;       // latent parameter
 
-  // vector[N] v_raw;
-  real alpha_dist;
+  // real mu_dist;
+  // real sigma_dist;
+    real alpha_dist;
   real<lower=0> omega_dist;
   real xi_dist;
 
@@ -55,7 +56,7 @@ parameters {
 
   // real<lower=-pi()*.5 , upper=pi()*0.5> atanARr;
 
-  vector[N] random_realization;
+  vector[N] random_realization_raw;
   real<lower=0> sigR;
 
   // population 2
@@ -71,8 +72,9 @@ parameters {
 model {
   // slope of TF Relation
   // real tanth = tan(atanAR);
-
-
+  // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
+  vector[N] logL = omega_dist*(logL_raw+xi_dist);
+  vector[N] random_realization=random_realization_raw*sigR;
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
 
@@ -159,12 +161,13 @@ model {
   // }
   if (flatDistribution==0)
   {
-      logL ~ skew_normal(xi_dist, omega_dist,alpha_dist);
+      logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      // logL_raw ~ normal(0, 1);
   } else if (flatDistribution==1)
   {
       // log10(v_raw) ~ uniform(-3,5);
   }
-  random_realization ~ normal (0, sigR);
+  random_realization_raw ~ normal (0, 1);
   sigR ~ cauchy(0.,1);
  
   // if (angle_error==1)

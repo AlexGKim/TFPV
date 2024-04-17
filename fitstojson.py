@@ -41,9 +41,21 @@ def coma_json():
         f.write(json_object)
 
     init = dict()
-    init["v_raw"]=(numpy.array(data_dic["V_0p33R26"])/139.35728557650154).tolist()
+    # init["v_raw"]=(numpy.array(data_dic["V_0p33R26"])/139.35728557650154).tolist()
+
+    init["atanAR"] = numpy.arctan(-6.1)
+    logL = numpy.log10(data_dic["V_0p33R26"])/numpy.cos(init["atanAR"])
+    init["logL"]  = logL.tolist()
     init["s_dist"]=0.5326792343583239
     init["scale_dist"]=139.35728557650154
+
+    init["alpha_dist"]=-3.661245022462153
+    init["xi_dist"]= 14.913405242237685
+    init["omega_dist"]=2.2831016215521247
+
+    init["mu_dist"]=13.133570672711606
+    init["sigma_dist"]= 1.5160651053079683
+    init["logL_raw"]  = ((logL-init["mu_dist"])/init["sigma_dist"]).tolist()
     with open(fn_sga+"_init.json", 'w') as f:
         f.write(json.dumps(init))
 
@@ -131,11 +143,18 @@ def segev_json(fn='SGA_TFR_simtest_20240307'):
 
     # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
     init["atanAR"] = numpy.arctan(-6.1)
+    logL = numpy.log10(data_dic["V_0p33R26"])/numpy.cos(init["atanAR"])
+    init["logL"]  = logL.tolist()
+    init["s_dist"]=0.5326792343583239
+    init["scale_dist"]=139.35728557650154
 
-    init["lnL"]  = (-numpy.log10(data_dic["V_0p33R26"])/numpy.cos(init["atanAR"])).tolist()
     init["alpha_dist"]=-3.661245022462153
     init["xi_dist"]= 14.913405242237685
     init["omega_dist"]=2.2831016215521247
+
+    init["mu_dist"]=13.133570672711606
+    init["sigma_dist"]= 1.5160651053079683
+    init["logL_raw"]  = ((logL-init["mu_dist"])/init["sigma_dist"]).tolist()
 
     # init["r_raw"]=((numpy.array(data_dic["V_0p33R26"])+24.483252891972377)/3.8906505354308463).tolist()
     # init["r_s_dist"]=0.3203771381830672
