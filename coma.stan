@@ -1,4 +1,4 @@
-// ./coma sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_410n.csv
+// ./coma210f sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_210f.csv
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -21,12 +21,12 @@ transformed data {
   // 3 : mag dispersion
   // 4 : perp dispersion
   // 5 : free dispersion
-  int dispersion_case=2;
+  int dispersion_case=4;
 
   int pure = 1;
   int angle_error = 0;
 
-  int flatDistribution = 0;
+  int flatDistribution = 1;
 
   real mu_coma=34.7;
 
@@ -45,55 +45,32 @@ parameters {
   // population 1
   vector[N] logL_raw;       // latent parameter
 
-  // real mu_dist;
-  // real sigma_dist;
-    real alpha_dist;
-  real<lower=0> omega_dist;
-  real xi_dist;
+  if (flatDistribution == 0)
+  {
+  // parameters for SkewNormal
+  // real alpha_dist;
+  // real<lower=0> omega_dist;
+  // real xi_dist;
+  }
 
   real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
   real bR;
 
-  // real<lower=-pi()*.5 , upper=pi()*0.5> atanARr;
-
   vector[N] random_realization_raw;
   real<lower=0> sigR;
-
-  // population 2
-  // vector <lower=0, upper=0.25>[N] pD;   // dwarf population fraction
-  // vector[N] logL2;       // latent parameter
-  // real<lower=pi()/4, upper=5*pi()/4> atanAR2;
-  // real bR2;
-
-  // vector[N] random_realization2;
-  // real<lower=0> sigR2;
-
 }
 model {
-  // slope of TF Relation
-  // real tanth = tan(atanAR);
+
   // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
-  vector[N] logL = omega_dist*(logL_raw+xi_dist);
+  vector[N] logL;
+  if (flatDistribution==0) {
+    // logL=omega_dist*(logL_raw+xi_dist);
+  } else {
+    logL=logL_raw*1.5160651053079683 + 13.133570672711606;
+  } 
   vector[N] random_realization=random_realization_raw*sigR;
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
-
-
-  // vector[N] v;
-  // if (flatDistribution==0)
-  // {
-  //     v = scale_dist*v_raw;
-  // } else if (flatDistribution==1)
-  // {
-  //     v= 139.35728557650154 * v_raw;
-  // }
-
-
-  // vector[N] logv = log10(v);
-  // vector[N] logL = log10(v)/costh;
-
-  // real sinth2 = sin(atanAR2);
-  // real costh2 = cos(atanAR2);
 
   // slope of redsidual dispersion
   real sinth_r; real costh_r; real sinth2_r; real costh2_r; 
@@ -120,53 +97,19 @@ model {
 
   // velocity model with or without axis error
   vector[N] VtoUse = pow(10, costh*logL  + (random_realization)*costh_r );
-  // if (angle_error == 1){
-  //     VtoUse = V_fiber(VtoUse,epsilon);
-  // } 
+  if (angle_error == 1){
+      // VtoUse = V_fiber(VtoUse,epsilon);
+  } 
 
-  if (pure == 1)
-  {
-    R_MAG_SB26 ~ normal(bR + mu_coma+ sinth * logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
-    V_0p33R26 ~ normal(VtoUse, V_0p33R26_err);
-  }
-  // else
-  // {
-  //   vector[N] lnpDs1 = log(1-pD);
-  //   vector[N] lnpDs2 = log(pD);
-  //   vector[N] VtoUse2 = pow(10, costh2*logL2  + (random_realization2)*costh2_r );
-  //   if (angle_error == 1){
-  //       VtoUse2 = V_fiber(VtoUse2,epsilon);
-  //   } 
-  //   vector[2] logexp;
-  //   for (n in 1:N)
-  //   {
-  //     logexp[1] =  lnpDs1[n] + normal_lpdf(R_MAG_SB26[n] |  bR + sinth*logL[n]  + random_realization[n]*sinth_r, R_MAG_SB26_ERR[n])
-  //                     + normal_lpdf(V_0p33R26[n]| VtoUse[n], V_0p33R26_err[n]) ;
-
-  //     logexp[2] =  lnpDs2[n] + normal_lpdf(R_MAG_SB26[n] |  bR2 + sinth2*logL2[n]  + random_realization2[n]*sinth2_r, R_MAG_SB26_ERR[n])
-  //                     + normal_lpdf(V_0p33R26[n]| VtoUse2[n], V_0p33R26_err[n]) ;
-  //     target += log_sum_exp(logexp);
-  //   }
-
-  //   // real alpha = 40;
-  //   // real omega = 10;
-  //   // bR + sinth*logL ~ skew_normal(dwarf_mag, omega, -alpha);
-  //   // bR2 + sinth2*logL2 ~ skew_normal(dwarf_mag, omega, alpha);
-
-  //   random_realization2 ~ normal (0, sigR2);
-  //   sigR2 ~ cauchy(0.,1);
-
-  //   // sin(atanAR2-atanAR) ~ normal (0,0.5);
-
-  // }
+  R_MAG_SB26 ~ normal(bR + mu_coma+ sinth * logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
+  V_0p33R26 ~ normal(VtoUse, V_0p33R26_err);
+  
   if (flatDistribution==0)
   {
-      logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      // logL_raw ~ skew_normal(0, 1 ,alpha_dist);
       // logL_raw ~ normal(0, 1);
-  } else if (flatDistribution==1)
-  {
-      // log10(v_raw) ~ uniform(-3,5);
   }
+
   random_realization_raw ~ normal (0, 1);
   sigR ~ cauchy(0.,1);
  
@@ -175,7 +118,4 @@ model {
 }
 generated quantities {
    real aR=tan(atanAR);
-   // real aRr = tan(atanARr);
-   // if (pure !=1) 
-   //  real aR2=tan(atanAR2);
 }
