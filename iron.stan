@@ -1,4 +1,4 @@
-// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_sub_0.10.json output file=output/iron_210_sub_0.10_test.csv
+// ./iron410f sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_sub_0.10.json output file=output/iron_410f_sub_0.10_test.csv
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -43,8 +43,6 @@ transformed data {
   // real angle_dispersion = angle_dispersion_deg/180*pi();
 
   vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR+dm_v.*dm_v);
-
-  // vector[N] logVovercosth = log10(V_0p4R26)/cos(atan(-6.1));
 
 }
 
@@ -113,8 +111,8 @@ model {
       // VtoUse = V_fiber(VtoUse,epsilon);
   } 
 
-  R_MAG_SB26 ~ normal(bR + mu+ sinth * logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
-  V_0p4R26 ~ normal(VtoUse, V_0p4R26_err);
+  R_MAG_SB26 ~ normal(bR + mu+ sinth * logL  + (random_realization)*sinth_r, dR);
+  V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
   
   if (flatDistribution==0)
   {
