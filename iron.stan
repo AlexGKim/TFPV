@@ -28,7 +28,7 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=4;
+  int dispersion_case=2;
 
   int pure = 1;
   int angle_error = 0;
@@ -74,7 +74,7 @@ model {
   // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
   vector[N] logL;
   if (flatDistribution==0) {
-    logL=omega_dist*(logL_raw+xi_dist);
+    logL=omega_dist*logL_raw+xi_dist;
   } else {
     logL=logL_raw*1.5160651053079683 + 13.133570672711606;
   } 
