@@ -2,7 +2,7 @@
 coma_batch(){
         for i in {1..10}
         do
-                ./coma sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 data file=data/SGA_TFR_simtest_${(l:3::0:)i}.json output file=output/coma_410_${(l:3::0:)i}.csv
+                ./coma410f sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 data file=data/SGA_TFR_simtest_${(l:3::0:)i}.json output file=output/coma_410f_${(l:3::0:)i}.csv
         done
 }
 

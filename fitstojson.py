@@ -109,9 +109,18 @@ def to_json(frac=1):
 
 #  vector[N] v = 373.137*v_raw + 222.371;
     init = dict()
-    init["v_raw"]=(numpy.array(data_dic["V_0p4R26"])/139.35728557650154).tolist()
-    init["s_dist"]=0.5326792343583239
-    init["scale_dist"]=139.35728557650154
+    init["atanAR"] = numpy.arctan(-6.1)
+    logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
+    # init["logL"]  = logL.tolist()
+
+    init["alpha_dist"]=-3.661245022462153
+    init["xi_dist"]= 14.913405242237685
+    init["omega_dist"]=2.2831016215521247
+
+    init["mu_dist"]=13.133570672711606
+    init["sigma_dist"]= 1.5160651053079683
+    init["logL_raw"]  = ((logL-init["mu_dist"])/init["sigma_dist"]).tolist()
+
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
 
@@ -182,8 +191,8 @@ def segev_plot(fn = fn_segev2):
 
 
 if __name__ == '__main__':
-    # to_json(0.02)
+    to_json(0.1)
     # coma_json()
-    for i in range(1,11):
-        segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
+    # for i in range(1,11):
+    #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()

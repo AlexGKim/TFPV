@@ -23,16 +23,17 @@ data {
 
 transformed data {
 
-  int iron = 1;
   // 4 cases
   // 1 : line fit only
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=2;
+  int dispersion_case=4;
 
   int pure = 1;
   int angle_error = 0;
+
+  int flatDistribution = 0;
 
   // real dwarf_mag=-17. + 34.7;
 
@@ -53,54 +54,37 @@ transformed data {
 parameters {
   // vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
 
+  vector[N] logL_raw;       // latent parameter
 
-  // population 1
-  // vector<lower=-.4/cos(atan(-6.1)), upper=.4/cos(atan(-6.1))>[N] logL_;
-  // vector<lower=pow(10,-.4/cos(atan(-6.1))), upper=pow(10,.4/cos(atan(-6.1)))>[N] L_;
-  // vector<lower=0>[N] V_; // V = V_^costh
-  vector[N] v_raw;
-  real<lower=0> s_dist;
-  real<lower=0> scale_dist;
+  // if (flatDistribution == 0)
+  // {
+  // parameters for SkewNormal
+  real alpha_dist;
+  real<lower=0> omega_dist;
+  real xi_dist;
+  // }
 
+  real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
   real bR;
-  // real<lower=-7.1-2, upper=-7.1+2> bR;
-  // vector[N] logL;       // latent parameter
-  // real bR;
-  real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR;
-  // real<lower=atan(-6.1)-.1 , upper=atan(-6.1)+.1> atanAR;
 
-  vector[N] random_realization;
+  vector[N] random_realization_raw;
   real<lower=0> sigR;
-
-  // population 2
-  // vector <lower=0, upper=0.25>[N] pD;   // dwarf population fraction
-  // vector[N] logL2;       // latent parameter
-  // real<lower=pi()/4, upper=5*pi()/4> atanAR2;
-  // real bR2;
-
-  // vector[N] random_realization2;
-  // real<lower=0> sigR2;
 
 }
 model {
-  // slope of TF Relation
-  real tanth = tan(atanAR);
 
+  // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
+  vector[N] logL;
+  if (flatDistribution==0) {
+    logL=omega_dist*(logL_raw+xi_dist);
+  } else {
+    logL=logL_raw*1.5160651053079683 + 13.133570672711606;
+  } 
+  vector[N] random_realization=random_realization_raw*sigR;
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
 
-  vector[N] v = scale_dist*v_raw;
-  vector[N] logv = log10(v);
-
-  // vector[N] logL = logVovercosth + logL_;
-  // vector[N] logL = logVovercosth + log(L_);
-  // vector[N] logL = log(L_);
-  // vector[N] logL = -4*log10(4)+2*log10(u);
-
-  // real sinth2 = sin(atanAR2);
-  // real costh2 = cos(atanAR2);
-
-  // slope of redsidual dispersion
+ // slope of redsidual dispersion
   real sinth_r; real costh_r; real sinth2_r; real costh2_r; 
   if (dispersion_case == 1)
   {
@@ -118,76 +102,26 @@ model {
   {
     sinth_r=-costh; costh_r=sinth; //sinth2_r=-costh2; costh2_r=sinth2;
   }
-
-
-  // vector[N] random_realization;
-  // velocity model with or without axis error
-  vector[N] VtoUse;
-  if (dispersion_case ==1) {
-    VtoUse = pow(10, logv );
-    // VtoUse = pow(V_,costh);
-  }
-  else {    
-    VtoUse = pow(10, logv  + random_realization*costh_r );
-  }
-  // if (angle_error == 1){
-  //     VtoUse = V_fiber(VtoUse,epsilon);
-  // } 
-
-  // print(mean(log10(V_0p4R26))," ",mean(costh*logL));
-  // print(mean(R_MAG_SB26)," ",mean(bR + mu + sinth*logL));
-  if (pure == 1)
+  else if (dispersion_case==5)
   {
-
-    vector[N] mint;
-    if (dispersion_case ==1){
-        mint = bR + mu +  tanth*logv;
-    }
-    else {
-        mint = bR + mu + tanth*logv  + random_realization*sinth_r;
-    }
-    R_MAG_SB26 ~ normal(mint, dR);
-    V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
-
-
-    // print(mint-Rlim);
-    // print(max(mint-Rlim));
-    // print(log(erfc((mint-Rlim)./R_MAG_SB26_ERR/sqrt(2))));
-    // print(-sum(log(erfc((mint-Rlim)./R_MAG_SB26_ERR/sqrt(2)))));
-    // target += - sum(log(erfc((mint-Rlim)./R_MAG_SB26_ERR/sqrt(2))));
+    // sinth_r=sin(atanARr); costh_r=cos(atanARr); //sinth2_r=-costh2; costh2_r=sinth2;
   }
-  // else
-  // {
-  //   vector[N] lnpDs1 = log(1-pD);
-  //   vector[N] lnpDs2 = log(pD);
-  //   vector[N] VtoUse2 = pow(10, costh2*logL2  + (random_realization2)*costh2_r );
-  //   if (angle_error == 1){
-  //       VtoUse2 = V_fiber(VtoUse2,epsilon);
-  //   } 
-  //   vector[2] logexp;
-  //   for (n in 1:N)
-  //   {
-  //     logexp[1] =  lnpDs1[n] + normal_lpdf(R_MAG_SB26[n] |  bR + sinth*logL[n]  + random_realization[n]*sinth_r, R_MAG_SB26_ERR[n])
-  //                     + normal_lpdf(V_0p33R26[n]| VtoUse[n], V_0p33R26_err[n]) ;
 
-  //     logexp[2] =  lnpDs2[n] + normal_lpdf(R_MAG_SB26[n] |  bR2 + sinth2*logL2[n]  + random_realization2[n]*sinth2_r, R_MAG_SB26_ERR[n])
-  //                     + normal_lpdf(V_0p33R26[n]| VtoUse2[n], V_0p33R26_err[n]) ;
-  //     target += log_sum_exp(logexp);
-  //   }
+  // velocity model with or without axis error
+  vector[N] VtoUse = pow(10, costh*logL  + (random_realization)*costh_r );
+  if (angle_error == 1){
+      // VtoUse = V_fiber(VtoUse,epsilon);
+  } 
 
-  //   // real alpha = 40;
-  //   // real omega = 10;
-  //   // bR + sinth*logL ~ skew_normal(dwarf_mag, omega, -alpha);
-  //   // bR2 + sinth2*logL2 ~ skew_normal(dwarf_mag, omega, alpha);
+  R_MAG_SB26 ~ normal(bR + mu+ sinth * logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
+  V_0p4R26 ~ normal(VtoUse, V_0p4R26_err);
+  
+  if (flatDistribution==0)
+  {
+      logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+  }
 
-  //   random_realization2 ~ normal (0, sigR2);
-  //   sigR2 ~ cauchy(0.,1);
-
-  //   // sin(atanAR2-atanAR) ~ normal (0,0.5);
-
-  // }
-  v_raw ~ lognormal(0, s_dist);
-  random_realization ~ cauchy (0, sigR);
+  random_realization_raw ~ normal (0, 1);
   sigR ~ cauchy(0.,1);
  
   // if (angle_error==1)

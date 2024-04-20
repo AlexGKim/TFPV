@@ -26,7 +26,7 @@ transformed data {
   int pure = 1;
   int angle_error = 0;
 
-  int flatDistribution = 1;
+  int flatDistribution = 0;
 
   real mu_coma=34.7;
 
@@ -45,13 +45,13 @@ parameters {
   // population 1
   vector[N] logL_raw;       // latent parameter
 
-  if (flatDistribution == 0)
-  {
+  // if (flatDistribution == 0)
+  // {
   // parameters for SkewNormal
-  // real alpha_dist;
-  // real<lower=0> omega_dist;
-  // real xi_dist;
-  }
+  real alpha_dist;
+  real<lower=0> omega_dist;
+  real xi_dist;
+  // }
 
   real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
   real bR;
@@ -64,7 +64,7 @@ model {
   // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
   vector[N] logL;
   if (flatDistribution==0) {
-    // logL=omega_dist*(logL_raw+xi_dist);
+    logL=omega_dist*(logL_raw+xi_dist);
   } else {
     logL=logL_raw*1.5160651053079683 + 13.133570672711606;
   } 
@@ -106,8 +106,7 @@ model {
   
   if (flatDistribution==0)
   {
-      // logL_raw ~ skew_normal(0, 1 ,alpha_dist);
-      // logL_raw ~ normal(0, 1);
+      logL_raw ~ skew_normal(0, 1 ,alpha_dist);
   }
 
   random_realization_raw ~ normal (0, 1);
