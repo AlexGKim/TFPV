@@ -28,7 +28,7 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=2;
+  int dispersion_case=4;
 
   int pure = 1;
   int angle_error = 0;
@@ -57,7 +57,7 @@ parameters {
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  real alpha_dist;
+  real<upper=0> alpha_dist;
   real<lower=0> omega_dist;
   real xi_dist;
   // }
