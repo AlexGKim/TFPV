@@ -55,7 +55,7 @@ def coma_json():
 
     init["mu_dist"]=13.133570672711606
     init["sigma_dist"]= 1.5160651053079683
-    init["logL_raw"]  = ((logL-init["mu_dist"])/init["sigma_dist"]).tolist()
+    init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
     with open(fn_sga+"_init.json", 'w') as f:
         f.write(json.dumps(init))
 
@@ -119,7 +119,7 @@ def to_json(frac=1):
 
     init["mu_dist"]=13.133570672711606
     init["sigma_dist"]= 1.5160651053079683
-    init["logL_raw"]  = ((logL-init["mu_dist"])/init["sigma_dist"]).tolist()
+    init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
 
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
@@ -163,7 +163,7 @@ def segev_json(fn='SGA_TFR_simtest_20240307'):
 
     init["mu_dist"]=13.133570672711606
     init["sigma_dist"]= 1.5160651053079683
-    init["logL_raw"]  = ((logL-init["mu_dist"])/init["sigma_dist"]).tolist()
+    init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
 
     # init["r_raw"]=((numpy.array(data_dic["V_0p33R26"])+24.483252891972377)/3.8906505354308463).tolist()
     # init["r_s_dist"]=0.3203771381830672
@@ -191,8 +191,8 @@ def segev_plot(fn = fn_segev2):
 
 
 if __name__ == '__main__':
-    to_json(0.1)
+    # to_json(0.1)
     # coma_json()
-    # for i in range(1,11):
-    #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
+    for i in range(1,11):
+        segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()
