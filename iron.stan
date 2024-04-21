@@ -1,4 +1,4 @@
-// ./iron410f sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_sub_0.10.json output file=output/iron_410f_sub_0.10_test.csv
+// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_sub_0.10.json output file=output/iron_410s_sub_0.10_test.csv
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -59,7 +59,7 @@ parameters {
   // parameters for SkewNormal
   real<upper=0> alpha_dist;
   real<lower=0> omega_dist;
-  real xi_dist;
+  real<lower=10, upper=20> xi_dist;
   // }
 
   real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
@@ -111,9 +111,20 @@ model {
       // VtoUse = V_fiber(VtoUse,epsilon);
   } 
 
-  R_MAG_SB26 ~ normal(bR + mu+ sinth * logL  + (random_realization)*sinth_r, dR);
+  vector[N] mR = bR + mu+ sinth * logL  + (random_realization)*sinth_r;
+  R_MAG_SB26 ~ normal(mR, dR);
   V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
-  
+
+  // print(Rlim, " ",mean(bR + mu+ sinth * logL)," ",min(bR + mu+ sinth * logL)," ",max(bR + mu+ sinth * logL));
+  // vector[N] dum;
+  //   dum = erfc((Rlim-mR)/sqrt(2)./R_MAG_SB26_ERR);
+  // for(n in 1:N){
+  //   if (dum[n]>0) {
+  //     target += -log(dum[n]);
+  //   }
+  // }
+  // target += -sum(log(erfc((Rlim-mR)/sqrt(2)./R_MAG_SB26_ERR)));
+  // target += -sum(log(Phi_approx(mR-Rlim)./R_MAG_SB26_ERR));
   if (flatDistribution==0)
   {
       logL_raw ~ skew_normal(0, 1 ,alpha_dist);
