@@ -120,7 +120,7 @@ def to_json(frac=1):
     init["mu_dist"]=13.133570672711606
     init["sigma_dist"]= 1.5160651053079683
     init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
-
+    init['bR'] = -5.8
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
 
