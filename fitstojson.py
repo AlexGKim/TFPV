@@ -102,13 +102,14 @@ def to_json(frac=1):
         outname2 = fn+"_init.json"
     else:
         outname =  fn+"_sub_{:4.2f}.json".format(frac)
-        outname2 = fn+"_init"+"_sub_{:4.2f}.json".format(frac)
+        outname2 = fn+"_sub_{:4.2f}_init.json".format(frac)
 
     with open("data/"+outname, 'w') as f:
         f.write(json_object)
 
 #  vector[N] v = 373.137*v_raw + 222.371;
     init = dict()
+    init['bR'] = -5.7
     init["atanAR"] = numpy.arctan(-6.1)
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
     # init["logL"]  = logL.tolist()
@@ -191,8 +192,8 @@ def segev_plot(fn = fn_segev2):
 
 
 if __name__ == '__main__':
-    # to_json(0.1)
+    to_json(0.02)
     # coma_json()
-    for i in range(1,11):
-        segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
+    # for i in range(1,11):
+    #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()
