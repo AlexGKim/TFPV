@@ -44,6 +44,7 @@ transformed data {
 
   vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR+dm_v.*dm_v);
 
+
 }
 
 
@@ -53,12 +54,11 @@ parameters {
   // vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
 
   vector[N] logL_raw;       // latent parameter
-
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  real<upper=0> alpha_dist;
-  real<lower=0> omega_dist;
+  real<lower=-10,upper=-1> alpha_dist;
+  real<lower=0.1, upper=5> omega_dist;  
   real<lower=10, upper=20> xi_dist;
   // }
 
@@ -67,6 +67,8 @@ parameters {
 
   vector[N] random_realization_raw;
   real<lower=0> sigR;
+
+  vector[N] dv;
 
 }
 model {
@@ -110,21 +112,10 @@ model {
   if (angle_error == 1){
       // VtoUse = V_fiber(VtoUse,epsilon);
   } 
-
-  vector[N] mR = bR + mu+ sinth * logL  + (random_realization)*sinth_r;
-  R_MAG_SB26 ~ normal(mR, dR);
+  vector[N] m_realize = bR + mu+ sinth * logL  + (random_realization)*sinth_r + dm_v.*dv;
+  R_MAG_SB26 ~ normal(m_realize, R_MAG_SB26_ERR);
   V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
-
-  // print(Rlim, " ",mean(bR + mu+ sinth * logL)," ",min(bR + mu+ sinth * logL)," ",max(bR + mu+ sinth * logL));
-  // vector[N] dum;
-  //   dum = erfc((Rlim-mR)/sqrt(2)./R_MAG_SB26_ERR);
-  // for(n in 1:N){
-  //   if (dum[n]>0) {
-  //     target += -log(dum[n]);
-  //   }
-  // }
-  // target += -sum(log(erfc((Rlim-mR)/sqrt(2)./R_MAG_SB26_ERR)));
-  // target += -sum(log(Phi_approx(mR-Rlim)./R_MAG_SB26_ERR));
+  target += -normal_lcdf(Rlim | m_realize,R_MAG_SB26_ERR);  
   if (flatDistribution==0)
   {
       logL_raw ~ skew_normal(0, 1 ,alpha_dist);
@@ -132,6 +123,8 @@ model {
 
   random_realization_raw ~ normal (0, 1);
   sigR ~ cauchy(0.,1);
+
+  dv ~ normal(0.,1.);
  
   // if (angle_error==1)
   //   epsilon ~ normal(0,angle_dispersion);
