@@ -1,4 +1,4 @@
-// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_sub_0.10.json output file=output/iron_410s_sub_0.10_test.csv
+// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.10.json output file=output/iron_410s_cuts_sub_0.10.csv
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -19,6 +19,9 @@ data {
   vector[N] mu;
   vector[N] dm_v;
   real Rlim;
+  vector[N] Rlim_eff;
+  real Vmin;
+  real Vmax;
 }
 
 transformed data {
@@ -41,9 +44,6 @@ transformed data {
   // real angle_dispersion_deg = 14.2;
   // real angle_dispersion_deg = 5.;
   // real angle_dispersion = angle_dispersion_deg/180*pi();
-
-  vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR+dm_v.*dm_v);
-
 
 }
 
@@ -115,7 +115,13 @@ model {
   vector[N] m_realize = bR + mu+ sinth * logL  + (random_realization)*sinth_r + dm_v.*dv;
   R_MAG_SB26 ~ normal(m_realize, R_MAG_SB26_ERR);
   V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
-  target += -normal_lcdf(Rlim | m_realize,R_MAG_SB26_ERR);  
+  target += -normal_lcdf(Rlim_eff | m_realize,R_MAG_SB26_ERR); 
+
+  for (n in 1:N){
+    real lcdfmax = cauchy_lcdf(Vmax | VtoUse[n], V_0p4R26_err[n]);
+    real lcdfmin = cauchy_lcdf(Vmin | VtoUse[n], V_0p4R26_err[n]);
+    target += - lcdfmax - log(1-exp(lcdfmin-lcdfmax));
+  }
   if (flatDistribution==0)
   {
       logL_raw ~ skew_normal(0, 1 ,alpha_dist);

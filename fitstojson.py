@@ -4,7 +4,7 @@ import json
 from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
 
-fn = "SGA-2020_iron_Vrot"
+fn = "SGA-2020_iron_Vrot_cuts"
 fn_sga = "data/SGA-2020_fuji_Vrot"
 fn_segev2 = "SGA_TFR_simtest_20240307"
 
@@ -44,10 +44,8 @@ def coma_json():
     # init["v_raw"]=(numpy.array(data_dic["V_0p33R26"])/139.35728557650154).tolist()
 
     init["atanAR"] = numpy.arctan(-6.1)
+    init['bR'] = -6.91
     logL = numpy.log10(data_dic["V_0p33R26"])/numpy.cos(init["atanAR"])
-    init["logL"]  = logL.tolist()
-    init["s_dist"]=0.5326792343583239
-    init["scale_dist"]=139.35728557650154
 
     init["alpha_dist"]=-3.661245022462153
     init["xi_dist"]= 14.913405242237685
@@ -61,18 +59,25 @@ def coma_json():
 
 def to_json(frac=1, cuts=False):
     fn = "SGA-2020_iron_Vrot"
-    Rlim = 17.75
 
+    Rlim = 17.75
     Mlim = -17.
-    Vlim = 15
-    inclination = 45.
+    Vmin = 70
+    Vmax = 500
+    cosi = 1/numpy.sqrt(2)
+    q0=0.2
+    balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
 
     fits=fitsio.FITS("data/"+fn+".fits")
     data=fits[1].read()
+
+    # selection effects
+
     mu = cosmo.distmod(data['Z_DESI']).value
+    Rlim_eff = numpy.minimum(Rlim, mu+Mlim)
 
     if cuts:
-        select = numpy.logical_and([data['R_MAG_SB26'] < Rlim , (data['R_MAG_SB26'] - mu) < Mlim, data["V_0p4R26"] > Vlim, ])
+        select = numpy.logical_and.reduce((data['R_MAG_SB26'] < Rlim_eff  , data["V_0p4R26"] > Vmin, data["V_0p4R26"] < Vmax, data["BA"] < balim))
     else:
         select = data['R_MAG_SB26'] < Rlim
 
@@ -87,6 +92,7 @@ def to_json(frac=1, cuts=False):
 
     data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
 
+    data_dic['Rlim_eff'] = Rlim_eff.tolist()
     z = numpy.array(data_dic["Z_DESI"])
     dv = 300
     dm = (5/numpy.log(10)*(1+z)**2*dv/cosmo.H(z)/cosmo.luminosity_distance(z)).value
@@ -102,7 +108,8 @@ def to_json(frac=1, cuts=False):
     data_dic['N'] = len(data_dic['SGA_ID'])
     data_dic['Rlim'] = Rlim
     data_dic['Mlim'] = Mlim
-    data_dic['Vlim'] = Vlim
+    data_dic['Vmin'] = Vmin
+    data_dic['Vmax'] = Vmax
 
     json_object = json.dumps(data_dic)
 
@@ -121,10 +128,10 @@ def to_json(frac=1, cuts=False):
 
 #  vector[N] v = 373.137*v_raw + 222.371;
     init = dict()
-    init['bR'] = -5.7
+
     init["atanAR"] = numpy.arctan(-6.1)
+    init['bR'] = -6.91
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
-    # init["logL"]  = logL.tolist()
 
     init["alpha_dist"]=-3.661245022462153
     init["xi_dist"]= 14.913405242237685
@@ -204,7 +211,7 @@ def segev_plot(fn = fn_segev2):
 
 
 if __name__ == '__main__':
-    to_json(0.02)
+    to_json(frac=0.02,cuts=True)
     # coma_json()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))

@@ -5,8 +5,9 @@ from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
 import scipy.stats
 
-fn = "data/SGA-2020_iron_Vrot_sub_0.10.json"
-# fn="data/SGA-2020_fuji_Vrot.json"
+# fn = "data/SGA-2020_iron_Vrot_cuts_sub_0.02.json"
+fn="data/SGA-2020_fuji_Vrot.json"
+# fn = "data/SGA_TFR_simtest_001.json"
 with open(fn, 'r') as f:
     data = json.load(f)
 
@@ -71,10 +72,22 @@ x=numpy.linspace(-23,-14,100)
 plt.plot(x, scipy.stats.lognorm.pdf(x, *ans))
 plt.show()
 
-x=[10,800]
+#Fuji
+x=[20,600]
+plt.plot(x,-5.8 -6.1* numpy.log10(x))
+MR = numpy.array(data["R_MAG_SB26"]) - 34.7
+plt.errorbar(data["V_0p33R26"], MR ,yerr=numpy.sqrt(numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p33R26_err"], fmt=".")
+plt.xscale('log',base=10)
+plt.xlabel("V_0p33R26")
+plt.ylabel(r"R_MAG_SB26-$\mu$")
+plt.ylim((MR.max()+.5,MR.min()-.5))
+plt.show()
+
+#iron
+x=[50,600]
+plt.plot(x,-6.91 -6.2* numpy.log10(x))
 MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"])
 plt.errorbar(data["V_0p4R26"], MR ,yerr=numpy.sqrt(dm**2+numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p4R26_err"], fmt=".")
-plt.plot(x,-7.979 -5.784* numpy.log10(x))
 plt.xscale('log',base=10)
 plt.xlabel("V_0p4R26")
 plt.ylabel(r"R_MAG_SB26-$\mu$")
