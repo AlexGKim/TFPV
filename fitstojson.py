@@ -59,15 +59,22 @@ def coma_json():
     with open(fn_sga+"_init.json", 'w') as f:
         f.write(json.dumps(init))
 
-def to_json(frac=1):
+def to_json(frac=1, cuts=False):
     fn = "SGA-2020_iron_Vrot"
     Rlim = 17.75
 
+    Mlim = -17.
+    Vlim = 15
+    inclination = 45.
+
     fits=fitsio.FITS("data/"+fn+".fits")
     data=fits[1].read()
+    mu = cosmo.distmod(data['Z_DESI']).value
 
-
-    select = data['R_MAG_SB26'] < Rlim
+    if cuts:
+        select = numpy.logical_and([data['R_MAG_SB26'] < Rlim , (data['R_MAG_SB26'] - mu) < Mlim, data["V_0p4R26"] > Vlim, ])
+    else:
+        select = data['R_MAG_SB26'] < Rlim
 
     data_dic=dict()
     for k in data.dtype.names:
@@ -94,15 +101,20 @@ def to_json(frac=1):
 
     data_dic['N'] = len(data_dic['SGA_ID'])
     data_dic['Rlim'] = Rlim
+    data_dic['Mlim'] = Mlim
+    data_dic['Vlim'] = Vlim
 
     json_object = json.dumps(data_dic)
 
+    cstr=""
+    if cuts:
+        cstr="_cuts"
     if frac==1:
-        outname = fn+".json"
-        outname2 = fn+"_init.json"
+        outname = fn+cstr+".json"
+        outname2 = fn+cstr+"_init.json"
     else:
-        outname =  fn+"_sub_{:4.2f}.json".format(frac)
-        outname2 = fn+"_sub_{:4.2f}_init.json".format(frac)
+        outname =  fn+cstr+"_sub_{:4.2f}.json".format(frac)
+        outname2 = fn+cstr+"_sub_{:4.2f}_init.json".format(frac)
 
     with open("data/"+outname, 'w') as f:
         f.write(json_object)
