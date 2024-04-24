@@ -133,9 +133,14 @@ def to_json(frac=1, cuts=False):
     init['bR'] = -6.91
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
 
-    init["alpha_dist"]=-3.661245022462153
-    init["xi_dist"]= 14.913405242237685
-    init["omega_dist"]=2.2831016215521247
+    if cuts:
+        init["alpha_dist"]=-2.4813505391290436
+        init["xi_dist"]= 14.628796578863792
+        init["omega_dist"]=1.4880837674710605
+    else:
+        init["alpha_dist"]=-3.661245022462153
+        init["xi_dist"]= 14.913405242237685
+        init["omega_dist"]=2.2831016215521247
 
     init["mu_dist"]=13.133570672711606
     init["sigma_dist"]= 1.5160651053079683
