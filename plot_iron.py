@@ -5,8 +5,8 @@ from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
 import scipy.stats
 
-# fn = "data/SGA-2020_iron_Vrot_cuts_sub_0.02.json"
-fn="data/SGA-2020_fuji_Vrot.json"
+fn = "data/SGA-2020_iron_Vrot_cuts_sub_0.02.json"
+# fn="data/SGA-2020_fuji_Vrot.json"
 # fn = "data/SGA_TFR_simtest_001.json"
 with open(fn, 'r') as f:
     data = json.load(f)
@@ -45,6 +45,8 @@ ans # (13.133570672711606, 1.5160651053079683)
 
 ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
 ans # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
+# Out[42]: (-2.4813505391290436, 14.628796578863792, 1.4880837674710605) for pruned set
+
 x=numpy.linspace(6,18,100)
 plt.plot(x, scipy.stats.skewnorm.pdf(x, *ans))
 plt.show()
@@ -74,7 +76,8 @@ plt.show()
 
 #Fuji
 x=[20,600]
-plt.plot(x,-5.8 -6.1* numpy.log10(x))
+# plt.plot(x,-6.9 -6.1* numpy.log10(x))
+plt.plot(x,-3.88 -7.55* numpy.log10(x))
 MR = numpy.array(data["R_MAG_SB26"]) - 34.7
 plt.errorbar(data["V_0p33R26"], MR ,yerr=numpy.sqrt(numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p33R26_err"], fmt=".")
 plt.xscale('log',base=10)
