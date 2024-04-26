@@ -36,20 +36,7 @@ plt.xlabel("Z_DESI")
 plt.ylabel("V_0p4R26")
 plt.show()
 
-plt.hist(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
-plt.show()
 
-ans = scipy.stats.norm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
-ans # (13.133570672711606, 1.5160651053079683)
-
-
-ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
-ans # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
-# Out[42]: (-2.4813505391290436, 14.628796578863792, 1.4880837674710605) for pruned set
-
-x=numpy.linspace(6,18,100)
-plt.plot(x, scipy.stats.skewnorm.pdf(x, *ans))
-plt.show()
 
 plt.hist(numpy.log10(data["V_0p33R26"]))
 plt.xlabel(r"$\log{V}$")
@@ -74,6 +61,14 @@ x=numpy.linspace(-23,-14,100)
 plt.plot(x, scipy.stats.lognorm.pdf(x, *ans))
 plt.show()
 
+ans = scipy.stats.norm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
+ans # (13.133570672711606, 1.5160651053079683)
+
+
+ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
+ans # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
+# Out[42]: (-2.4813505391290436, 14.628796578863792, 1.4880837674710605) for pruned set
+
 #Fuji
 x=[20,600]
 # plt.plot(x,-6.9 -6.1* numpy.log10(x))
@@ -88,12 +83,19 @@ plt.show()
 
 #iron
 x=[50,600]
-plt.plot(x,-6.91 -6.2* numpy.log10(x))
+plt.plot(x,-6.8 -6.1* numpy.log10(x))
 MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"])
-plt.errorbar(data["V_0p4R26"], MR ,yerr=numpy.sqrt(dm**2+numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p4R26_err"], fmt=".")
+# plt.errorbar(data["V_0p4R26"], MR ,yerr=numpy.sqrt(dm**2+numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p4R26_err"], fmt=".")
+plt.errorbar(data["V_0p4R26"], MR ,yerr=numpy.sqrt(.1**2+numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=numpy.sqrt((.1/numpy.array(data["V_0p4R26"]))**2+numpy.array(data["V_0p4R26_err"])**2), fmt=".")
 plt.xscale('log',base=10)
 plt.xlabel("V_0p4R26")
 plt.ylabel(r"R_MAG_SB26-$\mu$")
 plt.ylim((MR.max()+.5,MR.min()-.5))
 plt.show()
 
+plt.hist(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)),density=True)
+x=numpy.linspace(6,18,100)
+plt.plot(x, scipy.stats.skewnorm.pdf(x, -2.4813505391290436, 14.628796578863792,1.4880837674710605))
+plt.plot(x, scipy.stats.skewnorm.pdf(x, -2, 14.5,1.6))
+# plt.plot(x, scipy.stats.skewnorm.pdf(x, -3.661245022462153, 14.913405242237685,2.2831016215521247))
+plt.show()

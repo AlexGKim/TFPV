@@ -130,21 +130,28 @@ def to_json(frac=1, cuts=False):
     init = dict()
 
     init["atanAR"] = numpy.arctan(-6.1)
-    init['bR'] = -6.91
+    init['bR'] = -6.8
+    init['sigR'] = 0.1
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
 
     if cuts:
-        init["alpha_dist"]=-2.4813505391290436
-        init["xi_dist"]= 14.628796578863792
-        init["omega_dist"]=1.4880837674710605
+        # init["alpha_dist"]=-2.4813505391290436
+        # init["xi_dist"]= 14.628796578863792
+        # init["omega_dist"]=1.4880837674710605
+        init["alpha_dist"]=-2.
+        init["xi_dist"]= 14.5
+        init["omega_dist"]=1.6    
     else:
         init["alpha_dist"]=-3.661245022462153
         init["xi_dist"]= 14.913405242237685
         init["omega_dist"]=2.2831016215521247
 
-    init["mu_dist"]=13.133570672711606
-    init["sigma_dist"]= 1.5160651053079683
+    # init["mu_dist"]=13.133570672711606
+    # init["sigma_dist"]= 1.5160651053079683
     init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
+
+    init["dv"] = numpy.zeros(data_dic['N']).tolist()
+    init["random_realization_raw"] = numpy.zeros(data_dic['N']).tolist()
 
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
