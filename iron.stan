@@ -1,4 +1,4 @@
-// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.10.json output file=output/iron_210s_cuts_sub_0.10.csv
+// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.02_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.02.json output file=output/temp
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -46,9 +46,9 @@ transformed data {
   vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR + Rhat_noise*Rhat_noise);
   vector[N] dV = sqrt(V_0p4R26_err.*V_0p4R26_err + Vhat_noise.*Vhat_noise);
 
-    real alpha_dist=-1.98;
-  real omega_dist=1.29;  
-  real xi_dist=15.6;
+  //   real alpha_dist=-1.98;
+  // real omega_dist=1.29;  
+  // real xi_dist=15.6;
 
   // real dwarf_mag=-17. + 34.7;
 
@@ -69,11 +69,9 @@ parameters {
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  // real alpha_dist;
-  // real omega_dist;  
-  // real xi_dist;
-  // real omega_dist;  
-  // real xi_dist;
+  real alpha_dist;
+  real omega_dist;  
+  real xi_dist;
   // }
 
   real atanAR; // negative slope positive cosine
@@ -128,14 +126,13 @@ model {
       // VtoUse = V_fiber(VtoUse,epsilon);
   } 
   vector[N] m_realize = bR + mu+ sinth * logL  + (random_realization)*sinth_r + dm_v.*dv;
-  Rhat ~ normal(m_realize, dR);
-  Vhat ~ normal(VtoUse, dV);
-  // print(Rlim_eff-m_realize);
-  target += -normal_lcdf(Rlim_eff | m_realize, dR);
+
+  Rhat ~ normal(m_realize, dR) T[,Rlim];
+  Vhat ~ normal(VtoUse, dV) T[Vmin,Vmax];
+  // print(normal_lpdf(Rhat | m_realize, dR) - normal_lcdf(Rlim_eff | m_realize, dR));
+  // target += -normal_lcdf(Rlim_eff | m_realize, dR);
   // for (n in 1:N){
-  //   real lcdfmax = normal_lcdf(Vmax | VtoUse[n], dV[n]);
-  //   real lcdfmin = normal_lcdf(Vmin | VtoUse[n], dV[n]);
-  //   target += - lcdfmax - log(1-exp(lcdfmin-lcdfmax));
+  //   Rhat[n] ~ normal(m_realize[n], dR[n]) T[,Rhat[]]
   // }
 
   if (flatDistribution==0)
@@ -149,9 +146,9 @@ model {
 
   dv ~ normal(0.,1.);
 
-  // alpha_dist ~ uniform(-10,0);
-  // omega_dist ~ uniform(0.5,4);  
-  // xi_dist ~ uniform(12,18); 
+  alpha_dist ~ uniform(-10,0);
+  omega_dist ~ uniform(0.5,4);  
+  xi_dist ~ uniform(12,18); 
   atanAR ~ uniform(-1.43 , -1.4); 
   // if (angle_error==1)
   //   epsilon ~ normal(0,angle_dispersion);
