@@ -1,4 +1,4 @@
-// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.02_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.02.json output file=output/temp
+// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.02_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.02.json output file=output/temp
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -129,11 +129,6 @@ model {
 
   Rhat ~ normal(m_realize, dR) T[,Rlim];
   Vhat ~ normal(VtoUse, dV) T[Vmin,Vmax];
-  // print(normal_lpdf(Rhat | m_realize, dR) - normal_lcdf(Rlim_eff | m_realize, dR));
-  // target += -normal_lcdf(Rlim_eff | m_realize, dR);
-  // for (n in 1:N){
-  //   Rhat[n] ~ normal(m_realize[n], dR[n]) T[,Rhat[]]
-  // }
 
   if (flatDistribution==0)
   {
