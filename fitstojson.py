@@ -8,6 +8,8 @@ fn = "SGA-2020_iron_Vrot_cuts"
 fn_sga = "data/SGA-2020_fuji_Vrot"
 fn_segev2 = "SGA_TFR_simtest_20240307"
 
+rng = numpy.random.default_rng(seed=42)
+
 def coma_json():
     fits=fitsio.FITS(fn_sga+".fits")
     data=fits[1].read()
@@ -60,7 +62,7 @@ def coma_json():
 def to_json(frac=1, cuts=False):
     fn = "SGA-2020_iron_Vrot"
 
-    Rlim = 17.75
+    Rlim = 17.75 - 0.2
     Mlim = -17.
     Vmin = 70
     Vmax = 500
@@ -76,8 +78,15 @@ def to_json(frac=1, cuts=False):
     mu = cosmo.distmod(data['Z_DESI']).value
     Rlim_eff = numpy.minimum(Rlim, mu+Mlim)
 
+    # add extra noise degrading data to help fit
+    dt = {'names':['Vhat','Vhat_noise','Rhat'], 'formats':[float, float,float]}
+    extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
+    extradata['Vhat_noise'] = 0.04*data["V_0p4R26"]
+    Rhat_noise = 0.2
+    extradata['Vhat'] = numpy.random.normal(loc=data["V_0p4R26"], scale=extradata['Vhat_noise'])
+    extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
     if cuts:
-        select = numpy.logical_and.reduce((data['R_MAG_SB26'] < Rlim_eff  , data["V_0p4R26"] > Vmin, data["V_0p4R26"] < Vmax, data["BA"] < balim))
+        select = numpy.logical_and.reduce((extradata['Rhat'] < Rlim_eff  , extradata['Vhat'] > Vmin, extradata['Vhat'] < Vmax, data["BA"] < balim))
     else:
         select = data['R_MAG_SB26'] < Rlim
 
@@ -90,8 +99,10 @@ def to_json(frac=1, cuts=False):
 
             data_dic[k]=data[k][select].tolist()
 
-    data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
+    for k in extradata.dtype.names:
+        data_dic[k]=extradata[k][select].tolist()
 
+    data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
     data_dic['Rlim_eff'] = Rlim_eff.tolist()
     z = numpy.array(data_dic["Z_DESI"])
     dv = 300
@@ -110,6 +121,9 @@ def to_json(frac=1, cuts=False):
     data_dic['Mlim'] = Mlim
     data_dic['Vmin'] = Vmin
     data_dic['Vmax'] = Vmax
+
+    data_dic['Rhat_noise'] = Rhat_noise
+
 
     json_object = json.dumps(data_dic)
 
@@ -150,9 +164,8 @@ def to_json(frac=1, cuts=False):
     # init["sigma_dist"]= 1.5160651053079683
     init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
 
-    init["dv"] = numpy.zeros(data_dic['N']).tolist()
-    init["random_realization_raw"] = numpy.zeros(data_dic['N']).tolist()
-
+    init["dv"] = (numpy.zeros(data_dic['N'])-.5).tolist()
+    init["random_realization_raw"] = (numpy.zeros(data_dic['N'])-.5).tolist()
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
 

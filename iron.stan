@@ -15,6 +15,11 @@ data {
   vector[N] R_MAG_SB26;
   vector[N] R_MAG_SB26_ERR;
 
+  vector[N] Rhat;
+  vector[N] Vhat;
+  real Rhat_noise;
+  vector[N] Vhat_noise;  
+
   //for iron
   vector[N] mu;
   vector[N] dm_v;
@@ -38,8 +43,12 @@ transformed data {
 
   int flatDistribution = 0;
 
-  vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR + 0.15*0.15);
-  vector[N] dV = sqrt(V_0p4R26_err.*V_0p4R26_err + 0.15*0.15/V_0p4R26./V_0p4R26);
+  vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR + Rhat_noise*Rhat_noise);
+  vector[N] dV = sqrt(V_0p4R26_err.*V_0p4R26_err + Vhat_noise.*Vhat_noise);
+
+    real alpha_dist=-1.98;
+  real omega_dist=1.29;  
+  real xi_dist=15.6;
 
   // real dwarf_mag=-17. + 34.7;
 
@@ -60,14 +69,13 @@ parameters {
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  // real<lower=-5,upper=-0.5> alpha_dist;
-  // real<lower=0.5, upper=2> omega_dist;  
-  // real<lower=12, upper=15> xi_dist;
-  real omega_dist;  
-  real xi_dist;
+  // real alpha_dist;
+  // real omega_dist;  
+  // real xi_dist;
+  // real omega_dist;  
+  // real xi_dist;
   // }
 
-  // real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
   real atanAR; // negative slope positive cosine
     // real<lower=-1.43 , upper=-1.4> atanAR; // negative slope positive cosine
 
@@ -77,11 +85,10 @@ parameters {
   real<lower=0> sigR;
 
   vector[N] dv;
-
 }
 model {
 
-  // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
+
   vector[N] logL;
   if (flatDistribution==0) {
     logL=omega_dist*logL_raw+xi_dist;
@@ -121,19 +128,20 @@ model {
       // VtoUse = V_fiber(VtoUse,epsilon);
   } 
   vector[N] m_realize = bR + mu+ sinth * logL  + (random_realization)*sinth_r + dm_v.*dv;
-  R_MAG_SB26 ~ normal(m_realize, dR);
-  V_0p4R26 ~ normal(VtoUse, dV);
-  target += -normal_lcdf(Rlim_eff | m_realize,dR); 
-
+  Rhat ~ normal(m_realize, dR);
+  Vhat ~ normal(VtoUse, dV);
+  // print(Rlim_eff-m_realize);
+  target += -normal_lcdf(Rlim_eff | m_realize, dR);
   // for (n in 1:N){
   //   real lcdfmax = normal_lcdf(Vmax | VtoUse[n], dV[n]);
   //   real lcdfmin = normal_lcdf(Vmin | VtoUse[n], dV[n]);
   //   target += - lcdfmax - log(1-exp(lcdfmin-lcdfmax));
   // }
+
   if (flatDistribution==0)
   {
-      // logL_raw ~ skew_normal(0, 1 ,alpha_dist);
-      logL_raw ~ normal(0, 1 );
+      logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      // logL_raw ~ normal(0, 1 );
   }
 
   random_realization_raw ~ normal (0, 1);
@@ -142,17 +150,12 @@ model {
   dv ~ normal(0.,1.);
 
   // alpha_dist ~ uniform(-10,0);
-  omega_dist ~ uniform(0.5,4);  
-  xi_dist ~ uniform(12,18); 
+  // omega_dist ~ uniform(0.5,4);  
+  // xi_dist ~ uniform(12,18); 
   atanAR ~ uniform(-1.43 , -1.4); 
   // if (angle_error==1)
   //   epsilon ~ normal(0,angle_dispersion);
 }
 generated quantities {
    real aR=tan(atanAR);
-   // vector[N] logL_=log10(L_);
-   // real minLogL = min(logL_);
-   // real maxLogL = max(logL_);
-   // if (pure !=1) 
-   //  real aR2=tan(atanAR2);
 }

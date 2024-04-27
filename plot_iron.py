@@ -81,14 +81,23 @@ plt.ylabel(r"R_MAG_SB26-$\mu$")
 plt.ylim((MR.max()+.5,MR.min()-.5))
 plt.show()
 
+
+
 #iron
 x=[50,600]
 plt.plot(x,-6.8 -6.1* numpy.log10(x))
 MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"])
-# plt.errorbar(data["V_0p4R26"], MR ,yerr=numpy.sqrt(dm**2+numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p4R26_err"], fmt=".")
-plt.errorbar(data["V_0p4R26"], MR ,yerr=numpy.sqrt(.1**2+numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=numpy.sqrt((.1/numpy.array(data["V_0p4R26"]))**2+numpy.array(data["V_0p4R26_err"])**2), fmt=".")
+plt.errorbar(data["V_0p4R26"], MR ,yerr=numpy.sqrt(numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p4R26_err"], fmt=".")
 plt.xscale('log',base=10)
 plt.xlabel("V_0p4R26")
+plt.ylabel(r"R_MAG_SB26-$\mu$")
+plt.ylim((MR.max()+.5,MR.min()-.5))
+plt.show()
+
+MR = numpy.array(data["Rhat"]) - numpy.array(data["mu"])
+plt.errorbar(data["Vhat"], MR ,yerr=data["Rhat_noise"],xerr=data["Vhat_noise"], fmt=".")
+plt.xscale('log',base=10)
+plt.xlabel("V_0p33R26")
 plt.ylabel(r"R_MAG_SB26-$\mu$")
 plt.ylim((MR.max()+.5,MR.min()-.5))
 plt.show()
