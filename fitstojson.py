@@ -4,6 +4,7 @@ import json
 from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
 
+
 fn = "SGA-2020_iron_Vrot_cuts"
 fn_sga = "data/SGA-2020_fuji_Vrot"
 fn_segev2 = "SGA_TFR_simtest_20240307"
@@ -62,10 +63,10 @@ def coma_json():
 def to_json(frac=1, cuts=False):
     fn = "SGA-2020_iron_Vrot"
 
-    Rlim = 17.75-0.2
+    Rlim = 17.75-0.1
     Mlim = -17.
     Vmin = 70
-    Vmax = 500
+    Vmax = 300
     cosi = 1/numpy.sqrt(2)
     q0=0.2
     balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
@@ -81,8 +82,8 @@ def to_json(frac=1, cuts=False):
     # add extra noise degrading data to help fit
     dt = {'names':['Vhat','Vhat_noise','Rhat'], 'formats':[float, float,float]}
     extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
-    extradata['Vhat_noise'] = 0.04*data["V_0p4R26"]
-    Rhat_noise = 0.2
+    extradata['Vhat_noise'] = 0.02*data["V_0p4R26"]
+    Rhat_noise = 0.1
     extradata['Vhat'] = numpy.random.normal(loc=data["V_0p4R26"], scale=extradata['Vhat_noise'])
     extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
     if cuts:
@@ -164,8 +165,8 @@ def to_json(frac=1, cuts=False):
     # init["sigma_dist"]= 1.5160651053079683
     init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
 
-    init["dv"] = (numpy.zeros(data_dic['N'])-.5*0).tolist()
-    init["random_realization_raw"] = (numpy.zeros(data_dic['N'])-.5*0).tolist()
+    init["dv"] = (numpy.zeros(data_dic['N'])).tolist()
+    init["random_realization_raw"] = (numpy.zeros(data_dic['N'])-1).tolist()
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
 

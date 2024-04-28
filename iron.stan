@@ -1,4 +1,5 @@
-// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.02_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.02.json output file=output/temp
+// ./iron410 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.10.json output file=output/iron_410_cuts_sub_0.10.csv
+
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
