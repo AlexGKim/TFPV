@@ -63,7 +63,7 @@ def coma_json():
 def to_json(frac=1, cuts=False):
     fn = "SGA-2020_iron_Vrot"
 
-    Rlim = 17.75-0.1-0.1
+    Rlim = 17.75-0.1
     Mlim = -17.
     Vmin = 70
     Vmax = 300
@@ -82,8 +82,8 @@ def to_json(frac=1, cuts=False):
     # add extra noise degrading data to help fit
     dt = {'names':['Vhat','Vhat_noise','Rhat'], 'formats':[float, float,float]}
     extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
-    extradata['Vhat_noise'] = 0.04*data["V_0p4R26"]
-    Rhat_noise = 0.2
+    extradata['Vhat_noise'] = 0.02*data["V_0p4R26"]
+    Rhat_noise = 0.1
     extradata['Vhat'] = numpy.random.normal(loc=data["V_0p4R26"], scale=extradata['Vhat_noise'])
     extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
     if cuts:

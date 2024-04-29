@@ -133,7 +133,7 @@ model {
   }
 
   random_realization_raw ~ normal (0, 1);
-  sigR ~ cauchy(0.,1);
+  sigR ~ cauchy(0.,10);
 
   dv ~ normal(0.,1.);
 
