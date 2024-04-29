@@ -63,7 +63,7 @@ def coma_json():
 def to_json(frac=1, cuts=False):
     fn = "SGA-2020_iron_Vrot"
 
-    Rlim = 17.75-0.1
+    Rlim = 17.75-0.1-0.1
     Mlim = -17.
     Vmin = 70
     Vmax = 300
@@ -82,8 +82,8 @@ def to_json(frac=1, cuts=False):
     # add extra noise degrading data to help fit
     dt = {'names':['Vhat','Vhat_noise','Rhat'], 'formats':[float, float,float]}
     extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
-    extradata['Vhat_noise'] = 0.02*data["V_0p4R26"]
-    Rhat_noise = 0.1
+    extradata['Vhat_noise'] = 0.04*data["V_0p4R26"]
+    Rhat_noise = 0.2
     extradata['Vhat'] = numpy.random.normal(loc=data["V_0p4R26"], scale=extradata['Vhat_noise'])
     extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
     if cuts:
@@ -125,6 +125,9 @@ def to_json(frac=1, cuts=False):
 
     data_dic['Rhat_noise'] = Rhat_noise
 
+    data_dic["alpha_dist_init"]=-2.8782
+    data_dic["xi_dist_init"]= 16.556
+    data_dic["omega_dist_init"]=1.4521 
 
     json_object = json.dumps(data_dic)
 
@@ -144,18 +147,18 @@ def to_json(frac=1, cuts=False):
 #  vector[N] v = 373.137*v_raw + 222.371;
     init = dict()
 
-    init["atanAR"] = numpy.arctan(-6.1)
-    init['bR'] = -6.8
-    init['sigR'] = 0.1
+    init["atanAR"] = numpy.arctan(-6.9878)
+    init['bR'] = -5.3173
+    init['sigR'] = 0.07
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
 
     if cuts:
         # init["alpha_dist"]=-2.4813505391290436
         # init["xi_dist"]= 14.628796578863792
         # init["omega_dist"]=1.4880837674710605
-        init["alpha_dist"]=-2.
-        init["xi_dist"]= 14.5
-        init["omega_dist"]=1.6    
+        init["alpha_dist"]=data_dic["alpha_dist_init"]
+        init["xi_dist"]= data_dic["xi_dist_init"]
+        init["omega_dist"]=data_dic["omega_dist_init"]
     else:
         init["alpha_dist"]=-3.661245022462153
         init["xi_dist"]= 14.913405242237685
@@ -166,7 +169,7 @@ def to_json(frac=1, cuts=False):
     init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
 
     init["dv"] = (numpy.zeros(data_dic['N'])).tolist()
-    init["random_realization_raw"] = (numpy.zeros(data_dic['N'])-1).tolist()
+    init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
 

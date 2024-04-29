@@ -9,8 +9,6 @@
 
 data {
   int<lower=0> N;
-  // vector[N] V_0p33R26;
-  // vector[N] V_0p33R26_err;
   vector[N] V_0p4R26;
   vector[N] V_0p4R26_err;
   vector[N] R_MAG_SB26;
@@ -28,6 +26,9 @@ data {
   vector[N] Rlim_eff;
   real Vmin;
   real Vmax;
+
+  real omega_dist_init;
+  real xi_dist_init;
 }
 
 transformed data {
@@ -46,10 +47,6 @@ transformed data {
 
   vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR + Rhat_noise*Rhat_noise);
   vector[N] dV = sqrt(V_0p4R26_err.*V_0p4R26_err + Vhat_noise.*Vhat_noise);
-
-  //   real alpha_dist=-1.98;
-  // real omega_dist=1.29;  
-  // real xi_dist=15.6;
 
   // real dwarf_mag=-17. + 34.7;
 
@@ -70,13 +67,12 @@ parameters {
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  real alpha_dist;
-  real omega_dist;  
-  real xi_dist;
+  real<lower=-10, upper=0> alpha_dist;
+  real<lower=0.5, upper=4> omega_dist;  
+  real<lower=12, upper=18> xi_dist;
   // }
 
-  real atanAR; // negative slope positive cosine
-    // real<lower=-1.43 , upper=-1.4> atanAR; // negative slope positive cosine
+  real<lower=atan(-9) , upper=atan(-5.5)> atanAR; // negative slope positive cosine
 
   real bR;
 
@@ -92,7 +88,7 @@ model {
   if (flatDistribution==0) {
     logL=omega_dist*logL_raw+xi_dist;
   } else {
-    logL=logL_raw*1.5160651053079683 + 13.133570672711606;
+    logL=logL_raw*omega_dist_init + xi_dist_init;
   } 
   vector[N] random_realization=random_realization_raw*sigR;
   real sinth = sin(atanAR);
@@ -134,7 +130,6 @@ model {
   if (flatDistribution==0)
   {
       logL_raw ~ skew_normal(0, 1 ,alpha_dist);
-      // logL_raw ~ normal(0, 1 );
   }
 
   random_realization_raw ~ normal (0, 1);
@@ -142,10 +137,6 @@ model {
 
   dv ~ normal(0.,1.);
 
-  alpha_dist ~ uniform(-10,0);
-  omega_dist ~ uniform(0.5,4);  
-  xi_dist ~ uniform(12,18); 
-  atanAR ~ uniform(-1.43 , -1.4); 
   // if (angle_error==1)
   //   epsilon ~ normal(0,angle_dispersion);
 }
