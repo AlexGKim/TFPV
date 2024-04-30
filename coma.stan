@@ -1,5 +1,5 @@
 // ./coma210f sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_210f.csv
-
+// ./coma sample algorithm=hmc engine=nuts max_depth=19 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_410_cuts.csv
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
 //     return V./cos(epsilon);
@@ -12,6 +12,13 @@ data {
   vector[N] V_0p33R26_err;
   vector[N] R_MAG_SB26;
   vector[N] R_MAG_SB26_ERR;
+
+  // vector[N] Rhat;
+  // vector[N] Vhat;
+  // real Rhat_noise;
+  // vector[N] Vhat_noise;  
+
+  real Vmin;
 }
 
 transformed data {
@@ -26,11 +33,14 @@ transformed data {
   int pure = 1;
   int angle_error = 0;
 
-  int flatDistribution = 0;
+  int flatDistribution = 1;
 
   real mu_coma=34.7;
 
   real dwarf_mag=-17. + 34.7;
+
+  // vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR + Rhat_noise*Rhat_noise);
+  // vector[N] dV = sqrt(V_0p33R26_err.*V_0p33R26_err + Vhat_noise.*Vhat_noise);
 
   // Kelly finds standard deviation between 14.2 deg between MANGA and SGA
   // real angle_dispersion_deg = 14.2;
@@ -48,12 +58,12 @@ parameters {
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  real alpha_dist;
-  real<lower=0> omega_dist;
-  real xi_dist;
+  // real<lower=-10, upper=0> alpha_dist;
+  // real<lower=0.5, upper=4> omega_dist;  
+  // real<lower=11, upper=18> xi_dist;
   // }
 
-  real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
+ real<lower=atan(-9) , upper=atan(-5.5)> atanAR; // negative slope positive cosine
   real bR;
 
   vector[N] random_realization_raw;
@@ -64,9 +74,9 @@ model {
   // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
   vector[N] logL;
   if (flatDistribution==0) {
-    logL=omega_dist*logL_raw+xi_dist;
+    // logL=omega_dist*logL_raw+xi_dist;
   } else {
-    logL=logL_raw*1.5160651053079683 + 13.133570672711606;
+    logL=logL_raw*2.2831016215521247 + 14.913405242237685;
   } 
   vector[N] random_realization=random_realization_raw*sigR;
   real sinth = sin(atanAR);
@@ -101,16 +111,21 @@ model {
       // VtoUse = V_fiber(VtoUse,epsilon);
   } 
 
+  // Rhat ~ normal(bR + mu_coma+ sinth * logL  + (random_realization)*sinth_r, dR);
+  // Vhat ~ normal(VtoUse, dV) T[Vmin,];
+
   R_MAG_SB26 ~ normal(bR + mu_coma+ sinth * logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
-  V_0p33R26 ~ normal(VtoUse, V_0p33R26_err);
+  V_0p33R26 ~ normal(VtoUse, V_0p33R26_err) T[Vmin,];
   
   if (flatDistribution==0)
   {
-      logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      // logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+  } else{
+     logL_raw ~ normal(0, 10);
   }
 
   random_realization_raw ~ normal (0, 1);
-  sigR ~ cauchy(0.,1);
+  sigR ~ cauchy(0.,10);
  
   // if (angle_error==1)
   //   epsilon ~ normal(0,angle_dispersion);

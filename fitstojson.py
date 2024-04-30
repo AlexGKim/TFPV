@@ -11,15 +11,35 @@ fn_segev2 = "SGA_TFR_simtest_20240307"
 
 rng = numpy.random.default_rng(seed=42)
 
-def coma_json():
+def coma_json(cuts=False):
     fits=fitsio.FITS(fn_sga+".fits")
     data=fits[1].read()
+
+    cstr=""
+    if cuts:
+        cstr="_cuts"
+    outname = fn_sga+cstr+".json"
+    outname2 = fn_sga+cstr+"_init.json"
+
+    Vmin = 50
+
+    # # add extra noise degrading data to help fit
+    # dt = {'names':['Vhat','Vhat_noise','Rhat'], 'formats':[float, float,float]}
+    # extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
+    # extradata['Vhat_noise'] = 0.02*data["V_0p33R26"]
+    # Rhat_noise = 0.1
+    # extradata['Vhat'] = numpy.random.normal(loc=data["V_0p33R26"], scale=extradata['Vhat_noise'])
+    # extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
 
 
     # comalist = [8032,20886,25532,98934,100987,122260,127141,128944,139660,171794,191275,191496,192582,196592,202666,221178,238344,289665,291879,301194,302524,309306,330166,337817,343570,364410,364929,365429,366393,378180,378842,381769,390630,455486,465951,477610,479267,486394,540744,556334,566771,573264,629860,637552,645151,652931,665961,729931,733069,735080,747077,748600,753474,796671,811359,819754,824392,826543,827339,834049,837120,841705,900049,905270,908303,917608,918100,928810,972260,993595,995924,1009928,1014365,1020852,1050173,1089288,1115705,1122082,1144453,1167691,1195008,1198552,1201916,1203610,1203786,1204237,1206707,1209774,1269260,1272144,1274171,1274189,1274409,1281982,1284002,1293940,1294562,1323268,1349168,1356626,1364394,1379275,1387126,1387991]
     comalist = [25532,30149,98934,122260,191275,196592,202666,221178,291879,309306,337817,364410,364929,365429,366393,378842,455486,465951,479267,486394,566771,645151,747077,748600,753474,759003,819754,826543,841705,917608,995924,1050173,1167691,1195008,1203610,1203786,1269260,1274409,1284002,1323268,1352019,1356626,1364394,1379275,1387991]
     # comalist = [25532,30149,98934,122260,196592,202666,221178,291879,309306,337817,364410,364929,365429,366393,378842,455486,465951,479267,486394,566771,645151,747077,748600,753474,759003,819754,826543,841705,917608,995924,1050173,1167691,1195008,1203610,1203786,1269260,1274409,1284002,1323268,1352019,1356626,1364394,1379275,1387991]
-    select = numpy.isin(data['SGA_ID'],comalist)
+
+    if cuts:
+        select = numpy.logical_and.reduce((numpy.isin(data['SGA_ID'],comalist) , extradata['V_0p33R26'] > Vmin))
+    else:
+        select = numpy.isin(data['SGA_ID'],comalist)
 
     # plt.errorbar(numpy.log10(data['V_0p33R26'][select]), data['R_MAG_SB26'][select],yerr=data['R_MAG_SB26_ERR'][select],xerr=[numpy.log10(data['V_0p33R26'][select])-numpy.log10(data['V_0p33R26'][select]-data['V_0p33R26_err'][select]),numpy.log10(data['V_0p33R26'][select]+data['V_0p33R26_err'][select])-numpy.log10(data['V_0p33R26'][select])],fmt='.')
     # plt.plot(numpy.array([1.4,2.5]),23-3.5*numpy.array([1.4,2.5]))
@@ -35,12 +55,17 @@ def coma_json():
                 data[k][w[0]]=1e8
 
             data_dic[k]=data[k][select].tolist()
+    # for k in extradata.dtype.names:
+    #     data_dic[k]=extradata[k][select].tolist()
+
 
     data_dic['N'] = len(data_dic['SGA_ID'])
+    data_dic['Vmin'] = Vmin
+    # data_dic['Rhat_noise']=Rhat_noise
 
     json_object = json.dumps(data_dic)
 
-    with open(fn_sga+".json", 'w') as f:
+    with open(outname, 'w') as f:
         f.write(json_object)
 
     init = dict()
@@ -54,10 +79,8 @@ def coma_json():
     init["xi_dist"]= 14.913405242237685
     init["omega_dist"]=2.2831016215521247
 
-    init["mu_dist"]=13.133570672711606
-    init["sigma_dist"]= 1.5160651053079683
     init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
-    with open(fn_sga+"_init.json", 'w') as f:
+    with open(outname2, 'w') as f:
         f.write(json.dumps(init))
 
 def to_json(frac=1, cuts=False):
@@ -240,8 +263,8 @@ def segev_plot(fn = fn_segev2):
 
 
 if __name__ == '__main__':
-    to_json(frac=0.1,cuts=True)
-    # coma_json()
+    # to_json(frac=0.1,cuts=True)
+    coma_json(cuts=True)
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()
