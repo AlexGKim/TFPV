@@ -1,4 +1,4 @@
-// ./iron410 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.10.json output file=output/iron_410_cuts_sub_0.10.csv
+// ./cluster sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_410.csv
 
 
 // functions {
@@ -12,7 +12,6 @@ data {
 
   int<lower=0> N_cluster;
   array[N_cluster] int N_per_cluster;
-  array[N_cluster] real mu;
 
   vector[N] V_0p4R26;
   vector[N] V_0p4R26_err;
@@ -25,10 +24,10 @@ data {
   // vector[N] Vhat_noise;  
 
   //for iron
-  vector[N] mu;
+  vector[N_cluster] mu;
   // vector[N] dm_v;
   real Rlim;
-  vector[N] Rlim_eff;
+  vector[N_cluster] Rlim_eff;
   real Vmin;
   real Vmax;
 
@@ -50,8 +49,6 @@ transformed data {
 
   int flatDistribution = 0;
 
-  vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR + Rhat_noise*Rhat_noise);
-  vector[N] dV = sqrt(V_0p4R26_err.*V_0p4R26_err + Vhat_noise.*Vhat_noise);
 
   // real dwarf_mag=-17. + 34.7;
 
@@ -131,8 +128,8 @@ model {
   int index=1;
   for (i in 1:N_cluster){
     for (j in 1:N_per_cluster[i]){
-      m_realize[i]= bR_offset[i] +  mu[i]+ sinth * logL[index]  + random_realization[index]*sinth_r;
-      i=i+1;
+      m_realize[index]= bR_offset[i] +  mu[i]+ sinth * logL[index]  + random_realization[index]*sinth_r;
+      index=index+1;
     }
   }
   m_realize = bR + m_realize;
