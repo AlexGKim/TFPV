@@ -1,4 +1,5 @@
-// ./iron sample algorithm=hmc engine=nuts max_depth=16 adapt delta=0.95 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_sub_0.10.json output file=output/iron_410s_sub_0.10_test.csv
+// ./iron410 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.10.json output file=output/iron_410_cuts_sub_0.10.csv
+
 
 // functions {
 //   vector V_fiber(vector V, vector epsilon) {
@@ -8,17 +9,26 @@
 
 data {
   int<lower=0> N;
-  // vector[N] V_0p33R26;
-  // vector[N] V_0p33R26_err;
   vector[N] V_0p4R26;
   vector[N] V_0p4R26_err;
   vector[N] R_MAG_SB26;
   vector[N] R_MAG_SB26_ERR;
 
+  vector[N] Rhat;
+  vector[N] Vhat;
+  real Rhat_noise;
+  vector[N] Vhat_noise;  
+
   //for iron
   vector[N] mu;
   vector[N] dm_v;
   real Rlim;
+  vector[N] Rlim_eff;
+  real Vmin;
+  real Vmax;
+
+  real omega_dist_init;
+  real xi_dist_init;
 }
 
 transformed data {
@@ -35,14 +45,15 @@ transformed data {
 
   int flatDistribution = 0;
 
+  vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR + Rhat_noise*Rhat_noise);
+  vector[N] dV = sqrt(V_0p4R26_err.*V_0p4R26_err + Vhat_noise.*Vhat_noise);
+
   // real dwarf_mag=-17. + 34.7;
 
   // Kelly finds standard deviation between 14.2 deg between MANGA and SGA
   // real angle_dispersion_deg = 14.2;
   // real angle_dispersion_deg = 5.;
   // real angle_dispersion = angle_dispersion_deg/180*pi();
-
-  vector[N] dR = sqrt(R_MAG_SB26_ERR.*R_MAG_SB26_ERR+dm_v.*dm_v);
 
 }
 
@@ -53,30 +64,31 @@ parameters {
   // vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
 
   vector[N] logL_raw;       // latent parameter
-
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  real<lower=-10,upper=-1> alpha_dist;
-  real<lower=0.1, upper=5> omega_dist;
-  real<lower=10, upper=20> xi_dist;
+  real<lower=-10, upper=0> alpha_dist;
+  real<lower=0.5, upper=4> omega_dist;  
+  real<lower=12, upper=18> xi_dist;
   // }
 
-  real<lower=-pi()*(.5-1./32) , upper=-pi()*1./3> atanAR; // negative slope positive cosine
+  real<lower=atan(-9) , upper=atan(-5.5)> atanAR; // negative slope positive cosine
+
   real bR;
 
   vector[N] random_realization_raw;
   real<lower=0> sigR;
 
+  vector[N] dv;
 }
 model {
 
-  // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
+
   vector[N] logL;
   if (flatDistribution==0) {
     logL=omega_dist*logL_raw+xi_dist;
   } else {
-    logL=logL_raw*1.5160651053079683 + 13.133570672711606;
+    logL=logL_raw*omega_dist_init + xi_dist_init;
   } 
   vector[N] random_realization=random_realization_raw*sigR;
   real sinth = sin(atanAR);
@@ -110,37 +122,24 @@ model {
   if (angle_error == 1){
       // VtoUse = V_fiber(VtoUse,epsilon);
   } 
+  vector[N] m_realize = bR + mu+ sinth * logL  + (random_realization)*sinth_r + dm_v.*dv;
 
-  vector[N] mR = bR + mu+ sinth * logL  + (random_realization)*sinth_r;
-  R_MAG_SB26 ~ normal(mR, dR);
-  V_0p4R26 ~ cauchy(VtoUse, V_0p4R26_err);
+  Rhat ~ normal(m_realize, dR) T[,Rlim];
+  Vhat ~ normal(VtoUse, dV) T[Vmin,Vmax];
 
-  // print(Rlim, " ",mean(bR + mu+ sinth * logL)," ",min(bR + mu+ sinth * logL)," ",max(bR + mu+ sinth * logL));
-  // vector[N] dum;
-  //   dum = erfc((Rlim-mR)/sqrt(2)./R_MAG_SB26_ERR);
-  // for(n in 1:N){
-  //   if (dum[n]>0) {
-  //     target += -log(dum[n]);
-  //   }
-  // }
-  // target += -sum(log(erfc((Rlim-mR)/sqrt(2)./R_MAG_SB26_ERR)));
-  // target += -sum(log(Phi_approx(mR-Rlim)./R_MAG_SB26_ERR));
   if (flatDistribution==0)
   {
       logL_raw ~ skew_normal(0, 1 ,alpha_dist);
   }
 
   random_realization_raw ~ normal (0, 1);
-  sigR ~ cauchy(0.,1);
- 
+  sigR ~ cauchy(0.,10);
+
+  dv ~ normal(0.,1.);
+
   // if (angle_error==1)
   //   epsilon ~ normal(0,angle_dispersion);
 }
 generated quantities {
    real aR=tan(atanAR);
-   // vector[N] logL_=log10(L_);
-   // real minLogL = min(logL_);
-   // real maxLogL = max(logL_);
-   // if (pure !=1) 
-   //  real aR2=tan(atanAR2);
 }
