@@ -3,7 +3,9 @@ import numpy
 import json
 from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
-
+import glob
+import pandas
+from astropy.table import Table
 
 fn = "SGA-2020_iron_Vrot_cuts"
 fn_sga = "data/SGA-2020_fuji_Vrot"
@@ -196,6 +198,133 @@ def to_json(frac=1, cuts=False):
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
 
+
+def iron_cluster_json():
+    fn = "SGA-2020_iron_Vrot"
+
+    Rlim = 17.75-0.1
+    Mlim = -17.
+    Vmin = 70
+    Vmax = 300
+    cosi = 1/numpy.sqrt(2)
+    q0=0.2
+    balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
+
+    table = Table.read("data/"+fn+".fits")
+    pv_df = table.to_pandas()
+    print(pv_df.dtypes)
+    # Some things to apply to N_all
+
+    # read in the cluster files
+    N_cluster = []
+    mu = []
+
+    V_0p4R26 = []
+    V_0p4R26_err = []
+    R_MAG_SB26 = []
+    R_MAG_SB26_ERR = []
+    Rlim_eff = []
+    Rlim_eff #  = numpy.minimum(Rlim, mu+Mlim)
+
+   # selection effects
+    for fn in glob.glob("data/output_*.txt"):
+        df = pandas.read_csv(fn)
+        print(df.dtypes)
+        N_cluster.append(df.shape[0])
+        combo_df = df.merge(pv_df, on='SGA_ID')
+
+
+    # # add extra noise degrading data to help fit
+    # dt = {'names':['Vhat','Vhat_noise','Rhat'], 'formats':[float, float,float]}
+    # extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
+    # extradata['Vhat_noise'] = 0.02*data["V_0p4R26"]
+    # Rhat_noise = 0.1
+    # extradata['Vhat'] = numpy.random.normal(loc=data["V_0p4R26"], scale=extradata['Vhat_noise'])
+    # extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
+
+    select = numpy.logical_and.reduce(data['R_MAG_SB26'] < Rlim_eff  , data['Vhat'] > Vmin, data['Vhat'] < Vmax, data["BA"] < balim)
+
+    data_dic=dict()
+    for k in data.dtype.names:
+        if k not in ['SGA_GALAXY','GALAXY','MORPHTYPE','BYHAND','REF','GROUP_NAME','GROUP_PRIMARY','BRICKNAME','D26_REF']:
+            if k in ['G_MAG_SB26_ERR','R_MAG_SB26_ERR','Z_MAG_SB26_ERR']:
+                w=numpy.where(data[k]<0)
+                data[k][w[0]]=1e8
+
+            data_dic[k]=data[k][select].tolist()
+
+    for k in extradata.dtype.names:
+        data_dic[k]=extradata[k][select].tolist()
+
+    data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
+    data_dic['Rlim_eff'] = Rlim_eff.tolist()
+    z = numpy.array(data_dic["Z_DESI"])
+    dv = 300
+    dm = (5/numpy.log(10)*(1+z)**2*dv/cosmo.H(z)/cosmo.luminosity_distance(z)).value
+    data_dic['dm_v'] = dm.tolist()
+
+    N_all = len(data_dic['Z_DESI'])
+    if frac !=1 :
+        ind = numpy.random.randint(0, high=N_all, size=int(N_all*frac))
+        for key, value in data_dic.items():
+            value=numpy.array(value)[ind]
+            data_dic[key] = value.tolist()
+
+    data_dic['N'] = len(data_dic['SGA_ID'])
+    data_dic['Rlim'] = Rlim
+    data_dic['Mlim'] = Mlim
+    data_dic['Vmin'] = Vmin
+    data_dic['Vmax'] = Vmax
+
+    data_dic['Rhat_noise'] = Rhat_noise
+
+    data_dic["alpha_dist_init"]=-2.8782
+    data_dic["xi_dist_init"]= 16.556
+    data_dic["omega_dist_init"]=1.4521 
+
+    json_object = json.dumps(data_dic)
+
+    cstr=""
+    if cuts:
+        cstr="_cuts"
+    if frac==1:
+        outname = fn+cstr+".json"
+        outname2 = fn+cstr+"_init.json"
+    else:
+        outname =  fn+cstr+"_sub_{:4.2f}.json".format(frac)
+        outname2 = fn+cstr+"_sub_{:4.2f}_init.json".format(frac)
+
+    with open("data/"+outname, 'w') as f:
+        f.write(json_object)
+
+#  vector[N] v = 373.137*v_raw + 222.371;
+    init = dict()
+
+    init["atanAR"] = numpy.arctan(-6.9878)
+    init['bR'] = -5.3173
+    init['sigR'] = 0.07
+    logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
+
+    if cuts:
+        # init["alpha_dist"]=-2.4813505391290436
+        # init["xi_dist"]= 14.628796578863792
+        # init["omega_dist"]=1.4880837674710605
+        init["alpha_dist"]=data_dic["alpha_dist_init"]
+        init["xi_dist"]= data_dic["xi_dist_init"]
+        init["omega_dist"]=data_dic["omega_dist_init"]
+    else:
+        init["alpha_dist"]=-3.661245022462153
+        init["xi_dist"]= 14.913405242237685
+        init["omega_dist"]=2.2831016215521247
+
+    # init["mu_dist"]=13.133570672711606
+    # init["sigma_dist"]= 1.5160651053079683
+    init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
+
+    init["dv"] = (numpy.zeros(data_dic['N'])).tolist()
+    init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
+    with open("data/"+outname2, 'w') as f:
+        f.write(json.dumps(init))
     
 
 def segev_json(fn='SGA_TFR_simtest_20240307'):
@@ -264,7 +393,8 @@ def segev_plot(fn = fn_segev2):
 
 if __name__ == '__main__':
     # to_json(frac=0.1,cuts=True)
-    coma_json(cuts=True)
+    # coma_json(cuts=True)
+    iron_cluster_json()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()
