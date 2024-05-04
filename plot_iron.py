@@ -4,6 +4,7 @@ import json
 from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
 import scipy.stats
+import csv
 
 fn = "data/SGA-2020_iron_Vrot_cuts_sub_0.02.json"
 # fn="data/SGA-2020_fuji_Vrot.json"
@@ -122,7 +123,13 @@ plt.show()
 fn = "data/iron_cluster.json"
 with open(fn, 'r') as f:
     data = json.load(f)
+
+with open("output/cluster_410_opt.csv", newline='') as csvfile:
+    optimal = pandas.read_csv(csvfile,comment='#')
+
 MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu_all"])
+brArr=numpy.array([optimal["bR.{}".format(i+1)][0] for i in range(0,data["N_cluster"])])
+brArrmn= brArr-brArr.mean()
 index = 0
 for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
     if True:
@@ -134,10 +141,26 @@ plt.ylabel(r"R_MAG_SB26-$\mu$")
 plt.ylim((MR.max()+.5,MR.min()-.5))
 plt.show()
 
+
+index = 0
+for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
+    if True:
+        plt.errorbar(data["V_0p4R26"][index:index+data["N_per_cluster"][i]], MR[index:index+data["N_per_cluster"][i]]-brArrmn[i] ,yerr=data["R_MAG_SB26_ERR"][index:index+data["N_per_cluster"][i]],xerr=data["V_0p4R26_err"][index:index+data["N_per_cluster"][i]], fmt=".")
+    index = index+data["N_per_cluster"][i]
+print(plt.xlim())
+plt.plot(plt.xlim(), brArr.mean()+numpy.log10(plt.xlim())*optimal['aR'][0])
+plt.xscale('log',base=10)
+plt.xlabel("V_0p4R26")
+plt.ylabel(r"R_MAG_SB26-$\mu$")
+plt.ylim((MR.max()+.5,MR.min()-.5))
+plt.show()
+
+
 ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
 print(ans) # (-1.3565289337241162, 14.193371687903761, 1.0984767423119663)
+
 plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
 x=numpy.linspace(1.7,2.6,100)
-plt.plot(x, scipy.stats.skewnorm.pdf(x/numpy.cos(numpy.arctan(-6.1)), -1.3565289337241162, 14.193371687903761, 1.0984767423119663))
-plt.plot(x, scipy.stats.skewnorm.pdf(x/numpy.cos(numpy.arctan(-6.31)), -.399, 14.1, 0.719))
+# plt.plot(x, scipy.stats.skewnorm.pdf(x/numpy.cos(numpy.arctan(-6.334)), 1.585, 13.35, 0.8958)/numpy.cos(numpy.arctan(-6.334)))
+plt.plot(x, scipy.stats.skewnorm.pdf(x/numpy.cos(optimal["atanAR"][0]), optimal["alpha_dist"][0], optimal["xi_dist"][0], optimal["omega_dist"][0])/numpy.cos(optimal["atanAR"][0]))
 plt.show()

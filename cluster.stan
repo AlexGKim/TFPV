@@ -1,5 +1,5 @@
 // ./cluster sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=2000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_410.csv
-
+// ./cluster optimize  iter=40000 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_410_opt.csv
 functions {
   vector V_fiber(vector V, vector epsilon) {
     return V./cos(epsilon);
@@ -81,7 +81,7 @@ parameters {
   real<lower=12, upper=18> xi_dist;
   // }
 
-  real<lower=atan(-8) , upper=atan(-5.5)> atanAR; // negative slope positive cosine
+  real<lower=atan(-8) , upper=atan(-5)> atanAR; // negative slope positive cosine
 
   vector[N_cluster] bR;
   // vector[N_cluster] bR_offset;
@@ -153,7 +153,7 @@ model {
   }
 
   random_realization_raw ~ normal (0, 1);
-  sigR ~ cauchy(0.,10);
+  sigR ~ cauchy(0.,1);
 
   // bR_offset ~ normal(0,100);
 

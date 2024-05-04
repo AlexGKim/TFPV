@@ -273,10 +273,15 @@ def iron_cluster_json():
     data_dic["Rlim_eff"] = Rlim_eff
 
 # (-1.3565289337241162, 14.193371687903761, 1.0984767423119663)
-    data_dic["aR_init"]=-6.1
-    data_dic["alpha_dist_init"]=-1.3565289337241162
-    data_dic["xi_dist_init"]= 14.193371687903761
-    data_dic["omega_dist_init"]=1.0984767423119663
+    # data_dic["aR_init"]=-6.1
+    # data_dic["alpha_dist_init"]=-1.3565289337241162
+    # data_dic["xi_dist_init"]= 14.193371687903761
+    # data_dic["omega_dist_init"]=1.0984767423119663
+
+    data_dic["aR_init"]= -6.334
+    data_dic["alpha_dist_init"]=1.585
+    data_dic["xi_dist_init"]= 13.35
+    data_dic["omega_dist_init"]= .8958   
 
     dum=[]
     for npc,m in zip(N_per_cluster,mu):
@@ -298,7 +303,7 @@ def iron_cluster_json():
 
     init["atanAR"] = numpy.arctan(data_dic["aR_init"])
     init['bR'] = (-5.3173+ numpy.zeros(N_cluster)).tolist()
-    init['sigR'] = 0.07
+    init['sigR'] = 1
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
 
 
@@ -380,9 +385,9 @@ def segev_plot(fn = fn_segev2):
 
 
 if __name__ == '__main__':
-    to_json(frac=0.1,cuts=True)
+    # to_json(frac=0.1,cuts=True)
     # coma_json(cuts=True)
-    # iron_cluster_json()
+    iron_cluster_json()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()
