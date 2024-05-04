@@ -108,3 +108,18 @@ plt.plot(x, scipy.stats.skewnorm.pdf(x, -2.4813505391290436, 14.628796578863792,
 plt.plot(x, scipy.stats.skewnorm.pdf(x, -2, 14.5,1.6))
 # plt.plot(x, scipy.stats.skewnorm.pdf(x, -3.661245022462153, 14.913405242237685,2.2831016215521247))
 plt.show()
+
+fn = "data/iron_cluster.json"
+with open(fn, 'r') as f:
+    data = json.load(f)
+MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu_all"])
+index = 0
+for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
+    if True:
+        plt.errorbar(data["V_0p4R26"][index:index+data["N_per_cluster"][i]], MR[index:index+data["N_per_cluster"][i]] ,yerr=data["R_MAG_SB26_ERR"][index:index+data["N_per_cluster"][i]],xerr=data["V_0p4R26_err"][index:index+data["N_per_cluster"][i]], fmt=".")
+    index = index+data["N_per_cluster"][i]
+plt.xscale('log',base=10)
+plt.xlabel("V_0p4R26")
+plt.ylabel(r"R_MAG_SB26-$\mu$")
+plt.ylim((MR.max()+.5,MR.min()-.5))
+plt.show()

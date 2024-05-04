@@ -124,7 +124,10 @@ model {
   } 
   vector[N] m_realize = bR + mu+ sinth * logL  + (random_realization)*sinth_r + dm_v.*dv;
 
-  Rhat ~ normal(m_realize, dR) T[,Rlim];
+  for (i in 1:N)
+  {
+    Rhat[i] ~ normal(m_realize, dR[i]) T[,Rlim_eff[i]];
+  }
   Vhat ~ normal(VtoUse, dV) T[Vmin,Vmax];
 
   if (flatDistribution==0)

@@ -106,12 +106,13 @@ def to_json(frac=1, cuts=False):
     Rlim_eff = numpy.minimum(Rlim, mu+Mlim)
 
     # add extra noise degrading data to help fit
-    dt = {'names':['Vhat','Vhat_noise','Rhat'], 'formats':[float, float,float]}
+    dt = {'names':['Vhat','Vhat_noise','Rhat','Rlim_eff'], 'formats':[float, float,float,float]}
     extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
     extradata['Vhat_noise'] = 0.02*data["V_0p4R26"]
     Rhat_noise = 0.1
     extradata['Vhat'] = numpy.random.normal(loc=data["V_0p4R26"], scale=extradata['Vhat_noise'])
     extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
+    extradata['Rlim_eff'] = Rlim_eff
     if cuts:
         select = numpy.logical_and.reduce((extradata['Rhat'] < Rlim_eff  , extradata['Vhat'] > Vmin, extradata['Vhat'] < Vmax, data["BA"] < balim))
     else:
@@ -130,7 +131,6 @@ def to_json(frac=1, cuts=False):
         data_dic[k]=extradata[k][select].tolist()
 
     data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
-    data_dic['Rlim_eff'] = Rlim_eff.tolist()
     z = numpy.array(data_dic["Z_DESI"])
     dv = 300
     dm = (5/numpy.log(10)*(1+z)**2*dv/cosmo.H(z)/cosmo.luminosity_distance(z)).value
@@ -206,6 +206,10 @@ def iron_cluster_json():
     Mlim = -17.
     Vmin = 70
     Vmax = 300
+
+    Mlim = -18
+    Vmax = 1e4
+
     cosi = 1/numpy.sqrt(2)
     q0=0.2
     balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
@@ -233,15 +237,18 @@ def iron_cluster_json():
    # selection effects
     for fn in glob.glob("data/output_*.txt"):
         Nest = re.search('output_(.+?).txt',fn).group(1)
-        mu.append(tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0])
-        Rlim_eff.append(numpy.minimum(Rlim, mu[-1]+Mlim)); 
-
+        mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
         df = pandas.read_csv(fn)
         combo_df = df.merge(pv_df, on='SGA_ID')
-        select = (combo_df['R_MAG_SB26'] < Rlim_eff[-1])  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
+        Rcut = numpy.minimum(Rlim, mu_+Mlim)
+        select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
         combo_df = combo_df[select]
-        N_per_cluster.append(combo_df.shape[0])
-        alldf.append(combo_df)
+        if combo_df.shape[0] > 1:
+            N_per_cluster.append(combo_df.shape[0])
+            alldf.append(combo_df)
+            Nest = re.search('output_(.+?).txt',fn).group(1)
+            mu.append(mu_)
+            Rlim_eff.append(Rcut);
 
     N_cluster=len(alldf)
 
@@ -268,6 +275,12 @@ def iron_cluster_json():
     data_dic["xi_dist_init"]= 16.556
     data_dic["omega_dist_init"]=1.4521 
 
+    dum=[]
+    for npc,m in zip(N_per_cluster,mu):
+        for j in range(npc):
+            dum.append(m)
+    data_dic["mu_all"]=dum
+
     json_object = json.dumps(data_dic)
 
 
@@ -281,7 +294,7 @@ def iron_cluster_json():
     init = dict()
 
     init["atanAR"] = numpy.arctan(-6.9878)
-    init['bR'] = -5.3173
+    init['bR'] = (-5.3173+ numpy.zeros(N_cluster)).tolist()
     init['sigR'] = 0.07
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
 
@@ -364,9 +377,9 @@ def segev_plot(fn = fn_segev2):
 
 
 if __name__ == '__main__':
-    # to_json(frac=0.1,cuts=True)
+    to_json(frac=0.1,cuts=True)
     # coma_json(cuts=True)
-    iron_cluster_json()
+    # iron_cluster_json()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()
