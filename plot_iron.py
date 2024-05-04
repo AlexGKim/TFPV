@@ -68,7 +68,7 @@ ans # (13.133570672711606, 1.5160651053079683)
 ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
 ans # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
 # Out[42]: (-2.4813505391290436, 14.628796578863792, 1.4880837674710605) for pruned set
-
+--
 #Fuji
 x=[20,600]
 # plt.plot(x,-6.9 -6.1* numpy.log10(x))
@@ -84,6 +84,15 @@ plt.show()
 
 
 #iron
+
+fn = "data/SGA-2020_iron_Vrot_cuts.json"
+with open(fn, 'r') as f:
+    data = json.load(f)
+
+z = numpy.array(data["Z_DESI"])
+dv = 300
+dm = (5/numpy.log(10)*(1+z)**2*dv/cosmo.H(z)/cosmo.luminosity_distance(z)).value
+
 x=[50,600]
 plt.plot(x,-6.8 -6.1* numpy.log10(x))
 MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu"])
@@ -102,10 +111,11 @@ plt.ylabel(r"R_MAG_SB26-$\mu$")
 plt.ylim((MR.max()+.5,MR.min()-.5))
 plt.show()
 
+ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
+print(ans) # (-1.3565289337241162, 14.193371687903761, 1.0984767423119663)
 plt.hist(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)),density=True)
 x=numpy.linspace(6,18,100)
-plt.plot(x, scipy.stats.skewnorm.pdf(x, -2.4813505391290436, 14.628796578863792,1.4880837674710605))
-plt.plot(x, scipy.stats.skewnorm.pdf(x, -2, 14.5,1.6))
+plt.plot(x, scipy.stats.skewnorm.pdf(x, -1.3565289337241162, 14.193371687903761,1.0984767423119663))
 # plt.plot(x, scipy.stats.skewnorm.pdf(x, -3.661245022462153, 14.913405242237685,2.2831016215521247))
 plt.show()
 
@@ -122,4 +132,12 @@ plt.xscale('log',base=10)
 plt.xlabel("V_0p4R26")
 plt.ylabel(r"R_MAG_SB26-$\mu$")
 plt.ylim((MR.max()+.5,MR.min()-.5))
+plt.show()
+
+ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
+print(ans) # (-1.3565289337241162, 14.193371687903761, 1.0984767423119663)
+plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
+x=numpy.linspace(1.7,2.6,100)
+plt.plot(x, scipy.stats.skewnorm.pdf(x/numpy.cos(numpy.arctan(-6.1)), -1.3565289337241162, 14.193371687903761, 1.0984767423119663))
+plt.plot(x, scipy.stats.skewnorm.pdf(x/numpy.cos(numpy.arctan(-6.31)), -.399, 14.1, 0.719))
 plt.show()

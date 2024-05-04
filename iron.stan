@@ -38,7 +38,7 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=4;
+  int dispersion_case=2;
 
   int pure = 1;
   int angle_error = 1;

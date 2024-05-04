@@ -76,7 +76,7 @@ parameters {
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  real<lower=-5, upper=0> alpha_dist;
+  real<lower=-3, upper=3> alpha_dist;
   real<lower=0.2, upper=2> omega_dist;  
   real<lower=12, upper=18> xi_dist;
   // }

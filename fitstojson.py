@@ -150,10 +150,11 @@ def to_json(frac=1, cuts=False):
     data_dic['Vmax'] = Vmax
 
     data_dic['Rhat_noise'] = Rhat_noise
-
-    data_dic["alpha_dist_init"]=-2.8782
-    data_dic["xi_dist_init"]= 16.556
-    data_dic["omega_dist_init"]=1.4521 
+# (-2.2456218582429583, 14.530590758470598, 1.3865197193260355)
+    data_dic["aR_init"]=-6.1
+    data_dic["alpha_dist_init"]=-2.2456218582429583
+    data_dic["xi_dist_init"]= 14.530590758470598
+    data_dic["omega_dist_init"]=1.3865197193260355
 
     json_object = json.dumps(data_dic)
 
@@ -271,9 +272,11 @@ def iron_cluster_json():
     data_dic["mu"] = mu
     data_dic["Rlim_eff"] = Rlim_eff
 
-    data_dic["alpha_dist_init"]=-2.8782
-    data_dic["xi_dist_init"]= 16.556
-    data_dic["omega_dist_init"]=1.4521 
+# (-1.3565289337241162, 14.193371687903761, 1.0984767423119663)
+    data_dic["aR_init"]=-6.1
+    data_dic["alpha_dist_init"]=-1.3565289337241162
+    data_dic["xi_dist_init"]= 14.193371687903761
+    data_dic["omega_dist_init"]=1.0984767423119663
 
     dum=[]
     for npc,m in zip(N_per_cluster,mu):
@@ -293,7 +296,7 @@ def iron_cluster_json():
 #  vector[N] v = 373.137*v_raw + 222.371;
     init = dict()
 
-    init["atanAR"] = numpy.arctan(-6.9878)
+    init["atanAR"] = numpy.arctan(data_dic["aR_init"])
     init['bR'] = (-5.3173+ numpy.zeros(N_cluster)).tolist()
     init['sigR'] = 0.07
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
