@@ -278,10 +278,10 @@ def iron_cluster_json():
     # data_dic["xi_dist_init"]= 14.193371687903761
     # data_dic["omega_dist_init"]=1.0984767423119663
 
-    data_dic["aR_init"]= -6.334
-    data_dic["alpha_dist_init"]=1.585
-    data_dic["xi_dist_init"]= 13.35
-    data_dic["omega_dist_init"]= .8958   
+    data_dic["aR_init"]= -6.26
+    data_dic["alpha_dist_init"]=1.25
+    data_dic["xi_dist_init"]= 13.3
+    data_dic["omega_dist_init"]= .844   
 
     dum=[]
     for npc,m in zip(N_per_cluster,mu):
@@ -303,7 +303,7 @@ def iron_cluster_json():
 
     init["atanAR"] = numpy.arctan(data_dic["aR_init"])
     init['bR'] = (-5.3173+ numpy.zeros(N_cluster)).tolist()
-    init['sigR'] = 1
+    init['sigR'] = 0.1
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
 
 

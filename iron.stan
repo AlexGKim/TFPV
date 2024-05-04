@@ -137,9 +137,11 @@ model {
   if (flatDistribution==0)
   {
       logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      target += -N * log(omega_dist);
   }
 
   random_realization_raw ~ normal (0, 1);
+  target+= -N * log(sigR);
   sigR ~ cauchy(0.,10);
 
   dv ~ normal(0.,1.);
