@@ -40,7 +40,7 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=4;
+  int dispersion_case=3;
 
   int pure = 1;
   int angle_error = 1;
@@ -76,7 +76,7 @@ parameters {
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  real<lower=-3, upper=3> alpha_dist;
+  // real<lower=-3, upper=3> alpha_dist;
   real<lower=0.2, upper=2> omega_dist;  
   real<lower=12, upper=18> xi_dist;
   // }
@@ -147,15 +147,18 @@ model {
 
   if (flatDistribution==0)
   {
-      logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      // logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      logL_raw ~ normal(0,1);
+      target+= -N * log(omega_dist);
   } else {
       logL_raw ~ normal(0, 10);
   }
 
-  random_realization_raw ~ normal (0, 1);
-  sigR ~ cauchy(0.,1);
 
-  // bR_offset ~ normal(0,100);
+  random_realization_raw ~ normal (0, 1);
+  target += - N * log(sigR);
+
+  sigR ~ cauchy(0.,10);
 
   if (angle_error==1){
     epsilon_raw ~ normal(0,1);
