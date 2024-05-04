@@ -55,13 +55,22 @@ transformed data {
   real angle_dispersion_deg = 10.;
   real angle_dispersion = angle_dispersion_deg/180*pi();
 
+  // shifted data to align to common magnitude cutoff.  Allows vectorization
+  vector[N] R_;
+  int index_=1;
+  for (i in 1:N_cluster){ 
+    for (j in 1:N_per_cluster[i]){
+      R_[index_]=R_MAG_SB26[index_]-Rlim_eff[i];
+      index_=index_+1;
+    }
+  }
 }
 
 
 // from eyeball look at data expect b ~ -7.1, a ~ -6.1
 // average logV ~ 2.14
 parameters {
-  vector<lower=-pi()/4, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
+  vector[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
 
   vector[N] logL_raw;       // latent parameter
   // if (flatDistribution == 0)
@@ -81,6 +90,7 @@ parameters {
   real<lower=0> sigR;
 }
 model {
+  vector[N] epsilon=epsilon_raw*angle_dispersion;
   vector[N] logL;
   if (flatDistribution==0) {
     logL=omega_dist*logL_raw+xi_dist;
@@ -120,23 +130,19 @@ model {
       VtoUse = V_fiber(VtoUse,epsilon);
   } 
 
-  // vector[N] m_realize;
+  vector[N] m_realize = sinth * logL  + random_realization*sinth_r;
+  vector[N_cluster] a_term = bR + mu - Rlim_eff;
   int index=1;
-  for (i in 1:N_cluster){
-    vector[N_per_cluster[i]] R_;
-    vector[N_per_cluster[i]] R_err;
-    vector[N_per_cluster[i]] m_realize;    
+  for (i in 1:N_cluster){  
     for (j in 1:N_per_cluster[i]){
-      m_realize[j]= bR[i] +  mu[i]+ sinth * logL[index]  + random_realization[index]*sinth_r;
-      R_[j]=R_MAG_SB26[index];
-      R_err[j] = R_MAG_SB26_ERR[index];
+      m_realize[index]= a_term[i] + m_realize[index];
       index=index+1;
     }
-    R_ ~ normal(m_realize, R_err) T[,Rlim_eff[i]];
+    // R_ ~ normal(m_realize, R_err) T[,Rlim_eff[i]];
   }
   // m_realize = bR + m_realize;
 
-
+  R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
   V_0p4R26 ~ normal(VtoUse, V_0p4R26_err) T[Vmin,];
 
   if (flatDistribution==0)
@@ -152,7 +158,7 @@ model {
   // bR_offset ~ normal(0,100);
 
   if (angle_error==1){
-    epsilon ~ normal(0,angle_dispersion);
+    epsilon_raw ~ normal(0,1);
   }
 }
 generated quantities {

@@ -1,11 +1,11 @@
 // ./iron410 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_iron_Vrot_cuts_sub_0.10_init.json data file=data/SGA-2020_iron_Vrot_cuts_sub_0.10.json output file=output/iron_410_cuts_sub_0.10.csv
 
 
-// functions {
-//   vector V_fiber(vector V, vector epsilon) {
-//     return V./cos(epsilon);
-//   }
-// }
+functions {
+  vector V_fiber(vector V, vector epsilon) {
+    return V./cos(epsilon);
+  }
+}
 
 data {
   int<lower=0> N;
@@ -41,7 +41,7 @@ transformed data {
   int dispersion_case=4;
 
   int pure = 1;
-  int angle_error = 0;
+  int angle_error = 1;
 
   int flatDistribution = 0;
 
@@ -52,8 +52,11 @@ transformed data {
 
   // Kelly finds standard deviation between 14.2 deg between MANGA and SGA
   // real angle_dispersion_deg = 14.2;
-  // real angle_dispersion_deg = 5.;
-  // real angle_dispersion = angle_dispersion_deg/180*pi();
+  real angle_dispersion_deg = 10.;
+  real angle_dispersion = angle_dispersion_deg/180*pi();
+
+  // shifted data to align to common magnitude cutoff.  Allows vectorization
+  vector[N] R_=Rhat-Rlim_eff;
 
 }
 
@@ -61,7 +64,7 @@ transformed data {
 // from eyeball look at data expect b ~ -7.1, a ~ -6.1
 // average logV ~ 2.14
 parameters {
-  // vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
+  vector[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
 
   vector[N] logL_raw;       // latent parameter
   // if (flatDistribution == 0)
@@ -83,7 +86,7 @@ parameters {
 }
 model {
 
-
+  vector[N] epsilon=epsilon_raw*angle_dispersion;
   vector[N] logL;
   if (flatDistribution==0) {
     logL=omega_dist*logL_raw+xi_dist;
@@ -120,14 +123,15 @@ model {
   // velocity model with or without axis error
   vector[N] VtoUse = pow(10, costh*logL  + (random_realization)*costh_r );
   if (angle_error == 1){
-      // VtoUse = V_fiber(VtoUse,epsilon);
+      VtoUse = V_fiber(VtoUse,epsilon);
   } 
-  vector[N] m_realize = bR + mu+ sinth * logL  + (random_realization)*sinth_r + dm_v.*dv;
+  vector[N] m_realize = bR + mu+ sinth * logL  + (random_realization)*sinth_r + dm_v.*dv -Rlim_eff;
 
-  for (i in 1:N)
-  {
-    Rhat[i] ~ normal(m_realize, dR[i]) T[,Rlim_eff[i]];
-  }
+  // for (i in 1:N)
+  // {
+  //   Rhat[i] ~ normal(m_realize, dR[i]) T[,Rlim_eff[i]];
+  // }
+  R_ ~ normal(m_realize, dR) T[,0];
   Vhat ~ normal(VtoUse, dV) T[Vmin,Vmax];
 
   if (flatDistribution==0)
@@ -140,8 +144,9 @@ model {
 
   dv ~ normal(0.,1.);
 
-  // if (angle_error==1)
-  //   epsilon ~ normal(0,angle_dispersion);
+  if (angle_error==1){
+    epsilon_raw ~ normal(0,1);
+  }
 }
 generated quantities {
    real aR=tan(atanAR);
