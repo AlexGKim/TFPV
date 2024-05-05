@@ -1,10 +1,13 @@
 // ./coma210f sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_210f.csv
 // ./coma sample algorithm=hmc engine=nuts max_depth=19 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_410_cuts.csv
-// functions {
-//   vector V_fiber(vector V, vector epsilon) {
-//     return V./cos(epsilon);
-//   }
-// }
+// ./coma optimize  iter=40000 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_410_cuts_opt.csv
+//
+
+functions {
+  vector V_fiber(vector V, vector epsilon) {
+    return V./cos(epsilon);
+  }
+}
 
 data {
   int<lower=0> N;
@@ -28,12 +31,12 @@ transformed data {
   // 3 : mag dispersion
   // 4 : perp dispersion
   // 5 : free dispersion
-  int dispersion_case=4;
+  int dispersion_case=3;
 
   int pure = 1;
-  int angle_error = 0;
+  int angle_error = 1;
 
-  int flatDistribution = 1;
+  int flatDistribution = 0;
 
   real mu_coma=34.7;
 
@@ -50,7 +53,7 @@ transformed data {
 }
 
 parameters {
-  // vector<lower=0, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
+  vector<lower=-pi()/4, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
 
   // population 1
   vector[N] logL_raw;       // latent parameter
@@ -58,9 +61,9 @@ parameters {
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  // real<lower=-10, upper=0> alpha_dist;
-  // real<lower=0.5, upper=4> omega_dist;  
-  // real<lower=11, upper=18> xi_dist;
+  real<lower=-10, upper=0> alpha_dist;
+  real<lower=0.5, upper=4> omega_dist;  
+  real<lower=11, upper=18> xi_dist;
   // }
 
  real<lower=atan(-9) , upper=atan(-5.5)> atanAR; // negative slope positive cosine
@@ -74,7 +77,7 @@ model {
   // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
   vector[N] logL;
   if (flatDistribution==0) {
-    // logL=omega_dist*logL_raw+xi_dist;
+    logL=omega_dist*logL_raw+xi_dist;
   } else {
     logL=logL_raw*2.2831016215521247 + 14.913405242237685;
   } 
@@ -108,7 +111,7 @@ model {
   // velocity model with or without axis error
   vector[N] VtoUse = pow(10, costh*logL  + (random_realization)*costh_r );
   if (angle_error == 1){
-      // VtoUse = V_fiber(VtoUse,epsilon);
+      VtoUse = V_fiber(VtoUse,epsilon);
   } 
 
   // Rhat ~ normal(bR + mu_coma+ sinth * logL  + (random_realization)*sinth_r, dR);
@@ -119,16 +122,18 @@ model {
   
   if (flatDistribution==0)
   {
-      // logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      target += -N*log(omega_dist);
   } else{
      logL_raw ~ normal(0, 10);
   }
 
   random_realization_raw ~ normal (0, 1);
+  target += -N*log(sigR);
   sigR ~ cauchy(0.,10);
  
-  // if (angle_error==1)
-  //   epsilon ~ normal(0,angle_dispersion);
+  if (angle_error==1)
+    epsilon ~ normal(0,angle_dispersion);
 }
 generated quantities {
    real aR=tan(atanAR);
