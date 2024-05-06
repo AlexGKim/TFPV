@@ -1,4 +1,4 @@
-// ./cluster sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=2000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_410.csv
+// ./cluster sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_410.csv
 // ./cluster optimize  iter=40000 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_410_opt.csv
 functions {
   vector V_fiber(vector V, vector epsilon) {
@@ -78,7 +78,8 @@ parameters {
   // parameters for SkewNormal
   // real<lower=-3, upper=3> alpha_dist;
   real<lower=0.2, upper=2> omega_dist;  
-  real<lower=12, upper=18> xi_dist;
+  // real<lower=12, upper=18> xi_dist;
+  real<lower=.1, upper=10> xi_dist; 
   // }
 
   real<lower=atan(-8) , upper=atan(-5)> atanAR; // negative slope positive cosine
@@ -92,11 +93,7 @@ parameters {
 model {
   vector[N] epsilon=epsilon_raw*angle_dispersion;
   vector[N] logL;
-  if (flatDistribution==0) {
-    logL=omega_dist*logL_raw+xi_dist;
-  } else {
-    logL=logL_raw*omega_dist_init + xi_dist_init;
-  } 
+
   vector[N] random_realization=random_realization_raw*sigR;
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
@@ -123,6 +120,12 @@ model {
   {
     // sinth_r=sin(atanARr); costh_r=cos(atanARr); //sinth2_r=-costh2; costh2_r=sinth2;
   }
+
+  if (flatDistribution==0) {
+    logL=omega_dist*logL_raw+xi_dist/costh;
+  } else {
+    logL=logL_raw*omega_dist_init + xi_dist_init;
+  } 
 
   // velocity model with or without axis error
   vector[N] VtoUse = pow(10, costh*logL  + random_realization*costh_r );
