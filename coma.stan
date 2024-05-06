@@ -1,7 +1,6 @@
 // ./coma210f sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_210f.csv
-// ./coma sample algorithm=hmc engine=nuts max_depth=19 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_410_cuts.csv
-// ./coma optimize  iter=40000 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_410_cuts_opt.csv
-//
+// ./coma310 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.9999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/temp.csv
+
 
 functions {
   vector V_fiber(vector V, vector epsilon) {
@@ -31,7 +30,7 @@ transformed data {
   // 3 : mag dispersion
   // 4 : perp dispersion
   // 5 : free dispersion
-  int dispersion_case=3;
+  int dispersion_case=4;
 
   int pure = 1;
   int angle_error = 1;

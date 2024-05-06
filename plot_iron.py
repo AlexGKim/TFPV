@@ -71,7 +71,14 @@ ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arc
 ans # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
 # Out[42]: (-2.4813505391290436, 14.628796578863792, 1.4880837674710605) for pruned set
 --
-#Fuji
+#######Fuji
+
+fn="data/SGA-2020_fuji_Vrot_cuts.json"
+fn="data/SGA-2020_fuji_Vrot.json"
+
+with open(fn, 'r') as f:
+    data = json.load(f)
+
 x=[20,600]
 # plt.plot(x,-6.9 -6.1* numpy.log10(x))
 plt.plot(x,-3.88 -7.55* numpy.log10(x))
@@ -83,7 +90,10 @@ plt.ylabel(r"R_MAG_SB26-$\mu$")
 plt.ylim((MR.max()+.5,MR.min()-.5))
 plt.show()
 
-
+plt.hist(numpy.log10(data["V_0p33R26"]),density=True)
+plt.legend()
+plt.xlabel(r"$\log{(V\_0p33R26)}$")
+plt.show()
 
 #iron
 
@@ -125,34 +135,6 @@ fn = "data/iron_cluster.json"
 with open(fn, 'r') as f:
     data = json.load(f)
 
-with open("output/cluster_410_opt.csv", newline='') as csvfile:
-    optimal4 = pandas.read_csv(csvfile,comment='#')
-
-optimal4_ran = optimal4.copy()
-optimal4_ran.loc[0] = numpy.random.normal(optimal4_ran.loc[0],numpy.abs(optimal4_ran.loc[0])*0.2)
-optimal4_ran.loc[0,"atanAR"] = numpy.random.normal(optimal4.loc[0]["atanAR"],numpy.abs(optimal4.loc[0]["atanAR"])*0.02)
-ratio=numpy.cos(optimal4.loc[0]["atanAR"])/numpy.cos(optimal4_ran.loc[0]["atanAR"])
-optimal4_ran.loc[0,"xi_dist"] = optimal4_ran.loc[0]["xi_dist"]*ratio
-optimal4_ran.loc[0,"omega_dist"] = optimal4_ran.loc[0]["omega_dist"]*ratio
-optimal4_ran.loc[0].to_json("data/cluster_410_opt.json")
-
-brArr4=numpy.array([optimal4["bR.{}".format(i+1)][0] for i in range(0,data["N_cluster"])])
-brArr4mn= brArr4-brArr4.mean()
-
-with open("output/cluster_310_opt.csv", newline='') as csvfile:
-    optimal3 = pandas.read_csv(csvfile,comment='#')   
-optimal3_ran = optimal3.copy()
-optimal3_ran.loc[0] += optimal3_ran.loc[0]*0.1 #numpy.random.normal(optimal3_ran.loc[0],numpy.abs(optimal3_ran.loc[0])*0.2)
-
-optimal3_ran.loc[0,"atanAR"] = optimal3.loc[0,"atanAR"] + 0.01 #numpy.random.normal(optimal3.loc[0]["atanAR"],numpy.abs(optimal3.loc[0]["atanAR"])*0.02)
-ratio=numpy.cos(optimal3.loc[0]["atanAR"])/numpy.cos(optimal3_ran.loc[0]["atanAR"])
-optimal3_ran.loc[0,"xi_dist"] = optimal3.loc[0]["xi_dist"]*ratio
-optimal3_ran.loc[0,"omega_dist"] = optimal3.loc[0]["omega_dist"]*ratio
-optimal3_ran.loc[0].to_json("data/cluster_310_opt.json")
-
-brArr3=numpy.array([optimal3["bR.{}".format(i+1)][0] for i in range(0,data["N_cluster"])])
-brArr3mn= brArr3-brArr3.mean()
-
 
 MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu_all"])
 
@@ -188,7 +170,6 @@ for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
     if True:
         plt.errorbar(data["V_0p4R26"][index:index+data["N_per_cluster"][i]], MR[index:index+data["N_per_cluster"][i]] ,yerr=data["R_MAG_SB26_ERR"][index:index+data["N_per_cluster"][i]],xerr=data["V_0p4R26_err"][index:index+data["N_per_cluster"][i]], fmt=".")
     index = index+data["N_per_cluster"][i]
-plt.plot(plt.xlim(), brArr3.mean()+numpy.log10(plt.xlim())*optimal3['aR'][0])
 plt.xscale('log',base=10)
 plt.xlabel("V_0p4R26")
 plt.ylabel(r"R_MAG_SB26-$\mu$")
@@ -202,7 +183,6 @@ for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
     if True:
         plt.errorbar(data["V_0p4R26"][index:index+data["N_per_cluster"][i]], MR[index:index+data["N_per_cluster"][i]]-brArr3mn[i] ,yerr=data["R_MAG_SB26_ERR"][index:index+data["N_per_cluster"][i]],xerr=data["V_0p4R26_err"][index:index+data["N_per_cluster"][i]], fmt=".")
     index = index+data["N_per_cluster"][i]
-plt.plot(plt.xlim(), brArr3.mean()+numpy.log10(plt.xlim())*optimal3['aR'][0])
 plt.xscale('log',base=10)
 plt.xlabel("V_0p4R26")
 plt.ylabel(r"R_MAG_SB26-$\mu$")
@@ -216,14 +196,13 @@ print(ans) # (-1.3565289337241162, 14.193371687903761, 1.0984767423119663)
 
 plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
 x=numpy.linspace(1.7,2.6,100)
-plt.plot(x, scipy.stats.norm.pdf(x/numpy.cos(optimal4["atanAR"][0]),  optimal4["xi_dist"][0], optimal4["omega_dist"][0])/numpy.cos(optimal4["atanAR"][0]),label="Perpendicular")
-plt.plot(x, scipy.stats.norm.pdf(x/numpy.cos(optimal3["atanAR"][0]), optimal3["xi_dist"][0], optimal3["omega_dist"][0])/numpy.cos(optimal3["atanAR"][0]),label="Inverse TF")
 plt.legend()
 plt.xlabel(r"$\log{(V\_0p4R26)}$")
 plt.show()
 
 
 dum=[pandas.read_csv("output/cluster_310_{}.csv".format(i),comment='#') for i in range(1,5)]
+
 dum=pandas.concat(dum)
 c = ChainConsumer()
 c.add_chain(Chain(samples=dum[["aR","sigR","xi_dist","omega_dist"]], name="An Example Contour"))
