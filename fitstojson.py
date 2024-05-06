@@ -40,7 +40,7 @@ def coma_json(cuts=False):
     # comalist = [25532,30149,98934,122260,196592,202666,221178,291879,309306,337817,364410,364929,365429,366393,378842,455486,465951,479267,486394,566771,645151,747077,748600,753474,759003,819754,826543,841705,917608,995924,1050173,1167691,1195008,1203610,1203786,1269260,1274409,1284002,1323268,1352019,1356626,1364394,1379275,1387991]
 
     if cuts:
-        select = numpy.logical_and.reduce((numpy.isin(data['SGA_ID'],comalist) , extradata['V_0p33R26'] > Vmin))
+        select = numpy.logical_and.reduce((numpy.isin(data['SGA_ID'],comalist) , data['V_0p33R26'] > Vmin))
     else:
         select = numpy.isin(data['SGA_ID'],comalist)
 
@@ -79,10 +79,10 @@ def coma_json(cuts=False):
     logL = numpy.log10(data_dic["V_0p33R26"])/numpy.cos(init["atanAR"])
 
     init["alpha_dist"]=-3.661245022462153
-    init["xi_dist"]= 14.913405242237685
+    init["xi_dist"]= 14.913405242237685  * numpy.cos(init["atanAR"])
     init["omega_dist"]=2.2831016215521247
 
-    init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
+    init["logL_raw"]  = ((logL-init["xi_dist"]/ numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
     with open(outname2, 'w') as f:
         f.write(json.dumps(init))
 
@@ -312,7 +312,7 @@ def iron_cluster_json():
     init["omega_dist"]=data_dic["omega_dist_init"]
 
 
-    init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
+    init["logL_raw"]  = ((logL-init["xi_dist"]*numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
 
     init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
     init["bR_offset"]= (numpy.zeros(data_dic['N_cluster'])).tolist()
@@ -386,8 +386,8 @@ def segev_plot(fn = fn_segev2):
 
 if __name__ == '__main__':
     # to_json(frac=0.1,cuts=True)
-    # coma_json(cuts=True)
-    iron_cluster_json()
+    coma_json(cuts=True)
+    # iron_cluster_json()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()

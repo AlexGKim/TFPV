@@ -53,7 +53,7 @@ transformed data {
 }
 
 parameters {
-  vector<lower=-pi()/4, upper=pi()/4>[N] epsilon;    // angle error. There is a 1/cos so avoid extreme
+  vector[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
 
   // population 1
   vector[N] logL_raw;       // latent parameter
@@ -61,9 +61,9 @@ parameters {
   // if (flatDistribution == 0)
   // {
   // parameters for SkewNormal
-  real<lower=-10, upper=0> alpha_dist;
+  // real<lower=-10, upper=10> alpha_dist;
   real<lower=0.5, upper=4> omega_dist;  
-  real<lower=11, upper=18> xi_dist;
+  real<lower=.5, upper=5> xi_dist;
   // }
 
  real<lower=atan(-9) , upper=atan(-5.5)> atanAR; // negative slope positive cosine
@@ -73,14 +73,9 @@ parameters {
   real<lower=0> sigR;
 }
 model {
-
+  vector[N] epsilon = epsilon_raw * angle_dispersion;
   // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
-  vector[N] logL;
-  if (flatDistribution==0) {
-    logL=omega_dist*logL_raw+xi_dist;
-  } else {
-    logL=logL_raw*2.2831016215521247 + 14.913405242237685;
-  } 
+
   vector[N] random_realization=random_realization_raw*sigR;
   real sinth = sin(atanAR);
   real costh = cos(atanAR);
@@ -108,6 +103,13 @@ model {
     // sinth_r=sin(atanARr); costh_r=cos(atanARr); //sinth2_r=-costh2; costh2_r=sinth2;
   }
 
+  vector[N] logL;
+  if (flatDistribution==0) {
+    logL=omega_dist*logL_raw+xi_dist/costh;
+  } else {
+    logL=logL_raw*2.2831016215521247 + 14.913405242237685;
+  } 
+
   // velocity model with or without axis error
   vector[N] VtoUse = pow(10, costh*logL  + (random_realization)*costh_r );
   if (angle_error == 1){
@@ -122,7 +124,8 @@ model {
   
   if (flatDistribution==0)
   {
-      logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      // logL_raw ~ skew_normal(0, 1 ,alpha_dist);
+      logL_raw ~ normal(0,1.);
       target += -N*log(omega_dist);
   } else{
      logL_raw ~ normal(0, 10);
@@ -133,7 +136,7 @@ model {
   sigR ~ cauchy(0.,10);
  
   if (angle_error==1)
-    epsilon ~ normal(0,angle_dispersion);
+    epsilon_raw ~ normal(0,1);
 }
 generated quantities {
    real aR=tan(atanAR);
