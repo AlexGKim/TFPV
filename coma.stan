@@ -61,15 +61,15 @@ parameters {
   // {
   // parameters for SkewNormal
   // real<lower=-10, upper=10> alpha_dist;
-  real<lower=0.5, upper=4> omega_dist;  
-  real<lower=.5, upper=5> xi_dist;
+  real<lower=0.5, upper=5> omega_dist;  
+  real<lower=1.5, upper=2.7> xi_dist;
   // }
 
  real<lower=atan(-11) , upper=atan(-5.)> atanAR; // negative slope positive cosine
   real bR;
 
   vector[N] random_realization_raw;
-  real<lower=0> sigR;
+  real<lower=0.001> sigR;
 }
 model {
   vector[N] epsilon = epsilon_raw * angle_dispersion;
@@ -132,7 +132,7 @@ model {
 
   random_realization_raw ~ normal (0, 1);
   target += -N*log(sigR);
-  sigR ~ cauchy(0.,10);
+  // sigR ~ cauchy(0.,10);
  
   if (angle_error==1)
     epsilon_raw ~ normal(0,1);

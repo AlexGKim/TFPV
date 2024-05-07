@@ -79,7 +79,7 @@ parameters {
   // real<lower=-3, upper=3> alpha_dist;
   real<lower=0.2, upper=2> omega_dist;  
   // real<lower=12, upper=18> xi_dist;
-  real<lower=.1, upper=10> xi_dist; 
+  real<lower=1.5, upper=2.6> xi_dist; 
   // }
 
   real<lower=atan(-8) , upper=atan(-5)> atanAR; // negative slope positive cosine
@@ -88,7 +88,7 @@ parameters {
   // vector[N_cluster] bR_offset;
 
   vector[N] random_realization_raw;
-  real<lower=0> sigR;
+  real<lower=0.01> sigR;
 }
 model {
   vector[N] epsilon=epsilon_raw*angle_dispersion;
@@ -160,8 +160,6 @@ model {
 
   random_realization_raw ~ normal (0, 1);
   target += - N * log(sigR);
-
-  sigR ~ cauchy(0.,10);
 
   if (angle_error==1){
     epsilon_raw ~ normal(0,1);
