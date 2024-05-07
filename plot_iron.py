@@ -74,7 +74,7 @@ ans # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
 #######Fuji
 
 fn="data/SGA-2020_fuji_Vrot_cuts.json"
-fn="data/SGA-2020_fuji_Vrot.json"
+# fn="data/SGA-2020_fuji_Vrot.json"
 
 with open(fn, 'r') as f:
     data = json.load(f)
@@ -201,10 +201,13 @@ plt.xlabel(r"$\log{(V\_0p4R26)}$")
 plt.show()
 
 
-dum=[pandas.read_csv("output/cluster_310_{}.csv".format(i),comment='#') for i in range(1,5)]
+# dum=[pandas.read_csv("output/cluster_410_{}.csv".format(i),comment='#') for i in range(1,5)]
+dum=[pandas.read_csv("output/fuji_410_cuts_{}.csv".format(i),comment='#') for i in range(1,5)]
 
 dum=pandas.concat(dum)
 c = ChainConsumer()
 c.add_chain(Chain(samples=dum[["aR","sigR","xi_dist","omega_dist"]], name="An Example Contour"))
 fig = c.plotter.plot()
+plt.savefig("temp.png")
+plt.show()
 

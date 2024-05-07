@@ -65,7 +65,7 @@ parameters {
   real<lower=.5, upper=5> xi_dist;
   // }
 
- real<lower=atan(-9) , upper=atan(-5.5)> atanAR; // negative slope positive cosine
+ real<lower=atan(-11) , upper=atan(-5.)> atanAR; // negative slope positive cosine
   real bR;
 
   vector[N] random_realization_raw;
