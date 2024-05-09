@@ -61,11 +61,11 @@ parameters {
   // {
   // parameters for SkewNormal
   // real<lower=-10, upper=10> alpha_dist;
-  real<lower=0.5, upper=5> omega_dist;  
-  real<lower=1.5, upper=2.7> xi_dist;
+  real<lower=0.5, upper=5> omega_dist;  # this is in logL
+  real<lower=1.5, upper=2.7> xi_dist;   # this is in logV
   // }
 
- real<lower=atan(-11) , upper=atan(-5.)> atanAR; // negative slope positive cosine
+ real<lower=atan(-11.5) , upper=atan(-5.)> atanAR; // negative slope positive cosine
   real bR;
 
   vector[N] random_realization_raw;
