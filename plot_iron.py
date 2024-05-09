@@ -5,7 +5,144 @@ from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
 import scipy.stats
 import pandas
-from chainconsumer import Chain, ChainConsumer
+from chainconsumer import Chain, ChainConsumer, PlotConfig
+
+def cluster():
+    chains=[]
+    for _ in [3,4]:
+        dum=[pandas.read_csv("output/cluster_{}10_{}.csv".format(_,i),comment='#') for i in range(1,5)]
+        bRcols=["bR.{}".format(cin) for cin in range(1,12)]
+        for df_ in dum:
+            df_["bR_use"] = df_[bRcols].mean(axis=1)
+        dum=pandas.concat(dum)
+        chains.append(dum)
+        # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
+
+        c = ChainConsumer()
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist"]], name="An Example Contour"))
+        c.set_plot_config(
+            PlotConfig(
+                labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist" : r"$\sigma$"},
+            )
+        )
+        fig = c.plotter.plot()
+        plt.savefig("corner_cluster_{}.png".format(_))
+        # plt.show()
+        plt.clf()
+
+    fn="data/iron_cluster.json"
+    fn_all="data/iron_cluster_all.json"
+
+
+    with open(fn, 'r') as f:
+        data = json.load(f)
+
+    with open(fn_all, 'r') as f:
+        data_all = json.load(f)
+
+    MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu_all"])
+    MR_all  = numpy.array(data_all["R_MAG_SB26"]) - numpy.array(data_all["mu_all"])
+
+    plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black')
+    index = 0
+    for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
+        if True:
+            plt.errorbar(data["V_0p4R26"][index:index+data["N_per_cluster"][i]], MR[index:index+data["N_per_cluster"][i]] ,yerr=data["R_MAG_SB26_ERR"][index:index+data["N_per_cluster"][i]],xerr=data["V_0p4R26_err"][index:index+data["N_per_cluster"][i]], fmt=".")
+        index = index+data["N_per_cluster"][i]
+
+    mn = chains[1][["aR","bR_use"]].mean()
+    cov = chains[1][["aR","bR_use"]].cov()
+    
+    dum = numpy.array(plt.xlim())
+    if dum[0] <=0:
+        dum[0]=10
+    for i in range(1000):
+        aR, bR = numpy.random.multivariate_normal(mn, cov)
+        plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')            
+    plt.xscale('log',base=10)
+    plt.xlabel("V_0p4R26")
+    plt.ylabel(r"R_MAG_SB26-$\mu$")
+    plt.ylim((MR_all.max()+.5,MR_all.min()-.5))
+    plt.savefig("tf_cluster.png") 
+    plt.clf()
+
+    plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
+    x=numpy.linspace(1.5,2.5,100)
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist"].mean()) ,label="Perpendicular")
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist"].mean()) ,label="Inverse TF")
+    plt.xlabel(r"$\log{(V\_0p4R26)}$")
+    plt.legend()
+    plt.savefig("hist_cluster.png")
+    plt.clf()
+
+cluster()
+wef
+
+def fuji():
+    chains=[]
+    for _ in [3,4]:
+        dum=[pandas.read_csv("output/fuji_{}10_cuts_{}.csv".format(_,i),comment='#') for i in range(1,5)]
+        for df_ in dum:
+            df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
+        dum=pandas.concat(dum)
+        chains.append(dum)
+        # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
+
+        c = ChainConsumer()
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist"]], name="An Example Contour"))
+        c.set_plot_config(
+            PlotConfig(
+                labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist" : r"$\sigma$"},
+            )
+        )
+        fig = c.plotter.plot()
+        plt.savefig("corner_fuji_{}.png".format(_))
+        # plt.show()
+        plt.clf()
+    fn="data/SGA-2020_fuji_Vrot_cuts.json"
+    fn_all="data/SGA-2020_fuji_Vrot.json"
+
+
+    with open(fn, 'r') as f:
+        data = json.load(f)
+
+    with open(fn_all, 'r') as f:
+        data_all = json.load(f)
+
+    MR = numpy.array(data["R_MAG_SB26"]) - 34.7
+    MR_all  = numpy.array(data_all["R_MAG_SB26"]) - 34.7
+    plt.errorbar(data_all["V_0p33R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p33R26_err"], fmt="+", label="cut", color="black")
+    dum = numpy.array(plt.xlim())
+    if dum[0] <=0:
+        dum[0]=10
+    for i in range(1000):
+        aR, bR = numpy.random.multivariate_normal(chains[1][["aR","bR_use"]].mean(),chains[1][["aR","bR_use"]].cov())
+    #     plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')    
+    # plt.errorbar(data_all["V_0p33R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p33R26_err"], fmt=".", label="cut")
+    plt.errorbar(data["V_0p33R26"], MR ,yerr=data["R_MAG_SB26_ERR"],xerr=data["V_0p33R26_err"], fmt=".",label="sample") 
+    plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
+    plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse Tully-Fisher")
+    plt.xscale('log',base=10)
+    plt.xlabel("V_0p33R26")
+    plt.ylabel(r"R_MAG_SB26-$\mu$")
+    plt.ylim((MR_all.max()+.5,MR_all.min()-.5))
+    # plt.xlim(dum)
+    plt.legend()
+    plt.savefig("tf_fuji.png") 
+    plt.clf()
+    # plt.show()
+
+    plt.hist(numpy.log10(data["V_0p33R26"]),density=True)
+    x=numpy.linspace(1.5,2.5,100)
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist"].mean()) ,label="Perpendicular")
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist"].mean()) ,label="Inverse TF")
+    plt.xlabel(r"$\log{(V\_0p33R26)}$")
+    plt.legend()
+    plt.savefig("hist_fuji.png")
+    plt.clf()
+
+fuji()
+wef
 
 fn = "data/SGA-2020_iron_Vrot_cuts_sub_0.02.json"
 # fn="data/SGA-2020_fuji_Vrot.json"
@@ -70,30 +207,8 @@ ans # (13.133570672711606, 1.5160651053079683)
 ans = scipy.stats.skewnorm.fit(numpy.log10(data["V_0p4R26"])/numpy.cos(numpy.arctan(-6.1)))
 ans # (-3.661245022462153, 14.913405242237685, 2.2831016215521247)
 # Out[42]: (-2.4813505391290436, 14.628796578863792, 1.4880837674710605) for pruned set
---
-#######Fuji
 
-fn="data/SGA-2020_fuji_Vrot_cuts.json"
-# fn="data/SGA-2020_fuji_Vrot.json"
 
-with open(fn, 'r') as f:
-    data = json.load(f)
-
-x=[20,600]
-# plt.plot(x,-6.9 -6.1* numpy.log10(x))
-plt.plot(x,-3.88 -7.55* numpy.log10(x))
-MR = numpy.array(data["R_MAG_SB26"]) - 34.7
-plt.errorbar(data["V_0p33R26"], MR ,yerr=numpy.sqrt(numpy.array(data["R_MAG_SB26_ERR"])**2),xerr=data["V_0p33R26_err"], fmt=".")
-plt.xscale('log',base=10)
-plt.xlabel("V_0p33R26")
-plt.ylabel(r"R_MAG_SB26-$\mu$")
-plt.ylim((MR.max()+.5,MR.min()-.5))
-plt.show()
-
-plt.hist(numpy.log10(data["V_0p33R26"]),density=True)
-plt.legend()
-plt.xlabel(r"$\log{(V\_0p33R26)}$")
-plt.show()
 
 #iron
 
@@ -143,11 +258,10 @@ for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
     if True:
         plt.errorbar(data["V_0p4R26"][index:index+data["N_per_cluster"][i]], MR[index:index+data["N_per_cluster"][i]] ,yerr=data["R_MAG_SB26_ERR"][index:index+data["N_per_cluster"][i]],xerr=data["V_0p4R26_err"][index:index+data["N_per_cluster"][i]], fmt=".")
     index = index+data["N_per_cluster"][i]
-plt.plot(plt.xlim(), brArr4.mean()+numpy.log10(plt.xlim())*optimal4['aR'][0])
 plt.xscale('log',base=10)
 plt.xlabel("V_0p4R26")
 plt.ylabel(r"R_MAG_SB26-$\mu$")
-plt.ylim((MR.max()+.5,MR.min()-.5))
+# plt.ylim((MR.max()+.5,MR.min()-.5))
 plt.show()
 
 
@@ -201,13 +315,5 @@ plt.xlabel(r"$\log{(V\_0p4R26)}$")
 plt.show()
 
 
-# dum=[pandas.read_csv("output/cluster_410_{}.csv".format(i),comment='#') for i in range(1,5)]
-dum=[pandas.read_csv("output/fuji_410_cuts_{}.csv".format(i),comment='#') for i in range(1,5)]
 
-dum=pandas.concat(dum)
-c = ChainConsumer()
-c.add_chain(Chain(samples=dum[["aR","sigR","xi_dist","omega_dist"]], name="An Example Contour"))
-fig = c.plotter.plot()
-plt.savefig("temp.png")
-plt.show()
 

@@ -30,7 +30,7 @@ transformed data {
   // 3 : mag dispersion
   // 4 : perp dispersion
   // 5 : free dispersion
-  int dispersion_case=4;
+  int dispersion_case=3;
 
   int pure = 1;
   int angle_error = 1;
@@ -69,7 +69,7 @@ parameters {
   real bR;
 
   vector[N] random_realization_raw;
-  real<lower=0.001> sigR;
+  real<lower=0.01> sigR;
 }
 model {
   vector[N] epsilon = epsilon_raw * angle_dispersion;
@@ -118,7 +118,7 @@ model {
   // Rhat ~ normal(bR + mu_coma+ sinth * logL  + (random_realization)*sinth_r, dR);
   // Vhat ~ normal(VtoUse, dV) T[Vmin,];
 
-  R_MAG_SB26 ~ normal(bR + mu_coma+ sinth * logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
+  R_MAG_SB26 ~ normal(bR - xi_dist * tan(atanAR) + mu_coma+ sinth * logL  + (random_realization)*sinth_r, R_MAG_SB26_ERR);
   V_0p33R26 ~ normal(VtoUse, V_0p33R26_err) T[Vmin,];
   
   if (flatDistribution==0)
