@@ -13,9 +13,8 @@ def cluster():
         dum=[pandas.read_csv("output/cluster_{}10_{}.csv".format(_,i),comment='#') for i in range(1,5)]
         bRcols=["bR.{}".format(cin) for cin in range(1,12)]
         for df_ in dum:
-            df_["bR_use"] = df_[bRcols].mean(axis=1)
+            df_["bR_use"] = df_[bRcols].mean(axis=1) - df_["xi_dist"]*df_["aR"]
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
-            df_["omega_dist_use"] = df_["omega_dist"] 
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
@@ -83,7 +82,7 @@ cluster()
 def fuji():
     chains=[]
     for _ in [3,4]:
-        dum=[pandas.read_csv("output/fuji_{}10_cuts_{}.csv".format(_,i),comment='#') for i in range(1,5)]
+        dum=[pandas.read_csv("output/fuji_{}10_cuts_{} (1).csv".format(_,i),comment='#') for i in range(1,5)]
         for df_ in dum:
             df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
@@ -92,10 +91,10 @@ def fuji():
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
 
         c = ChainConsumer()
-        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist"]], name="An Example Contour"))
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name="An Example Contour"))
         c.set_plot_config(
             PlotConfig(
-                labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist" : r"$\sigma$"},
+                labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist_use" : r"$\sigma$"},
             )
         )
         fig = c.plotter.plot()
