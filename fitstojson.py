@@ -26,14 +26,6 @@ def coma_json(cuts=False):
 
     Vmin = 50
 
-    # # add extra noise degrading data to help fit
-    # dt = {'names':['Vhat','Vhat_noise','Rhat'], 'formats':[float, float,float]}
-    # extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
-    # extradata['Vhat_noise'] = 0.02*data["V_0p33R26"]
-    # Rhat_noise = 0.1
-    # extradata['Vhat'] = numpy.random.normal(loc=data["V_0p33R26"], scale=extradata['Vhat_noise'])
-    # extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
-
 
     # comalist = [8032,20886,25532,98934,100987,122260,127141,128944,139660,171794,191275,191496,192582,196592,202666,221178,238344,289665,291879,301194,302524,309306,330166,337817,343570,364410,364929,365429,366393,378180,378842,381769,390630,455486,465951,477610,479267,486394,540744,556334,566771,573264,629860,637552,645151,652931,665961,729931,733069,735080,747077,748600,753474,796671,811359,819754,824392,826543,827339,834049,837120,841705,900049,905270,908303,917608,918100,928810,972260,993595,995924,1009928,1014365,1020852,1050173,1089288,1115705,1122082,1144453,1167691,1195008,1198552,1201916,1203610,1203786,1204237,1206707,1209774,1269260,1272144,1274171,1274189,1274409,1281982,1284002,1293940,1294562,1323268,1349168,1356626,1364394,1379275,1387126,1387991]
     comalist = [25532,30149,98934,122260,191275,196592,202666,221178,291879,309306,337817,364410,364929,365429,366393,378842,455486,465951,479267,486394,566771,645151,747077,748600,753474,759003,819754,826543,841705,917608,995924,1050173,1167691,1195008,1203610,1203786,1269260,1274409,1284002,1323268,1352019,1356626,1364394,1379275,1387991]
@@ -44,12 +36,6 @@ def coma_json(cuts=False):
     else:
         select = numpy.isin(data['SGA_ID'],comalist)
 
-    # plt.errorbar(numpy.log10(data['V_0p33R26'][select]), data['R_MAG_SB26'][select],yerr=data['R_MAG_SB26_ERR'][select],xerr=[numpy.log10(data['V_0p33R26'][select])-numpy.log10(data['V_0p33R26'][select]-data['V_0p33R26_err'][select]),numpy.log10(data['V_0p33R26'][select]+data['V_0p33R26_err'][select])-numpy.log10(data['V_0p33R26'][select])],fmt='.')
-    # plt.plot(numpy.array([1.4,2.5]),23-3.5*numpy.array([1.4,2.5]))
-    # plt.ylim((18,13))
-    # plt.show()
-    # wef
-
     data_dic=dict()
     for k in data.dtype.names:
         if k not in ['SGA_GALAXY','GALAXY','MORPHTYPE','BYHAND','REF','GROUP_NAME','GROUP_PRIMARY','BRICKNAME','D26_REF']:
@@ -58,13 +44,10 @@ def coma_json(cuts=False):
                 data[k][w[0]]=1e8
 
             data_dic[k]=data[k][select].tolist()
-    # for k in extradata.dtype.names:
-    #     data_dic[k]=extradata[k][select].tolist()
 
 
     data_dic['N'] = len(data_dic['SGA_ID'])
     data_dic['Vmin'] = Vmin
-    # data_dic['Rhat_noise']=Rhat_noise
 
     json_object = json.dumps(data_dic)
 
@@ -72,132 +55,134 @@ def coma_json(cuts=False):
         f.write(json_object)
 
     init = dict()
-    # init["v_raw"]=(numpy.array(data_dic["V_0p33R26"])/139.35728557650154).tolist()
 
     init["atanAR"] = numpy.arctan(-6.1)
-    init['bR'] = -6.91
     logL = numpy.log10(data_dic["V_0p33R26"])/numpy.cos(init["atanAR"])
 
     init["alpha_dist"]=-3.661245022462153
     init["xi_dist"]= 14.913405242237685  * numpy.cos(init["atanAR"])
     init["omega_dist"]=2.2831016215521247
-
+    init['bR'] =  init["xi_dist"] * numpy.tan(init["atanAR"]) 
     init["logL_raw"]  = ((logL-init["xi_dist"]/ numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
     with open(outname2, 'w') as f:
         f.write(json.dumps(init))
 
-def to_json(frac=1, cuts=False):
-    fn = "SGA-2020_iron_Vrot"
 
-    Rlim = 17.75-0.1
-    Mlim = -17.
-    Vmin = 70
-    Vmax = 300
-    cosi = 1/numpy.sqrt(2)
-    q0=0.2
-    balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
 
-    fits=fitsio.FITS("data/"+fn+".fits")
-    data=fits[1].read()
 
-    # selection effects
+# def to_json(frac=1, cuts=False):
+#     fn = "SGA-2020_iron_Vrot"
 
-    mu = cosmo.distmod(data['Z_DESI']).value
-    Rlim_eff = numpy.minimum(Rlim, mu+Mlim)
+#     Rlim = 17.75-0.1
+#     Mlim = -17.
+#     Vmin = 70
+#     Vmax = 300
+#     cosi = 1/numpy.sqrt(2)
+#     q0=0.2
+#     balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
 
-    # add extra noise degrading data to help fit
-    dt = {'names':['Vhat','Vhat_noise','Rhat','Rlim_eff'], 'formats':[float, float,float,float]}
-    extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
-    extradata['Vhat_noise'] = 0.02*data["V_0p4R26"]
-    Rhat_noise = 0.1
-    extradata['Vhat'] = numpy.random.normal(loc=data["V_0p4R26"], scale=extradata['Vhat_noise'])
-    extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
-    extradata['Rlim_eff'] = Rlim_eff
-    if cuts:
-        select = numpy.logical_and.reduce((extradata['Rhat'] < Rlim_eff  , extradata['Vhat'] > Vmin, extradata['Vhat'] < Vmax, data["BA"] < balim))
-    else:
-        select = data['R_MAG_SB26'] < Rlim
+#     fits=fitsio.FITS("data/"+fn+".fits")
+#     data=fits[1].read()
 
-    data_dic=dict()
-    for k in data.dtype.names:
-        if k not in ['SGA_GALAXY','GALAXY','MORPHTYPE','BYHAND','REF','GROUP_NAME','GROUP_PRIMARY','BRICKNAME','D26_REF']:
-            if k in ['G_MAG_SB26_ERR','R_MAG_SB26_ERR','Z_MAG_SB26_ERR']:
-                w=numpy.where(data[k]<0)
-                data[k][w[0]]=1e8
+#     # selection effects
 
-            data_dic[k]=data[k][select].tolist()
+#     mu = cosmo.distmod(data['Z_DESI']).value
+#     Rlim_eff = numpy.minimum(Rlim, mu+Mlim)
 
-    for k in extradata.dtype.names:
-        data_dic[k]=extradata[k][select].tolist()
+#     # add extra noise degrading data to help fit
+#     dt = {'names':['Vhat','Vhat_noise','Rhat','Rlim_eff'], 'formats':[float, float,float,float]}
+#     extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
+#     extradata['Vhat_noise'] = 0.02*data["V_0p4R26"]
+#     Rhat_noise = 0.1
+#     extradata['Vhat'] = numpy.random.normal(loc=data["V_0p4R26"], scale=extradata['Vhat_noise'])
+#     extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
+#     extradata['Rlim_eff'] = Rlim_eff
+#     if cuts:
+#         select = numpy.logical_and.reduce((extradata['Rhat'] < Rlim_eff  , extradata['Vhat'] > Vmin, extradata['Vhat'] < Vmax, data["BA"] < balim))
+#     else:
+#         select = data['R_MAG_SB26'] < Rlim
 
-    data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
-    z = numpy.array(data_dic["Z_DESI"])
-    dv = 300
-    dm = (5/numpy.log(10)*(1+z)**2*dv/cosmo.H(z)/cosmo.luminosity_distance(z)).value
-    data_dic['dm_v'] = dm.tolist()
+#     data_dic=dict()
+#     for k in data.dtype.names:
+#         if k not in ['SGA_GALAXY','GALAXY','MORPHTYPE','BYHAND','REF','GROUP_NAME','GROUP_PRIMARY','BRICKNAME','D26_REF']:
+#             if k in ['G_MAG_SB26_ERR','R_MAG_SB26_ERR','Z_MAG_SB26_ERR']:
+#                 w=numpy.where(data[k]<0)
+#                 data[k][w[0]]=1e8
 
-    N_all = len(data_dic['Z_DESI'])
-    if frac !=1 :
-        ind = numpy.random.randint(0, high=N_all, size=int(N_all*frac))
-        for key, value in data_dic.items():
-            value=numpy.array(value)[ind]
-            data_dic[key] = value.tolist()
+#             data_dic[k]=data[k][select].tolist()
 
-    data_dic['N'] = len(data_dic['SGA_ID'])
-    data_dic['Rlim'] = Rlim
-    data_dic['Mlim'] = Mlim
-    data_dic['Vmin'] = Vmin
-    data_dic['Vmax'] = Vmax
+#     for k in extradata.dtype.names:
+#         data_dic[k]=extradata[k][select].tolist()
 
-    data_dic['Rhat_noise'] = Rhat_noise
-# (-2.2456218582429583, 14.530590758470598, 1.3865197193260355)
-    data_dic["aR_init"]=-6.1
-    data_dic["alpha_dist_init"]=-2.2456218582429583
-    data_dic["xi_dist_init"]= 14.530590758470598
-    data_dic["omega_dist_init"]=1.3865197193260355
+#     data_dic['mu'] = cosmo.distmod(data_dic['Z_DESI']).value.tolist()
+#     z = numpy.array(data_dic["Z_DESI"])
+#     dv = 300
+#     dm = (5/numpy.log(10)*(1+z)**2*dv/cosmo.H(z)/cosmo.luminosity_distance(z)).value
+#     data_dic['dm_v'] = dm.tolist()
 
-    json_object = json.dumps(data_dic)
+#     N_all = len(data_dic['Z_DESI'])
+#     if frac !=1 :
+#         ind = numpy.random.randint(0, high=N_all, size=int(N_all*frac))
+#         for key, value in data_dic.items():
+#             value=numpy.array(value)[ind]
+#             data_dic[key] = value.tolist()
 
-    cstr=""
-    if cuts:
-        cstr="_cuts"
-    if frac==1:
-        outname = fn+cstr+".json"
-        outname2 = fn+cstr+"_init.json"
-    else:
-        outname =  fn+cstr+"_sub_{:4.2f}.json".format(frac)
-        outname2 = fn+cstr+"_sub_{:4.2f}_init.json".format(frac)
+#     data_dic['N'] = len(data_dic['SGA_ID'])
+#     data_dic['Rlim'] = Rlim
+#     data_dic['Mlim'] = Mlim
+#     data_dic['Vmin'] = Vmin
+#     data_dic['Vmax'] = Vmax
 
-    with open("data/"+outname, 'w') as f:
-        f.write(json_object)
+#     data_dic['Rhat_noise'] = Rhat_noise
+# # (-2.2456218582429583, 14.530590758470598, 1.3865197193260355)
+#     data_dic["aR_init"]=-6.1
+#     data_dic["alpha_dist_init"]=-2.2456218582429583
+#     data_dic["xi_dist_init"]= 14.530590758470598 
+#     data_dic["omega_dist_init"]=1.3865197193260355
 
-#  vector[N] v = 373.137*v_raw + 222.371;
-    init = dict()
+#     json_object = json.dumps(data_dic)
 
-    init["atanAR"] = numpy.arctan(-6.9878)
-    init['bR'] = -5.3173
-    init['sigR'] = 0.07
-    logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
+#     cstr=""
+#     if cuts:
+#         cstr="_cuts"
+#     if frac==1:
+#         outname = fn+cstr+".json"
+#         outname2 = fn+cstr+"_init.json"
+#     else:
+#         outname =  fn+cstr+"_sub_{:4.2f}.json".format(frac)
+#         outname2 = fn+cstr+"_sub_{:4.2f}_init.json".format(frac)
 
-    if cuts:
-        # init["alpha_dist"]=-2.4813505391290436
-        # init["xi_dist"]= 14.628796578863792
-        # init["omega_dist"]=1.4880837674710605
-        init["alpha_dist"]=data_dic["alpha_dist_init"]
-        init["xi_dist"]= data_dic["xi_dist_init"]
-        init["omega_dist"]=data_dic["omega_dist_init"]
-    else:
-        init["alpha_dist"]=-3.661245022462153
-        init["xi_dist"]= 14.913405242237685
-        init["omega_dist"]=2.2831016215521247
+#     with open("data/"+outname, 'w') as f:
+#         f.write(json_object)
 
-    # init["mu_dist"]=13.133570672711606
-    # init["sigma_dist"]= 1.5160651053079683
-    init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
-    init["dv"] = (numpy.zeros(data_dic['N'])).tolist()
-    init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
-    with open("data/"+outname2, 'w') as f:
-        f.write(json.dumps(init))
+# #  vector[N] v = 373.137*v_raw + 222.371;
+#     init = dict()
+
+#     init["atanAR"] = numpy.arctan(-6.9878)
+#     init['bR'] = -5.3173
+#     intit['bR'] = 0
+#     init['sigR'] = 0.07
+#     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
+
+#     if cuts:
+#         # init["alpha_dist"]=-2.4813505391290436
+#         # init["xi_dist"]= 14.628796578863792
+#         # init["omega_dist"]=1.4880837674710605
+#         init["alpha_dist"]=data_dic["alpha_dist_init"]
+#         init["xi_dist"]= data_dic["xi_dist_init"]
+#         init["omega_dist"]=data_dic["omega_dist_init"]
+#     else:
+#         init["alpha_dist"]=-3.661245022462153
+#         init["xi_dist"]= 14.913405242237685
+#         init["omega_dist"]=2.2831016215521247
+
+#     # init["mu_dist"]=13.133570672711606
+#     # init["sigma_dist"]= 1.5160651053079683
+#     init["logL_raw"]  = ((logL-init["xi_dist"])/init["omega_dist"]).tolist()
+#     init["dv"] = (numpy.zeros(data_dic['N'])).tolist()
+#     init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
+#     with open("data/"+outname2, 'w') as f:
+#         f.write(json.dumps(init))
 
 
 def iron_cluster_json():
@@ -280,7 +265,7 @@ def iron_cluster_json():
 
     data_dic["aR_init"]= -6.26
     data_dic["alpha_dist_init"]=1.25
-    data_dic["xi_dist_init"]= 13.3
+    data_dic["xi_dist_init"]= 13.3 * numpy.cos(numpy.arctan(data_dic["aR_init"]))
     data_dic["omega_dist_init"]= .844   
 
     dum=[]
@@ -301,15 +286,16 @@ def iron_cluster_json():
 #  vector[N] v = 373.137*v_raw + 222.371;
     init = dict()
 
+    init["alpha_dist"]=data_dic["alpha_dist_init"]
+    init["xi_dist"]= data_dic["xi_dist_init"]
+    init["omega_dist"]=data_dic["omega_dist_init"]
+
     init["atanAR"] = numpy.arctan(data_dic["aR_init"])
-    init['bR'] = (-5.3173+ numpy.zeros(N_cluster)).tolist()
+    init['bR'] = (init["xi_dist"] * numpy.tan(init["atanAR"]) + numpy.zeros(N_cluster)).tolist()
     init['sigR'] = 0.1
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
 
 
-    init["alpha_dist"]=data_dic["alpha_dist_init"]
-    init["xi_dist"]= data_dic["xi_dist_init"]
-    init["omega_dist"]=data_dic["omega_dist_init"]
 
 
     init["logL_raw"]  = ((logL-init["xi_dist"]*numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
@@ -318,6 +304,120 @@ def iron_cluster_json():
     init["bR_offset"]= (numpy.zeros(data_dic['N_cluster'])).tolist()
     with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
+
+
+# def iron_cluster_json(all=False):
+#     fn = "SGA-2020_iron_Vrot"
+
+#     Rlim = 17.75
+#     Mlim = -17.
+#     Vmin = 70
+#     Vmax = 300
+
+#     Mlim = -18
+#     Vmax = 1e4
+
+#     cosi = 1/numpy.sqrt(2)
+#     q0=0.2
+#     balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
+
+#     table = Table.read("data/"+fn+".fits")
+#     pv_df = table.to_pandas()
+
+#     table = Table.read("data/Tully15-Table3.fits")
+#     tully_df = table.to_pandas()
+
+#     # read in the cluster files
+#     N_per_cluster = []
+#     mu = []
+#     Rlim_eff = []
+
+#     alldf=[]
+#    # selection effects
+#     for fn in glob.glob("data/output_*.txt"):
+#         Nest = re.search('output_(.+?).txt',fn).group(1)
+#         mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
+#         df = pandas.read_csv(fn)
+#         combo_df = df.merge(pv_df, on='SGA_ID')
+#         Rcut = numpy.minimum(Rlim, mu_+Mlim)
+#         if not all:
+#             select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
+#             combo_df = combo_df[select]
+#         if combo_df.shape[0] > 1:
+#             N_per_cluster.append(combo_df.shape[0])
+#             alldf.append(combo_df)
+#             Nest = re.search('output_(.+?).txt',fn).group(1)
+#             mu.append(mu_)
+#             Rlim_eff.append(Rcut);
+
+#     N_cluster=len(alldf)
+
+#     alldf = pandas.concat(alldf,ignore_index=True)
+#     alldf = alldf[["SGA_ID", "V_0p4R26","V_0p4R26_err","R_MAG_SB26","R_MAG_SB26_ERR"]]
+
+#     data_dic=dict()
+
+#     for series_name, series in alldf.items():
+#         data_dic[series_name]=series.tolist()
+
+#     data_dic['N'] = len(data_dic['SGA_ID'])
+#     data_dic['Rlim'] = Rlim
+#     data_dic['Mlim'] = Mlim
+#     data_dic['Vmin'] = Vmin
+#     data_dic['Vmax'] = Vmax
+
+#     data_dic["N_cluster"] = N_cluster
+#     data_dic["N_per_cluster"] = N_per_cluster
+#     data_dic["mu"] = mu
+#     data_dic["Rlim_eff"] = Rlim_eff
+
+#     data_dic["aR_init"]= -6.26
+#     data_dic["atanAR"] = numpy.arctan(data_dic["aR_init"])
+#     data_dic["alpha_dist_init"]=1.25
+#     data_dic["xi_dist_init"]= 13.3 * numpy.cos(data_dic["atanAR"])
+#     data_dic["omega_dist_init"]= .08
+
+
+#     dum=[]
+#     for npc,m in zip(N_per_cluster,mu):
+#         for j in range(npc):
+#             dum.append(m)
+#     data_dic["mu_all"]=dum
+
+#     json_object = json.dumps(data_dic)
+
+#     outname = "iron_cluster.json"
+#     outname2 = "iron_cluster_init.json"
+
+#     if all:
+#         outname = "iron_cluster_all.json"
+#         outname2 = "iron_cluster_all_init.json"
+
+#     with open("data/"+outname, 'w') as f:
+#         f.write(json_object)
+
+# #  vector[N] v = 373.137*v_raw + 222.371;
+#     init = dict()
+
+#     init["atanAR"] = data_dic["atanAR"]
+#     # init['bR'] = (-5.3173*0+ numpy.zeros(N_cluster)).tolist()
+
+#     init['sigR'] = 0.1
+#     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
+
+
+#     init["alpha_dist"]=data_dic["alpha_dist_init"]
+#     init["xi_dist"]= data_dic["xi_dist_init"] 
+#     init["omega_dist"]=data_dic["omega_dist_init"]
+#     init['bR'] =  (init["xi_dist"] * numpy.tan(init["atanAR"]) + numpy.zeros(N_cluster)).tolist()
+
+#     # init["logL_raw"]  = ((logL-init["xi_dist"]/numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
+#     # init["logL_raw"]  = ((logL-init["xi_dist"]/numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
+#     init["logL_raw"]  = ((numpy.log10(data_dic["V_0p4R26"]) - init["xi_dist"])/init["omega_dist"]).tolist()
+
+#     init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
+#     with open("data/"+outname2, 'w') as f:
+#         f.write(json.dumps(init))
     
 
 def segev_json(fn='SGA_TFR_simtest_20240307'):
@@ -386,8 +486,8 @@ def segev_plot(fn = fn_segev2):
 
 if __name__ == '__main__':
     # to_json(frac=0.1,cuts=True)
-    coma_json(cuts=True)
-    # iron_cluster_json()
+    # coma_json(cuts=True)
+    iron_cluster_json()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()

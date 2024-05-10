@@ -77,9 +77,9 @@ parameters {
   // {
   // parameters for SkewNormal
   // real<lower=-3, upper=3> alpha_dist;
-  real<lower=0.2, upper=2> omega_dist;  
+  real<lower=0.4, upper=2> omega_dist;  
   // real<lower=12, upper=18> xi_dist;
-  real<lower=1.5, upper=2.6> xi_dist; 
+  real<lower=1.5, upper=2.7> xi_dist; 
   // }
 
   real<lower=atan(-8) , upper=atan(-5)> atanAR; // negative slope positive cosine
@@ -133,7 +133,7 @@ model {
       VtoUse = V_fiber(VtoUse,epsilon);
   } 
 
-  vector[N] m_realize = sinth * logL  + random_realization*sinth_r;
+  vector[N] m_realize = sinth * logL  + random_realization*sinth_r - xi_dist * tan(atanAR);
   vector[N_cluster] a_term = bR + mu - Rlim_eff;
   int index=1;
   for (i in 1:N_cluster){  

@@ -14,15 +14,17 @@ def cluster():
         bRcols=["bR.{}".format(cin) for cin in range(1,12)]
         for df_ in dum:
             df_["bR_use"] = df_[bRcols].mean(axis=1)
+            df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
+            df_["omega_dist_use"] = df_["omega_dist"] 
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
 
         c = ChainConsumer()
-        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist"]], name="An Example Contour"))
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name="An Example Contour"))
         c.set_plot_config(
             PlotConfig(
-                labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist" : r"$\sigma$"},
+                labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist_use" : r"$\sigma$"},
             )
         )
         fig = c.plotter.plot()
@@ -43,7 +45,7 @@ def cluster():
     MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu_all"])
     MR_all  = numpy.array(data_all["R_MAG_SB26"]) - numpy.array(data_all["mu_all"])
 
-    plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black')
+    # plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black')
     index = 0
     for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
         if True:
@@ -62,21 +64,21 @@ def cluster():
     plt.xscale('log',base=10)
     plt.xlabel("V_0p4R26")
     plt.ylabel(r"R_MAG_SB26-$\mu$")
-    plt.ylim((MR_all.max()+.5,MR_all.min()-.5))
+    plt.ylim((MR.max()+.5,MR.min()-.5))
     plt.savefig("tf_cluster.png") 
     plt.clf()
 
     plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
-    x=numpy.linspace(1.5,2.5,100)
-    plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist"].mean()) ,label="Perpendicular")
-    plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist"].mean()) ,label="Inverse TF")
+    x=numpy.linspace(1.8,2.5,100)
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist_use"].mean()) ,label="Perpendicular")
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist_use"].mean()) ,label="Inverse TF")
     plt.xlabel(r"$\log{(V\_0p4R26)}$")
     plt.legend()
     plt.savefig("hist_cluster.png")
     plt.clf()
 
 cluster()
-wef
+
 
 def fuji():
     chains=[]
@@ -84,6 +86,7 @@ def fuji():
         dum=[pandas.read_csv("output/fuji_{}10_cuts_{}.csv".format(_,i),comment='#') for i in range(1,5)]
         for df_ in dum:
             df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
+            df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
@@ -134,8 +137,8 @@ def fuji():
 
     plt.hist(numpy.log10(data["V_0p33R26"]),density=True)
     x=numpy.linspace(1.5,2.5,100)
-    plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist"].mean()) ,label="Perpendicular")
-    plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist"].mean()) ,label="Inverse TF")
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist_use"].mean()) ,label="Perpendicular")
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist_use"].mean()) ,label="Inverse TF")
     plt.xlabel(r"$\log{(V\_0p33R26)}$")
     plt.legend()
     plt.savefig("hist_fuji.png")
