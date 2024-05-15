@@ -48,7 +48,9 @@ def cluster():
     MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu_all"])
     MR_all  = numpy.array(data_all["R_MAG_SB26"]) - numpy.array(data_all["mu_all"])
 
-    # plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black')
+    plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black')
+    # plt.errorbar(data["V_0p4R26"], MR ,yerr=data["R_MAG_SB26_ERR"],xerr=data["V_0p4R26_err"], fmt="+", label="sample",color='black')
+
     index = 0
     for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
         if True:
@@ -63,12 +65,17 @@ def cluster():
         dum[0]=10
     for i in range(1000):
         aR, bR = numpy.random.multivariate_normal(mn, cov)
-        plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')            
+        plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')    
+
+    plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
+    plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")
+            
     plt.xscale('log',base=10)
     plt.xlabel("V_0p4R26")
     plt.ylabel(r"R_MAG_SB26-$\mu$")
     plt.ylim((MR.max()+.5,MR.min()-.5))
-    plt.savefig("tf_cluster.png") 
+    plt.legend()
+    plt.savefig("tf_cluster_all.png") 
     plt.clf()
 
     plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
@@ -135,7 +142,7 @@ def fuji():
     # plt.errorbar(data_all["V_0p33R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p33R26_err"], fmt=".", label="cut")
     plt.errorbar(data["V_0p33R26"], MR ,yerr=data["R_MAG_SB26_ERR"],xerr=data["V_0p33R26_err"], fmt=".",label="sample") 
     plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
-    plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse Tully-Fisher")
+    plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")
     plt.xscale('log',base=10)
     plt.xlabel("V_0p33R26")
     plt.ylabel(r"R_MAG_SB26-$\mu$")

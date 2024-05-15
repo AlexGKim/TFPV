@@ -36,6 +36,8 @@ def coma_json(cuts=False):
     else:
         select = numpy.isin(data['SGA_ID'],comalist)
 
+    print(len(comalist), select.sum())
+
     data_dic=dict()
     for k in data.dtype.names:
         if k not in ['SGA_GALAXY','GALAXY','MORPHTYPE','BYHAND','REF','GROUP_NAME','GROUP_PRIMARY','BRICKNAME','D26_REF']:
@@ -191,7 +193,7 @@ def iron_cluster_json():
     Rlim = 17.75
     Mlim = -17.
     Vmin = 70
-    Vmax = 300
+    Vmax = 300. # nothing this bright
 
     Mlim = -18
     Vmax = 1e4
@@ -238,8 +240,13 @@ def iron_cluster_json():
 
     N_cluster=len(alldf)
 
+
     alldf = pandas.concat(alldf,ignore_index=True)
     alldf = alldf[["SGA_ID", "V_0p4R26","V_0p4R26_err","R_MAG_SB26","R_MAG_SB26_ERR"]]
+
+    print(N_cluster)
+    print(alldf.shape)
+    wef
 
     data_dic=dict()
 
@@ -486,7 +493,7 @@ def segev_plot(fn = fn_segev2):
 
 if __name__ == '__main__':
     # to_json(frac=0.1,cuts=True)
-    # coma_json(cuts=True)
+    # coma_json(cuts=False)
     iron_cluster_json()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
