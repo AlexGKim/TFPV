@@ -6,6 +6,10 @@ import  matplotlib.pyplot as plt
 import scipy.stats
 import pandas
 from chainconsumer import Chain, ChainConsumer, PlotConfig
+import matplotlib
+
+matplotlib.rcParams["font.size"] = 20
+matplotlib.rcParams["lines.linewidth"] = 2
 
 def cluster():
     infile = json.load(open("data/iron_cluster.json",))
@@ -40,7 +44,7 @@ def cluster():
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name="An Example Contour"))
         c.set_plot_config(
             PlotConfig(
-                labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist_use" : r"$\sigma$"},
+                labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
             )
         )
         fig = c.plotter.plot()
@@ -74,7 +78,9 @@ def cluster():
     MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu_all"])
     MR_all  = numpy.array(data_all["R_MAG_SB26"]) - numpy.array(data_all["mu_all"])
 
-    # plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black')
+    plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black')
+    # plt.errorbar(data["V_0p4R26"], MR ,yerr=data["R_MAG_SB26_ERR"],xerr=data["V_0p4R26_err"], fmt="+", label="sample",color='black')
+
     index = 0
     for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
         if True:
@@ -89,12 +95,17 @@ def cluster():
         dum[0]=10
     for i in range(1000):
         aR, bR = numpy.random.multivariate_normal(mn, cov)
-        plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')            
+        plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')    
+
+    plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
+    plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")
+            
     plt.xscale('log',base=10)
     plt.xlabel("V_0p4R26")
     plt.ylabel(r"R_MAG_SB26-$\mu$")
     plt.ylim((MR.max()+.5,MR.min()-.5))
-    plt.savefig("tf_cluster.png") 
+    plt.legend()
+    plt.savefig("tf_cluster_all.png") 
     plt.clf()
 
     plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
@@ -112,7 +123,7 @@ cluster()
 def fuji():
     chains=[]
     for _ in [3,4]:
-        dum=[pandas.read_csv("output/fuji_{}10_cuts_{} (1).csv".format(_,i),comment='#') for i in range(1,5)]
+        dum=[pandas.read_csv("output/fuji_{}10_cuts_{}.csv".format(_,i),comment='#') for i in range(1,5)]
         for df_ in dum:
             df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
@@ -124,7 +135,7 @@ def fuji():
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name="An Example Contour"))
         c.set_plot_config(
             PlotConfig(
-                labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist_use" : r"$\sigma$"},
+                labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
             )
         )
         fig = c.plotter.plot()
@@ -144,6 +155,10 @@ def fuji():
     MR = numpy.array(data["R_MAG_SB26"]) - 34.7
     MR_all  = numpy.array(data_all["R_MAG_SB26"]) - 34.7
     plt.errorbar(data_all["V_0p33R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p33R26_err"], fmt="+", label="cut", color="black")
+
+    mn = chains[1][["aR","bR_use"]].mean()
+    cov = chains[1][["aR","bR_use"]].cov()
+    
     dum = numpy.array(plt.xlim())
     if dum[0] <=0:
         dum[0]=10
@@ -159,7 +174,7 @@ def fuji():
     # plt.errorbar(data_all["V_0p33R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p33R26_err"], fmt=".", label="cut")
     plt.errorbar(data["V_0p33R26"], MR ,yerr=data["R_MAG_SB26_ERR"],xerr=data["V_0p33R26_err"], fmt=".",label="sample") 
     plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
-    plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse Tully-Fisher")
+    plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")
     plt.xscale('log',base=10)
     plt.xlabel("V_0p33R26")
     plt.ylabel(r"R_MAG_SB26-$\mu$")
