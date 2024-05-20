@@ -8,6 +8,8 @@ import pandas
 from chainconsumer import Chain, ChainConsumer, PlotConfig
 
 def cluster():
+    infile = json.load(open("data/iron_cluster.json",))
+
     chains=[]
     for _ in [3,4]:
         dum=[pandas.read_csv("output/cluster_{}10_{}.csv".format(_,i),comment='#') for i in range(1,5)]
@@ -18,6 +20,21 @@ def cluster():
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
+
+        lrmn=[]
+        for cin in range(1,12):
+            use = dum["bR.{}".format(cin)] - dum["xi_dist"]*dum["aR"]
+            lrmn.append(numpy.percentile(use, (.32,.5,.68)))
+
+        lrmn = numpy.array(lrmn).transpose()
+        lrmn[0]=lrmn[1]-lrmn[0]
+        lrmn[2]=lrmn[2]-lrmn[1]
+        yerr=numpy.array((lrmn[0],lrmn[2]))
+        plt.errorbar(infile["mu"],lrmn[1],fmt="+",yerr=yerr)
+        plt.xlabel(r"$\mu$")
+        plt.ylabel(r"$b$")
+        plt.savefig("b_cluster.png")
+        plt.clf()
 
         c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name="An Example Contour"))
@@ -30,6 +47,19 @@ def cluster():
         plt.savefig("corner_cluster_{}.png".format(_))
         # plt.show()
         plt.clf()
+
+        # c = ChainConsumer()
+        # c.add_chain(Chain(samples=dum[bRcols], name="An Example Contour"))
+        # # c.set_plot_config(
+        # #     PlotConfig(
+        # #         labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist_use" : r"$\sigma$"},
+        # #     )
+        # # )
+        # fig = c.plotter.plot()
+        # plt.savefig("corner_cluster_b_{}.png".format(_))
+        # plt.show()
+        # plt.clf()
+        # wef
 
     fn="data/iron_cluster.json"
     fn_all="data/iron_cluster_all.json"
@@ -117,8 +147,14 @@ def fuji():
     dum = numpy.array(plt.xlim())
     if dum[0] <=0:
         dum[0]=10
-    for i in range(1000):
-        aR, bR = numpy.random.multivariate_normal(chains[1][["aR","bR_use"]].mean(),chains[1][["aR","bR_use"]].cov())
+
+    mn = chains[1][["aR","bR_use"]].mean()
+    cov = chains[1][["aR","bR_use"]].cov()
+    
+    for i in range(2000):
+        aR, bR = numpy.random.multivariate_normal(mn, cov)
+        plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')  
+
     #     plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')    
     # plt.errorbar(data_all["V_0p33R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p33R26_err"], fmt=".", label="cut")
     plt.errorbar(data["V_0p33R26"], MR ,yerr=data["R_MAG_SB26_ERR"],xerr=data["V_0p33R26_err"], fmt=".",label="sample") 
