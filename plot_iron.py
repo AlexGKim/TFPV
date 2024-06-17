@@ -14,7 +14,7 @@ matplotlib.rcParams["lines.linewidth"] = 2
 def cluster():
     chains=[]
     for _ in [3,4]:
-        dum=[pandas.read_csv("output/cluster_{}10_{}.csv".format(_,i),comment='#') for i in range(1,5)]
+        dum=[pandas.read_csv("output/cluster_{}11_{}.csv".format(_,i),comment='#') for i in range(1,5)]
         bRcols=["bR.{}".format(cin) for cin in range(1,12)]
         for df_ in dum:
             df_["bR_use"] = df_[bRcols].mean(axis=1) - df_["xi_dist"]*df_["aR"]
@@ -87,13 +87,12 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-cluster()
-
+# cluster()
 
 def fuji():
     chains=[]
     for _ in [3,4]:
-        dum=[pandas.read_csv("output/fuji_{}10_cuts_{}.csv".format(_,i),comment='#') for i in range(1,5)]
+        dum=[pandas.read_csv("output/fuji_{}11_{}.csv".format(_,i),comment='#') for i in range(1,5)]
         for df_ in dum:
             df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
