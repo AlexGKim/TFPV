@@ -87,7 +87,7 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-# cluster()
+cluster()
 
 def fuji():
     chains=[]

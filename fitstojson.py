@@ -66,6 +66,7 @@ def coma_json(cuts=False):
     init["omega_dist"]=2.2831016215521247
     init['bR'] =  init["xi_dist"] * numpy.tan(init["atanAR"]) 
     init["logL_raw"]  = ((logL-init["xi_dist"]/ numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
+    init['epsilon_unif'] =  numpy.zeros(data_dic['N']).tolist()
     with open(outname2, 'w') as f:
         f.write(json.dumps(init))
 
@@ -493,8 +494,8 @@ def segev_plot(fn = fn_segev2):
 
 if __name__ == '__main__':
     # to_json(frac=0.1,cuts=True)
-    # coma_json(cuts=False)
-    iron_cluster_json()
+    coma_json(cuts=True)
+    # iron_cluster_json()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()

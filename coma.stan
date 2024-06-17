@@ -52,8 +52,9 @@ transformed data {
 }
 
 parameters {
-  vector<lower=-pi()/2/angle_dispersion, upper=pi()/2/angle_dispersion>[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
-
+  // vector<lower=-pi()/2/angle_dispersion, upper=pi()/2/angle_dispersion>[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
+  // vector<lower=-atan(pi()/2/angle_dispersion), upper=atan(pi()/2/angle_dispersion)>[N] epsilon_unif;   
+  vector<lower=-atan(pi()/2), upper=atan(pi()/2)>[N] epsilon_unif;   
   // population 1
   vector[N] logL_raw;       // latent parameter
 
@@ -72,7 +73,8 @@ parameters {
   real<lower=0.0> sigR;
 }
 model {
-  vector[N] epsilon = epsilon_raw * angle_dispersion;
+  // vector[N] epsilon_raw = tan(epsilon_unif);
+  vector[N] epsilon = angle_dispersion * tan(epsilon_unif);
   // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
 
   vector[N] random_realization=random_realization_raw*sigR;
@@ -134,9 +136,10 @@ model {
   target += -N*log(sigR);
   // sigR ~ cauchy(0.,10);
  
-  if (angle_error==1){
-    epsilon_raw ~ cauchy(0, 1);
-  }
+  // if (angle_error==1){
+  //   // epsilon_raw ~ cauchy(0, 1);
+  //   // epsilon_unif ~ uniform(-pi() / 2, pi() / 2);)
+  // }
 }
 generated quantities {
    real aR=tan(atanAR);

@@ -1,5 +1,5 @@
 // ./cluster311 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_311.csv
-// ./cluster411 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=2000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_411.csv
+// ./cluster411 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=3000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_411.csv
 
 functions {
   vector V_fiber(vector V, vector epsilon) {
@@ -41,7 +41,7 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=3;
+  int dispersion_case=4;
 
   int pure = 1;
   int angle_error = 1;
@@ -71,8 +71,8 @@ transformed data {
 // from eyeball look at data expect b ~ -7.1, a ~ -6.1
 // average logV ~ 2.14
 parameters {
-  vector<lower=-pi()/2/angle_dispersion, upper=pi()/2/angle_dispersion>[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
-
+  // vector<lower=-pi()/2/angle_dispersion, upper=pi()/2/angle_dispersion>[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
+  vector<lower=-atan(pi()/2), upper=atan(pi()/2)>[N] epsilon_unif;   
   vector[N] logL_raw;       // latent parameter
   // if (flatDistribution == 0)
   // {
@@ -92,7 +92,8 @@ parameters {
   real<lower=0.01> sigR;
 }
 model {
-  vector[N] epsilon=epsilon_raw*angle_dispersion;
+  // vector[N] epsilon=epsilon_raw*angle_dispersion;
+  vector[N] epsilon = angle_dispersion * tan(epsilon_unif);
   vector[N] logL;
 
   vector[N] random_realization=random_realization_raw*sigR;
@@ -162,9 +163,9 @@ model {
   random_realization_raw ~ normal (0, 1);
   target += - N * log(sigR);
 
-  if (angle_error==1){
-    epsilon_raw ~ cauchy(0,1);
-  }
+  // if (angle_error==1){
+  //   // epsilon_raw ~ cauchy(0,1);
+  // }
 }
 generated quantities {
    real aR=tan(atanAR);
