@@ -3,6 +3,7 @@ import numpy
 import json
 from astropy.cosmology import Planck18 as cosmo
 import  matplotlib.pyplot as plt
+import matplotlib
 import glob
 import pandas
 from astropy.table import Table
@@ -490,11 +491,91 @@ def segev_plot(fn = fn_segev2):
     plt.ylim((19,12))
     plt.show()
 
+def iron_mag_plot():
+
+    Rlim = 17.75
+
+    fn = "SGA-2020_iron_Vrot"
+    table = Table.read("data/"+fn+".fits")
+    pv_df = table.to_pandas()
+
+    plt.scatter(pv_df["Z_DESI"],pv_df["R_MAG_SB26"],s=matplotlib.rcParams['lines.markersize'],linewidth=0,label="Iron",color='black')
+    plt.axhline(17.75,color='red')
+    plt.xlabel('Z_DESI')
+    plt.ylabel('R_MAG_SB26')
+
+
+
+    Rlim = 17.75
+    Mlim = -17.
+    Vmin = 70
+    Vmax = 300. # nothing this bright
+
+    Mlim = -18
+    Vmax = 1e4
+
+    cosi = 1/numpy.sqrt(2)
+    q0=0.2
+    balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
+
+    table = Table.read("data/Tully15-Table3.fits")
+    tully_df = table.to_pandas()
+    # read in the cluster files
+    N_per_cluster = []
+    mu = []
+    Rlim_eff = []
+
+    alldf=[]
+   # selection effects
+    for fn in glob.glob("data/output_*.txt"):
+        Nest = re.search('output_(.+?).txt',fn).group(1)
+        mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
+        df = pandas.read_csv(fn)
+        combo_df = df.merge(pv_df, on='SGA_ID')
+        Rcut = numpy.minimum(Rlim, mu_+Mlim)
+        select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
+        combo_df = combo_df[select]
+        if combo_df.shape[0] > 1:
+            N_per_cluster.append(combo_df.shape[0])
+            alldf.append(combo_df)
+            Nest = re.search('output_(.+?).txt',fn).group(1)
+            # mu.append(mu_)
+            Rlim_eff.append(Rcut);
+
+    N_cluster=len(alldf)
+
+
+    alldf = pandas.concat(alldf,ignore_index=True)
+    alldf = alldf[["Z_DESI","SGA_ID", "V_0p4R26","V_0p4R26_err","R_MAG_SB26","R_MAG_SB26_ERR"]]
+
+    plt.scatter(alldf["Z_DESI"],alldf["R_MAG_SB26"],s=matplotlib.rcParams['lines.markersize'],linewidth=0,label="Iron Cluster",color="orange")
+
+
+    table2 = Table.read(fn_sga+".fits")
+    # fits=fitsio.FITS()
+    # data=fits[1].read()
+    c_df = table2.to_pandas()
+
+
+    Vmin = 50
+
+    comalist = [25532,30149,98934,122260,191275,196592,202666,221178,291879,309306,337817,364410,364929,365429,366393,378842,455486,465951,479267,486394,566771,645151,747077,748600,753474,759003,819754,826543,841705,917608,995924,1050173,1167691,1195008,1203610,1203786,1269260,1274409,1284002,1323268,1352019,1356626,1364394,1379275,1387991]
+    select = numpy.logical_and.reduce((numpy.isin(c_df['SGA_ID'],comalist) , c_df['V_0p33R26'] > Vmin))
+
+    plt.scatter(c_df["Z_DESI"][select],c_df["R_MAG_SB26"][select],s=matplotlib.rcParams['lines.markersize'],linewidth=0,label="Coma",color="cyan")
+
+
+
+    plt.legend()
+    plt.savefig("zR.png")
+    plt.show()  
+
 
 if __name__ == '__main__':
     # to_json(frac=0.1,cuts=True)
     # coma_json(cuts=False)
-    iron_cluster_json()
+    # iron_cluster_json()
+    iron_mag_plot()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()
