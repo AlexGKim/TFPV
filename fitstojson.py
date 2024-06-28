@@ -67,6 +67,7 @@ def coma_json(cuts=False):
     init["omega_dist"]=2.2831016215521247
     init['bR'] =  init["xi_dist"] * numpy.tan(init["atanAR"]) 
     init["logL_raw"]  = ((logL-init["xi_dist"]/ numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
+    init['epsilon_unif'] =  numpy.zeros(data_dic['N']).tolist()
     with open(outname2, 'w') as f:
         f.write(json.dumps(init))
 

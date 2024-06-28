@@ -1,5 +1,5 @@
-// ./coma210f sample algorithm=hmc engine=nuts max_depth=18 adapt delta=0.99 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_init.json data file=data/SGA-2020_fuji_Vrot.json output file=output/fuji_210f.csv
-// ./coma310 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.9999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/temp.csv
+// ./coma311 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.9999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_311.csv
+// ./coma411 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.9999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_411.csv
 
 
 functions {
@@ -45,15 +45,16 @@ transformed data {
   // vector[N] dV = sqrt(V_0p33R26_err.*V_0p33R26_err + Vhat_noise.*Vhat_noise);
 
   // Kelly finds standard deviation between 14.2 deg between MANGA and SGA
-  // real angle_dispersion_deg = 14.2;
-  real angle_dispersion_deg = 5.;
+  // real angle_distribution_nu = 0.8483460681555207;
+  real angle_dispersion_deg = 4.217219770730775;
   real angle_dispersion = angle_dispersion_deg/180*pi();
 
 }
 
 parameters {
-  vector[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
-
+  // vector<lower=-pi()/2/angle_dispersion, upper=pi()/2/angle_dispersion>[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
+  // vector<lower=-atan(pi()/2/angle_dispersion), upper=atan(pi()/2/angle_dispersion)>[N] epsilon_unif;   
+  vector<lower=-atan(pi()/2), upper=atan(pi()/2)>[N] epsilon_unif;   
   // population 1
   vector[N] logL_raw;       // latent parameter
 
@@ -61,18 +62,19 @@ parameters {
   // {
   // parameters for SkewNormal
   // real<lower=-10, upper=10> alpha_dist;
-  real<lower=0.5, upper=5> omega_dist;  # this is in logL
-  real<lower=1.5, upper=2.7> xi_dist;   # this is in logV
+  real<lower=0.5, upper=5> omega_dist;  // this is in logL
+  real<lower=1.5, upper=2.7> xi_dist;   // this is in logV
   // }
 
  real<lower=atan(-11.5) , upper=atan(-5.)> atanAR; // negative slope positive cosine
   real bR;
 
   vector[N] random_realization_raw;
-  real<lower=0.01> sigR;
+  real<lower=0.0> sigR;
 }
 model {
-  vector[N] epsilon = epsilon_raw * angle_dispersion;
+  // vector[N] epsilon_raw = tan(epsilon_unif);
+  vector[N] epsilon = angle_dispersion * tan(epsilon_unif);
   // vector[N] logL = sigma_dist*(logL_raw+mu_dist);
 
   vector[N] random_realization=random_realization_raw*sigR;
@@ -134,8 +136,10 @@ model {
   target += -N*log(sigR);
   // sigR ~ cauchy(0.,10);
  
-  if (angle_error==1)
-    epsilon_raw ~ normal(0,1);
+  // if (angle_error==1){
+  //   // epsilon_raw ~ cauchy(0, 1);
+  //   // epsilon_unif ~ uniform(-pi() / 2, pi() / 2);)
+  // }
 }
 generated quantities {
    real aR=tan(atanAR);
