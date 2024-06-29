@@ -65,7 +65,6 @@ def cluster():
     plt.savefig("corner_cluster.png")
     # plt.show()
     plt.clf()
-    egr
     print(c.analysis.get_latex_table())
 
     fn="data/iron_cluster.json"
@@ -120,13 +119,16 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-cluster()
-
-wef
+# cluster()
 
 def fuji():
     chains=[]
+    c = ChainConsumer()
     for _ in [3,4]:
+        if _ == 3:
+            name = 'Inverse TF'
+        elif _==4:
+            name = 'Perpendicular'
         dum=[pandas.read_csv("output/fuji_{}11_{}.csv".format(_,i),comment='#') for i in range(1,5)]
         for df_ in dum:
             df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
@@ -135,17 +137,23 @@ def fuji():
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
 
-        c = ChainConsumer()
-        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name="An Example Contour"))
-        c.set_plot_config(
-            PlotConfig(
-                labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
-            )
+        # c = ChainConsumer()
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
+
+
+
+    c.set_plot_config(
+        PlotConfig(
+            summary_font_size=20, label_font_size=20, legend_kwargs={'prop':{'size':20}}, labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
         )
-        fig = c.plotter.plot()
-        plt.savefig("corner_fuji_{}.png".format(_))
-        # plt.show()
-        plt.clf()
+    )
+
+    fig = c.plotter.plot()
+    plt.savefig("corner_fuji.png")
+    # plt.show()
+    plt.clf()
+    print(c.analysis.get_latex_table())
+    wefew
     fn="data/SGA-2020_fuji_Vrot_cuts.json"
     fn_all="data/SGA-2020_fuji_Vrot.json"
 
