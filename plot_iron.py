@@ -11,10 +11,13 @@ import matplotlib
 matplotlib.rcParams["font.size"] = 20
 matplotlib.rcParams["lines.linewidth"] = 2
 
+
 def cluster():
     infile = json.load(open("data/iron_cluster.json",))
 
     chains=[]
+    c = ChainConsumer()
+
     for _ in [3,4]:
         if _ == 3:
             name = 'Inverse TF'
@@ -44,20 +47,26 @@ def cluster():
         plt.savefig("b_cluster.png")
         plt.clf()
 
-        c = ChainConsumer()
+        # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
-        c.set_plot_config(
-            PlotConfig(
-                labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
-            )
-        )
-        fig = c.plotter.plot()
-        plt.savefig("corner_cluster_{}.png".format(_))
-        # plt.show()
-        plt.clf()
 
-        print(c.analysis.get_latex_table())
-        wef
+        # fig = c.plotter.plot()
+        # plt.savefig("corner_cluster_{}.png".format(_))
+        # # plt.show()
+        # plt.clf()
+
+        # print(c.analysis.get_latex_table())
+    c.set_plot_config(
+        PlotConfig(
+            summary_font_size=20, label_font_size=20, legend_kwargs={'prop':{'size':20}}, labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
+        )
+    )
+    fig = c.plotter.plot()
+    plt.savefig("corner_cluster.png")
+    # plt.show()
+    plt.clf()
+    egr
+    print(c.analysis.get_latex_table())
 
     fn="data/iron_cluster.json"
     fn_all="data/iron_cluster_all.json"
