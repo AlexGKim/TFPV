@@ -16,6 +16,10 @@ def cluster():
 
     chains=[]
     for _ in [3,4]:
+        if _ == 3:
+            name = 'Inverse TF'
+        elif _==4:
+            name = 'Perpendicular'
         dum=[pandas.read_csv("output/cluster_{}11_{}.csv".format(_,i),comment='#') for i in range(1,5)]
         bRcols=["bR.{}".format(cin) for cin in range(1,12)]
         for df_ in dum:
@@ -41,7 +45,7 @@ def cluster():
         plt.clf()
 
         c = ChainConsumer()
-        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name="An Example Contour"))
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
         c.set_plot_config(
             PlotConfig(
                 labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
@@ -52,18 +56,8 @@ def cluster():
         # plt.show()
         plt.clf()
 
-        # c = ChainConsumer()
-        # c.add_chain(Chain(samples=dum[bRcols], name="An Example Contour"))
-        # # c.set_plot_config(
-        # #     PlotConfig(
-        # #         labels={"aR": r"$a_R$", "bR_use": r"$b_R$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\mu$", "omega_dist_use" : r"$\sigma$"},
-        # #     )
-        # # )
-        # fig = c.plotter.plot()
-        # plt.savefig("corner_cluster_b_{}.png".format(_))
-        # plt.show()
-        # plt.clf()
-        # wef
+        print(c.analysis.get_latex_table())
+        wef
 
     fn="data/iron_cluster.json"
     fn_all="data/iron_cluster_all.json"
@@ -118,6 +112,8 @@ def cluster():
     plt.clf()
 
 cluster()
+
+wef
 
 def fuji():
     chains=[]
