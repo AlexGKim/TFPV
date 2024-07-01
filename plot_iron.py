@@ -35,7 +35,7 @@ def cluster():
         lrmn=[]
         for cin in range(1,12):
             use = dum["bR.{}".format(cin)] - dum["xi_dist"]*dum["aR"]
-            lrmn.append(numpy.percentile(use, (.32,.5,.68)))
+            lrmn.append(numpy.percentile(use, (32,50,68)))
 
         lrmn = numpy.array(lrmn).transpose()
         lrmn[0]=lrmn[1]-lrmn[0]
@@ -49,6 +49,13 @@ def cluster():
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
+
+
+        if _==3:
+            _v = numpy.percentile(dum["aR"]*dum["sigR"],(32,50,100-32))
+        elif _==4:
+            _v = numpy.percentile(dum["aR"]*numpy.sin(dum["atanAR"])*dum["sigR"],(32,50,100-32))
+        print("${:4.2f}_{:4.2f}^+{:4.2f}$".format(_v[1], -_v[1]+_v[0],_v[2]-_v[1]))      
 
         # fig = c.plotter.plot()
         # plt.savefig("corner_cluster_{}.png".format(_))
@@ -66,6 +73,8 @@ def cluster():
     # plt.show()
     plt.clf()
     print(c.analysis.get_latex_table())
+
+
 
     fn="data/iron_cluster.json"
     fn_all="data/iron_cluster_all.json"
@@ -119,8 +128,8 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-# cluster()
-
+cluster()
+sdw
 def fuji():
     chains=[]
     c = ChainConsumer()
@@ -140,7 +149,11 @@ def fuji():
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
 
-
+        if _==3:
+            _v = numpy.percentile(dum["aR"]*dum["sigR"],(32,50,100-32))
+        elif _==4:
+            _v = numpy.percentile(dum["aR"]*numpy.sin(dum["atanAR"])*dum["sigR"],(32,50,100-32))
+        print("${:4.2f}_{:4.2f}^+{:4.2f}$".format(_v[1], -_v[1]+_v[0],_v[2]-_v[1]))      
 
     c.set_plot_config(
         PlotConfig(
