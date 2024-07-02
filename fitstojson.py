@@ -193,9 +193,8 @@ def iron_cluster_json():
     fn = "SGA-2020_iron_Vrot"
 
     Rlim = 17.75
-    Mlim = -17.
     Vmin = 70
-    Vmax = 300. # nothing this bright
+    # Vmax = 300. # nothing this bright
 
     Mlim = -18
     Vmax = 1e4
