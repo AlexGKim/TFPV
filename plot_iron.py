@@ -18,6 +18,8 @@ def cluster():
     chains=[]
     c = ChainConsumer()
 
+    fig_b, ax_b = plt.subplots()
+    fig_b2, ax_b2 = plt.subplots()
     for _ in [3,4]:
         if _ == 3:
             name = 'Inverse TF'
@@ -33,19 +35,30 @@ def cluster():
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
 
         lrmn=[]
+        lrmn2=[]
         for cin in range(1,12):
             use = dum["bR.{}".format(cin)] - dum["xi_dist"]*dum["aR"]
             lrmn.append(numpy.percentile(use, (32,50,68)))
+            use2 = dum["bR.{}".format(cin)] - dum["bR.{}".format(1)] 
+            lrmn2.append(numpy.percentile(use2, (32,50,68)))
 
         lrmn = numpy.array(lrmn).transpose()
         lrmn[0]=lrmn[1]-lrmn[0]
         lrmn[2]=lrmn[2]-lrmn[1]
         yerr=numpy.array((lrmn[0],lrmn[2]))
-        plt.errorbar(infile["mu"],lrmn[1],fmt="+",yerr=yerr)
-        plt.xlabel(r"$\mu$")
-        plt.ylabel(r"$b$")
-        plt.savefig("b_cluster.png")
-        plt.clf()
+
+        lrmn2 = numpy.array(lrmn2).transpose()
+        lrmn2[0]=lrmn2[1]-lrmn2[0]
+        lrmn2[2]=lrmn2[2]-lrmn2[1]
+        yerr2=numpy.array((lrmn2[0],lrmn2[2]))        
+
+        if _ == 3:
+            off = 0
+            ax_b.errorbar(numpy.array(infile["mu"])+off,lrmn[1],fmt="+",yerr=yerr,label=name)
+            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+        elif _==4:
+            off = 0.02
+
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
@@ -63,11 +76,28 @@ def cluster():
         # plt.clf()
 
         # print(c.analysis.get_latex_table())
+
+    
+    ax_b.set_xlabel(r"$\mu$")
+    ax_b.set_ylabel(r"$b$")
+    # ax_b.legend()
+    fig_b.tight_layout()
+    fig_b.savefig("b_cluster.png")
+
+    ax_b2.set_xlabel(r"$\mu$")
+    ax_b2.set_ylabel(r"$b-b_0$")
+    # ax_b.legend()
+    fig_b2.tight_layout()
+    fig_b2.savefig("b_cluster2.png")   
+
+    plt.clf()
+
     c.set_plot_config(
         PlotConfig(
             summary_font_size=20, label_font_size=20, legend_kwargs={'prop':{'size':20}}, labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
         )
     )
+
     fig = c.plotter.plot()
     plt.savefig("corner_cluster.png")
     # plt.show()
@@ -112,10 +142,11 @@ def cluster():
     plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")
             
     plt.xscale('log',base=10)
-    plt.xlabel("V_0p4R26")
-    plt.ylabel(r"R_MAG_SB26-$\mu$")
+    plt.xlabel(r"$\hat{V}$")
+    plt.ylabel(r"$\hat{m}$-$\mu$")
     plt.ylim((MR.max()+.5,MR.min()-.5))
     plt.legend()
+    plt.tight_layout()
     plt.savefig("tf_cluster_all.png") 
     plt.clf()
 
@@ -123,13 +154,13 @@ def cluster():
     x=numpy.linspace(1.8,2.5,100)
     plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist_use"].mean()) ,label="Perpendicular")
     plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist_use"].mean()) ,label="Inverse TF")
-    plt.xlabel(r"$\log{(V\_0p4R26)}$")
+    plt.xlabel(r"$\log{(\hat{V})}$")
     plt.legend()
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-cluster()
-sdw
+# cluster()
+
 def fuji():
     chains=[]
     c = ChainConsumer()
@@ -166,7 +197,7 @@ def fuji():
     # plt.show()
     plt.clf()
     print(c.analysis.get_latex_table())
-    wefew
+
     fn="data/SGA-2020_fuji_Vrot_cuts.json"
     fn_all="data/SGA-2020_fuji_Vrot.json"
 
@@ -201,8 +232,8 @@ def fuji():
     plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
     plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")
     plt.xscale('log',base=10)
-    plt.xlabel("V_0p33R26")
-    plt.ylabel(r"R_MAG_SB26-$\mu$")
+    plt.xlabel("$\hat{V}$")
+    plt.ylabel(r"$\hat{m}-\mu$")
     plt.ylim((MR_all.max()+.5,MR_all.min()-.5))
     # plt.xlim(dum)
     plt.legend()
@@ -214,7 +245,7 @@ def fuji():
     x=numpy.linspace(1.5,2.5,100)
     plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist_use"].mean()) ,label="Perpendicular")
     plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist_use"].mean()) ,label="Inverse TF")
-    plt.xlabel(r"$\log{(V\_0p33R26)}$")
+    plt.xlabel(r"$\log{(\hat{V})}$")
     plt.legend()
     plt.savefig("hist_fuji.png")
     plt.clf()
