@@ -58,7 +58,7 @@ def cluster():
             ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
         elif _==4:
             off = 0.02
-
+            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
@@ -80,13 +80,13 @@ def cluster():
     
     ax_b.set_xlabel(r"$\mu$")
     ax_b.set_ylabel(r"$b$")
-    # ax_b.legend()
+    ax_b.legend()
     fig_b.tight_layout()
     fig_b.savefig("b_cluster.png")
 
     ax_b2.set_xlabel(r"$\mu$")
     ax_b2.set_ylabel(r"$b-b_0$")
-    # ax_b.legend()
+    ax_b2.legend()
     fig_b2.tight_layout()
     fig_b2.savefig("b_cluster2.png")   
 
@@ -140,7 +140,8 @@ def cluster():
 
     plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
     plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")
-            
+    plt.axhline(-18, linestyle='dotted') 
+    plt.axvline(70, linestyle='dotted')    
     plt.xscale('log',base=10)
     plt.xlabel(r"$\hat{V}$")
     plt.ylabel(r"$\hat{m}$-$\mu$")
@@ -159,8 +160,8 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-# cluster()
-
+cluster()
+wfe
 def fuji():
     chains=[]
     c = ChainConsumer()
