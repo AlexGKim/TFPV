@@ -124,7 +124,7 @@ def cluster():
     MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu_all"])
     MR_all  = numpy.array(data_all["R_MAG_SB26"]) - numpy.array(data_all["mu_all"])
 
-    plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black')
+    plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black',alpha=0.5)
     # plt.errorbar(data["V_0p4R26"], MR ,yerr=data["R_MAG_SB26_ERR"],xerr=data["V_0p4R26_err"], fmt="+", label="sample",color='black')
 
     index = 0
@@ -154,6 +154,33 @@ def cluster():
     plt.legend()
     plt.tight_layout()
     plt.savefig("tf_cluster_all.png") 
+    plt.clf()
+
+    index = 0
+    for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
+        if True:
+            plt.errorbar(data["V_0p4R26"][index:index+data["N_per_cluster"][i]], MR[index:index+data["N_per_cluster"][i]] ,yerr=data["R_MAG_SB26_ERR"][index:index+data["N_per_cluster"][i]],xerr=data["V_0p4R26_err"][index:index+data["N_per_cluster"][i]], fmt=".")
+        index = index+data["N_per_cluster"][i]
+
+    mn = chains[1][["aR","bR_use"]].mean()
+    cov = chains[1][["aR","bR_use"]].cov()
+    
+    dum = numpy.array(plt.xlim())
+    if dum[0] <=0:
+        dum[0]=10
+    for i in range(1000):
+        aR, bR = numpy.random.multivariate_normal(mn, cov)
+        plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')    
+
+    plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
+    plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")  
+    plt.xscale('log',base=10)
+    plt.xlabel(r"$\hat{V}$")
+    plt.ylabel(r"$\hat{m}$-$\mu$")
+    plt.ylim((MR.max()+.5,MR.min()-.5))
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("tf_cluster.png")
     plt.clf()
 
     plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
