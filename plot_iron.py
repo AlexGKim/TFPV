@@ -31,9 +31,9 @@ def cluster():
             df_["bR_use"] = df_[bRcols].mean(axis=1) - df_["xi_dist"]*df_["aR"]
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
             if _==3:
-                df_['sigR_proj'] = df_['sigR']
+                df_['sigR_proj'] = -df_['aR']* df_['sigR']
             elif _==4:
-                df_['sigR_proj'] = -numpy.sin(df_["atanAR"])*df_["sigR"]
+                df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
@@ -68,11 +68,11 @@ def cluster():
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
         c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","sigR_proj"]], name=name))
 
-        if _==3:
-            _v = numpy.percentile(dum["sigR"],(32,50,100-32))
-        elif _==4:
-            _v = numpy.percentile(numpy.sin(dum["atanAR"])*dum["sigR"],(32,50,100-32))
-        print("${:5.3f}_{:5.3f}^+{:5.3f}$".format(_v[1], -_v[1]+_v[0],_v[2]-_v[1]))      
+        # if _==3:
+        #     _v = numpy.percentile(dum["aR"]*dum["sigR"],(32,50,100-32))
+        # elif _==4:
+        #     _v = numpy.percentile(numpy.sin(dum["atanAR"])*dum["sigR"],(32,50,100-32))
+        # print("${:5.3f}_{:5.3f}^+{:5.3f}$".format(_v[1], -_v[1]+_v[0],_v[2]-_v[1]))      
 
         # fig = c.plotter.plot()
         # plt.savefig("corner_cluster_{}.png".format(_))
@@ -192,8 +192,8 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-cluster()
-wfe
+# cluster()
+# wfe
 def fuji():
     chains=[]
     c = ChainConsumer()
@@ -208,9 +208,9 @@ def fuji():
             df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
             if _==3:
-                df_['sigR_proj'] = df_['sigR']
+                df_['sigR_proj'] = -df_['aR']* df_['sigR']
             elif _==4:
-                df_['sigR_proj'] = -numpy.sin(df_["atanAR"])*df_["sigR"]
+                df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
 
         dum=pandas.concat(dum)
         chains.append(dum)
