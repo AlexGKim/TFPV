@@ -90,6 +90,9 @@ parameters {
 
   vector[N] random_realization_raw;
   real<lower=0.01> sigR;
+
+  // special case for letting dispersion axis free dispersion_case=5
+  real<lower=-pi(),upper=pi()> theta_2;
 }
 model {
   // vector[N] epsilon=epsilon_raw*angle_dispersion;
@@ -120,7 +123,7 @@ model {
   }
   else if (dispersion_case==5)
   {
-    // sinth_r=sin(atanARr); costh_r=cos(atanARr); //sinth2_r=-costh2; costh2_r=sinth2;
+    sinth_r=sin(theta_2); costh_r=cos(theta_2);
   }
 
   if (flatDistribution==0) {
