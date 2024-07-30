@@ -227,12 +227,21 @@ def iron_cluster_json():
     for fn in glob.glob("data/output_*.txt"):
         Nest = re.search('output_(.+?).txt',fn).group(1)
         mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
+
         df = pandas.read_csv(fn)
         combo_df = df.merge(pv_df, on='SGA_ID')
         Rcut = numpy.minimum(Rlim, mu_+Mlim)
         select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
         combo_df = combo_df[select]
         if combo_df.shape[0] > 1:
+            _first = "{} & ".format(Nest)
+            _second = "{} & ".format(mu_)
+            # glue these together into a comma string
+            dum = combo_df['SGA_ID'].tolist()
+            for i in range(len(dum)):
+                dum[i] = str(dum[i])
+            my_string = ', '.join(dum)
+            print(_first + _second + my_string + ' \\\\')
             N_per_cluster.append(combo_df.shape[0])
             alldf.append(combo_df)
             Nest = re.search('output_(.+?).txt',fn).group(1)
@@ -570,12 +579,25 @@ def iron_mag_plot():
     plt.savefig("zR.png")
     plt.show()  
 
+def all_table():
+
+    fn = "SGA-2020_iron_Vrot"
+    table = Table.read("data/"+fn+".fits")
+    pv_df = table.to_pandas()
+    cols = ["SGA_ID", "Z_DESI","V_0p4R26","V_0p4R26_err","R_MAG_SB26","R_MAG_SB26_ERR",'BA']
+    pv_df = pv_df[cols]
+
+    for index, row in pv_df.iterrows():
+        if index<20:
+            print("{:10.0f} & {:5.3f} & ${:6.1f} \\pm {:6.1f}$ & ${:6.2f} \\pm {:6.2f}$ & {:6.3f} \\\\".format(*row.to_numpy()))
+        
 
 if __name__ == '__main__':
     # to_json(frac=0.1,cuts=True)
     # coma_json(cuts=False)
     # iron_cluster_json()
-    iron_mag_plot()
+    all_table()
+    # iron_mag_plot()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))
     # # segev_plot()

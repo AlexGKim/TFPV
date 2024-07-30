@@ -17,7 +17,7 @@ def cluster():
 
     chains=[]
     c = ChainConsumer()
-
+    c2 = ChainConsumer()
     fig_b, ax_b = plt.subplots()
     fig_b2, ax_b2 = plt.subplots()
     for _ in [3,4]:
@@ -30,6 +30,10 @@ def cluster():
         for df_ in dum:
             df_["bR_use"] = df_[bRcols].mean(axis=1) - df_["xi_dist"]*df_["aR"]
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
+            if _==3:
+                df_['sigR_proj'] = -df_['aR']* df_['sigR']
+            elif _==4:
+                df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
@@ -62,13 +66,13 @@ def cluster():
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
+        c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","sigR_proj"]], name=name))
 
-
-        if _==3:
-            _v = numpy.percentile(dum["aR"]*dum["sigR"],(32,50,100-32))
-        elif _==4:
-            _v = numpy.percentile(dum["aR"]*numpy.sin(dum["atanAR"])*dum["sigR"],(32,50,100-32))
-        print("${:4.2f}_{:4.2f}^+{:4.2f}$".format(_v[1], -_v[1]+_v[0],_v[2]-_v[1]))      
+        # if _==3:
+        #     _v = numpy.percentile(dum["aR"]*dum["sigR"],(32,50,100-32))
+        # elif _==4:
+        #     _v = numpy.percentile(numpy.sin(dum["atanAR"])*dum["sigR"],(32,50,100-32))
+        # print("${:5.3f}_{:5.3f}^+{:5.3f}$".format(_v[1], -_v[1]+_v[0],_v[2]-_v[1]))      
 
         # fig = c.plotter.plot()
         # plt.savefig("corner_cluster_{}.png".format(_))
@@ -103,6 +107,7 @@ def cluster():
     # plt.show()
     plt.clf()
     print(c.analysis.get_latex_table())
+    print(c2.analysis.get_latex_table())
 
 
 
@@ -119,7 +124,7 @@ def cluster():
     MR = numpy.array(data["R_MAG_SB26"]) - numpy.array(data["mu_all"])
     MR_all  = numpy.array(data_all["R_MAG_SB26"]) - numpy.array(data_all["mu_all"])
 
-    plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black')
+    plt.errorbar(data_all["V_0p4R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p4R26_err"], fmt="+", label="cut",color='black',alpha=0.5)
     # plt.errorbar(data["V_0p4R26"], MR ,yerr=data["R_MAG_SB26_ERR"],xerr=data["V_0p4R26_err"], fmt="+", label="sample",color='black')
 
     index = 0
@@ -151,6 +156,33 @@ def cluster():
     plt.savefig("tf_cluster_all.png") 
     plt.clf()
 
+    index = 0
+    for i in range(0,data["N_cluster"]): #range(data["N_cluster"]):
+        if True:
+            plt.errorbar(data["V_0p4R26"][index:index+data["N_per_cluster"][i]], MR[index:index+data["N_per_cluster"][i]] ,yerr=data["R_MAG_SB26_ERR"][index:index+data["N_per_cluster"][i]],xerr=data["V_0p4R26_err"][index:index+data["N_per_cluster"][i]], fmt=".")
+        index = index+data["N_per_cluster"][i]
+
+    mn = chains[1][["aR","bR_use"]].mean()
+    cov = chains[1][["aR","bR_use"]].cov()
+    
+    dum = numpy.array(plt.xlim())
+    if dum[0] <=0:
+        dum[0]=10
+    for i in range(1000):
+        aR, bR = numpy.random.multivariate_normal(mn, cov)
+        plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')    
+
+    plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
+    plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")  
+    plt.xscale('log',base=10)
+    plt.xlabel(r"$\hat{V}$")
+    plt.ylabel(r"$\hat{m}$-$\mu$")
+    plt.ylim((MR.max()+.5,MR.min()-.5))
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("tf_cluster.png")
+    plt.clf()
+
     plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
     x=numpy.linspace(1.8,2.5,100)
     plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist_use"].mean()) ,label="Perpendicular")
@@ -160,11 +192,12 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-cluster()
-wfe
+# cluster()
+# wfe
 def fuji():
     chains=[]
     c = ChainConsumer()
+    c2 = ChainConsumer()
     for _ in [3,4]:
         if _ == 3:
             name = 'Inverse TF'
@@ -174,18 +207,24 @@ def fuji():
         for df_ in dum:
             df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
+            if _==3:
+                df_['sigR_proj'] = -df_['aR']* df_['sigR']
+            elif _==4:
+                df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
+
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
-
-        if _==3:
-            _v = numpy.percentile(dum["aR"]*dum["sigR"],(32,50,100-32))
-        elif _==4:
-            _v = numpy.percentile(dum["aR"]*numpy.sin(dum["atanAR"])*dum["sigR"],(32,50,100-32))
-        print("${:4.2f}_{:4.2f}^+{:4.2f}$".format(_v[1], -_v[1]+_v[0],_v[2]-_v[1]))      
+        c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","sigR_proj"]], name=name))
+    #     if _==3:
+    #         _v = numpy.percentile(dum["sigR"],(32,50,100-32))
+    #     elif _==4:
+    #         _v = numpy.percentile(numpy.sin(dum["atanAR"])*dum["sigR"],(32,50,100-32))
+    #     print("${:5.3f}_{:5.3f}^+{:5.3f}$".format(_v[1], -_v[1]+_v[0],_v[2]-_v[1]))      
+    # qwd
 
     c.set_plot_config(
         PlotConfig(
@@ -198,6 +237,7 @@ def fuji():
     # plt.show()
     plt.clf()
     print(c.analysis.get_latex_table())
+    print(c2.analysis.get_latex_table())
 
     fn="data/SGA-2020_fuji_Vrot_cuts.json"
     fn_all="data/SGA-2020_fuji_Vrot.json"
