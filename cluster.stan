@@ -41,7 +41,7 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=4;
+  int dispersion_case=5;
 
   int pure = 1;
   int angle_error = 1;
@@ -92,7 +92,7 @@ parameters {
   real<lower=0.01> sigR;
 
   // special case for letting dispersion axis free dispersion_case=5
-  real<lower=-pi(),upper=pi()> theta_2;
+  // real<lower=-pi()/2,upper=pi()/2> theta_2;
 }
 model {
   // vector[N] epsilon=epsilon_raw*angle_dispersion;
