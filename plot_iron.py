@@ -197,17 +197,20 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-cluster()
-wfe
+# cluster()
+# wfe
 def fuji():
     chains=[]
     c = ChainConsumer()
     c2 = ChainConsumer()
-    for _ in [3,4]:
+    for _ in [5]:
+    # for _ in [3,4]:
         if _ == 3:
             name = 'Inverse TF'
         elif _==4:
             name = 'Perpendicular'
+        elif _==5:
+            name = 'Free'
         dum=[pandas.read_csv("output/fuji_{}11_{}.csv".format(_,i),comment='#') for i in range(1,5)]
         for df_ in dum:
             df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
@@ -216,13 +219,15 @@ def fuji():
                 df_['sigR_proj'] = -df_['aR']* df_['sigR']
             elif _==4:
                 df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
-
+            elif _==5:
+                df_['sigR_proj'] = 1/numpy.cos(df_["theta_2"])*df_["sigR"]
+                
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
 
         # c = ChainConsumer()
-        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use",'theta_2']], name=name))
         c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","sigR_proj"]], name=name))
     #     if _==3:
     #         _v = numpy.percentile(dum["sigR"],(32,50,100-32))
@@ -233,7 +238,7 @@ def fuji():
 
     c.set_plot_config(
         PlotConfig(
-            summary_font_size=20, label_font_size=20, legend_kwargs={'prop':{'size':20}}, labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
+            summary_font_size=20, label_font_size=20, legend_kwargs={'prop':{'size':20}}, labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$", "theta_2" : r"$\theta_2$"},
         )
     )
 

@@ -1,5 +1,6 @@
 // ./coma311 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.9999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_311.csv
 // ./coma411 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.9999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_411.csv
+// ./coma511 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.9999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/SGA-2020_fuji_Vrot_cuts_init.json data file=data/SGA-2020_fuji_Vrot_cuts.json output file=output/fuji_511.csv
 
 
 functions {
@@ -30,7 +31,7 @@ transformed data {
   // 3 : mag dispersion
   // 4 : perp dispersion
   // 5 : free dispersion
-  int dispersion_case=3;
+  int dispersion_case=5;
 
   int pure = 1;
   int angle_error = 1;
@@ -71,6 +72,9 @@ parameters {
 
   vector[N] random_realization_raw;
   real<lower=0.0> sigR;
+
+    // special case for letting dispersion axis free dispersion_case=5
+  real<lower=-pi()/2+.2,upper=pi()/2+.2> theta_2;
 }
 model {
   // vector[N] epsilon_raw = tan(epsilon_unif);
@@ -101,7 +105,7 @@ model {
   }
   else if (dispersion_case==5)
   {
-    // sinth_r=sin(atanARr); costh_r=cos(atanARr); //sinth2_r=-costh2; costh2_r=sinth2;
+    sinth_r=sin(theta_2); costh_r=cos(theta_2);
   }
 
   vector[N] logL;
@@ -136,6 +140,7 @@ model {
   target += -N*log(sigR);
   // sigR ~ cauchy(0.,10);
  
+
   // if (angle_error==1){
   //   // epsilon_raw ~ cauchy(0, 1);
   //   // epsilon_unif ~ uniform(-pi() / 2, pi() / 2);)
