@@ -20,11 +20,14 @@ def cluster():
     c2 = ChainConsumer()
     fig_b, ax_b = plt.subplots()
     fig_b2, ax_b2 = plt.subplots()
-    for _ in [3,4]:
+    # for _ in [3,4]:
+    for _ in [5]:
         if _ == 3:
             name = 'Inverse TF'
         elif _==4:
             name = 'Perpendicular'
+        elif _==5:
+            name = "Free"   
         dum=[pandas.read_csv("output/cluster_{}11_{}.csv".format(_,i),comment='#') for i in range(1,5)]
         bRcols=["bR.{}".format(cin) for cin in range(1,12)]
         for df_ in dum:
@@ -34,6 +37,8 @@ def cluster():
                 df_['sigR_proj'] = -df_['aR']* df_['sigR']
             elif _==4:
                 df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
+            elif _==5:
+                df_['sigR_proj'] = 1/numpy.cos(df_["theta_2"])*df_["sigR"]
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
@@ -65,7 +70,7 @@ def cluster():
             ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
 
         # c = ChainConsumer()
-        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use"]], name=name))
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2"]], name=name))
         c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","sigR_proj"]], name=name))
 
         # if _==3:
@@ -98,7 +103,7 @@ def cluster():
 
     c.set_plot_config(
         PlotConfig(
-            summary_font_size=20, label_font_size=20, legend_kwargs={'prop':{'size':20}}, labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$"},
+            summary_font_size=20, label_font_size=20, legend_kwargs={'prop':{'size':20}}, labels={"aR": r"$a$", "bR_use": r"$b$", "sigR": r"$\sigma_R$",  "xi_dist": r"$\log{V}_{TF}$", "omega_dist_use" : r"$\sigma_{\log{V}_{TF}}$", "theta_2": r"$\theta_2$"}, 
         )
     )
 
@@ -192,8 +197,8 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-# cluster()
-# wfe
+cluster()
+wfe
 def fuji():
     chains=[]
     c = ChainConsumer()
