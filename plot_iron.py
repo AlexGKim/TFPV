@@ -206,14 +206,13 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-cluster()
-wfe
+# cluster()
+# wfe
 def fuji():
     chains=[]
     c = ChainConsumer()
     c2 = ChainConsumer()
-    for _ in [5]:
-    # for _ in [3,4]:
+    for _ in [3,4,5]:
         if _ == 3:
             name = 'Inverse TF'
         elif _==4:
@@ -226,10 +225,14 @@ def fuji():
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
             if _==3:
                 df_['sigR_proj'] = -df_['aR']* df_['sigR']
+                df_['theta_2'] = numpy.random.normal(0,0.00001, len(df_['aR']))
             elif _==4:
                 df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
+                df_['theta_2'] = df_["atanAR"]+numpy.pi/2
             elif _==5:
-                df_['sigR_proj'] = 1/numpy.cos(df_["theta_2"])*df_["sigR"]
+                _y = numpy.sin(df_["theta_2"])*df_["sigR"]
+                _x = numpy.cos(df_["theta_2"])*df_["sigR"]
+                df_['sigR_proj'] = _y - _x* df_['aR']
                 
         dum=pandas.concat(dum)
         chains.append(dum)
@@ -237,7 +240,7 @@ def fuji():
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use",'theta_2']], name=name))
-        c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","sigR_proj"]], name=name))
+        c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use",'theta_2',"sigR_proj"]], name=name))
     #     if _==3:
     #         _v = numpy.percentile(dum["sigR"],(32,50,100-32))
     #     elif _==4:
@@ -251,8 +254,13 @@ def fuji():
         )
     )
 
+
     fig = c.plotter.plot()
+    allaxes = fig.get_axes()
+
+    allaxes[35].set_ylim((0,30))
     plt.savefig("corner_fuji.png")
+
     # plt.show()
     plt.clf()
     print(c.analysis.get_latex_table())
@@ -279,8 +287,8 @@ def fuji():
     if dum[0] <=0:
         dum[0]=10
 
-    mn = chains[1][["aR","bR_use"]].mean()
-    cov = chains[1][["aR","bR_use"]].cov()
+    mn = chains[2][["aR","bR_use"]].mean()
+    cov = chains[2][["aR","bR_use"]].cov()
     
     for i in range(2000):
         aR, bR = numpy.random.multivariate_normal(mn, cov)
@@ -289,6 +297,7 @@ def fuji():
     #     plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')    
     # plt.errorbar(data_all["V_0p33R26"], MR_all ,yerr=data_all["R_MAG_SB26_ERR"],xerr=data_all["V_0p33R26_err"], fmt=".", label="cut")
     plt.errorbar(data["V_0p33R26"], MR ,yerr=data["R_MAG_SB26_ERR"],xerr=data["V_0p33R26_err"], fmt=".",label="sample") 
+    plt.plot(dum, chains[2]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Free")
     plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
     plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")
     plt.xscale('log',base=10)
@@ -303,6 +312,7 @@ def fuji():
 
     plt.hist(numpy.log10(data["V_0p33R26"]),density=True)
     x=numpy.linspace(1.5,2.5,100)
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[2]["xi_dist"].mean(),chains[1]["omega_dist_use"].mean()) ,label="Free")
     plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist_use"].mean()) ,label="Perpendicular")
     plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist_use"].mean()) ,label="Inverse TF")
     plt.xlabel(r"$\log{(\hat{V})}$")
