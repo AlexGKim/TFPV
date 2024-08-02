@@ -20,8 +20,8 @@ def cluster():
     c2 = ChainConsumer()
     fig_b, ax_b = plt.subplots()
     fig_b2, ax_b2 = plt.subplots()
-    # for _ in [3,4]:
-    for _ in [5]:
+
+    for _ in [3,4,5]:
         if _ == 3:
             name = 'Inverse TF'
         elif _==4:
@@ -35,8 +35,10 @@ def cluster():
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
             if _==3:
                 df_['sigR_proj'] = -df_['aR']* df_['sigR']
+                df_['theta_2'] = numpy.random.normal(0,0.00001, len(df_['aR']))
             elif _==4:
                 df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
+                df_['theta_2'] = df_["atanAR"]+numpy.pi/2
             elif _==5:
                 df_['sigR_proj'] = 1/numpy.cos(df_["theta_2"])*df_["sigR"]
         dum=pandas.concat(dum)
@@ -108,6 +110,9 @@ def cluster():
     )
 
     fig = c.plotter.plot()
+    allaxes = fig.get_axes()
+
+    allaxes[35].set_ylim((0,65))
     plt.savefig("corner_cluster.png")
     # plt.show()
     plt.clf()
@@ -197,8 +202,8 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-# cluster()
-# wfe
+cluster()
+wfe
 def fuji():
     chains=[]
     c = ChainConsumer()
