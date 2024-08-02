@@ -40,7 +40,9 @@ def cluster():
                 df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
                 df_['theta_2'] = df_["atanAR"]+numpy.pi/2
             elif _==5:
-                df_['sigR_proj'] = 1/numpy.cos(df_["theta_2"])*df_["sigR"]
+                _y = numpy.sin(df_["theta_2"])*df_["sigR"]
+                _x = numpy.cos(df_["theta_2"])*df_["sigR"]
+                df_['sigR_proj'] = _y - _x* df_['aR']
         dum=pandas.concat(dum)
         chains.append(dum)
         # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
@@ -73,7 +75,7 @@ def cluster():
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2"]], name=name))
-        c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","sigR_proj"]], name=name))
+        c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2","sigR_proj"]], name=name))
 
         # if _==3:
         #     _v = numpy.percentile(dum["aR"]*dum["sigR"],(32,50,100-32))
@@ -172,8 +174,8 @@ def cluster():
             plt.errorbar(data["V_0p4R26"][index:index+data["N_per_cluster"][i]], MR[index:index+data["N_per_cluster"][i]] ,yerr=data["R_MAG_SB26_ERR"][index:index+data["N_per_cluster"][i]],xerr=data["V_0p4R26_err"][index:index+data["N_per_cluster"][i]], fmt=".")
         index = index+data["N_per_cluster"][i]
 
-    mn = chains[1][["aR","bR_use"]].mean()
-    cov = chains[1][["aR","bR_use"]].cov()
+    mn = chains[2][["aR","bR_use"]].mean()
+    cov = chains[2][["aR","bR_use"]].cov()
     
     dum = numpy.array(plt.xlim())
     if dum[0] <=0:
@@ -182,6 +184,7 @@ def cluster():
         aR, bR = numpy.random.multivariate_normal(mn, cov)
         plt.plot(dum, bR + aR*numpy.log10(dum),alpha=0.01,color='black')    
 
+    plt.plot(dum, chains[2]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Free")
     plt.plot(dum, chains[1]["bR_use"].mean() + chains[1]["aR"].mean()*numpy.log10(dum),label="Perpendicular")
     plt.plot(dum, chains[0]["bR_use"].mean() + chains[0]["aR"].mean()*numpy.log10(dum),label="Inverse TF")  
     plt.xscale('log',base=10)
@@ -195,6 +198,7 @@ def cluster():
 
     plt.hist(numpy.log10(data["V_0p4R26"]),density=True)
     x=numpy.linspace(1.8,2.5,100)
+    plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[2]["omega_dist_use"].mean()) ,label="Free")
     plt.plot(x, scipy.stats.norm.pdf(x, chains[1]["xi_dist"].mean(),chains[1]["omega_dist_use"].mean()) ,label="Perpendicular")
     plt.plot(x, scipy.stats.norm.pdf(x, chains[0]["xi_dist"].mean(),chains[0]["omega_dist_use"].mean()) ,label="Inverse TF")
     plt.xlabel(r"$\log{(\hat{V})}$")
