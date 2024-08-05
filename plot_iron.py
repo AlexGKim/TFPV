@@ -70,7 +70,10 @@ def cluster():
             ax_b.errorbar(numpy.array(infile["mu"])+off,lrmn[1],fmt="+",yerr=yerr,label=name)
             ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
         elif _==4:
-            off = 0.02
+            off = 0.025
+            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+        elif _==5:
+            off = 0.05
             ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
 
         # c = ChainConsumer()
@@ -206,8 +209,8 @@ def cluster():
     plt.savefig("hist_cluster.png")
     plt.clf()
 
-# cluster()
-# wfe
+cluster()
+wfe
 def fuji():
     chains=[]
     c = ChainConsumer()

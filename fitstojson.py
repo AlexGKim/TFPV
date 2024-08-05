@@ -38,7 +38,7 @@ def coma_json(cuts=False):
         select = numpy.isin(data['SGA_ID'],comalist)
 
     print(len(comalist), select.sum())
-
+    qqwd
     data_dic=dict()
     for k in data.dtype.names:
         if k not in ['SGA_GALAXY','GALAXY','MORPHTYPE','BYHAND','REF','GROUP_NAME','GROUP_PRIMARY','BRICKNAME','D26_REF']:
@@ -594,9 +594,9 @@ def all_table():
 
 if __name__ == '__main__':
     # to_json(frac=0.1,cuts=True)
-    # coma_json(cuts=False)
+    coma_json(cuts=True)
     # iron_cluster_json()
-    all_table()
+    # all_table()
     # iron_mag_plot()
     # for i in range(1,11):
     #     segev_json("data/SGA_TFR_simtest_{}".format(str(i).zfill(3)))

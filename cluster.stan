@@ -1,5 +1,6 @@
 // ./cluster311 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_311.csv
 // ./cluster411 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=3000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_411.csv
+// ./cluster511 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=3000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_511.csv
 
 functions {
   vector V_fiber(vector V, vector epsilon) {
@@ -92,7 +93,7 @@ parameters {
   real<lower=0.01> sigR;
 
   // special case for letting dispersion axis free dispersion_case=5
-  // real<lower=-pi()/2,upper=pi()/2> theta_2;
+  real<lower=-pi()/2,upper=pi()/2> theta_2;
 }
 model {
   // vector[N] epsilon=epsilon_raw*angle_dispersion;
