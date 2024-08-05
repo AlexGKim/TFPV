@@ -13,6 +13,7 @@ data {
 
   int<lower=0> N_cluster;
   array[N_cluster] int N_per_cluster;
+  vector[N_cluster] sigma_r_over_R;
 
   vector[N] V_0p4R26;
   vector[N] V_0p4R26_err;
@@ -94,6 +95,9 @@ parameters {
 
   // special case for letting dispersion axis free dispersion_case=5
   real<lower=-pi()/2,upper=pi()/2> theta_2;
+
+  // cluster depth offset delta r / R
+  vector[N] delta_r_over_R_raw;
 }
 model {
   // vector[N] epsilon=epsilon_raw*angle_dispersion;
@@ -144,7 +148,7 @@ model {
   int index=1;
   for (i in 1:N_cluster){  
     for (j in 1:N_per_cluster[i]){
-      m_realize[index]= a_term[i] + m_realize[index];
+      m_realize[index]= a_term[i] + m_realize[index] + 5 * log10(1+sigma_r_over_R[i] * delta_r_over_R_raw[index]);
       index=index+1;
     }
     // R_ ~ normal(m_realize, R_err) T[,Rlim_eff[i]];
@@ -163,10 +167,10 @@ model {
       logL_raw ~ normal(0, 10);
   }
 
-
   random_realization_raw ~ normal (0, 1);
   target += - N * log(sigR);
 
+  delta_r_over_R_raw ~ normal(0, 1);
   // if (angle_error==1){
   //   // epsilon_raw ~ cauchy(0,1);
   // }
