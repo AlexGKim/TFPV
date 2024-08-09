@@ -34,6 +34,9 @@ data {
 
   real omega_dist_init;
   real xi_dist_init;
+
+  // cluster depth offset Rs / R where Rs is the NFW scale radius
+  vector[N] Rs_over_R;  
 }
 
 transformed data {
@@ -50,6 +53,7 @@ transformed data {
 
   int flatDistribution = 0;
 
+  real c_NFW = 10.;
 
   // real dwarf_mag=-17. + 34.7;
 
@@ -96,8 +100,8 @@ parameters {
   // special case for letting dispersion axis free dispersion_case=5
   real<lower=-pi()/2,upper=pi()/2> theta_2;
 
-  // cluster depth offset delta r / R
-  vector[N] delta_r_over_R_raw;
+  // Z is the cylindrical coordinate
+  vector[N] Z_over_R;
 }
 model {
   // vector[N] epsilon=epsilon_raw*angle_dispersion;
@@ -148,7 +152,7 @@ model {
   int index=1;
   for (i in 1:N_cluster){  
     for (j in 1:N_per_cluster[i]){
-      m_realize[index]= a_term[i] + m_realize[index] + 5 * log10(1+sigma_r_over_R[i] * delta_r_over_R_raw[index]);
+      m_realize[index]= a_term[i] + m_realize[index] + 5 * log10(1+Z_over_R[i]);
       index=index+1;
     }
     // R_ ~ normal(m_realize, R_err) T[,Rlim_eff[i]];
@@ -170,7 +174,9 @@ model {
   random_realization_raw ~ normal (0, 1);
   target += - N * log(sigR);
 
-  delta_r_over_R_raw ~ normal(0, 1);
+  // distance along the line of slight along hte quasar
+  target +=   log(c_NFW * Rs_over_R - abs(Z_over_R)) - log(Rs_over_R+abs(Z_over_R));
+
   // if (angle_error==1){
   //   // epsilon_raw ~ cauchy(0,1);
   // }
