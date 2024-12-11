@@ -10,9 +10,13 @@ import pandas
 from astropy.table import Table
 import re
 
-fn = "SGA-2020_iron_Vrot_cuts"
+# fn = "SGA-2020_iron_Vrot_cuts"
+fn = "DESI-DR1_TF_pv_cat_v3"
+
 fn_sga = "data/SGA-2020_fuji_Vrot"
 fn_segev2 = "SGA_TFR_simtest_20240307"
+
+datadir2 = "/Users/akim/Projects/DESI_SGA/TF/Y1/"
 
 rng = numpy.random.default_rng(seed=42)
 
@@ -110,12 +114,13 @@ def iron_cluster_json():
 
     alldf=[]
    # selection effects
-    for fn in glob.glob("data/output_*.txt"):
+    for fn in glob.glob(datadir2+"/output_*.txt"):
         Nest = re.search('output_(.+?).txt',fn).group(1)
         mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
         R2t_=tully_df.loc[tully_df["Nest"]==int(Nest)]["R2t"].values[0]
 
         df = pandas.read_csv(fn)
+        df = df.rename(columns={'# SGA_ID': 'SGA_ID'})
         combo_df = df.merge(pv_df, on='SGA_ID')
         Rcut = numpy.minimum(Rlim, mu_+Mlim)
         select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
@@ -142,13 +147,9 @@ def iron_cluster_json():
     alldf = pandas.concat(alldf,ignore_index=True)
     alldf = alldf[["SGA_ID", "V_0p4R26","V_0p4R26_err","R_MAG_SB26","R_MAG_SB26_ERR"]]
 
-    print(N_cluster)
-    print(alldf.shape)
-
     z = astropy.cosmology.z_at_value(cosmo.distmod, numpy.array(mu)*astropy.units.mag)
     d = cosmo.luminosity_distance(z)
-    print("Radial depth ", 5*numpy.log10(1+numpy.array(R2t)*0.1/d.value).max())
-    wef
+
 
     data_dic=dict()
 
