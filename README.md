@@ -9,7 +9,7 @@ Instructions
   - Tully's table of cluster information ./Tully15-Table3.fits
   - Clusters and which galaxies are in them ./TF/output_??????.txt
 - Get other requuired private data
-  - Create data directory cmdstan/TFPV/data where to oout these files
+  - Create data directory cmdstan/TFPV/data where to put these files
   - Other data on NERSC /global/cfs/cdirs/desi/science/td/pv/tfgalaxies/.
     - The cluster catalog "./Y1/DESI-DR1_TF_pv_cat_v3.fits"
     - Coma  "SV/SGA-2020_fuji_Vrot.fits".
