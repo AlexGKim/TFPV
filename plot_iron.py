@@ -7,12 +7,17 @@ import scipy.stats
 import pandas
 from chainconsumer import Chain, ChainConsumer, PlotConfig
 import matplotlib
+import glob
 
 matplotlib.rcParams["font.size"] = 20
 matplotlib.rcParams["lines.linewidth"] = 2
 
 
 def cluster():
+    desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
+    ncluster  = len(glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"))
+    # print(ncluster)
+    # wef
     infile = json.load(open("data/iron_cluster.json",))
 
     chains=[]
@@ -29,7 +34,8 @@ def cluster():
         elif _==5:
             name = "Free"   
         dum=[pandas.read_csv("output/cluster_{}11_{}.csv".format(_,i),comment='#') for i in range(1,5)]
-        bRcols=["bR.{}".format(cin) for cin in range(1,12)]
+
+        bRcols=["bR.{}".format(cin) for cin in range(1,ncluster+1)]
         for df_ in dum:
             df_["bR_use"] = df_[bRcols].mean(axis=1) - df_["xi_dist"]*df_["aR"]
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
@@ -49,7 +55,7 @@ def cluster():
 
         lrmn=[]
         lrmn2=[]
-        for cin in range(1,12):
+        for cin in range(1,ncluster+1):
             use = dum["bR.{}".format(cin)] - dum["xi_dist"]*dum["aR"]
             lrmn.append(numpy.percentile(use, (32,50,68)))
             use2 = dum["bR.{}".format(cin)] - dum["bR.{}".format(1)] 
@@ -102,7 +108,7 @@ def cluster():
 
     ax_b2.set_xlabel(r"$\mu$")
     ax_b2.set_ylabel(r"$b-b_0$")
-    ax_b2.legend()
+    ax_b2.legend(loc=3)
     fig_b2.tight_layout()
     fig_b2.savefig("b_cluster2.png")   
 
