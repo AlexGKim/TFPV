@@ -16,7 +16,7 @@ fn = "DESI-DR1_TF_pv_cat_v3"
 fn_sga = "data/SGA-2020_fuji_Vrot"
 fn_segev2 = "SGA_TFR_simtest_20240307"
 
-datadir2 = "/Users/akim/Projects/DESI_SGA/TF/Y1/"
+desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
 
 rng = numpy.random.default_rng(seed=42)
 
@@ -95,7 +95,7 @@ def iron_cluster_json():
     table = Table.read("data/"+fn+".fits")
     pv_df = table.to_pandas()
 
-    table = Table.read("data/Tully15-Table3.fits")
+    table = Table.read(desi_sga_dir+"/TF/Tully15-Table3.fits")
     tully_df = table.to_pandas()
 
     # # add extra noise degrading data to help fit
@@ -114,7 +114,7 @@ def iron_cluster_json():
 
     alldf=[]
    # selection effects
-    for fn in glob.glob(datadir2+"/output_*.txt"):
+    for fn in glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"):
         Nest = re.search('output_(.+?).txt',fn).group(1)
         mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
         R2t_=tully_df.loc[tully_df["Nest"]==int(Nest)]["R2t"].values[0]
