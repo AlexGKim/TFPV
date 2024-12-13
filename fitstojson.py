@@ -146,7 +146,9 @@ def iron_cluster_json():
     table = Table.read("data/SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits")
     df = table.to_pandas()
     df['SGA_ID']=df['SGA_ID'].astype(int)
-    df.to_csv('temp.txt',columns=['SGA_ID'],index=False )
+    dumdf = df.copy()
+    dumdf.rename(columns={"SGA_ID": "# SGA_ID"},inplace=True)
+    dumdf.to_csv(desi_sga_dir+'/TF/Y1/output_sn.txt',columns=['# SGA_ID'],index=False )
     mu_sn=37.
 
     for index, _ in df.iterrows():
