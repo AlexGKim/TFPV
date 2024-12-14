@@ -15,10 +15,12 @@ matplotlib.rcParams["lines.linewidth"] = 2
 
 def cluster():
     desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
-    ncluster  = len(glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"))
+    # ncluster  = len(glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"))
     # print(ncluster)
     # wef
     infile = json.load(open("data/iron_cluster.json",))
+    ncluster = infile["N_cluster"]
+
 
     chains=[]
     c = ChainConsumer()

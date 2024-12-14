@@ -15,11 +15,11 @@ matplotlib.rcParams["lines.linewidth"] = 2
 
 def cluster():
     desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
-    ncluster  = len(glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"))
+    # ncluster  = len(glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"))
     # print(ncluster)
     # wef
     infile = json.load(open("data/iron_cluster.json",))
-
+    ncluster = infile["N_cluster"]
     chains=[]
     c = ChainConsumer()
     c2 = ChainConsumer()
@@ -55,6 +55,7 @@ def cluster():
 
         lrmn=[]
         lrmn2=[]
+ 
         for cin in range(1,ncluster+1):
             use = dum["bR.{}".format(cin)] - dum["xi_dist"]*dum["aR"]
             lrmn.append(numpy.percentile(use, (32,50,68)))
@@ -69,6 +70,7 @@ def cluster():
         lrmn2 = numpy.array(lrmn2).transpose()
         lrmn2[0]=lrmn2[1]-lrmn2[0]
         lrmn2[2]=lrmn2[2]-lrmn2[1]
+
         yerr2=numpy.array((lrmn2[0],lrmn2[2]))        
 
         if _ == 3:
@@ -79,7 +81,7 @@ def cluster():
             off = 0.025
             ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
         elif _==5:
-            off = 0.05
+            off = 0.0
             ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
 
         # c = ChainConsumer()
@@ -100,17 +102,17 @@ def cluster():
         # print(c.analysis.get_latex_table())
 
     
-    ax_b.set_xlabel(r"$\mu$")
-    ax_b.set_ylabel(r"$b$")
-    ax_b.legend()
-    fig_b.tight_layout()
-    fig_b.savefig("b_cluster.png")
+    # ax_b.set_xlabel(r"$\mu$")
+    # ax_b.set_ylabel(r"$b$")
+    # ax_b.legend()
+    # fig_b.tight_layout()
+    # fig_b.savefig("b_cluster.png")
 
     ax_b2.set_xlabel(r"$\mu$")
     ax_b2.set_ylabel(r"$b-b_0$")
     ax_b2.legend(loc=3)
     fig_b2.tight_layout()
-    fig_b2.savefig("b_cluster2.png")   
+    fig_b2.savefig("b_cluster_sn.png")   
 
     wef
     plt.clf()
