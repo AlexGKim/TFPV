@@ -9,6 +9,7 @@ import glob
 import pandas
 from astropy.table import Table
 import re
+import os
 
 # fn = "SGA-2020_iron_Vrot_cuts"
 fn = "DESI-DR1_TF_pv_cat_v3"
@@ -113,6 +114,9 @@ def iron_cluster_json():
     Rlim_eff = []
 
     alldf=[]
+
+    # remove the file that will be created later
+    os.remove(desi_sga_dir+'/TF/Y1/output_sn.txt')
    # selection effects
     for fn in glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"):
         Nest = re.search('output_(.+?).txt',fn).group(1)  # number of the galaxy
@@ -236,6 +240,8 @@ def iron_cluster_json():
 
     init["atanAR"] = numpy.arctan(data_dic["aR_init"])
     init['bR'] = (init["xi_dist"] * numpy.tan(init["atanAR"]) + numpy.zeros(N_cluster)).tolist()
+    init['bR_sn'] = (init["xi_dist"] * numpy.tan(init["atanAR"]) + numpy.zeros(N_cluster-nsn+1)).tolist()
+
     init['sigR'] = 0.1
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
 
