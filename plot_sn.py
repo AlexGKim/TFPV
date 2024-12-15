@@ -20,6 +20,7 @@ def cluster():
     # wef
     infile = json.load(open("data/iron_cluster.json",))
     ncluster = infile["N_cluster"]
+    nsn = infile["N_sn"]
     chains=[]
     c = ChainConsumer()
     c2 = ChainConsumer()
@@ -72,6 +73,8 @@ def cluster():
         lrmn2[2]=lrmn2[2]-lrmn2[1]
 
         yerr2=numpy.array((lrmn2[0],lrmn2[2]))        
+        ncmsn = ncluster-nsn
+
 
         if _ == 3:
             off = 0
@@ -82,7 +85,9 @@ def cluster():
             ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
         elif _==5:
             off = 0.0
-            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+
+            ax_b2.errorbar(numpy.array(infile["mu"])[0:ncmsn]+off,lrmn2[1][0:ncmsn],fmt="+",yerr=yerr2[:,0:ncmsn],label=name+" cluster",color='red')
+            ax_b2.errorbar(numpy.array(infile["mu"])[ncmsn+1:]+off,lrmn2[1][ncmsn+1:],fmt="+",yerr=yerr2[:,ncmsn+1:],label=name+" sn",color='blue')
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2"]], name=name))
