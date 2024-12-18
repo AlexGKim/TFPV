@@ -20,6 +20,7 @@ def cluster():
     # wef
     infile = json.load(open("data/iron_cluster.json",))
     ncluster = infile["N_cluster"]
+    nsn = infile["N_sn"]
     chains=[]
     c = ChainConsumer()
     c2 = ChainConsumer()
@@ -57,9 +58,12 @@ def cluster():
         lrmn2=[]
  
         for cin in range(1,ncluster+1):
+            hterm = 0
+            if cin>= ncluster-nsn+1:
+                hterm = 5*numpy.log10(.73)
             use = dum["bR.{}".format(cin)] - dum["xi_dist"]*dum["aR"]
             lrmn.append(numpy.percentile(use, (32,50,68)))
-            use2 = dum["bR.{}".format(cin)] - dum["bR.{}".format(1)] 
+            use2 = dum["bR.{}".format(cin)] - dum["bR.{}".format(1)] - hterm 
             lrmn2.append(numpy.percentile(use2, (32,50,68)))
 
         lrmn = numpy.array(lrmn).transpose()
