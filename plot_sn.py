@@ -12,6 +12,193 @@ import glob
 matplotlib.rcParams["font.size"] = 20
 matplotlib.rcParams["lines.linewidth"] = 2
 
+def cepheid():
+    desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
+    # ncluster  = len(glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"))
+    # print(ncluster)
+    # wef
+    infile = json.load(open("data/iron_cluster.json",))
+    ncluster = infile["N_cluster"]
+    nsn = infile["N_sn"]
+    chains=[]
+    c = ChainConsumer()
+    c2 = ChainConsumer()
+    fig_b, ax_b = plt.subplots()
+    fig_b2, ax_b2 = plt.subplots()
+
+    for _ in [5]:
+        if _ == 3:
+            name = 'Inverse TF'
+        elif _==4:
+            name = 'Perpendicular'
+        elif _==5:
+            name = "Cepheid"   
+        dum=[pandas.read_csv("output/cepheid_{}.csv".format(i),comment='#') for i in range(1,5)]
+
+
+        for df_ in dum:
+            df_["bR_use"] = df_["bR"] - df_["xi_dist"]*df_["aR"]
+            df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
+            if _==3:
+                df_['sigR_proj'] = -df_['aR']* df_['sigR']
+                df_['theta_2'] = numpy.random.normal(0,0.00001, len(df_['aR']))
+            elif _==4:
+                df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
+                df_['theta_2'] = df_["atanAR"]+numpy.pi/2
+            elif _==5:
+                _y = numpy.sin(df_["theta_2"])*df_["sigR"]
+                _x = numpy.cos(df_["theta_2"])*df_["sigR"]
+                df_['sigR_proj'] = _y - _x* df_['aR']
+        dum=pandas.concat(dum)
+        chains.append(dum)
+        # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
+
+        lrmn=[]
+        lrmn2=[]
+ 
+        for cin in range(1,ncluster+1):
+            hterm = 0
+            if cin>= ncluster-nsn+1:
+                hterm = 5*numpy.log10(.8)
+            use = dum["bR"] - dum["xi_dist"]*dum["aR"]
+            lrmn.append(numpy.percentile(use, (32,50,68)))
+            use2 = - hterm 
+            lrmn2.append(numpy.percentile(use2, (32,50,68)))
+
+        lrmn = numpy.array(lrmn).transpose()
+        lrmn[0]=lrmn[1]-lrmn[0]
+        lrmn[2]=lrmn[2]-lrmn[1]
+        yerr=numpy.array((lrmn[0],lrmn[2]))
+
+        lrmn2 = numpy.array(lrmn2).transpose()
+        lrmn2[0]=lrmn2[1]-lrmn2[0]
+        lrmn2[2]=lrmn2[2]-lrmn2[1]
+
+        yerr2=numpy.array((lrmn2[0],lrmn2[2]))        
+        ncmsn = ncluster-nsn
+
+
+        if _ == 3:
+            off = 0
+            ax_b.errorbar(numpy.array(infile["mu"])+off,lrmn[1],fmt="+",yerr=yerr,label=name)
+            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+        elif _==4:
+            off = 0.025
+            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+        elif _==5:
+            off = 0.0
+
+            ax_b2.errorbar(numpy.array(infile["mu"])[0:ncmsn]+off,
+                lrmn2[1][0:ncmsn],fmt="+",yerr=yerr2[:,0:ncmsn],label="Cluster",color='red')
+            ax_b2.errorbar(numpy.array(infile["mu"])[ncmsn+1:]+off,
+                lrmn2[1][ncmsn+1:],fmt="+",yerr=yerr2[:,ncmsn+1:],label="Cepheid $h=0.8$",color='blue')
+
+        # c = ChainConsumer()
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2"]], name=name))
+        c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2","sigR_proj"]], name=name))
+
+        # if _==3:
+        #     _v = numpy.percentile(dum["aR"]*dum["sigR"],(32,50,100-32))
+        # elif _==4:
+        #     _v = numpy.percentile(numpy.sin(dum["atanAR"])*dum["sigR"],(32,50,100-32))
+        # print("${:5.3f}_{:5.3f}^+{:5.3f}$".format(_v[1], -_v[1]+_v[0],_v[2]-_v[1]))      
+
+        # fig = c.plotter.plot()
+        # plt.savefig("corner_cluster_{}.png".format(_))
+        # # plt.show()
+        # plt.clf()
+
+        # print(c.analysis.get_latex_table())
+    for _ in [5]:
+        if _ == 3:
+            name = 'Inverse TF'
+        elif _==4:
+            name = 'Perpendicular'
+        elif _==5:
+            name = "Cluster + Cepheid"   
+        dum=[pandas.read_csv("output/cluster_sn_{}11_{}.csv".format(_,i),comment='#') for i in range(1,5)]
+
+
+        bRcols=["bR.{}".format(cin) for cin in range(1,ncluster+1)]
+        for df_ in dum:
+            df_["bR_use"] = df_[bRcols].mean(axis=1) - df_["xi_dist"]*df_["aR"]
+            df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
+            if _==3:
+                df_['sigR_proj'] = -df_['aR']* df_['sigR']
+                df_['theta_2'] = numpy.random.normal(0,0.00001, len(df_['aR']))
+            elif _==4:
+                df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
+                df_['theta_2'] = df_["atanAR"]+numpy.pi/2
+            elif _==5:
+                _y = numpy.sin(df_["theta_2"])*df_["sigR"]
+                _x = numpy.cos(df_["theta_2"])*df_["sigR"]
+                df_['sigR_proj'] = _y - _x* df_['aR']
+        dum=pandas.concat(dum)
+        chains.append(dum)
+        # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
+
+        lrmn=[]
+        lrmn2=[]
+ 
+        for cin in range(1,ncluster+1):
+            hterm = 0
+            if cin>= ncluster-nsn+1:
+                hterm = 5*numpy.log10(.8)
+            use = dum["bR.{}".format(cin)] - dum["xi_dist"]*dum["aR"]
+            lrmn.append(numpy.percentile(use, (32,50,68)))
+            use2 = dum["bR.{}".format(cin)] - dum["bR.{}".format(1)] - hterm 
+            lrmn2.append(numpy.percentile(use2, (32,50,68)))
+
+        lrmn = numpy.array(lrmn).transpose()
+        lrmn[0]=lrmn[1]-lrmn[0]
+        lrmn[2]=lrmn[2]-lrmn[1]
+        yerr=numpy.array((lrmn[0],lrmn[2]))
+
+        lrmn2 = numpy.array(lrmn2).transpose()
+        lrmn2[0]=lrmn2[1]-lrmn2[0]
+        lrmn2[2]=lrmn2[2]-lrmn2[1]
+
+        yerr2=numpy.array((lrmn2[0],lrmn2[2]))        
+        ncmsn = ncluster-nsn
+
+
+        if _ == 3:
+            off = 0
+            ax_b.errorbar(numpy.array(infile["mu"])+off,lrmn[1],fmt="+",yerr=yerr,label=name)
+            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+        elif _==4:
+            off = 0.025
+            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+        elif _==5:
+            off = 0.0
+
+            ax_b2.errorbar(numpy.array(infile["mu"])[0:ncmsn]+off,
+                lrmn2[1][0:ncmsn],fmt="+",yerr=yerr2[:,0:ncmsn],label="Cluster",color='red')
+            ax_b2.errorbar(numpy.array(infile["mu"])[ncmsn+1:]+off,
+                lrmn2[1][ncmsn+1:],fmt="+",yerr=yerr2[:,ncmsn+1:],label="Cepheid $h=0.8$",color='blue')
+
+        # c = ChainConsumer()
+        c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2"]], name=name))
+        c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2","sigR_proj"]], name=name))
+
+    
+    # ax_b.set_xlabel(r"$\mu$")
+    # ax_b.set_ylabel(r"$b$")
+    # ax_b.legend()
+    # fig_b.tight_layout()
+    # fig_b.savefig("b_cluster.png")
+
+    ax_b2.set_xlabel(r"$\mu$")
+    ax_b2.set_ylabel(r"$b-b_0$")
+    ax_b2.legend(loc=3,fontsize=12)
+    fig_b2.tight_layout()
+    fig_b2.savefig("b_cluster_sn.png")
+
+    print(c.analysis.get_latex_table())
+    print(c2.analysis.get_latex_table())
+
+cepheid()
+wef
 
 def cluster():
     desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
@@ -60,7 +247,7 @@ def cluster():
         for cin in range(1,ncluster+1):
             hterm = 0
             if cin>= ncluster-nsn+1:
-                hterm = 5*numpy.log10(.73)
+                hterm = 5*numpy.log10(.8)
             use = dum["bR.{}".format(cin)] - dum["xi_dist"]*dum["aR"]
             lrmn.append(numpy.percentile(use, (32,50,68)))
             use2 = dum["bR.{}".format(cin)] - dum["bR.{}".format(1)] - hterm 
@@ -89,8 +276,10 @@ def cluster():
         elif _==5:
             off = 0.0
 
-            ax_b2.errorbar(numpy.array(infile["mu"])[0:ncmsn]+off,lrmn2[1][0:ncmsn],fmt="+",yerr=yerr2[:,0:ncmsn],label=name+" cluster",color='red')
-            ax_b2.errorbar(numpy.array(infile["mu"])[ncmsn+1:]+off,lrmn2[1][ncmsn+1:],fmt="+",yerr=yerr2[:,ncmsn+1:],label=name+" sn",color='blue')
+            ax_b2.errorbar(numpy.array(infile["mu"])[0:ncmsn]+off,
+                lrmn2[1][0:ncmsn],fmt="+",yerr=yerr2[:,0:ncmsn],label="Cluster",color='red')
+            ax_b2.errorbar(numpy.array(infile["mu"])[ncmsn+1:]+off,
+                lrmn2[1][ncmsn+1:],fmt="+",yerr=yerr2[:,ncmsn+1:],label="Cepheid $h=0.8$",color='blue')
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2"]], name=name))
@@ -118,11 +307,16 @@ def cluster():
 
     ax_b2.set_xlabel(r"$\mu$")
     ax_b2.set_ylabel(r"$b-b_0$")
-    ax_b2.legend(loc=3)
+    ax_b2.legend(loc=3,fontsize=12)
     fig_b2.tight_layout()
-    fig_b2.savefig("b_cluster_sn.png")   
+    fig_b2.savefig("b_cluster_sn.png")
 
-    wef
+    print(c.analysis.get_latex_table())
+    print(c2.analysis.get_latex_table())
+
+
+    egr 
+
     plt.clf()
 
     c.set_plot_config(
@@ -138,8 +332,6 @@ def cluster():
     plt.savefig("corner_cluster.png")
     # plt.show()
     plt.clf()
-    print(c.analysis.get_latex_table())
-    print(c2.analysis.get_latex_table())
 
 
 
