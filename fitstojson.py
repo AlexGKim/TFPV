@@ -419,8 +419,8 @@ def iron_cepheid_json():
 
     json_object = json.dumps(data_dic)
 
-    outname = "iron_cepheid.json"
-    outname2 = "iron_cepheid_init.json"
+    outname = "_iron_cepheid.json"
+    outname2 = "_iron_cepheid_init.json"
 
     with open("data/"+outname, 'w') as f:
         f.write(json_object)
