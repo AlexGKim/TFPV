@@ -15,7 +15,7 @@ Instructions
     - Coma  "SV/SGA-2020_fuji_Vrot.fits".
 - I don't have a "requirements.txt" file with all the python packages needed to run the software.  Just create a new environment, run, crash, install, repeat...
 - Create the data and initial condition files input to STAN.  This is done with the command "python fitstojson.py".  If you look at the file filtstojson.py, you will find several functions that can be called through __main__.
-  - iron_cluster_json() creates the data for IRON, coma_json() creates the data for EDR.
+  - iron_cluster_json() creates the data for IRON, coma_json() creates the data for EDR. iron_cluster_json(cepheid=True) creates the joint cluster/cepheid catalog, iron_cepheid_json() craeates the chepheid-only catalog.
   - coma_json() has a keyword for cuts, which in my analysis is set to True.
 - The STAN code to fit IRON is cluster.stan, the code to fit Coma is coma.stan.
 - Each code can be run with different configurations.  The one to care about is controled by the variable "dispersion_case".  "dispersion_case=4" is the perpendicular fit, "dispersion_case=3" is the ITF fit despite what is written in the comments.

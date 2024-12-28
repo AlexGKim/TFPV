@@ -79,7 +79,12 @@ def coma_json(cuts=False):
 
 
 
-def iron_cluster_json():
+def iron_cluster_json(cepheid=False):
+
+    fn_str = ""
+    if cepheid:
+        fn_str="_clustercepheid"
+
     fn = "SGA-2020_iron_Vrot"
 
     Rlim = 17.75
@@ -117,6 +122,7 @@ def iron_cluster_json():
 
     # remove the file that will be created later
     os.remove(desi_sga_dir+'/TF/Y1/output_sn.txt')
+
    # selection effects
     for fn in glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"):
         Nest = re.search('output_(.+?).txt',fn).group(1)  # number of the galaxy
@@ -137,7 +143,7 @@ def iron_cluster_json():
             for i in range(len(dum)):
                 dum[i] = str(dum[i])
             my_string = ', '.join(dum)
-            print(_first + _second + my_string + ' \\\\')
+            # print(_first + _second + my_string + ' \\\\')
             N_per_cluster.append(combo_df.shape[0])
             alldf.append(combo_df)
             Nest = re.search('output_(.+?).txt',fn).group(1)
@@ -147,43 +153,44 @@ def iron_cluster_json():
 
     # if there are supernovae out them into data as well
     nsn=0
-    table = Table.read("data/SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits")
-    df = table.to_pandas()
-    df['SGA_ID']=df['SGA_ID'].astype(int)
-    dumdf = df.copy()
-    dumdf.rename(columns={"SGA_ID": "# SGA_ID"},inplace=True)
-    dumdf.to_csv(desi_sga_dir+'/TF/Y1/output_sn.txt',columns=['# SGA_ID'],index=False )
-    mu_sn=37.
+    if cepheid:
+        table = Table.read("data/SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits")
+        df = table.to_pandas()
+        df['SGA_ID']=df['SGA_ID'].astype(int)
+        dumdf = df.copy()
+        dumdf.rename(columns={"SGA_ID": "# SGA_ID"},inplace=True)
+        dumdf.to_csv(desi_sga_dir+'/TF/Y1/output_sn.txt',columns=['# SGA_ID'],index=False )
+        mu_sn=37.
 
-    for index, _ in df.iterrows():
-        row=df.iloc[[index]]
-        combo_df = row.merge(pv_df, on=['SGA_ID'],suffixes=["","y"]) #,'R_MAG_SB26', 'V_0p4R26','BA'])
+        for index, _ in df.iterrows():
+            row=df.iloc[[index]]
+            combo_df = row.merge(pv_df, on=['SGA_ID'],suffixes=["","y"]) #,'R_MAG_SB26', 'V_0p4R26','BA'])
 
-        Rcut = numpy.minimum(Rlim, combo_df['MU_SECONDARY'].tolist()[0]+Mlim)
-        # print((combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) ,(combo_df['R_MAG_SB26'] < Rcut))
-        select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
-        combo_df = combo_df[select]
-        if combo_df.shape[0] > 0:
-            nsn=nsn+1
+            Rcut = numpy.minimum(Rlim, combo_df['MU_SECONDARY'].tolist()[0]+Mlim)
+            # print((combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) ,(combo_df['R_MAG_SB26'] < Rcut))
+            select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
             combo_df = combo_df[select]
-            combo_df['R_MAG_SB26'] = combo_df['R_MAG_SB26']  - combo_df['MU_SECONDARY'] + mu_sn
-            Rcut = Rcut  - combo_df['MU_SECONDARY'].tolist()[0] + mu_sn
-            combo_df['R_MAG_SB26_ERR'] = numpy.sqrt(combo_df['R_MAG_SB26_ERR'] + combo_df['MU_ERR']**2) 
-            Nest = df["SGA_ID"]
-            _first = "{} & ".format(Nest)
-            _second = "{} & ".format(mu_sn)
-            # glue these together into a comma string
-            dum = combo_df['SGA_ID'].tolist()
-            # for i in range(len(dum)):
-            #     dum[i] = str(dum[i])
-            # my_string = ', '.join(dum)
-            # print(_first + _second + my_string + ' \\\\')
-            N_per_cluster.append(combo_df.shape[0])
-            alldf.append(combo_df)
+            if combo_df.shape[0] > 0:
+                nsn=nsn+1
+                combo_df = combo_df[select]
+                combo_df['R_MAG_SB26'] = combo_df['R_MAG_SB26']  - combo_df['MU_SECONDARY'] + mu_sn
+                Rcut = Rcut  - combo_df['MU_SECONDARY'].tolist()[0] + mu_sn
+                combo_df['R_MAG_SB26_ERR'] = numpy.sqrt(combo_df['R_MAG_SB26_ERR'] + combo_df['MU_ERR']**2) 
+                Nest = df["SGA_ID"]
+                _first = "{} & ".format(Nest)
+                _second = "{} & ".format(mu_sn)
+                # glue these together into a comma string
+                dum = combo_df['SGA_ID'].tolist()
+                # for i in range(len(dum)):
+                #     dum[i] = str(dum[i])
+                # my_string = ', '.join(dum)
+                # print(_first + _second + my_string + ' \\\\')
+                N_per_cluster.append(combo_df.shape[0])
+                alldf.append(combo_df)
 
-            mu.append(mu_sn)
-            # R2t.append(0)
-            Rlim_eff.append(Rcut);      
+                mu.append(mu_sn)
+                # R2t.append(0)
+                Rlim_eff.append(Rcut);      
 
     N_cluster=len(alldf)
 
@@ -225,8 +232,8 @@ def iron_cluster_json():
 
     json_object = json.dumps(data_dic)
 
-    outname = "iron_cluster.json"
-    outname2 = "iron_cluster_init.json"
+    outname = "iron_cluster"+fn_str+".json"
+    outname2 = "iron_cluster"+fn_str+"_init.json"
 
     with open("data/"+outname, 'w') as f:
         f.write(json_object)
@@ -500,7 +507,7 @@ def iron_mag_plot():
 
     Rlim = 17.75
 
-    fn = "SGA-2020_iron_Vrot"
+    fn = "DESI-DR1_TF_pv_cat_v3"
     table = Table.read("data/"+fn+".fits")
     pv_df = table.to_pandas()
 
@@ -532,20 +539,22 @@ def iron_mag_plot():
 
     alldf=[]
    # selection effects
-    for fn in glob.glob("data/output_*.txt"):
+    for fn in glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"):
         Nest = re.search('output_(.+?).txt',fn).group(1)
-        mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
-        df = pandas.read_csv(fn)
-        combo_df = df.merge(pv_df, on='SGA_ID')
-        Rcut = numpy.minimum(Rlim, mu_+Mlim)
-        select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
-        combo_df = combo_df[select]
-        if combo_df.shape[0] > 1:
-            N_per_cluster.append(combo_df.shape[0])
-            alldf.append(combo_df)
-            Nest = re.search('output_(.+?).txt',fn).group(1)
-            # mu.append(mu_)
-            Rlim_eff.append(Rcut);
+        if Nest != 'sn':
+            mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
+            df = pandas.read_csv(fn)
+            df = df.rename(columns={'# SGA_ID': 'SGA_ID'})
+            combo_df = df.merge(pv_df, on='SGA_ID')
+            Rcut = numpy.minimum(Rlim, mu_+Mlim)
+            select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
+            combo_df = combo_df[select]
+            if combo_df.shape[0] > 1:
+                N_per_cluster.append(combo_df.shape[0])
+                alldf.append(combo_df)
+                Nest = re.search('output_(.+?).txt',fn).group(1)
+                # mu.append(mu_)
+                Rlim_eff.append(Rcut);
 
     N_cluster=len(alldf)
 
@@ -610,7 +619,10 @@ def all_table():
 
 if __name__ == '__main__':
     # iron_cluster_json()
-    iron_cepheid_json()
+    # iron_cluster_json(cepheid=True)
+    iron_mag_plot()
+
+    # iron_cepheid_json()
     # all_table()
 
     # to_json(frac=0.1,cuts=True)

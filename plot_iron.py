@@ -15,9 +15,6 @@ matplotlib.rcParams["lines.linewidth"] = 2
 
 def cluster():
     desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
-    # ncluster  = len(glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"))
-    # print(ncluster)
-    # wef
     infile = json.load(open("data/iron_cluster.json",))
     ncluster = infile["N_cluster"]
 
@@ -43,6 +40,7 @@ def cluster():
             df_["omega_dist_use"] = df_["omega_dist"] * numpy.cos(df_["atanAR"])
             if _==3:
                 df_['sigR_proj'] = -df_['aR']* df_['sigR']
+                # add a little noise for plotting purposes
                 df_['theta_2'] = numpy.random.normal(0,0.00001, len(df_['aR']))
             elif _==4:
                 df_['sigR_proj'] = 1/numpy.cos(df_["atanAR"])*df_["sigR"]
@@ -53,7 +51,6 @@ def cluster():
                 df_['sigR_proj'] = _y - _x* df_['aR']
         dum=pandas.concat(dum)
         chains.append(dum)
-        # dum=pandas.read_csv("output/temp_{}.csv".format(1),comment='#')
 
         lrmn=[]
         lrmn2=[]
@@ -75,14 +72,14 @@ def cluster():
 
         if _ == 3:
             off = 0
-            ax_b.errorbar(numpy.array(infile["mu"])+off,lrmn[1],fmt="+",yerr=yerr,label=name)
-            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+            ax_b.errorbar(numpy.array(infile["mu"][:ncluster])+off,lrmn[1],fmt="+",yerr=yerr,label=name)
+            ax_b2.errorbar(numpy.array(infile["mu"][:ncluster])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
         elif _==4:
             off = 0.025
-            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+            ax_b2.errorbar(numpy.array(infile["mu"][:ncluster])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
         elif _==5:
             off = 0.05
-            ax_b2.errorbar(numpy.array(infile["mu"])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
+            ax_b2.errorbar(numpy.array(infile["mu"][:ncluster])+off,lrmn2[1],fmt="+",yerr=yerr2,label=name)
 
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2"]], name=name))
@@ -130,8 +127,7 @@ def cluster():
     # plt.show()
     plt.clf()
     print(c.analysis.get_latex_table())
-    print(c2.analysis.get_latex_table())
-
+    # print(c2.analysis.get_latex_table())
 
 
     fn="data/iron_cluster.json"
@@ -219,6 +215,7 @@ def cluster():
 
 cluster()
 wfe
+
 def fuji():
     chains=[]
     c = ChainConsumer()
