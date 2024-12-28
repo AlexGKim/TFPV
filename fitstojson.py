@@ -11,6 +11,17 @@ from astropy.table import Table
 import re
 import os
 
+cluster_cuts ={
+    'Rlim': 17.75,
+    'Vmin': 70,
+    'Vmax': 300.,
+    'Mlim': -18,
+    'Vmax': 1e4,
+    'cosi': 1/numpy.sqrt(2),
+    'q0' : 0.2,
+    'balim': numpy.sqrt((1/numpy.sqrt(2))**2 * (1-0.2**2) + 0.2**2)
+    }
+
 # fn = "SGA-2020_iron_Vrot_cuts"
 fn = "DESI-DR1_TF_pv_cat_v3"
 
@@ -505,84 +516,25 @@ def segev_plot(fn = fn_segev2):
 
 def iron_mag_plot():
 
-    Rlim = 17.75
-
-    fn = "DESI-DR1_TF_pv_cat_v3"
-    table = Table.read("data/"+fn+".fits")
-    pv_df = table.to_pandas()
+    # the cluster set
+    pv_df, alldf, _, _, _ = cluster_set()
+    # the coma set
+    c_df = coma_set()
 
     plt.scatter(pv_df["Z_DESI"],pv_df["R_MAG_SB26"],s=matplotlib.rcParams['lines.markersize'],linewidth=0,label="Iron",color='black')
     plt.axhline(17.75,color='red')
     plt.xlabel('Z_DESI')
     plt.ylabel('R_MAG_SB26')
 
-
-
-    Rlim = 17.75
-    Mlim = -17.
-    Vmin = 70
-    Vmax = 300. # nothing this bright
-
-    Mlim = -18
-    Vmax = 1e4
-
-    cosi = 1/numpy.sqrt(2)
-    q0=0.2
-    balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
-
-    table = Table.read("data/Tully15-Table3.fits")
-    tully_df = table.to_pandas()
-    # read in the cluster files
-    N_per_cluster = []
-    mu = []
-    Rlim_eff = []
-
-    alldf=[]
-   # selection effects
-    for fn in glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"):
-        Nest = re.search('output_(.+?).txt',fn).group(1)
-        if Nest != 'sn':
-            mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
-            df = pandas.read_csv(fn)
-            df = df.rename(columns={'# SGA_ID': 'SGA_ID'})
-            combo_df = df.merge(pv_df, on='SGA_ID')
-            Rcut = numpy.minimum(Rlim, mu_+Mlim)
-            select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
-            combo_df = combo_df[select]
-            if combo_df.shape[0] > 1:
-                N_per_cluster.append(combo_df.shape[0])
-                alldf.append(combo_df)
-                Nest = re.search('output_(.+?).txt',fn).group(1)
-                # mu.append(mu_)
-                Rlim_eff.append(Rcut);
-
-    N_cluster=len(alldf)
-
-
-    alldf = pandas.concat(alldf,ignore_index=True)
-    alldf = alldf[["Z_DESI","SGA_ID", "V_0p4R26","V_0p4R26_err","R_MAG_SB26","R_MAG_SB26_ERR"]]
-
     plt.scatter(alldf["Z_DESI"],alldf["R_MAG_SB26"],s=matplotlib.rcParams['lines.markersize'],linewidth=0,label="Iron Cluster",color="orange")
 
 
-    table2 = Table.read(fn_sga+".fits")
-    # fits=fitsio.FITS()
-    # data=fits[1].read()
-    c_df = table2.to_pandas()
-
-
-    Vmin = 50
-
-    comalist = [25532,30149,98934,122260,191275,196592,202666,221178,291879,309306,337817,364410,364929,365429,366393,378842,455486,465951,479267,486394,566771,645151,747077,748600,753474,759003,819754,826543,841705,917608,995924,1050173,1167691,1195008,1203610,1203786,1269260,1274409,1284002,1323268,1352019,1356626,1364394,1379275,1387991]
-    select = numpy.logical_and.reduce((numpy.isin(c_df['SGA_ID'],comalist) , c_df['V_0p33R26'] > Vmin))
-
-    plt.scatter(c_df["Z_DESI"][select],c_df["R_MAG_SB26"][select],s=matplotlib.rcParams['lines.markersize'],linewidth=0,label="Coma",color="cyan")
-
-
+    plt.scatter(c_df["Z_DESI"],c_df["R_MAG_SB26"],s=matplotlib.rcParams['lines.markersize'],linewidth=0,label="Coma",color="cyan")
 
     plt.legend()
     plt.savefig("zR.png")
-    plt.show()  
+    plt.show()
+
 
 def iron_to_sn():
 
@@ -615,14 +567,143 @@ def all_table():
     for index, row in pv_df.iterrows():
         if index<20:
             print("{:10.0f} & {:5.3f} & ${:6.1f} \\pm {:6.1f}$ & ${:6.2f} \\pm {:6.2f}$ & {:6.3f} \\\\".format(*row.to_numpy()))
-        
+
+def coma_set():
+    table2 = Table.read(fn_sga+".fits")
+    c_df = table2.to_pandas()
+
+    Vmin = 50
+
+    comalist = [25532,30149,98934,122260,191275,196592,202666,221178,291879,309306,337817,364410,364929,365429,366393,378842,455486,465951,479267,486394,566771,645151,747077,748600,753474,759003,819754,826543,841705,917608,995924,1050173,1167691,1195008,1203610,1203786,1269260,1274409,1284002,1323268,1352019,1356626,1364394,1379275,1387991]
+    select = numpy.logical_and.reduce((numpy.isin(c_df['SGA_ID'],comalist) , c_df['V_0p33R26'] > Vmin))
+    return c_df[select]
+
+def cluster_set():
+
+    Rlim = cluster_cuts["Rlim"] 
+    Vmin = cluster_cuts["Vmin"] 
+
+    Mlim = cluster_cuts["Mlim"] 
+    Vmax = cluster_cuts["Vmax"] 
+
+    balim = cluster_cuts["balim"]
+
+    fn = "DESI-DR1_TF_pv_cat_v3"
+    table = Table.read("data/"+fn+".fits")
+    pv_df = table.to_pandas()
+
+    table = Table.read("data/Tully15-Table3.fits")
+    tully_df = table.to_pandas()
+    # read in the cluster files
+    N_per_cluster = []
+    mu = []
+    Rlim_eff = []
+
+    alldf=[]
+   # selection effects
+    for fn in glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"):
+        Nest = re.search('output_(.+?).txt',fn).group(1)
+        if Nest != 'sn':
+            mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
+            df = pandas.read_csv(fn)
+            df = df.rename(columns={'# SGA_ID': 'SGA_ID'})
+            combo_df = df.merge(pv_df, on='SGA_ID')
+            Rcut = numpy.minimum(Rlim, mu_+Mlim)
+            select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
+            combo_df = combo_df[select]
+            if combo_df.shape[0] > 1:
+                N_per_cluster.append(combo_df.shape[0])
+                alldf.append(combo_df)
+                Nest = re.search('output_(.+?).txt',fn).group(1)
+                # mu.append(mu_)
+                Rlim_eff.append(Rcut)
+
+    alldf = pandas.concat(alldf,ignore_index=True)
+            
+    return pv_df, alldf, N_per_cluster, mu, Rlim_eff
+
+def cepheid_set():
+
+    Rlim = cluster_cuts["Rlim"] 
+    Vmin = cluster_cuts["Vmin"] 
+
+    Mlim = cluster_cuts["Mlim"] 
+    Vmax = cluster_cuts["Vmax"] 
+
+    # cosi = 1/numpy.sqrt(2)
+    # q0=0.2
+    balim = cluster_cuts["balim"]
+
+    table = Table.read("data/"+fn+".fits")
+    pv_df = table.to_pandas()
+
+    table = Table.read(desi_sga_dir+"/TF/Tully15-Table3.fits")
+    tully_df = table.to_pandas()
+
+
+    # read in the cluster files
+    N_per_cluster = []
+    mu = []
+    R2t = []
+    Rlim_eff = []
+
+    alldf=[]
+
+    # remove the file that will be created later
+    if os.path.exists(desi_sga_dir+'/TF/Y1/output_sn.txt'):
+        os.remove(desi_sga_dir+'/TF/Y1/output_sn.txt')
+
+    # if there are supernovae out them into data as well
+    nsn=0
+    table = Table.read("data/SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits")
+    df = table.to_pandas()
+    df['SGA_ID']=df['SGA_ID'].astype(int)
+    dumdf = df.copy()
+    dumdf.rename(columns={"SGA_ID": "# SGA_ID"},inplace=True)
+    dumdf.to_csv(desi_sga_dir+'/TF/Y1/output_sn.txt',columns=['# SGA_ID'],index=False )
+    mu_sn=37.
+
+    for index, _ in df.iterrows():
+        row=df.iloc[[index]]
+        combo_df = row.merge(pv_df, on=['SGA_ID'],suffixes=["","y"]) #,'R_MAG_SB26', 'V_0p4R26','BA'])
+
+        Rcut = numpy.minimum(Rlim, combo_df['MU_SECONDARY'].tolist()[0]+Mlim)
+        # print((combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) ,(combo_df['R_MAG_SB26'] < Rcut))
+        select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
+        combo_df = combo_df[select]
+        if combo_df.shape[0] > 0:
+            nsn=nsn+1
+            combo_df = combo_df[select]
+            combo_df['R_MAG_SB26'] = combo_df['R_MAG_SB26']  - combo_df['MU_SECONDARY'] + mu_sn
+            Rcut = Rcut  - combo_df['MU_SECONDARY'].tolist()[0] + mu_sn
+            combo_df['R_MAG_SB26_ERR'] = numpy.sqrt(combo_df['R_MAG_SB26_ERR'] + combo_df['MU_ERR']**2) 
+            Nest = df["SGA_ID"]
+            _first = "{} & ".format(Nest)
+            _second = "{} & ".format(mu_sn)
+            # glue these together into a comma string
+            dum = combo_df['SGA_ID'].tolist()
+            # for i in range(len(dum)):
+            #     dum[i] = str(dum[i])
+            # my_string = ', '.join(dum)
+            # print(_first + _second + my_string + ' \\\\')
+            N_per_cluster.append(combo_df.shape[0])
+            alldf.append(combo_df)
+
+            mu.append(mu_sn)
+            # R2t.append(0)
+            Rlim_eff.append(Rcut);      
+
+    alldf = pandas.concat(alldf,ignore_index=True)
+
+    return pv_df, alldf, N_per_cluster, mu, Rlim_eff
 
 if __name__ == '__main__':
     # iron_cluster_json()
     # iron_cluster_json(cepheid=True)
-    iron_mag_plot()
+    iron_cepheid_json()
 
-    # iron_cepheid_json()
+    # iron_mag_plot()
+
     # all_table()
 
     # to_json(frac=0.1,cuts=True)
