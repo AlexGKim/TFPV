@@ -328,26 +328,6 @@ def iron_mag_plot():
     plt.show()
 
 
-def iron_to_sn():
-
-    inname = "iron_cluster.json"
-    inname2 = "iron_cluster_init.json"
-
-    outname = "sn.json"
-    outname2 = "sn_init.json"
-    with open('data/'+inname, 'r') as file:
-        data = json.load(file)
-    with open('data/'+inname2, 'r') as file:
-        data_init = json.load(file)
-
-    for k in data.keys():
-        print(k,)
-        print(numpy.array(data[k]).shape)
-
-    outdata = dict(data)
-    outdata_init = dict(data_init)
-
-
 def all_table():
 
     fn = "SGA-2020_iron_Vrot"
@@ -492,7 +472,7 @@ def cepheid_set():
 
 if __name__ == '__main__':
     # iron_cluster_json()
-    iron_cluster_json(cepheid=True)
+    # iron_cluster_json(cepheid=True)
     # iron_cepheid_json()
 
     # iron_mag_plot()

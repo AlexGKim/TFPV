@@ -29,5 +29,16 @@ Instructions
 - Use standard cmdstan to compile the STAN code.  From cmdstan/ "make TFPV/cluster" for example.  You will find a new executable TFPV/cluster. Personally I immediately rename it to include the dispersion case.  So I have files "cluster311", "cluster411", "coma411", "coma311"
 - At the top of cluster.stan, coma.stan are commented out command line commands I used to run the fit.  Run them and hope for the best.  Note it puts the output into a directory "output" you have to create.
 - STAN provides two useful tools to check the result.  The first checks for the convergence. from TFPV  "../bin/diagnose output/cluster_311_?.csv" for example.  The second shows statistics on the posterior "../bin/stansummary output/cluster_311_?.csv"
+
+Plots
+
+- Redshift - magnitude zR.png fitstojson.iron_mag_plot()
+- Cluster results
+  - plot_iron.cluster tf_cluster_all.png tf_cluster.png hist_cluster.png corner_cluster.png b_cluster2.png
 - Plots for both cluster and coma runs are made using methods in plot_iron.py
 - Plot of redshift-Magntiude zR fitstojson.iron_mag_plot()
+
+Tables
+
+- Cluster table plot_iron.cluster
+- Cepheid and Cepheid+Cluster in plot_sn.cluster
