@@ -1,4 +1,4 @@
-// ./cepheid sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=3000 num_samples=2000 num_chains=4 init=data/iron_cepheid_init.json data file=data/iron_cepheid.json output file=output/cepheid.csv
+// ./cepheid sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=3000 num_samples=4000 num_chains=4 init=data/iron_cepheid_init.json data file=data/iron_cepheid.json output file=output/cepheid.csv
 
 
 functions {

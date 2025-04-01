@@ -197,15 +197,15 @@ def cepheid():
     print(c.analysis.get_latex_table())
     print(c2.analysis.get_latex_table())
 
-cepheid()
-wef
+# cepheid()
+# wef
 
 def cluster():
     desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
     # ncluster  = len(glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"))
     # print(ncluster)
     # wef
-    infile = json.load(open("data/iron_cluster.json",))
+    infile = json.load(open("data/iron_cluster_clustercepheid.json",))
     ncluster = infile["N_cluster"]
     nsn = infile["N_sn"]
     chains=[]
@@ -248,6 +248,7 @@ def cluster():
             hterm = 0
             if cin>= ncluster-nsn+1:
                 hterm = 5*numpy.log10(.8)
+                hterm = 0
             use = dum["bR.{}".format(cin)] - dum["xi_dist"]*dum["aR"]
             lrmn.append(numpy.percentile(use, (32,50,68)))
             use2 = dum["bR.{}".format(cin)] - dum["bR.{}".format(1)] - hterm 
@@ -279,8 +280,12 @@ def cluster():
             ax_b2.errorbar(numpy.array(infile["mu"])[0:ncmsn]+off,
                 lrmn2[1][0:ncmsn],fmt="+",yerr=yerr2[:,0:ncmsn],label="Cluster",color='red')
             ax_b2.errorbar(numpy.array(infile["mu"])[ncmsn+1:]+off,
-                lrmn2[1][ncmsn+1:],fmt="+",yerr=yerr2[:,ncmsn+1:],label="Cepheid $h=0.8$",color='blue')
-
+                lrmn2[1][ncmsn+1:]-5*numpy.log10(.75),fmt="o",yerr=yerr2[:,ncmsn+1:],label="Cepheid $h=0.75$",color='green')
+            ax_b2.errorbar(numpy.array(infile["mu"])[ncmsn+1:]+off,
+                lrmn2[1][ncmsn+1:]-5*numpy.log10(.8),fmt="s",yerr=yerr2[:,ncmsn+1:],label="Cepheid $h=0.8$",color='blue')
+            ax_b2.errorbar(numpy.array(infile["mu"])[ncmsn+1:]+off,
+                lrmn2[1][ncmsn+1:]-5*numpy.log10(.85),fmt="x",yerr=yerr2[:,ncmsn+1:],label="Cepheid $h=0.85$",color='orange') 
+                          
         # c = ChainConsumer()
         c.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2"]], name=name))
         c2.add_chain(Chain(samples=dum[["aR","bR_use","sigR","xi_dist","omega_dist_use","theta_2","sigR_proj"]], name=name))
