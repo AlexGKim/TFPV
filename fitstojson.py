@@ -9,6 +9,10 @@ import glob
 import pandas
 from astropy.table import Table
 import re
+import os
+
+DATA_DIR = os.environ.get('DATA_DIR', 'data')
+OUT_DIR = os.environ.get('OUT_DIR', 'output')
 
 # fn = "SGA-2020_iron_Vrot_cuts"
 fn = "DESI-DR1_TF_pv_cat_v3"
@@ -18,7 +22,7 @@ fn_segev2 = "SGA_TFR_simtest_20240307"
 
 # desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
 
-desi_sga_dir = "/data/DESI_SGA/"
+desi_sga_dir = os.path.join(DATA_DIR, "DESI_SGA/")
 
 rng = numpy.random.default_rng(seed=42)
 
@@ -81,7 +85,10 @@ def coma_json(cuts=False):
 
 
 def iron_cluster_json():
-    fn = "/data/SGA-2020_iron_Vrot"
+    # fn = "/data/SGA-2020_iron_Vrot"
+    fn = os.path.join(DATA_DIR, 'SGA-2020_iron_Vrot')
+    outname = os.path.join(OUT_DIR, "iron_cluster.json")
+    outname2 = os.path.join(OUT_DIR, "iron_cluster_init.json")
 
     Rlim = 17.75
     Vmin = 70
@@ -115,8 +122,12 @@ def iron_cluster_json():
     Rlim_eff = []
 
     alldf=[]
+    file = open(os.path.join(OUT_DIR, "cluster_tex.txt"), "w")
+
    # selection effects
     for fn in glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"):
+        if "output_sn.txt" in fn:
+            continue
         Nest = re.search('output_(.+?).txt',fn).group(1)  # number of the galaxy
         mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
         R2t_=tully_df.loc[tully_df["Nest"]==int(Nest)]["R2t"].values[0]
@@ -135,7 +146,7 @@ def iron_cluster_json():
             for i in range(len(dum)):
                 dum[i] = str(dum[i])
             my_string = ', '.join(dum)
-            print(_first + _second + my_string + ' \\\\')
+            print(_first + _second + my_string + ' \\\\', file=file)
             N_per_cluster.append(combo_df.shape[0])
             alldf.append(combo_df)
             Nest = re.search('output_(.+?).txt',fn).group(1)
@@ -145,7 +156,7 @@ def iron_cluster_json():
 
     # if there are supernovae out them into data as well
     nsn=0
-    table = Table.read("/data/SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits")
+    table = Table.read(os.path.join(DATA_DIR, "SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits"))
     df = table.to_pandas()
     df['SGA_ID']=df['SGA_ID'].astype(int)
     df.to_csv('temp.txt',columns=['SGA_ID'],index=False )
@@ -221,10 +232,8 @@ def iron_cluster_json():
 
     json_object = json.dumps(data_dic)
 
-    outname = "iron_cluster.json"
-    outname2 = "iron_cluster_init.json"
 
-    with open("/data/"+outname, 'w') as f:
+    with open(outname, 'w') as f:
         f.write(json_object)
 
 #  vector[N] v = 373.137*v_raw + 222.371;
@@ -240,13 +249,11 @@ def iron_cluster_json():
     logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
 
 
-
-
     init["logL_raw"]  = ((logL-init["xi_dist"]*numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
 
     init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
     init["bR_offset"]= (numpy.zeros(data_dic['N_cluster'])).tolist()
-    with open("/data/"+outname2, 'w') as f:
+    with open(outname2, 'w') as f:
         f.write(json.dumps(init))
 
 
