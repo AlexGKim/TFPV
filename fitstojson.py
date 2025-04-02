@@ -16,7 +16,9 @@ fn = "DESI-DR1_TF_pv_cat_v3"
 fn_sga = "data/SGA-2020_fuji_Vrot"
 fn_segev2 = "SGA_TFR_simtest_20240307"
 
-desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
+# desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
+
+desi_sga_dir = "/data/DESI_SGA/"
 
 rng = numpy.random.default_rng(seed=42)
 
@@ -79,7 +81,7 @@ def coma_json(cuts=False):
 
 
 def iron_cluster_json():
-    fn = "SGA-2020_iron_Vrot"
+    fn = "/data/SGA-2020_iron_Vrot"
 
     Rlim = 17.75
     Vmin = 70
@@ -92,7 +94,7 @@ def iron_cluster_json():
     q0=0.2
     balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
 
-    table = Table.read("data/"+fn+".fits")
+    table = Table.read(fn+".fits")
     pv_df = table.to_pandas()
 
     table = Table.read(desi_sga_dir+"/TF/Tully15-Table3.fits")
@@ -143,7 +145,7 @@ def iron_cluster_json():
 
     # if there are supernovae out them into data as well
     nsn=0
-    table = Table.read("data/SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits")
+    table = Table.read("/data/SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits")
     df = table.to_pandas()
     df['SGA_ID']=df['SGA_ID'].astype(int)
     df.to_csv('temp.txt',columns=['SGA_ID'],index=False )
@@ -222,7 +224,7 @@ def iron_cluster_json():
     outname = "iron_cluster.json"
     outname2 = "iron_cluster_init.json"
 
-    with open("data/"+outname, 'w') as f:
+    with open("/data/"+outname, 'w') as f:
         f.write(json_object)
 
 #  vector[N] v = 373.137*v_raw + 222.371;
@@ -244,7 +246,7 @@ def iron_cluster_json():
 
     init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
     init["bR_offset"]= (numpy.zeros(data_dic['N_cluster'])).tolist()
-    with open("data/"+outname2, 'w') as f:
+    with open("/data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
 
 
