@@ -12,12 +12,12 @@ import re
 import os
 
 DATA_DIR = os.environ.get('DATA_DIR', 'data')
+DESI_SGA_DIR = os.environ.get('DESI_SGA_DIR', 'data/DESI_SGA')
 OUT_DIR = os.environ.get('OUT_DIR', 'output')
-DESI_SGA_DIR = os.environ.get('DESI_SGA_DIR', 'output')
+
 
 # fn = "SGA-2020_iron_Vrot_cuts"
 fn = "DESI-DR1_TF_pv_cat_v3"
-
 fn_sga = "data/SGA-2020_fuji_Vrot"
 fn_segev2 = "SGA_TFR_simtest_20240307"
 
