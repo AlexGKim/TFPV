@@ -13,6 +13,7 @@ import os
 
 DATA_DIR = os.environ.get('DATA_DIR', 'data')
 OUT_DIR = os.environ.get('OUT_DIR', 'output')
+DESI_SGA_DIR = os.environ.get('DESI_SGA_DIR', 'output')
 
 # fn = "SGA-2020_iron_Vrot_cuts"
 fn = "DESI-DR1_TF_pv_cat_v3"
@@ -22,7 +23,7 @@ fn_segev2 = "SGA_TFR_simtest_20240307"
 
 # desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
 
-desi_sga_dir = os.path.join(DATA_DIR, "DESI_SGA/")
+# desi_sga_dir = os.path.join(DATA_DIR, "DESI_SGA/")
 
 rng = numpy.random.default_rng(seed=42)
 
@@ -104,7 +105,7 @@ def iron_cluster_json():
     table = Table.read(fn+".fits")
     pv_df = table.to_pandas()
 
-    table = Table.read(desi_sga_dir+"/TF/Tully15-Table3.fits")
+    table = Table.read(os.path.join(DESI_SGA_DIR,"/TF/Tully15-Table3.fits"))
     tully_df = table.to_pandas()
 
     # # add extra noise degrading data to help fit
@@ -125,7 +126,7 @@ def iron_cluster_json():
     file = open(os.path.join(OUT_DIR, "cluster_tex.txt"), "w")
 
    # selection effects
-    for fn in glob.glob(desi_sga_dir+"/TF/Y1/output_*.txt"):
+    for fn in glob.glob(os.path.join(DESI_SGA_DIR,"/TF/Y1/output_*.txt")):
         if "output_sn.txt" in fn:
             continue
         Nest = re.search('output_(.+?).txt',fn).group(1)  # number of the galaxy
