@@ -105,7 +105,7 @@ def iron_cluster_json():
     table = Table.read(fn+".fits")
     pv_df = table.to_pandas()
 
-    table = Table.read(os.path.join(DESI_SGA_DIR,"/TF/Tully15-Table3.fits"))
+    table = Table.read(os.path.join(DESI_SGA_DIR,"TF/Tully15-Table3.fits"))
     tully_df = table.to_pandas()
 
     # # add extra noise degrading data to help fit
@@ -126,7 +126,7 @@ def iron_cluster_json():
     file = open(os.path.join(OUT_DIR, "cluster_tex.txt"), "w")
 
    # selection effects
-    for fn in glob.glob(os.path.join(DESI_SGA_DIR,"/TF/Y1/output_*.txt")):
+    for fn in glob.glob(os.path.join(DESI_SGA_DIR,"TF/Y1/output_*.txt")):
         if "output_sn.txt" in fn:
             continue
         Nest = re.search('output_(.+?).txt',fn).group(1)  # number of the galaxy
