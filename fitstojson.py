@@ -157,41 +157,43 @@ def iron_cluster_json():
 
     # if there are supernovae out them into data as well
     nsn=0
-    table = Table.read(os.path.join(DATA_DIR, "SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits"))
-    df = table.to_pandas()
-    df['SGA_ID']=df['SGA_ID'].astype(int)
-    df.to_csv('temp.txt',columns=['SGA_ID'],index=False )
-    mu_sn=37.
+    include_sn = False
+    if include_sn:
+        table = Table.read(os.path.join(DATA_DIR, "SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits"))
+        df = table.to_pandas()
+        df['SGA_ID']=df['SGA_ID'].astype(int)
+        df.to_csv('temp.txt',columns=['SGA_ID'],index=False )
+        mu_sn=37.
 
-    for index, _ in df.iterrows():
-        row=df.iloc[[index]]
-        combo_df = row.merge(pv_df, on=['SGA_ID'],suffixes=["","y"]) #,'R_MAG_SB26', 'V_0p4R26','BA'])
+        for index, _ in df.iterrows():
+            row=df.iloc[[index]]
+            combo_df = row.merge(pv_df, on=['SGA_ID'],suffixes=["","y"]) #,'R_MAG_SB26', 'V_0p4R26','BA'])
 
-        Rcut = numpy.minimum(Rlim, combo_df['MU_SECONDARY'].tolist()[0]+Mlim)
-        # print((combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) ,(combo_df['R_MAG_SB26'] < Rcut))
-        select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
-        combo_df = combo_df[select]
-        if combo_df.shape[0] > 0:
-            nsn=nsn+1
+            Rcut = numpy.minimum(Rlim, combo_df['MU_SECONDARY'].tolist()[0]+Mlim)
+            # print((combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) ,(combo_df['R_MAG_SB26'] < Rcut))
+            select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
             combo_df = combo_df[select]
-            combo_df['R_MAG_SB26'] = combo_df['R_MAG_SB26']  - combo_df['MU_SECONDARY'] + mu_sn
-            Rcut = Rcut  - combo_df['MU_SECONDARY'].tolist()[0] + mu_sn
-            combo_df['R_MAG_SB26_ERR'] = numpy.sqrt(combo_df['R_MAG_SB26_ERR'] + combo_df['MU_ERR']**2) 
-            Nest = df["SGA_ID"]
-            _first = "{} & ".format(Nest)
-            _second = "{} & ".format(mu_sn)
-            # glue these together into a comma string
-            dum = combo_df['SGA_ID'].tolist()
-            # for i in range(len(dum)):
-            #     dum[i] = str(dum[i])
-            # my_string = ', '.join(dum)
-            # print(_first + _second + my_string + ' \\\\')
-            N_per_cluster.append(combo_df.shape[0])
-            alldf.append(combo_df)
+            if combo_df.shape[0] > 0:
+                nsn=nsn+1
+                combo_df = combo_df[select]
+                combo_df['R_MAG_SB26'] = combo_df['R_MAG_SB26']  - combo_df['MU_SECONDARY'] + mu_sn
+                Rcut = Rcut  - combo_df['MU_SECONDARY'].tolist()[0] + mu_sn
+                combo_df['R_MAG_SB26_ERR'] = numpy.sqrt(combo_df['R_MAG_SB26_ERR'] + combo_df['MU_ERR']**2) 
+                Nest = df["SGA_ID"]
+                _first = "{} & ".format(Nest)
+                _second = "{} & ".format(mu_sn)
+                # glue these together into a comma string
+                dum = combo_df['SGA_ID'].tolist()
+                # for i in range(len(dum)):
+                #     dum[i] = str(dum[i])
+                # my_string = ', '.join(dum)
+                # print(_first + _second + my_string + ' \\\\')
+                N_per_cluster.append(combo_df.shape[0])
+                alldf.append(combo_df)
 
-            mu.append(mu_sn)
-            # R2t.append(0)
-            Rlim_eff.append(Rcut);      
+                mu.append(mu_sn)
+                # R2t.append(0)
+                Rlim_eff.append(Rcut);      
 
     N_cluster=len(alldf)
 
