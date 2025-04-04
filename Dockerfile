@@ -6,7 +6,7 @@
 # docker buildx build --platform linux/arm64/v8  --load -t tfpv:dev . 
 
 # docker run -v /Users/akim/Projects/TFPV/data:/data -v /Users/akim/Projects/TFPV/output:/output -v /Users/akim/Projects/DESI_SGA:/DESI_SGA alexgkim/tfpv:dev python /opt/TFPV-docker/fitstojson.py;  /opt/TFPV-docker/cluster sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=3000 num_samples=1000 num_chains=4 init=/output/iron_cluster_init.json data file=/output/iron_cluster.json output file=/output/cluster.csv
-
+# docker run -v /Users/akim/Projects/TFPV/data:/data -v /Users/akim/Projects/TFPV/output:/output -v /Users/akim/Projects/DESI_SGA:/DESI_SGA tfpv:dev
 
 
 FROM docker.io/library/python:latest
@@ -37,11 +37,13 @@ RUN git clone https://github.com/stan-dev/cmdstan.git --recursive \
     && cd cmdstan \
     && make /opt/TFPV-docker/cluster
 
-
+COPY command.sh /usr/local/bin/
+RUN ["chmod", "+x", "/usr/local/bin/command.sh"]
 
 ENV DATA_DIR=/data
-ENV OUT_DIR=/output
+ENV OUTPUT_DIR=/output
 ENV DESI_SGA_DIR=/DESI_SGA
+ENV RELEASE=Y1
 
 VOLUME /data
 VOLUME /output
