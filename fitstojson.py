@@ -13,7 +13,7 @@ import os
 
 DATA_DIR = os.environ.get('DATA_DIR', 'data')
 DESI_SGA_DIR = os.environ.get('DESI_SGA_DIR', 'data/DESI_SGA')
-OUT_DIR = os.environ.get('OUT_DIR', 'output')
+OUTPUT_DIR = os.environ.get('OUTPUT_DIR', 'output')
 
 
 # fn = "SGA-2020_iron_Vrot_cuts"
@@ -88,8 +88,8 @@ def coma_json(cuts=False):
 def iron_cluster_json():
     # fn = "/data/SGA-2020_iron_Vrot"
     fn = os.path.join(DATA_DIR, 'SGA-2020_iron_Vrot')
-    outname = os.path.join(OUT_DIR, "iron_cluster.json")
-    outname2 = os.path.join(OUT_DIR, "iron_cluster_init.json")
+    outname = os.path.join(OUTPUT_DIR, "iron_cluster.json")
+    outname2 = os.path.join(OUTPUT_DIR, "iron_cluster_init.json")
 
     Rlim = 17.75
     Vmin = 70
@@ -123,7 +123,7 @@ def iron_cluster_json():
     Rlim_eff = []
 
     alldf=[]
-    file = open(os.path.join(OUT_DIR, "cluster_tex.txt"), "w+")
+    file = open(os.path.join(OUTPUT_DIR, "cluster_tex.txt"), "w+")
 
    # selection effects
     for fn in glob.glob(os.path.join(DESI_SGA_DIR,"TF/Y1/output_*.txt")):
