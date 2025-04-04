@@ -7,9 +7,11 @@ DESI Tully Fisher Peculiar Velocity
 
 #### Data Environmental variables
 Location of input and output data files are communicated through environmental variables.  For example on my local computer I do
+```
 export DESI_SGA_DIR=/Users/akim/Projects/DESI_SGA
 export OUTPUT_DIR=/Users/akim/Projects/TFPV/output 
 export DATA_DIR=/Users/akim/Projects/TFPV/data
+```
 
 #### Input data
 - Download DESI_SGA repository https://github.com/DESI-UR/DESI_SGA.  These have data required for the analysis:
