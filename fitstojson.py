@@ -123,7 +123,7 @@ def iron_cluster_json():
     Rlim_eff = []
 
     alldf=[]
-    file = open(os.path.join(OUT_DIR, "cluster_tex.txt"), "w")
+    file = open(os.path.join(OUT_DIR, "cluster_tex.txt"), "w+")
 
    # selection effects
     for fn in glob.glob(os.path.join(DESI_SGA_DIR,"TF/Y1/output_*.txt")):
@@ -234,7 +234,7 @@ def iron_cluster_json():
     json_object = json.dumps(data_dic)
 
 
-    with open(outname, 'w') as f:
+    with open(outname, 'w+') as f:
         f.write(json_object)
 
 #  vector[N] v = 373.137*v_raw + 222.371;
@@ -254,7 +254,7 @@ def iron_cluster_json():
 
     init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
     init["bR_offset"]= (numpy.zeros(data_dic['N_cluster'])).tolist()
-    with open(outname2, 'w') as f:
+    with open(outname2, 'w+') as f:
         f.write(json.dumps(init))
 
 
