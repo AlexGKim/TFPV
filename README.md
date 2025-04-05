@@ -11,20 +11,24 @@ Location of input and output data files are communicated through environmental v
 export DESI_SGA_DIR=/Users/akim/Projects/DESI_SGA
 export OUTPUT_DIR=/Users/akim/Projects/TFPV/output 
 export DATA_DIR=/Users/akim/Projects/TFPV/data
+export RELEASE=Y1
 ```
 
 #### Input data
+- Assume that there is a public github repo and a private NERSC filesystem that has all the needed data
+- Different sets of data in RELEASE subdirectories
 - Download DESI_SGA repository https://github.com/DESI-UR/DESI_SGA.  These have data required for the analysis:
   - Set environmental variable DESI_SGA_DIR to the directory
   - Tully's table of cluster information $DESI_SGA_DIR/Tully15-Table3.fits
-  - Clusters and which galaxies are in them $DESI_SGA_DIR/TF/output_??????.txt
-    
+  - Set environmental variable RELEASE to the appropriate release.  Input data is in $DESI_SGA_DIR/TF/$RELEASE Default is Y1.
+  - Clusters and which galaxies are in them $DESI_SGA_DIR/TF/$RELEASE/output_??????.txt
 - Get other required private data
+  - Data is at NERSC /global/cfs/cdirs/desi/science/td/pv/tfgalaxies/
+  - If working locally copy the needed RELEASEs in this directory
   - Set environmental variable DATA_DIR to the directory where these files will be located
-  - On NERSC DATA_DIR=/global/cfs/cdirs/desi/science/td/pv/tfgalaxies/ otherwise wherever you 
-  - Other data on NERSC /global/cfs/cdirs/desi/science/td/pv/tfgalaxies/.
-    - The cluster catalog "./Y1/DESI-DR1_TF_pv_cat_v3.fits"
-    - Coma  "SV/SGA-2020_fuji_Vrot.fits".
+    - On NERSC DATA_DIR=/global/cfs/cdirs/desi/science/td/pv/tfgalaxies/
+  - Relevent data in $DATA_DIR/$RELEASE/
+    - SGA-2020_iron_Vrot_VI.fits
    
 #### Ouput data
 - Set environmental variable OUTPUT_DIR to where created data go 
