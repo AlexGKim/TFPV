@@ -33,12 +33,14 @@ RUN curl -L https://github.com/AlexGKim/TFPV/archive/refs/heads/docker.tar.gz \
     && tar xzf TFPV.tar.gz \
     && rm -rf TFPV.tar.gz
 
-RUN git clone https://github.com/stan-dev/cmdstan.git --recursive \
-    && cd cmdstan \
-    && make /opt/TFPV-docker/cluster
+RUN git clone https://github.com/stan-dev/cmdstan.git --recursive       \
+    && cd cmdstan                                                       \
+    && make /opt/TFPV-docker/cluster                                    \
+    && make clean
 
-COPY command.sh /usr/local/bin/
-RUN ["chmod", "+x", "/usr/local/bin/command.sh"]
+COPY command.sh /opt
+
+RUN chmod +x /opt/command.sh
 
 ENV DATA_DIR=/data
 ENV OUTPUT_DIR=/output
