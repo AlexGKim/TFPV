@@ -11,28 +11,30 @@ Location of input and output data files are communicated through environmental v
 export DESI_SGA_DIR=/Users/akim/Projects/DESI_SGA
 export OUTPUT_DIR=/Users/akim/Projects/TFPV/output 
 export DATA_DIR=/Users/akim/Projects/TFPV/data
+export RELEASE=Y1
 ```
 
 #### Input data
-- Download DESI_SGA repository https://github.com/DESI-UR/DESI_SGA.  These have data required for the analysis:
+- Assume that there is a public github repo and a private NERSC filesystem that has all the needed data
+- Different sets of data in RELEASE subdirectories
+- Download DESI_SGA repository https://github.com/DESI-UR/DESI_SGA
   - Set environmental variable DESI_SGA_DIR to the directory
   - Tully's table of cluster information $DESI_SGA_DIR/Tully15-Table3.fits
-  - Clusters and which galaxies are in them $DESI_SGA_DIR/TF/output_??????.txt
-    
-- Get other required private data
+  - Set environmental variable RELEASE to the appropriate release.  Input data is in $DESI_SGA_DIR/TF/$RELEASE. Default is Y1.
+  - Clusters and which galaxies are in them $DESI_SGA_DIR/TF/$RELEASE/output_??????.txt
+- Other required private data
+  - Data is at NERSC /global/cfs/cdirs/desi/science/td/pv/tfgalaxies/
+  - If working locally retrieve the needed RELEASEs
   - Set environmental variable DATA_DIR to the directory where these files will be located
-  - On NERSC DATA_DIR=/global/cfs/cdirs/desi/science/td/pv/tfgalaxies/ otherwise wherever you 
-  - Other data on NERSC /global/cfs/cdirs/desi/science/td/pv/tfgalaxies/.
-    - The cluster catalog "./Y1/DESI-DR1_TF_pv_cat_v3.fits"
-    - Coma  "SV/SGA-2020_fuji_Vrot.fits".
+  - Relevent data in $DATA_DIR/$RELEASE/
+    - SGA-2020_iron_Vrot_VI.fits Note that this name should presumably be changed to something more generic.
    
 #### Ouput data
-- Set environmental variable OUTPUT_DIR to where created data go 
+- Set environmental variable OUTPUT_DIR to where created data go $OUTPUT_DIR/$RELEASE/. 
 
 ### Docker image
-- alexgkim/tfpv:dev
-- docker run -v $DATA_DIR:/data -v $OUTPUT_DIR:/output -v $DESI_SGA_DIR:/DESI_SGA alexgkim/tfpv:dev python /opt/TFPV-docker/fitstojson.py;  /opt/TFPV-docker/cluster sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=3000 num_samples=1000 num_chains=4 init=/output/iron_cluster_init.json data file=/output/iron_cluster.json output file=/output/cluster.csv
-
+- The docker image is alexgkim/tfpv:dev
+- docker run -v /Users/akim/Projects/TFPV/data:/data -v /Users/akim/Projects/TFPV/output:/output -v /Users/akim/Projects/DESI_SGA:/DESI_SGA alexgkim/tfpv:dev ./command.sh
 
 ### Local install
 
