@@ -88,7 +88,7 @@ rng = numpy.random.default_rng(seed=42)
 
 def iron_cluster_json():
     # fn = "/data/SGA-2020_iron_Vrot"
-    fn = os.path.join(DATA_DIR, 'SGA-2020_iron_Vrot.fits')
+    fn = os.path.join(DATA_DIR, RELEASE_DIR, 'SGA-2020_iron_Vrot_VI.fits')
     outname = os.path.join(OUTPUT_DIR, "iron_cluster.json")
     outname2 = os.path.join(OUTPUT_DIR, "iron_cluster_init.json")
 
@@ -160,7 +160,7 @@ def iron_cluster_json():
     nsn=0
     include_sn = False
     if include_sn:
-        table = Table.read(os.path.join(DATA_DIR, "SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits"))
+        table = Table.read(os.path.join(DATA_DIR, RELEASE_DIR, "SGA-2020_iron_Vrot_VI_0pt_calib_z0p1.fits"))
         df = table.to_pandas()
         df['SGA_ID']=df['SGA_ID'].astype(int)
         df.to_csv('temp.txt',columns=['SGA_ID'],index=False )
