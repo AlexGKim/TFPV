@@ -89,8 +89,10 @@ rng = numpy.random.default_rng(seed=42)
 def iron_cluster_json():
     # fn = "/data/SGA-2020_iron_Vrot"
     fn = os.path.join(DATA_DIR, RELEASE_DIR, 'SGA-2020_iron_Vrot_VI.fits')
-    outname = os.path.join(OUTPUT_DIR, "iron_cluster.json")
-    outname2 = os.path.join(OUTPUT_DIR, "iron_cluster_init.json")
+    outname = os.path.join(OUTPUT_DIR, RELEASE_DIR, "iron_cluster.json")
+    outname2 = os.path.join(OUTPUT_DIR, RELEASE_DIR, "iron_cluster_init.json")
+    if not os.path.exists(os.path.join(OUTPUT_DIR, RELEASE_DIR)):
+        os.makedirs(os.path.join(OUTPUT_DIR, RELEASE_DIR))
 
     Rlim = 17.75
     Vmin = 70
@@ -124,7 +126,7 @@ def iron_cluster_json():
     Rlim_eff = []
 
     alldf=[]
-    file = open(os.path.join(OUTPUT_DIR, "cluster_tex.txt"), "w+")
+    file = open(os.path.join(OUTPUT_DIR, RELEASE_DIR, "cluster_tex.txt"), "w+")
 
    # selection effects
     for fn in glob.glob(os.path.join(DESI_SGA_DIR,"TF",RELEASE_DIR,"output_*.txt")):
