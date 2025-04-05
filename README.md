@@ -17,21 +17,20 @@ export RELEASE=Y1
 #### Input data
 - Assume that there is a public github repo and a private NERSC filesystem that has all the needed data
 - Different sets of data in RELEASE subdirectories
-- Download DESI_SGA repository https://github.com/DESI-UR/DESI_SGA.  These have data required for the analysis:
+- Download DESI_SGA repository https://github.com/DESI-UR/DESI_SGA
   - Set environmental variable DESI_SGA_DIR to the directory
   - Tully's table of cluster information $DESI_SGA_DIR/Tully15-Table3.fits
-  - Set environmental variable RELEASE to the appropriate release.  Input data is in $DESI_SGA_DIR/TF/$RELEASE Default is Y1.
+  - Set environmental variable RELEASE to the appropriate release.  Input data is in $DESI_SGA_DIR/TF/$RELEASE. Default is Y1.
   - Clusters and which galaxies are in them $DESI_SGA_DIR/TF/$RELEASE/output_??????.txt
-- Get other required private data
+- Other required private data
   - Data is at NERSC /global/cfs/cdirs/desi/science/td/pv/tfgalaxies/
-  - If working locally copy the needed RELEASEs in this directory
+  - If working locally retrieve the needed RELEASEs
   - Set environmental variable DATA_DIR to the directory where these files will be located
-    - On NERSC DATA_DIR=/global/cfs/cdirs/desi/science/td/pv/tfgalaxies/
   - Relevent data in $DATA_DIR/$RELEASE/
-    - SGA-2020_iron_Vrot_VI.fits
+    - SGA-2020_iron_Vrot_VI.fits Note that this name should presumably be changed to something more generic.
    
 #### Ouput data
-- Set environmental variable OUTPUT_DIR to where created data go 
+- Set environmental variable OUTPUT_DIR to where created data go $OUTPUT_DIR/$RELEASE/. 
 
 ### Docker image
 - alexgkim/tfpv:dev
