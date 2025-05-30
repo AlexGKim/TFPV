@@ -14,7 +14,7 @@ export DATA_DIR=/Users/akim/Projects/TFPV/data
 #### Input data
 - Download DESI_SGA repository https://github.com/DESI-UR/DESI_SGA.  These have data required for the analysis:
   - Set environmental variable DESI_SGA_DIR to the directory
-  - Tully's table of cluster information $DESI_SGA_DIR/Tully15-Table3.fits
+  - Tully's table of cluster information $DESI_SGA_DIR/TF/Tully15-Table3.fits
   - Clusters and which galaxies are in them $DESI_SGA_DIR/TF/output_??????.txt
     
 - Get other required private data
