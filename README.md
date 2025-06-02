@@ -35,6 +35,7 @@ export RELEASE=Y1
 ### Docker image
 - The docker image is alexgkim/tfpv:dev
 - docker run -v /Users/akim/Projects/TFPV/data:/data -v /Users/akim/Projects/TFPV/output:/output -v /Users/akim/Projects/DESI_SGA:/DESI_SGA alexgkim/tfpv:dev ./command.sh
+- shifter --volume=/global/homes/a/akim/tmpdata:/data --volume=/global/homes/a/akim/tmpoutput:/output --volume=/global/homes/a/akim/tmpdesi_sga:/DESI_SGA --image=alexgkim/tfpv:dev ./command/sh
 
 ### Local install
 
