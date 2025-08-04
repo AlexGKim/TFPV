@@ -39,6 +39,7 @@ parameters {
     vector[N] mu;
     vector[N] logL;
     vector<lower=-atan(pi()/2), upper=atan(pi()/2)>[N] delta_phi_unif;   
+    vector[N] epsilon;
 
     // Latent variables that were fit parameters in the training
     vector[N] theta_1;
@@ -46,12 +47,12 @@ parameters {
     vector[N] b;
     vector[N] sigR;
     vector[N] logL0;
-    vector[N]<lower=0> sigma_logL0;
+    vector<lower=0>[N] sigma_logL0;
 }
 
 model {
 
-    vector[6] _parameters;
+    vector[6] pars;
     vector[N] delta_phi = angle_dispersion * tan(delta_phi_unif);
     real V_mod;
     real m_mod;    
@@ -59,7 +60,7 @@ model {
     for (n in 1:N) {
         // Priors on latent variables
         logL[n] ~ normal(logL0[n], sigma_logL0[n]);
-        epsilon[n] ~ normal(0, sigma_R[n]);
+        epsilon[n] ~ normal(0, sigR[n]);
 
         // Likelihoods
         // Compute the deterministic functions
@@ -68,14 +69,14 @@ model {
 
         // Truncated normal likelihoods
         R_ ~ normal(m_mod - Rlim_eff[n], R_MAG_SB26_ERR) T[,0];
-        V_0p4R26 ~ normal(V_mod, V_0p4R26_err) T[Vmin,];
+        V_0p4R26 ~ normal(V_mod, V_0p4R26_err) T[V_min,];
 
-        _parameters[1] = theta_1[n];
-        _parameters[2] = theta_2[n];
-        _parameters[3] = b[n];
-        _parameters[4] = sigR[n];
-        _parameters[5] = logL0[n];
-        _parameters[6] = sigma_logL0[n];
-        _parameters ~ multi_normal_cholesky(pop_mn, pop_cov_L);
+        pars[1] = theta_1[n];
+        pars[2] = theta_2[n];
+        pars[3] = b[n];
+        pars[4] = sigR[n];
+        pars[5] = logL0[n];
+        pars[6] = sigma_logL0[n];
+        pars ~ multi_normal_cholesky(pop_mn, pop_cov_L);
     }
 }
