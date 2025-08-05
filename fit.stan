@@ -1,18 +1,24 @@
+// make ~/Projects/TFPV/fit
+// ./fit sample algorithm=hmc engine=nuts num_chains=4 data file="data_fit/Y1/fit.json" output file="output_fit/Y1/fit.csv"
+
 data {
     int<lower=1> N; // number of data points
     vector[N] V_0p4R26;
-    vector[N] V_0p4R26_err;
+    vector[N] V_0p4R26_ERR;
     vector[N] R_MAG_SB26;
     vector[N] R_MAG_SB26_ERR;
 
-    vector[N] Rlim_eff;
-    real V_min;
+    vector[N] Rcut;
+    real Vmin;
+    real Vmax;
+
+    real V0;
 
     // Note that these are not the fit parameters in the training fit so they need to be transformed first
     // Alternatively this code could be modified to use the native training parameters
 
-    vector[6] pop_mn; // in order of theta_1 : tan(atanAR), theta_2, b : bR, sigR,  logL0 :xi_dist/cos(theta_1), sigma_logL0 (omega_dist)  
-    matrix[6,6] pop_cov_L; // Cholesky decomposition of covariance matrix
+    vector[7] pop_mn; // in order of theta_1 : tan(atanAR), theta_2, b : bR, sigR,  logL0 :xi_dist/cos(theta_1), sigma_logL0 (omega_dist)  
+    matrix[7,7] pop_cov_L; // Cholesky decomposition of covariance matrix
 }
 
 transformed data {
@@ -32,7 +38,12 @@ transformed data {
   real angle_dispersion = angle_dispersion_deg/180*pi();
 
   // shifted data to align to common magnitude cutoff.  Allows vectorization
-  vector[N] R_ =R_MAG_SB26-Rlim_eff;
+  vector[N] R_ =R_MAG_SB26-Rcut;
+
+  vector[N] V_0p4R26_0 = V_0p4R26 / V0;
+  vector[N] V_0p4R26_ERR_0 = V_0p4R26_ERR / V0;
+  real Vmin_0 = Vmin/V0;
+  real Vmax_0 = Vmax/V0;
 }
 
 parameters {
@@ -52,7 +63,7 @@ parameters {
 
 model {
 
-    vector[6] pars;
+    vector[7] pars;
     vector[N] delta_phi = angle_dispersion * tan(delta_phi_unif);
     real V_mod;
     real m_mod;    
@@ -68,8 +79,8 @@ model {
         m_mod = mu[n] + b[n] + sin(theta_1[n]) * logL[n] + sin(theta_2[n]) * epsilon[n];
 
         // Truncated normal likelihoods
-        R_ ~ normal(m_mod - Rlim_eff[n], R_MAG_SB26_ERR) T[,0];
-        V_0p4R26 ~ normal(V_mod, V_0p4R26_err) T[V_min,];
+        R_ ~ normal(m_mod - Rcut[n], R_MAG_SB26_ERR) T[,0];
+        V_0p4R26_0 ~ normal(V_mod, V_0p4R26_ERR_0) T[Vmin_0,Vmax_0];
 
         pars[1] = theta_1[n];
         pars[2] = theta_2[n];
