@@ -1,5 +1,5 @@
 // make ~/Projects/TFPV/fit
-// ./fit sample algorithm=hmc engine=nuts num_chains=4 data file="data_fit/Y1/fit.json" output file="output_fit/Y1/fit.csv"
+// ./fit sample algorithm=hmc engine=nuts num_chains=4 init="data_fit/Y1/fit_init.json"  data file="data_fit/Y1/fit.json" output file="output_fit/Y1/fit.csv" 
 
 data {
     int<lower=1> N; // number of data points
@@ -17,8 +17,8 @@ data {
     // Note that these are not the fit parameters in the training fit so they need to be transformed first
     // Alternatively this code could be modified to use the native training parameters
 
-    vector[7] pop_mn; // in order of theta_1 : tan(atanAR), theta_2, b : bR, sigR,  logL0 :xi_dist/cos(theta_1), sigma_logL0 (omega_dist)  
-    matrix[7,7] pop_cov_L; // Cholesky decomposition of covariance matrix
+    vector[6] pop_mn; // in order of theta_1 : tan(atanAR), theta_2, b : bR, sigR,  logL0 :xi_dist/cos(theta_1), sigma_logL0 (omega_dist)  
+    matrix[6,6] pop_cov_L; // Cholesky decomposition of covariance matrix
 }
 
 transformed data {
@@ -56,14 +56,14 @@ parameters {
     vector[N] theta_1;
     vector[N] theta_2;
     vector[N] b;
-    vector[N] sigR;
+    vector<lower=0>[N] sigR;
     vector[N] logL0;
     vector<lower=0>[N] sigma_logL0;
 }
 
 model {
 
-    vector[7] pars;
+    vector[6] pars;
     vector[N] delta_phi = angle_dispersion * tan(delta_phi_unif);
     real V_mod;
     real m_mod;    
