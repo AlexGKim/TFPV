@@ -17,7 +17,7 @@ data {
     // Note that these are not the fit parameters in the training fit so they need to be transformed first
     // Alternatively this code could be modified to use the native training parameters
 
-    vector[6] pop_mn; // in order of theta_1 : tan(atanAR), theta_2, b : bR, sigR,  logL0 :xi_dist/cos(theta_1), sigma_logL0 (omega_dist)  
+    vector[6] pop_mn; // in order of  atanAR; bR; sigR; xi_dist; omega_dist; theta_2;
     matrix[6,6] pop_cov_L; // Cholesky decomposition of covariance matrix
 }
 
@@ -39,7 +39,6 @@ transformed data {
 
   // shifted data to align to common magnitude cutoff.  Allows vectorization
   vector[N] R_ =R_MAG_SB26-Rcut;
-
   vector[N] V_0p4R26_0 = V_0p4R26 / V0;
   vector[N] V_0p4R26_ERR_0 = V_0p4R26_ERR / V0;
   real Vmin_0 = Vmin/V0;
@@ -48,46 +47,55 @@ transformed data {
 
 parameters {
     vector[N] mu;
-    vector[N] logL;
+    vector[N] logL_raw;
     vector<lower=-atan(pi()/2), upper=atan(pi()/2)>[N] delta_phi_unif;   
     vector[N] epsilon;
 
     // Latent variables that were fit parameters in the training
-    vector[N] theta_1;
-    vector[N] theta_2;
-    vector[N] b;
+    vector[N] atanAR;
+    vector[N] bR;
     vector<lower=0>[N] sigR;
-    vector[N] logL0;
-    vector<lower=0>[N] sigma_logL0;
+    vector[N] xi_dist;
+    vector<lower=0>[N] omega_dist;
+    vector[N] theta_2;
 }
 
-model {
 
+model {
+    vector[N] sinth = sin(atanAR);
+    vector[N] costh = cos(atanAR);
+    vector[N] sinth_2 = sin(theta_2);
+    vector[N] costh_2 = cos(theta_2);
+
+    vector[N] logL = omega_dist.*logL_raw + xi_dist./costh;
+    vector[N] cos_delta_phi = cos(angle_dispersion * tan(delta_phi_unif));
     vector[6] pars;
-    vector[N] delta_phi = angle_dispersion * tan(delta_phi_unif);
     real V_mod;
-    real m_mod;    
+    real m_mod;
 
     for (n in 1:N) {
         // Priors on latent variables
-        logL[n] ~ normal(logL0[n], sigma_logL0[n]);
         epsilon[n] ~ normal(0, sigR[n]);
 
         // Likelihoods
         // Compute the deterministic functions
-        V_mod = pow(10, cos(theta_1[n]) * logL[n] + cos(theta_2[n]) * epsilon[n]) * (1.0 / cos(delta_phi[n]));
-        m_mod = mu[n] + b[n] + sin(theta_1[n]) * logL[n] + sin(theta_2[n]) * epsilon[n];
+        V_mod = pow(10, costh[n] * logL[n] + costh_2[n] * epsilon[n]) * (1.0 / cos_delta_phi[n]);
+        m_mod = mu[n] + bR[n] + sinth[n] * logL[n] + sinth_2[n] * epsilon[n];
 
         // Truncated normal likelihoods
-        R_ ~ normal(m_mod - Rcut[n], R_MAG_SB26_ERR) T[,0];
-        V_0p4R26_0 ~ normal(V_mod, V_0p4R26_ERR_0) T[Vmin_0,Vmax_0];
+        R_[n] ~ normal(m_mod - Rcut[n], R_MAG_SB26_ERR[n]) T[,0];
+        V_0p4R26_0[n] ~ normal(V_mod, V_0p4R26_ERR_0[n]) T[Vmin_0,Vmax_0];
 
-        pars[1] = theta_1[n];
-        pars[2] = theta_2[n];
-        pars[3] = b[n];
-        pars[4] = sigR[n];
-        pars[5] = logL0[n];
-        pars[6] = sigma_logL0[n];
+        pars[1] = atanAR[n];
+        pars[2] = bR[n];
+        pars[3] = sigR[n];
+        pars[4] = xi_dist[n];
+        pars[5] = omega_dist[n];
+        pars[6] = theta_2[n];
         pars ~ multi_normal_cholesky(pop_mn, pop_cov_L);
+
+        // print(normal_lpdf(R_[n]| m_mod - Rcut[n], R_MAG_SB26_ERR[n]), " ", normal_lpdf(V_0p4R26_0[n] | V_mod, V_0p4R26_ERR_0[n])," ", multi_normal_cholesky_lpdf(pars | pop_mn, pop_cov_L));
     }
+    logL_raw ~ normal(0,1);
+    target+= -log(omega_dist);
 }

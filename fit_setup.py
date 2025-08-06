@@ -36,10 +36,7 @@ def main():
     df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
 
     cov_ab, tfr_samples, logV0  = pandas.read_pickle('/Users/akim/Projects/TFPV/data/cluster_result_all.pickle')
-    df_samples = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["atanAR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
-    df_samples['theta_1'] = numpy.atan(df_samples['atanAR'])
-    df_samples['logL0'] = df_samples['xi_dist']/numpy.cos(df_samples['theta_1'])
-    df_prune=df_samples[["theta_1", "theta_2", "bR", "sigR", "logL0", "omega_dist"]]
+    df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["atanAR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
     pop_mn = df_prune.mean()
     cov = df_prune.cov()
     pop_cov_L = numpy.linalg.cholesky(cov)
@@ -63,14 +60,13 @@ def main():
 
     init_dic=dict()
     init_dic["mu"] = df["MU_ZCMB"].tolist()
-    init_dic["logL"] = (numpy.log10(df["V_0p4R26"])-logV0).tolist()
 
-    init_dic["theta_1"] = (numpy.zeros(len(df)) + pop_mn["theta_1"]).tolist()
-    init_dic["theta_2"] = (numpy.zeros(len(df)) + pop_mn["theta_2"]).tolist()
-    init_dic["b"] = (numpy.zeros(len(df)) + pop_mn["bR"]).tolist()
-    init_dic["sigR"] = (numpy.zeros(len(df)) + pop_mn["sigR"]).tolist()
-    init_dic["logL0"] = (numpy.zeros(len(df)) + pop_mn["logL0"]).tolist()
-    init_dic["sigma_logL0"]= (numpy.zeros(len(df)) + pop_mn["omega_dist"]).tolist()
+    init_dic["atanAR"] = (numpy.random.normal(pop_mn["atanAR"], 0.1, len(df))).tolist()
+    init_dic["bR"] = (numpy.random.normal(pop_mn["bR"], 0.1, len(df))).tolist()
+    init_dic["sigR"] = (numpy.random.normal(pop_mn["sigR"], 0.001, len(df))).tolist()
+    init_dic["xi_dist"] = (numpy.random.normal(pop_mn["xi_dist"], 0.1, len(df))).tolist()
+    init_dic["omega_dist"]= (numpy.random.normal(pop_mn["omega_dist"], 0.001, len(df))).tolist()
+    init_dic["theta_2"]= (numpy.random.normal(pop_mn["theta_2"], 0.1, len(df))).tolist()
 
     outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_init.json")
     json_object = json.dumps(init_dic)
