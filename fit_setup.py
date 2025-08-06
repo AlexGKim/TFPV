@@ -29,15 +29,19 @@ def main():
     Mlim = -17.
     Vmin = 70
     Vmax = 350. # nothing this bright
-    Rcut = numpy.minimum(Rlim, df['MU_ZCMB']+Mlim)
-    w= (df['R_MAG_SB26'] < Rcut) & (df['V_0p4R26'] > Vmin) &  (df['V_0p4R26'] < Vmax)
+    Rlim_eff = numpy.minimum(Rlim, df['MU_ZCMB']+Mlim)
+    w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin) &  (df['V_0p4R26'] < Vmax)
     df = df[w]
-    Rcut = Rcut[w]
+    Rlim_eff = Rlim_eff[w]
     df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
 
     cov_ab, tfr_samples, logV0  = pandas.read_pickle('/Users/akim/Projects/TFPV/data/cluster_result_all.pickle')
     df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["atanAR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
+    bR0 = df_prune["bR"].mean()
+
+    df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
     pop_mn = df_prune.mean()
+
     cov = df_prune.cov()
     pop_cov_L = numpy.linalg.cholesky(cov)
 
@@ -45,12 +49,13 @@ def main():
     for series_name, series in df.items():
         data_dic[series_name]=series.tolist()
     data_dic['N'] = len(df)
-    data_dic['Rcut'] = Rcut.tolist()
+    data_dic['Rlim_eff'] = Rlim_eff.tolist()
     data_dic['Vmin'] = Vmin
     data_dic['Vmax'] = Vmax       
     data_dic['pop_mn'] = pop_mn.tolist()
     data_dic['pop_cov_L'] = pop_cov_L.tolist()
     data_dic['V0'] = 10**logV0 
+    data_dic['bR0'] = bR0
 
     outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit.json")
 
@@ -62,7 +67,7 @@ def main():
     init_dic["mu"] = df["MU_ZCMB"].tolist()
 
     init_dic["atanAR"] = (numpy.random.normal(pop_mn["atanAR"], 0.1, len(df))).tolist()
-    init_dic["bR"] = (numpy.random.normal(pop_mn["bR"], 0.1, len(df))).tolist()
+    # init_dic["bR"] = (numpy.random.normal(pop_mn["bR"], 0.1, len(df))).tolist()
     init_dic["sigR"] = (numpy.random.normal(pop_mn["sigR"], 0.001, len(df))).tolist()
     init_dic["xi_dist"] = (numpy.random.normal(pop_mn["xi_dist"], 0.1, len(df))).tolist()
     init_dic["omega_dist"]= (numpy.random.normal(pop_mn["omega_dist"], 0.001, len(df))).tolist()
