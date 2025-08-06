@@ -65,6 +65,7 @@ parameters {
 
 model {
     vector[N] epsilon = angle_dispersion * tan(epsilon_unif);
+    vector[N] random_realization=random_realization_raw .* sigR;
 
     vector[N] sinth = sin(atanAR);
     vector[N] costh = cos(atanAR);
@@ -72,7 +73,6 @@ model {
     vector[N] costh_r = cos(theta_2);
 
     vector[N] logL = omega_dist.*logL_raw + xi_dist./costh;
-    vector[N] random_realization=random_realization_raw .* sigR;
 
     vector[N] VtoUse = pow(10, costh .* logL  + random_realization .* costh_r ) ./ cos(epsilon) ;
     vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r - xi_dist .* tan(atanAR);
@@ -82,10 +82,9 @@ model {
     R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
     V_0p4R26_0 ~ normal(VtoUse, V_0p4R26_ERR_0) T[Vmin_0,Vmax_0];
 
-    // CONTAINERS
     vector[5] pars;
+    // Priors on latent variables
     for (n in 1:N) {
-        // Priors on latent variables
         pars[1] = atanAR[n];
         // pars[2] = bR[n];
         pars[2] = sigR[n];
