@@ -32,11 +32,13 @@ def main():
     Rlim_eff = numpy.minimum(Rlim, df['MU_ZCMB']+Mlim)
     w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin) &  (df['V_0p4R26'] < Vmax)
     df = df[w]
+    df.to_csv('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.csv') 
     Rlim_eff = Rlim_eff[w]
     df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
 
     cov_ab, tfr_samples, logV0  = pandas.read_pickle('/Users/akim/Projects/TFPV/data/cluster_result_all.pickle')
-    df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["atanAR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
+    df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["aR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
+    df_prune["atanAR"] = numpy.atan(df_prune["aR"])
     bR0 = df_prune["bR"].mean()
 
     df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
