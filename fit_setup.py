@@ -38,7 +38,7 @@ def main():
 
     cov_ab, tfr_samples, logV0  = pandas.read_pickle('/Users/akim/Projects/TFPV/data/cluster_result_all.pickle')
     df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["aR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
-    df_prune["atanAR"] = numpy.atan(df_prune["aR"])
+    df_prune["atanAR"] = numpy.arctan(df_prune["aR"])
     bR0 = df_prune["bR"].mean()
 
     df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
