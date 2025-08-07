@@ -33,9 +33,9 @@ def main():
     w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin) &  (df['V_0p4R26'] < Vmax)
     df = df[w]
     Rlim_eff = Rlim_eff[w]
-    df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
     df.to_csv('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.csv') 
-
+    df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
+    
     for i in range(len(df)):
         # df = df.iloc[[0]]
         # Rlim_eff = Rlim_eff[[0]]
