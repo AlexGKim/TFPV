@@ -64,7 +64,11 @@ parameters {
 
 
 model {
-    
+
+    // training parameters
+    for (n in 1:N) {
+        alpha[n] ~ std_normal();  
+    }
     vector[3] pars;
     vector[N] atanAR;
     // vector[N] bR;
@@ -88,8 +92,6 @@ model {
     vector[N] sinth_r = sin(theta_2);
     vector[N] costh_r = cos(theta_2);
 
-
-
     // vector[N] logL = omega_dist.*logL_raw + xi_dist./costh;
 
     vector[N] VtoUse = pow(10, costh .* logL  + random_realization .* costh_r ) ./ cos(epsilon) ;
@@ -106,9 +108,5 @@ model {
     // logL_raw ~ normal(0,1);
     // target+= -log(omega_dist);
     target += - log(sigR);
-
-    for (n in 1:N) {
-        alpha[n] ~ std_normal();  
-    }
 
 }
