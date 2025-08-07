@@ -1,5 +1,7 @@
 // make ~/Projects/TFPV/fit
 // ./fit sample algorithm=hmc engine=nuts num_warmup=500 num_samples=500 num_chains=4 init="data_fit/Y1/fit_init.json"  data file="data_fit/Y1/fit.json" output file="output_fit/Y1/fit.csv"
+// $CONDA_PREFIX/bin/cmdstan/bin/stansummary output_fit/Y1/fit_?.csv
+
 data {
     int<lower=1> N; // number of data points
     vector[N] V_0p4R26;
@@ -19,8 +21,8 @@ data {
 
     // vector[6] pop_mn; // in order of  atanAR; bR; sigR; xi_dist; omega_dist; theta_2;
     // matrix[6,6] pop_cov_L; // Cholesky decomposition of covariance matrix
-    vector[5] pop_mn; // in order of  atanAR; bR; sigR; xi_dist; omega_dist; theta_2;
-    matrix[5,5] pop_cov_L; // Cholesky decomposition of covariance matrix    
+    vector[3] pop_mn; // in order of  atanAR; bR; sigR; xi_dist; omega_dist; theta_2;
+    matrix[3,3] pop_cov_L; // Cholesky decomposition of covariance matrix    
 }
 
 transformed data {
@@ -45,58 +47,69 @@ transformed data {
   vector[N] V_0p4R26_ERR_0 = V_0p4R26_ERR / V0;
   real Vmin_0 = Vmin/V0;
   real Vmax_0 = Vmax/V0;
+
+
 }
 
 parameters {
     vector[N] mu;
-    vector[N] logL_raw;
+    // vector[N] logL_raw;
+    vector[N] logL;
     vector<lower=-atan(pi()/2), upper=atan(pi()/2)>[N] epsilon_unif;   
     vector[N] random_realization_raw;
 
     // Latent variables that were fit parameters in the training
-    vector[N] atanAR;
-    // vector[N] bR;
-    vector<lower=0>[N] sigR;
-    vector[N] xi_dist;
-    vector<lower=0>[N] omega_dist;
-    vector[N] theta_2;
+    // vector[N] atanAR;
+    // // vector[N] bR;
+    // vector<lower=0>[N] sigR;
+    // // vector[N] xi_dist;
+    // // vector<lower=0>[N] omega_dist;
+    // vector[N] theta_2;
 }
 
 
 model {
+
+    real atanAR = pop_mn[1];
+    real sigR = pop_mn[2];
+    real theta_2 = pop_mn[3];
+    real sinth = sin(atanAR);
+    real costh = cos(atanAR);
+    real sinth_r = sin(theta_2);
+    real costh_r = cos(theta_2);
+
     vector[N] epsilon = angle_dispersion * tan(epsilon_unif);
     vector[N] random_realization=random_realization_raw .* sigR;
 
-    vector[N] sinth = sin(atanAR);
-    vector[N] costh = cos(atanAR);
-    vector[N] sinth_r = sin(theta_2);
-    vector[N] costh_r = cos(theta_2);
+    // vector[N] sinth = sin(atanAR);
+    // vector[N] costh = cos(atanAR);
+    // vector[N] sinth_r = sin(theta_2);
+    // vector[N] costh_r = cos(theta_2);
 
-    vector[N] logL = omega_dist.*logL_raw + xi_dist./costh;
+    // vector[N] logL = omega_dist.*logL_raw + xi_dist./costh;
 
     vector[N] VtoUse = pow(10, costh .* logL  + random_realization .* costh_r ) ./ cos(epsilon) ;
-    vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r - xi_dist .* tan(atanAR);
-
+    // vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r - xi_dist .* tan(atanAR);
+    vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r;
+    // print(logL," ", m_realize , " ", R_," ", R_MAG_SB26_ERR," ", VtoUse," ",V_0p4R26_0," ",V_0p4R26_ERR_0);
 
     // Truncated normal likelihoods
     R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
     V_0p4R26_0 ~ normal(VtoUse, V_0p4R26_ERR_0) T[Vmin_0,Vmax_0];
 
-    vector[5] pars;
-    // Priors on latent variables
-    for (n in 1:N) {
-        pars[1] = atanAR[n];
-        // pars[2] = bR[n];
-        pars[2] = sigR[n];
-        pars[3] = xi_dist[n];
-        pars[4] = omega_dist[n];
-        pars[5] = theta_2[n];
-        pars ~ multi_normal_cholesky(pop_mn, pop_cov_L);
-
-        // print(normal_lpdf(R_[n]| m_mod - Rlim_eff[n], R_MAG_SB26_ERR[n]), " ", normal_lpdf(V_0p4R26_0[n] | V_mod, V_0p4R26_ERR_0[n])," ", multi_normal_cholesky_lpdf(pars | pop_mn, pop_cov_L));
-    }
+    // vector[3] pars;
+    // // Priors on latent variables
+    // for (n in 1:N) {
+    //     pars[1] = atanAR[n];
+    //     // pars[2] = bR[n];
+    //     pars[2] = sigR[n];
+    //     // pars[3] = xi_dist[n];
+    //     // pars[4] = omega_dist[n];
+    //     pars[3] = theta_2[n];
+    //     pars ~ multi_normal_cholesky(pop_mn, pop_cov_L);
+    // }
     random_realization_raw ~ normal(0,1);
-    logL_raw ~ normal(0,1);
-    target+= -log(omega_dist);
-    target += - log(sigR);    
+    // logL_raw ~ normal(0,1);
+    // target+= -log(omega_dist);
+    // target += - log(sigR);
 }

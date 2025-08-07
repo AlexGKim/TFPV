@@ -32,21 +32,25 @@ def main():
     Rlim_eff = numpy.minimum(Rlim, df['MU_ZCMB']+Mlim)
     w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin) &  (df['V_0p4R26'] < Vmax)
     df = df[w]
-    df.to_csv('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.csv') 
     Rlim_eff = Rlim_eff[w]
     df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
+    df = df.iloc[[0]]
+    Rlim_eff = Rlim_eff[[0]]
+    df.to_csv('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.csv') 
 
     cov_ab, tfr_samples, logV0  = pandas.read_pickle('/Users/akim/Projects/TFPV/data/cluster_result_all.pickle')
     df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["aR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
     df_prune["atanAR"] = numpy.arctan(df_prune["aR"])
     bR0 = df_prune["bR"].mean()
 
-    df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
+    # df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
+    df_prune = df_prune[["atanAR","sigR", "theta_2"]]
+
     pop_mn = df_prune.mean()
+
 
     cov = df_prune.cov()
     pop_cov_L = numpy.linalg.cholesky(cov)
-
     data_dic=dict()
     for series_name, series in df.items():
         data_dic[series_name]=series.tolist()
@@ -68,12 +72,12 @@ def main():
     init_dic=dict()
     init_dic["mu"] = df["MU_ZCMB"].tolist()
 
-    init_dic["atanAR"] = (numpy.random.normal(pop_mn["atanAR"], 0.1, len(df))).tolist()
+    init_dic["atanAR"] = (numpy.random.normal(pop_mn["atanAR"], 0.001, len(df))).tolist()
     # init_dic["bR"] = (numpy.random.normal(pop_mn["bR"], 0.1, len(df))).tolist()
     init_dic["sigR"] = (numpy.random.normal(pop_mn["sigR"], 0.001, len(df))).tolist()
-    init_dic["xi_dist"] = (numpy.random.normal(pop_mn["xi_dist"], 0.1, len(df))).tolist()
-    init_dic["omega_dist"]= (numpy.random.normal(pop_mn["omega_dist"], 0.001, len(df))).tolist()
-    init_dic["theta_2"]= (numpy.random.normal(pop_mn["theta_2"], 0.1, len(df))).tolist()
+    # init_dic["xi_dist"] = (numpy.random.normal(pop_mn["xi_dist"], 0.001, len(df))).tolist()
+    # init_dic["omega_dist"]= (numpy.random.normal(pop_mn["omega_dist"], 0.001, len(df))).tolist()
+    init_dic["theta_2"]= (numpy.random.normal(pop_mn["theta_2"], 0.001, len(df))).tolist()
 
     outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_init.json")
     json_object = json.dumps(init_dic)
