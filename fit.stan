@@ -59,57 +59,56 @@ parameters {
     vector[N] random_realization_raw;
 
     // Latent variables that were fit parameters in the training
-    // vector[N] atanAR;
-    // // vector[N] bR;
-    // vector<lower=0>[N] sigR;
-    // // vector[N] xi_dist;
-    // // vector<lower=0>[N] omega_dist;
-    // vector[N] theta_2;
+    array[N] vector[3] alpha;
 }
 
 
 model {
-
-    real atanAR = pop_mn[1];
-    real sigR = pop_mn[2];
-    real theta_2 = pop_mn[3];
-    real sinth = sin(atanAR);
-    real costh = cos(atanAR);
-    real sinth_r = sin(theta_2);
-    real costh_r = cos(theta_2);
+    
+    vector[3] pars;
+    vector[N] atanAR;
+    // vector[N] bR;
+    vector[N] sigR;
+    // vector[N] xi_dist;
+    // vector<lower=0>[N] omega_dist;
+    vector[N] theta_2;
+    // Priors on latent variables
+    for (n in 1:N) {
+        pars = pop_mn + pop_cov_L * alpha[n];
+        atanAR[n] = pars[1];
+        sigR[n] = pars[2];
+        theta_2[n] = pars[3];
+    }
 
     vector[N] epsilon = angle_dispersion * tan(epsilon_unif);
     vector[N] random_realization=random_realization_raw .* sigR;
 
-    // vector[N] sinth = sin(atanAR);
-    // vector[N] costh = cos(atanAR);
-    // vector[N] sinth_r = sin(theta_2);
-    // vector[N] costh_r = cos(theta_2);
+    vector[N] sinth = sin(atanAR);
+    vector[N] costh = cos(atanAR);
+    vector[N] sinth_r = sin(theta_2);
+    vector[N] costh_r = cos(theta_2);
+
+
 
     // vector[N] logL = omega_dist.*logL_raw + xi_dist./costh;
 
     vector[N] VtoUse = pow(10, costh .* logL  + random_realization .* costh_r ) ./ cos(epsilon) ;
     // vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r - xi_dist .* tan(atanAR);
     vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r;
-    // print(logL," ", m_realize , " ", R_," ", R_MAG_SB26_ERR," ", VtoUse," ",V_0p4R26_0," ",V_0p4R26_ERR_0);
+    // print(mu," ", m_realize - R_," ", R_MAG_SB26_ERR," ", VtoUse - V_0p4R26_0," ",V_0p4R26_ERR_0);
 
     // Truncated normal likelihoods
     R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
     V_0p4R26_0 ~ normal(VtoUse, V_0p4R26_ERR_0) T[Vmin_0,Vmax_0];
 
-    // vector[3] pars;
-    // // Priors on latent variables
-    // for (n in 1:N) {
-    //     pars[1] = atanAR[n];
-    //     // pars[2] = bR[n];
-    //     pars[2] = sigR[n];
-    //     // pars[3] = xi_dist[n];
-    //     // pars[4] = omega_dist[n];
-    //     pars[3] = theta_2[n];
-    //     pars ~ multi_normal_cholesky(pop_mn, pop_cov_L);
-    // }
+
     random_realization_raw ~ normal(0,1);
     // logL_raw ~ normal(0,1);
     // target+= -log(omega_dist);
-    // target += - log(sigR);
+    target += - log(sigR);
+
+    for (n in 1:N) {
+        alpha[n] ~ std_normal();  
+    }
+
 }

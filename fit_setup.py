@@ -72,6 +72,8 @@ def main():
     init_dic=dict()
     init_dic["mu"] = df["MU_ZCMB"].tolist()
 
+    init_dic["logL"] = (numpy.log10(df["V_0p4R26"]/data_dic['V0'] )/numpy.cos(pop_mn["atanAR"])).tolist();
+
     init_dic["atanAR"] = (numpy.random.normal(pop_mn["atanAR"], 0.001, len(df))).tolist()
     # init_dic["bR"] = (numpy.random.normal(pop_mn["bR"], 0.1, len(df))).tolist()
     init_dic["sigR"] = (numpy.random.normal(pop_mn["sigR"], 0.001, len(df))).tolist()
