@@ -33,6 +33,9 @@ data {
 
   real omega_dist_init;
   real xi_dist_init;
+
+  real logVM_slope;
+  real logVM_zero;
 }
 
 transformed data {
@@ -65,6 +68,14 @@ transformed data {
       R_[index_]=R_MAG_SB26[index_]-Rlim_eff[i];
       index_=index_+1;
     }
+  }
+
+  vector[N] Vmax_eff;
+  vector[2] dum;
+  dum[1]=Vmax;
+  for (n in 1:N){
+    dum[2]=pow(10,(logVM_slope * mu[n] + logVM_zero));
+    Vmax_eff[n] = min(dum);
   }
 }
 
@@ -152,7 +163,9 @@ model {
   // m_realize = bR + m_realize;
 
   R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
-  V_0p4R26 ~ normal(VtoUse, V_0p4R26_err) T[Vmin,];
+  for (n in 1:N) {
+    V_0p4R26[n] ~ normal(VtoUse[n], V_0p4R26_err[n]) T[Vmin,Vmax_eff[n]];
+  }
 
   if (flatDistribution==0)
   {
