@@ -25,12 +25,19 @@ def main():
     pvcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v10.fits')
     dat = Table.read(pvcat, format='fits')
     df = dat.to_pandas()
-    Rlim = 17.75
-    Mlim = -17.
-    Vmin = 70
-    Vmax = 300. # nothing this bright
+
+    Rlim = 17.75           # close to real magnitude limit
+    Mlim = -17. + 5*numpy.log10(cosmo.h)           # absolute magnitude limit
+    Vmin = 70.            # galaxies with lower velocities have different TF relation
+    Vmax = 300.            # nothing faster in training set
+        
+    logVM_slope = .3      # there are missing high-velocity galaxies at low redshift
+    logVM_zero =  -7.9 + numpy.log10(cosmo.h)
+    logVM_zero =  34 + 5*numpy.log10(cosmo.h)
+
+    Vlim_eff = numpy.minimum(Vmax, 10**(logVM_slope*numpy.array(df["MU_ZCMB"]-logVM_zero) + 2))
     Rlim_eff = numpy.minimum(Rlim, df['MU_ZCMB']+Mlim)
-    w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin) &  (df['V_0p4R26'] < Vmax)
+    w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin)  &  (df['V_0p4R26'] < Vmax) & ( df["V_0p4R26"] < Vlim_eff)
     df = df[w]
     Rlim_eff = Rlim_eff[w]
     outcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v10_cut.csv')
@@ -64,6 +71,7 @@ def main():
             data_dic[series_name]=series.tolist()
         data_dic['N'] = 1
         data_dic['Rlim_eff'] = Rlim_eff.iloc[[i]].tolist()
+        data_dic['Vlim_eff'] = Vlim_eff[[i]].tolist()
         data_dic['Vmin'] = Vmin
         data_dic['Vmax'] = Vmax       
         data_dic['pop_mn'] = pop_mn.tolist()

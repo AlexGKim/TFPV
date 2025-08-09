@@ -10,6 +10,8 @@ data {
     vector[N] R_MAG_SB26_ERR;
 
     vector[N] Rlim_eff;
+    vector[N] Vlim_eff;
+
     real Vmin;
     real Vmax;
 
@@ -45,6 +47,7 @@ transformed data {
   vector[N] R_ =R_MAG_SB26-Rlim_eff;
   vector[N] V_0p4R26_0 = V_0p4R26 / V0;
   vector[N] V_0p4R26_ERR_0 = V_0p4R26_ERR / V0;
+  vector[N] Vlim_eff_0 = Vlim_eff / V0;
   real Vmin_0 = Vmin/V0;
   real Vmax_0 = Vmax/V0;
 
@@ -101,8 +104,10 @@ model {
 
     // Truncated normal likelihoods
     R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
-    V_0p4R26_0 ~ normal(VtoUse, V_0p4R26_ERR_0) T[Vmin_0,Vmax_0];
 
+    for (n in 1:N) {
+        V_0p4R26_0[n] ~ normal(VtoUse[n], V_0p4R26_ERR_0[n]) T[Vmin_0,Vlim_eff_0[n]];
+    }
 
     random_realization_raw ~ normal(0,1);
     // logL_raw ~ normal(0,1);
