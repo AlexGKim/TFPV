@@ -16,7 +16,7 @@ from astropy.io import fits
 # def look():
 
 def main():
-    nrows=4
+    nrows=50
 
     mu=[]
     mu_std=[]
@@ -36,7 +36,7 @@ def main():
         mu_32.append(_[0])
         mu_50.append(_[1])
         mu_68.append(_[2])
-        print(mu_32[-1],mu_50[-1], mu_68[-1])
+        print(i, mu_32[-1],mu_50[-1], mu_68[-1])
 
     df_master = pandas.read_csv('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.csv')
     df_master = df_master.head(nrows)

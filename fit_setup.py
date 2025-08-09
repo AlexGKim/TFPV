@@ -32,14 +32,14 @@ def main():
     Vmax = 300.            # nothing faster in training set
         
     logVM_slope = .3      # there are missing high-velocity galaxies at low redshift
-    logVM_zero =  -7.9 + numpy.log10(cosmo.h)
     logVM_zero =  34 + 5*numpy.log10(cosmo.h)
 
     Vlim_eff = numpy.minimum(Vmax, 10**(logVM_slope*numpy.array(df["MU_ZCMB"]-logVM_zero) + 2))
     Rlim_eff = numpy.minimum(Rlim, df['MU_ZCMB']+Mlim)
-    w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin)  &  (df['V_0p4R26'] < Vmax) & ( df["V_0p4R26"] < Vlim_eff)
+    w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin)  & (df["V_0p4R26"] <  Vlim_eff)
     df = df[w]
     Rlim_eff = Rlim_eff[w]
+    Vlim_eff = Vlim_eff[w]
     outcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v10_cut.csv')
     df.to_csv(outcat) 
     df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
@@ -89,7 +89,9 @@ def main():
 
     init_dic["atanAR"] = (numpy.random.normal(pop_mn["atanAR"], 0.001, 1)).tolist()
     # init_dic["bR"] = (numpy.random.normal(pop_mn["bR"], 0.1, 1)).tolist()
-    init_dic["sigR"] = (numpy.random.normal(pop_mn["sigR"], 0.001, 1)).tolist()
+    init_dic["sigR"] = pop_mn["sigR"].tolist()
+    # init_dic["sigR"] = (numpy.random.normal(pop_mn["sigR"], 0.001, 1)).tolist()
+
     # init_dic["xi_dist"] = (numpy.random.normal(pop_mn["xi_dist"], 0.001, 1)).tolist()
     # init_dic["omega_dist"]= (numpy.random.normal(pop_mn["omega_dist"], 0.001, 1)).tolist()
     init_dic["theta_2"]= (numpy.random.normal(pop_mn["theta_2"], 0.001, 1)).tolist()
