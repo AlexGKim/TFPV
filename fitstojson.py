@@ -94,12 +94,13 @@ def iron_cluster_json():
     if not os.path.exists(os.path.join(OUTPUT_DIR, RELEASE_DIR)):
         os.makedirs(os.path.join(OUTPUT_DIR, RELEASE_DIR))
 
-    Rlim = 17.75
-    Vmin = 70
-    # Vmax = 300. # nothing this bright
-
-    Mlim = -18
-    Vmax = 1e4
+    Rlim = 17.75           # close to real magnitude limit
+    Mlim = -18           # absolute magnitude limit
+    Vmin = 100.            # galaxies with lower velocities have different TF relation
+    Vmax = 300.            # nothing faster in training set
+        
+    logVM_slope = 0.3      # there are missing high-velocity galaxies at low redshift
+    logVM_zero =  -9.9 + numpy.log10(70)   
 
     cosi = 1/numpy.sqrt(2)
     q0=0.2
@@ -124,6 +125,7 @@ def iron_cluster_json():
     mu = []
     R2t = []
     Rlim_eff = []
+    Vlim_eff = []
 
     alldf=[]
     file = open(os.path.join(OUTPUT_DIR, RELEASE_DIR, "cluster_tex.txt"), "w+")
@@ -456,11 +458,10 @@ def iron_mag_plot():
 
 
     Rlim = 17.75
-    Mlim = -17.
     Vmin = 70
     Vmax = 300. # nothing this bright
 
-    Mlim = -18
+    Mlim = -17
     Vmax = 1e4
 
     cosi = 1/numpy.sqrt(2)

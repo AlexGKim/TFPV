@@ -22,8 +22,8 @@ rng = numpy.random.default_rng(seed=42)
 
 def main():
 
-
-    dat = Table.read('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10.fits', format='fits')
+    pvcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v10.fits')
+    dat = Table.read(pvcat, format='fits')
     df = dat.to_pandas()
     Rlim = 17.75
     Mlim = -17.
@@ -33,27 +33,32 @@ def main():
     w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin) &  (df['V_0p4R26'] < Vmax)
     df = df[w]
     Rlim_eff = Rlim_eff[w]
-    df.to_csv('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.csv') 
+    outcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v10_cut.csv')
+    df.to_csv(outcat) 
     df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
-    
+
+
+    fitres = os.path.join(DATA_DIR, RELEASE_DIR, 'cluster_result_all.pickle')
+    cov_ab, tfr_samples, logV0  = pandas.read_pickle(fitres)
+    df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["aR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
+    df_prune["atanAR"] = numpy.arctan(df_prune["aR"])
+    bR0 = df_prune["bR"].mean()
+
+    # df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
+    df_prune = df_prune[["atanAR","sigR", "theta_2"]]
+
+    pop_mn = df_prune.mean()
+
+
+    cov = df_prune.cov()
+    pop_cov_L = numpy.linalg.cholesky(cov)
+
     for i in range(len(df)):
         # df = df.iloc[[0]]
         # Rlim_eff = Rlim_eff[[0]]
 
 
-        cov_ab, tfr_samples, logV0  = pandas.read_pickle('/Users/akim/Projects/TFPV/data/cluster_result_all.pickle')
-        df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["aR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
-        df_prune["atanAR"] = numpy.arctan(df_prune["aR"])
-        bR0 = df_prune["bR"].mean()
 
-        # df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
-        df_prune = df_prune[["atanAR","sigR", "theta_2"]]
-
-        pop_mn = df_prune.mean()
-
-
-        cov = df_prune.cov()
-        pop_cov_L = numpy.linalg.cholesky(cov)
         data_dic=dict()
         for series_name, series in df.iloc[[i]].items():
             data_dic[series_name]=series.tolist()
