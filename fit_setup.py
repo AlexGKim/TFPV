@@ -1,3 +1,10 @@
+# Code that takes output from training and runs on a new set
+# This code creates input files for stan fit.stan
+# Though stan is written to take all files at once for debugging and existence
+# catastrophic failures we do one at a time.
+# the script fit_all.sh runs stan for all galaxies
+
+
 import fitsio
 import numpy
 import json
