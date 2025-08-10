@@ -18,6 +18,9 @@ data {
     real V0;
     real bR0;
 
+    // Don't think this is necessary
+    // real xiprodb;
+
     // Note that these are not the fit parameters in the training fit so they need to be transformed first
     // Alternatively this code could be modified to use the native training parameters
 
@@ -44,7 +47,7 @@ transformed data {
   real angle_dispersion = angle_dispersion_deg/180*pi();
 
   // shifted data to align to common magnitude cutoff.  Allows vectorization
-  vector[N] R_ =R_MAG_SB26-Rlim_eff;
+  vector[N] R_ = R_MAG_SB26 - Rlim_eff;
   vector[N] V_0p4R26_0 = V_0p4R26 / V0;
   vector[N] V_0p4R26_ERR_0 = V_0p4R26_ERR / V0;
   vector[N] Vlim_eff_0 = Vlim_eff / V0;
@@ -99,9 +102,9 @@ model {
 
     vector[N] VtoUse = pow(10, costh .* logL  + random_realization .* costh_r ) ./ cos(epsilon) ;
     // vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r - xi_dist .* tan(atanAR);
-    vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r;
-    // print(mu," ", m_realize - R_," ", R_MAG_SB26_ERR," ", VtoUse - V_0p4R26_0," ",V_0p4R26_ERR_0);
+    vector[N] m_realize = mu + bR0  + sinth .* logL  + random_realization .* sinth_r  - Rlim_eff;
 
+    // print(mu," ", R_, " ", m_realize, " ", R_-m_realize, " ", V_0p4R26_0," ",VtoUse);
     // Truncated normal likelihoods
     R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
 
