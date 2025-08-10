@@ -50,6 +50,7 @@ def main():
     df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["aR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
     df_prune["atanAR"] = numpy.arctan(df_prune["aR"])
     bR0 = df_prune["bR"].mean()
+    xiprodb = numpy.mean(df_prune["xi_dist"] * numpy.tan(df_prune["atanAR"]))
 
     # df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
     df_prune = df_prune[["atanAR","sigR", "theta_2"]]
@@ -59,6 +60,8 @@ def main():
 
     cov = df_prune.cov()
     pop_cov_L = numpy.linalg.cholesky(cov)
+
+
 
     for i in range(len(df)):
         # df = df.iloc[[0]]
@@ -78,6 +81,7 @@ def main():
         data_dic['pop_cov_L'] = pop_cov_L.tolist()
         data_dic['V0'] = 10**logV0 
         data_dic['bR0'] = bR0
+        data_dic["xiprodb"] = xiprodb
 
         outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_{}.json".format(i))
 
@@ -86,15 +90,8 @@ def main():
             f.write(json_object)
 
     init_dic=dict()
-
-    init_dic["atanAR"] = (numpy.random.normal(pop_mn["atanAR"], 0.001, 1)).tolist()
-    # init_dic["bR"] = (numpy.random.normal(pop_mn["bR"], 0.1, 1)).tolist()
-    init_dic["sigR"] = pop_mn["sigR"].tolist()
-    # init_dic["sigR"] = (numpy.random.normal(pop_mn["sigR"], 0.001, 1)).tolist()
-
-    # init_dic["xi_dist"] = (numpy.random.normal(pop_mn["xi_dist"], 0.001, 1)).tolist()
-    # init_dic["omega_dist"]= (numpy.random.normal(pop_mn["omega_dist"], 0.001, 1)).tolist()
-    init_dic["theta_2"]= (numpy.random.normal(pop_mn["theta_2"], 0.001, 1)).tolist()
+    init_dic["mu"] = numpy.array([37.]).tolist()
+    init_dic["alpha"] = numpy.array([[pop_mn["atanAR"], pop_mn["sigR"],pop_mn["theta_2"]]]).tolist()
 
     outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_init.json")
     json_object = json.dumps(init_dic)
