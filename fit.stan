@@ -54,11 +54,12 @@ transformed data {
   real Vmin_0 = Vmin/V0;
   real Vmax_0 = Vmax/V0;
 
-
+  V_0p4R26_0 = V_0p4R26_0 - Vmin_0;
+  Vmax_0 = Vmax_0 - Vmin_0;
 }
 
 parameters {
-    vector[N] mu;
+    vector<lower=29, upper=45> [N] mu;
     // vector[N] logL_raw;
     vector[N] logL;
     vector<lower=-atan(pi()/2), upper=atan(pi()/2)>[N] epsilon_unif;   
@@ -68,6 +69,12 @@ parameters {
     array[N] vector[3] alpha;
 }
 
+// transformed parameters {
+//     vector[3] pars;
+//     for (n in 1:N) {
+//         pars = pop_mn + pop_cov_L * alpha[n];
+//     }
+// }
 
 model {
 
@@ -75,14 +82,17 @@ model {
     for (n in 1:N) {
         alpha[n] ~ std_normal();  
     }
-    vector[3] pars;
+
     vector[N] atanAR;
     // vector[N] bR;
     vector[N] sigR;
     // vector[N] xi_dist;
     // vector<lower=0>[N] omega_dist;
     vector[N] theta_2;
+
+
     // Priors on latent variables
+    vector[3] pars;
     for (n in 1:N) {
         pars = pop_mn + pop_cov_L * alpha[n];
         atanAR[n] = pars[1];
@@ -109,7 +119,8 @@ model {
     R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
 
     for (n in 1:N) {
-        V_0p4R26_0[n] ~ normal(VtoUse[n], V_0p4R26_ERR_0[n]) T[Vmin_0,Vlim_eff_0[n]];
+        // V_0p4R26_0[n] ~ normal(VtoUse[n], V_0p4R26_ERR_0[n]) T[Vmin_0,Vlim_eff_0[n]];
+        V_0p4R26_0[n] ~ normal(VtoUse[n] - Vmin_0, V_0p4R26_ERR_0[n]) T[0,Vlim_eff_0[n]];
     }
 
     random_realization_raw ~ normal(0,1);
