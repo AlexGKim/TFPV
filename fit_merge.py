@@ -12,11 +12,14 @@ import re
 import os
 from astropy.io import fits
 
+DATA_DIR = os.environ.get('DATA_DIR', '/Users/akim/Projects/TFPV/data_fit')
+OUTPUT_DIR = os.environ.get('OUTPUT_DIR', '/Users/akim/Projects/TFPV/output_fit')
+RELEASE_DIR = os.environ.get('RELEASE_DIR', 'Y1')
 
 # def look():
 
 def main():
-    nrows=50
+    nrows=3842
 
     mu=[]
     mu_std=[]
@@ -27,7 +30,8 @@ def main():
     for i in range(nrows):
         dfs = []
         for j in range(4):
-            df = pandas.read_csv('/Users/akim/Projects/TFPV/output_fit/Y1/fit_{}_{}.csv'.format(i,j+1), comment='#')
+            infile = os.path.join(OUTPUT_DIR, RELEASE_DIR, 'fit_{}_{}.csv'.format(i,j+1))
+            df = pandas.read_csv(infile, comment='#')
             dfs.append(df)
         combined_df = pandas.concat(dfs, ignore_index=True)
         mu.append(combined_df['mu.1'].mean())
@@ -38,14 +42,17 @@ def main():
         mu_68.append(_[2])
         print(i, mu_32[-1],mu_50[-1], mu_68[-1])
 
-    df_master = pandas.read_csv('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.csv')
+
+    master_file = os.path.join(DATA_DIR, RELEASE_DIR, "DESI-DR1_TF_pv_cat_v13_cut.csv")
+    df_master = pandas.read_csv(master_file)
     df_master = df_master.head(nrows)
     df_master['MU_ALEX'] = mu
     df_master['MU_ALEX_ERR'] = mu_std
     df_master['MU_ALEX_32'] = mu_32
     df_master['MU_ALEX_50'] = mu_50
     df_master['MU_ALEX_68'] = mu_68
-    df_master.to_pickle("/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.pkl")
+    out_file = os.path.join(DATA_DIR, RELEASE_DIR, "DESI-DR1_TF_pv_cat_v13_cut.pkl")
+    df_master.to_pickle(out_file)
     # dat = QTable.from_pandas(df_master)
     # dat.write('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.fits', format='fits', overwrite=True)
 
