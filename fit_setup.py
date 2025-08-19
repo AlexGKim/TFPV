@@ -22,7 +22,7 @@ from astropy.io import fits
 
 DATA_DIR = os.environ.get('DATA_DIR', '/Users/akim/Projects/TFPV/data_fit')
 OUTPUT_DIR = os.environ.get('OUTPUT_DIR', '/Users/akim/Projects/TFPV/output_fit')
-RELEASE_DIR = os.environ.get('RELEASE_DIR', 'Y1')
+RELEASE_DIR = os.environ.get('RELEASE_DIR', 'unclustered')
 
 rng = numpy.random.default_rng(seed=42)
 
