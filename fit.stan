@@ -69,12 +69,12 @@ parameters {
     array[N] vector[3] alpha;
 }
 
-// transformed parameters {
-//     vector[3] pars;
-//     for (n in 1:N) {
-//         pars = pop_mn + pop_cov_L * alpha[n];
-//     }
-// }
+transformed parameters {
+    vector[3] pars;
+    for (n in 1:N) {
+        pars = pop_mn + pop_cov_L * alpha[n];
+    }
+}
 
 model {
 
@@ -92,9 +92,9 @@ model {
 
 
     // Priors on latent variables
-    vector[3] pars;
+    // vector[3] pars;
     for (n in 1:N) {
-        pars = pop_mn + pop_cov_L * alpha[n];
+        // pars = pop_mn + pop_cov_L * alpha[n];
         atanAR[n] = pars[1];
         sigR[n] = pars[2];
         theta_2[n] = pars[3];
@@ -128,4 +128,8 @@ model {
     // target+= -log(omega_dist);
     target += - log(sigR);
 
+}
+
+generated quantities {
+   vector[N] V_TF = pow(10, cos(pars[1]) .* logL ) ./ cos(angle_dispersion * tan(epsilon_unif)) ;
 }
