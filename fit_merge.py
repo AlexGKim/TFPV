@@ -19,13 +19,19 @@ RELEASE_DIR = os.environ.get('RELEASE_DIR', 'unclustered')
 # def look():
 
 def main():
-    nrows=8309
+    nrows=400
 
     mu=[]
     mu_std=[]
     mu_32=[]
     mu_50=[]
     mu_68=[]
+    V_TF = []
+    V_TF_std = []
+    V_TF_32=[]
+    V_TF_50=[]
+    V_TF_68=[]    
+
     # for i in range(8716):
     for i in range(nrows):
         dfs = []
@@ -40,7 +46,14 @@ def main():
         mu_32.append(_[0])
         mu_50.append(_[1])
         mu_68.append(_[2])
-        print(i, mu_32[-1],mu_50[-1], mu_68[-1])
+
+        V_TF.append(combined_df['V_TF.1'].mean())
+        V_TF_std.append(combined_df['V_TF.1'].std())        
+        _ = numpy.percentile(combined_df['V_TF.1'],[32,50,68])
+        V_TF_32.append(_[0])
+        V_TF_50.append(_[1])
+        V_TF_68.append(_[2])
+        # print(i, mu_32[-1],mu_50[-1], mu_68[-1])
 
 
     master_file = os.path.join(DATA_DIR, RELEASE_DIR, "DESI-DR1_TF_pv_cat_v13_cut.csv")
@@ -51,6 +64,11 @@ def main():
     df_master['MU_ALEX_32'] = mu_32
     df_master['MU_ALEX_50'] = mu_50
     df_master['MU_ALEX_68'] = mu_68
+    df_master['V_TF'] = V_TF
+    df_master['V_TF_ERR'] = V_TF_std
+    df_master['V_TF_32'] = V_TF_32
+    df_master['V_TF_50'] = V_TF_50
+    df_master['V_TF_68'] = V_TF_68
     out_file = os.path.join(DATA_DIR, RELEASE_DIR, "DESI-DR1_TF_pv_cat_v13_cut.pkl")
     df_master.to_pickle(out_file)
     # dat = QTable.from_pandas(df_master)

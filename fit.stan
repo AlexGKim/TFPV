@@ -1,5 +1,5 @@
 // make ~/Projects/TFPV/fit
-// ./fit sample algorithm=hmc engine=nuts num_warmup=500 num_samples=500 num_chains=4 init="data_fit/Y1/fit_init.json"  data file="data_fit/Y1/fit.json" output file="output_fit/Y1/fit.csv"
+// ./fit sample algorithm=hmc engine=nuts num_warmup=500 num_samples=500 num_chains=4 init="data_fit/unclustered/fit_init.json"  data file="data_fit/unclustered/fit.json" output file="output_fit/unclustered/fit.csv"
 // $CONDA_PREFIX/bin/cmdstan/bin/stansummary output_fit/Y1/fit_?.csv
 
 data {
@@ -26,8 +26,8 @@ data {
 
     // vector[6] pop_mn; // in order of  atanAR; bR; sigR; xi_dist; omega_dist; theta_2;
     // matrix[6,6] pop_cov_L; // Cholesky decomposition of covariance matrix
-    vector[3] pop_mn; // in order of  atanAR; bR; sigR; xi_dist; omega_dist; theta_2;
-    matrix[3,3] pop_cov_L; // Cholesky decomposition of covariance matrix    
+    vector[5] pop_mn; // in order of  atanAR; bR; sigR; xi_dist; omega_dist; theta_2;
+    matrix[5,5] pop_cov_L; // Cholesky decomposition of covariance matrix    
 }
 
 transformed data {
@@ -66,14 +66,15 @@ parameters {
     vector[N] random_realization_raw;
 
     // Latent variables that were fit parameters in the training
-    array[N] vector[3] alpha;
+    array[N] vector[5] alpha;
 }
 
 transformed parameters {
-    vector[3] pars;
+    vector[5] pars;
     for (n in 1:N) {
         pars = pop_mn + pop_cov_L * alpha[n];
     }
+
 }
 
 model {
@@ -89,6 +90,8 @@ model {
     // vector[N] xi_dist;
     // vector<lower=0>[N] omega_dist;
     vector[N] theta_2;
+    vector[N] xi_dist;
+    vector[N] omega_dist;
 
 
     // Priors on latent variables
@@ -98,6 +101,8 @@ model {
         atanAR[n] = pars[1];
         sigR[n] = pars[2];
         theta_2[n] = pars[3];
+        xi_dist[n] = pars[4];
+        omega_dist[n] = pars[5];
     }
 
     vector[N] epsilon = angle_dispersion * tan(epsilon_unif);
@@ -123,13 +128,14 @@ model {
         V_0p4R26_0[n] ~ normal(VtoUse[n] - Vmin_0, V_0p4R26_ERR_0[n]) T[0,Vlim_eff_0[n]];
     }
 
+    // logL ~ normal(xi_dist, omega_dist);
+
     random_realization_raw ~ normal(0,1);
-    // logL_raw ~ normal(0,1);
-    // target+= -log(omega_dist);
-    target += - log(sigR);
+    target += - N*log(sigR);
+
 
 }
 
 generated quantities {
-   vector[N] V_TF = pow(10, cos(pars[1]) .* logL ) ./ cos(angle_dispersion * tan(epsilon_unif)) ;
+   vector[N] V_TF = V0 * pow(10, cos(pars[1]) .* logL ) ./ cos(angle_dispersion * tan(epsilon_unif)) ;
 }

@@ -27,7 +27,7 @@ RELEASE_DIR = os.environ.get('RELEASE_DIR', 'unclustered')
 rng = numpy.random.default_rng(seed=42)
 
 
-def main():
+def main(one=True):
 
     pvcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v10.fits')
     dat = Table.read(pvcat, format='fits')
@@ -57,10 +57,9 @@ def main():
     df_prune = pandas.DataFrame(data=numpy.array(tfr_samples).T,columns=["aR", "bR", "sigR", "xi_dist", "omega_dist",  "theta_2"])
     df_prune["atanAR"] = numpy.arctan(df_prune["aR"])
     bR0 = df_prune["bR"].mean()
-    xiprodb = numpy.mean(df_prune["xi_dist"] * numpy.tan(df_prune["atanAR"]))
 
     # df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
-    df_prune = df_prune[["atanAR","sigR", "theta_2"]]
+    df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist", "theta_2"]]
 
     pop_mn = df_prune.mean()
 
@@ -69,42 +68,69 @@ def main():
     pop_cov_L = numpy.linalg.cholesky(cov)
 
 
+    if one:
+        for i in range(len(df)):
+            # df = df.iloc[[0]]
+            # Rlim_eff = Rlim_eff[[0]]
 
-    for i in range(len(df)):
-        # df = df.iloc[[0]]
-        # Rlim_eff = Rlim_eff[[0]]
 
 
+            data_dic=dict()
+            for series_name, series in df.iloc[[i]].items():
+                data_dic[series_name]=series.tolist()
+            data_dic['N'] = 1
+            data_dic['Rlim_eff'] = Rlim_eff.iloc[[i]].tolist()
+            data_dic['Vlim_eff'] = Vlim_eff[[i]].tolist()
+            data_dic['Vmin'] = Vmin
+            data_dic['Vmax'] = Vmax       
+            data_dic['pop_mn'] = pop_mn.tolist()
+            data_dic['pop_cov_L'] = pop_cov_L.tolist()
+            data_dic['V0'] = 10**logV0 
+            data_dic['bR0'] = bR0
 
+            outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_{}.json".format(i))
+
+            json_object = json.dumps(data_dic)
+            with open(outname, 'w+') as f:
+                f.write(json_object)
+
+            init_dic=dict()
+            init_dic["mu"] = numpy.array([37.]).tolist()
+            init_dic["alpha"] = numpy.array([[pop_mn["atanAR"], pop_mn["sigR"],pop_mn["theta_2"],pop_mn["xi_dist"], pop_mn["omega_dist"]]]).tolist()
+
+            outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_init_one.json")
+            json_object = json.dumps(init_dic)
+            with open(outname, 'w+') as f:
+                f.write(json_object)     
+    else:
         data_dic=dict()
-        for series_name, series in df.iloc[[i]].items():
+        for series_name, series in df.items():
             data_dic[series_name]=series.tolist()
-        data_dic['N'] = 1
-        data_dic['Rlim_eff'] = Rlim_eff.iloc[[i]].tolist()
-        data_dic['Vlim_eff'] = Vlim_eff[[i]].tolist()
+        data_dic['N'] = len(df)
+        data_dic['Rlim_eff'] = Rlim_eff.tolist()
+        data_dic['Vlim_eff'] = Vlim_eff.tolist()
         data_dic['Vmin'] = Vmin
         data_dic['Vmax'] = Vmax       
         data_dic['pop_mn'] = pop_mn.tolist()
         data_dic['pop_cov_L'] = pop_cov_L.tolist()
         data_dic['V0'] = 10**logV0 
         data_dic['bR0'] = bR0
-        data_dic["xiprodb"] = xiprodb
 
-        outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_{}.json".format(i))
+        outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit.json")
 
         json_object = json.dumps(data_dic)
         with open(outname, 'w+') as f:
             f.write(json_object)
 
-    init_dic=dict()
-    init_dic["mu"] = numpy.array([37.]).tolist()
-    init_dic["alpha"] = numpy.array([[pop_mn["atanAR"], pop_mn["sigR"],pop_mn["theta_2"]]]).tolist()
+        init_dic=dict()
+        init_dic["mu"] = (37+numpy.zeros(data_dic['N'])).tolist()
+        init_dic["alpha"] = [numpy.array([pop_mn["atanAR"], pop_mn["sigR"],pop_mn["theta_2"],pop_mn["xi_dist"], pop_mn["omega_dist"]]).tolist() for i in range(data_dic['N'])]
 
-    outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_init.json")
-    json_object = json.dumps(init_dic)
-    with open(outname, 'w+') as f:
-        f.write(json_object)
+        outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_init.json")
+        json_object = json.dumps(init_dic)
+        with open(outname, 'w+') as f:
+            f.write(json_object)
 
 
 if __name__ == '__main__':
-    main()
+    main(one=True)
