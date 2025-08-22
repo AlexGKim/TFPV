@@ -76,7 +76,7 @@ model {
     real random_realization;
     real epsilon;
 
-
+    vector[N_s] logexp;
     for (m in 1:N_s) {
         sinth = sin(posterior_samples[m,1]);
         costh = cos(posterior_samples[m,1]);
@@ -95,10 +95,13 @@ model {
 
         // print(mu," ", R_, " ", m_realize, " ", R_-m_realize, " ", V_0p4R26_0," ",VtoUse);
         // Truncated normal likelihoods
-        R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
-
+        // R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
+        logexp[m] = normal_lpdf(R_ | m_realize, R_MAG_SB26_ERR) - normal_lcdf(0 | m_realize, R_MAG_SB26_ERR);
         for (n in 1:N) {
-            V_0p4R26_0[n] ~ normal(VtoUse[n], V_0p4R26_ERR_0[n]) T[Vlim_min_0[n],Vlim_eff_0[n]];
+            // V_0p4R26_0[n] ~ normal(VtoUse[n], V_0p4R26_ERR_0[n]) T[Vlim_min_0[n],Vlim_eff_0[n]];
+            logexp[m] = logexp[m] + normal_lpdf(V_0p4R26_0[n] | VtoUse[n], V_0p4R26_ERR_0[n]) 
+                - normal_lccdf(Vlim_min_0[n] | VtoUse[n], V_0p4R26_ERR_0[n])
+                - normal_lcdf(Vlim_eff_0[n] | VtoUse[n], V_0p4R26_ERR_0[n]);
             // V_0p4R26_0[n] ~ normal(VtoUse[n] - Vmin_0, V_0p4R26_ERR_0[n]) T[0,Vlim_eff_0[n]];
         }
         // print(V_0p4R26_0[1] - Vmin_0, " ", VtoUse[1] - Vmin_0," ",(VtoUse[1]-V_0p4R26_0[1])/V_0p4R26_ERR_0[1], " ",cos(epsilon), " ",random_realization .* costh_r );
@@ -108,6 +111,7 @@ model {
         // random_realization_raw ~ normal(0,1);
         // target += - N*log(posterior_samples[m,2]);
     }
+    target += log_sum_exp(logexp);
 
 }
 
