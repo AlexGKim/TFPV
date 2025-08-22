@@ -46,7 +46,7 @@ def main(one=True):
     Vlim_min = numpy.array((0 * df["V_0p4R26_ERR"] + Vmin).tolist())
     Rlim_eff = numpy.minimum(Rlim, df['MU_ZCMB']+Mlim)
     w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin)  & (df["V_0p4R26"] <  Vlim_eff) & (df["V_0p4R26"] >  Vlim_min)
-    w[200:] = False
+    # w[200:] = False
     df = df[w]
     Rlim_eff = Rlim_eff[w]
     Vlim_eff = Vlim_eff[w]
@@ -64,7 +64,7 @@ def main(one=True):
 
     # df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
     df_prune = df_prune[["atanAR","sigR", "theta_2"]]
-    df_prune = df_prune.head(20)
+    df_prune = df_prune.sample(n=20)  # to avoid correlations
     df_prune['random_realization_raw'] = numpy.random.normal(size=df_prune.shape[0])
     df_prune['epsilon_unif'] = numpy.random.uniform(-numpy.arctan(numpy.pi/2),  numpy.arctan(numpy.pi/2), size=df_prune.shape[0]);
     # # print(numpy.sin(df_prune['theta_2'])*df_prune['sigR'])
