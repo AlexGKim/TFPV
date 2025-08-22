@@ -29,9 +29,10 @@ rng = numpy.random.default_rng(seed=42)
 
 def main(one=True):
 
-    pvcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v10.fits')
+    pvcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v13.fits')
     dat = Table.read(pvcat, format='fits')
     df = dat.to_pandas()
+
 
     Rlim = 17.75           # close to real magnitude limit
     Mlim = -17. + 5*numpy.log10(cosmo.h)           # absolute magnitude limit
@@ -42,12 +43,15 @@ def main(one=True):
     logVM_zero =  34 + 5*numpy.log10(cosmo.h)
 
     Vlim_eff = numpy.minimum(Vmax, 10**(logVM_slope*numpy.array(df["MU_ZCMB"]-logVM_zero) + 2))
+    Vlim_min = numpy.array((0 * df["V_0p4R26_ERR"] + Vmin).tolist())
     Rlim_eff = numpy.minimum(Rlim, df['MU_ZCMB']+Mlim)
-    w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin)  & (df["V_0p4R26"] <  Vlim_eff)
+    w= (df['R_MAG_SB26'] < Rlim_eff) & (df['V_0p4R26'] > Vmin)  & (df["V_0p4R26"] <  Vlim_eff) & (df["V_0p4R26"] >  Vlim_min)
+    w[200:] = False
     df = df[w]
     Rlim_eff = Rlim_eff[w]
     Vlim_eff = Vlim_eff[w]
-    outcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v10_cut.csv')
+    Vlim_min = Vlim_min[w]
+    outcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v13_cut.csv')
     df.to_csv(outcat) 
     df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
 
@@ -59,13 +63,23 @@ def main(one=True):
     bR0 = df_prune["bR"].mean()
 
     # df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
-    df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist", "theta_2"]]
+    df_prune = df_prune[["atanAR","sigR", "theta_2"]]
+    df_prune = df_prune.head(20)
+    df_prune['random_realization_raw'] = numpy.random.normal(size=df_prune.shape[0])
+    df_prune['epsilon_unif'] = numpy.random.uniform(-numpy.arctan(numpy.pi/2),  numpy.arctan(numpy.pi/2), size=df_prune.shape[0]);
+    # # print(numpy.sin(df_prune['theta_2'])*df_prune['sigR'])
+    # print(1/numpy.tan(df_prune['theta_2'])* df_prune['sigR'])
 
-    pop_mn = df_prune.mean()
+    # wef
+    N_s = df_prune.shape[0];
+
+    posterior_samples = df_prune.to_numpy()
+
+    # pop_mn = df_prune.mean()
 
 
-    cov = df_prune.cov()
-    pop_cov_L = numpy.linalg.cholesky(cov)
+    # cov = df_prune.cov()
+    # pop_cov_L = numpy.linalg.cholesky(cov)
 
 
     if one:
@@ -79,12 +93,15 @@ def main(one=True):
             for series_name, series in df.iloc[[i]].items():
                 data_dic[series_name]=series.tolist()
             data_dic['N'] = 1
+            data_dic['N_s'] = N_s
             data_dic['Rlim_eff'] = Rlim_eff.iloc[[i]].tolist()
             data_dic['Vlim_eff'] = Vlim_eff[[i]].tolist()
+            data_dic['Vlim_min'] = Vlim_min[[i]].tolist()
             data_dic['Vmin'] = Vmin
             data_dic['Vmax'] = Vmax       
-            data_dic['pop_mn'] = pop_mn.tolist()
-            data_dic['pop_cov_L'] = pop_cov_L.tolist()
+            data_dic['posterior_samples'] = posterior_samples.tolist()
+            # data_dic['pop_mn'] = pop_mn.tolist()
+            # data_dic['pop_cov_L'] = pop_cov_L.tolist()
             data_dic['V0'] = 10**logV0 
             data_dic['bR0'] = bR0
 
@@ -96,7 +113,7 @@ def main(one=True):
 
             init_dic=dict()
             init_dic["mu"] = numpy.array([37.]).tolist()
-            init_dic["alpha"] = numpy.array([[pop_mn["atanAR"], pop_mn["sigR"],pop_mn["theta_2"],pop_mn["xi_dist"], pop_mn["omega_dist"]]]).tolist()
+            # init_dic["alpha"] = numpy.array([[pop_mn["atanAR"], pop_mn["sigR"],pop_mn["theta_2"],pop_mn["xi_dist"], pop_mn["omega_dist"]]]).tolist()
 
             outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_init_one.json")
             json_object = json.dumps(init_dic)
@@ -107,12 +124,15 @@ def main(one=True):
         for series_name, series in df.items():
             data_dic[series_name]=series.tolist()
         data_dic['N'] = len(df)
+        data_dic['N_s'] = N_s
         data_dic['Rlim_eff'] = Rlim_eff.tolist()
         data_dic['Vlim_eff'] = Vlim_eff.tolist()
+        data_dic['Vlim_min'] = Vlim_min.tolist()
         data_dic['Vmin'] = Vmin
-        data_dic['Vmax'] = Vmax       
-        data_dic['pop_mn'] = pop_mn.tolist()
-        data_dic['pop_cov_L'] = pop_cov_L.tolist()
+        data_dic['Vmax'] = Vmax
+        data_dic['posterior_samples'] = posterior_samples.tolist()
+        # data_dic['pop_mn'] = pop_mn.tolist()
+        # data_dic['pop_cov_L'] = pop_cov_L.tolist()
         data_dic['V0'] = 10**logV0 
         data_dic['bR0'] = bR0
 
@@ -124,7 +144,7 @@ def main(one=True):
 
         init_dic=dict()
         init_dic["mu"] = (37+numpy.zeros(data_dic['N'])).tolist()
-        init_dic["alpha"] = [numpy.array([pop_mn["atanAR"], pop_mn["sigR"],pop_mn["theta_2"],pop_mn["xi_dist"], pop_mn["omega_dist"]]).tolist() for i in range(data_dic['N'])]
+        # init_dic["alpha"] = [numpy.array([pop_mn["atanAR"], pop_mn["sigR"],pop_mn["theta_2"],pop_mn["xi_dist"], pop_mn["omega_dist"]]).tolist() for i in range(data_dic['N'])]
 
         outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_init.json")
         json_object = json.dumps(init_dic)
@@ -133,4 +153,4 @@ def main(one=True):
 
 
 if __name__ == '__main__':
-    main(one=True)
+    main(one=False)
