@@ -14,7 +14,6 @@ data {
     vector[N] Vlim_min;
 
     real Vmin;
-    real Vmax;
 
     real V0;
     real bR0;
@@ -63,10 +62,7 @@ transformed data {
   vector[N] Vlim_min_0 = Vlim_min / V0;
 
   real Vmin_0 = Vmin/V0;
-  // real Vmax_0 = Vmax/V0;
 
-  // V_0p4R26_0 = V_0p4R26_0 - Vmin_0;
-  // Vmax_0 = Vmax_0 - Vmin_0;
 
   vector[N_s] sinth = sin(atanAR);
   vector[N_s] costh = cos(atanAR);
@@ -98,14 +94,3 @@ model {
     target += log_sum_exp(logexp);
 
 }
-
-// generated quantities {
-//    vector[N] V_TF ;
-//    for (n in 1:N) {
-//     V_TF[n]=0;
-//    }
-//    for (m in 1:N_s) {
-//         V_TF = V_TF + V0 * pow(10, cos(posterior_samples[m,1]) .* logL ) ./ cos(angle_dispersion * tan(posterior_samples[m,5])) ;
-//     }
-//     V_TF = V_TF/N_s;
-// }

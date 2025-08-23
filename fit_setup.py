@@ -64,14 +64,11 @@ def main(one=True):
 
     # df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
     df_prune = df_prune[["atanAR","sigR", "theta_2"]]
-    df_prune = df_prune.sample(n=10)  # to avoid correlations
-    df_prune['random_realization'] = numpy.random.normal(size=df_prune.shape[0]) * df_prune["sigR"]
-    df_prune['epsilon_unif'] = numpy.random.uniform(-numpy.arctan(numpy.pi/2),  numpy.arctan(numpy.pi/2), size=df_prune.shape[0]);
     # # print(numpy.sin(df_prune['theta_2'])*df_prune['sigR'])
     # print(1/numpy.tan(df_prune['theta_2'])* df_prune['sigR'])
 
     # wef
-    N_s = df_prune.shape[0];
+
 
 
     # pop_mn = df_prune.mean()
@@ -85,8 +82,12 @@ def main(one=True):
         for i in range(len(df)):
             # df = df.iloc[[0]]
             # Rlim_eff = Rlim_eff[[0]]
+            rng = numpy.random.default_rng(seed=42+i)
 
-
+            df_prune_sub = df_prune.sample(n=25)  # to avoid correlations
+            df_prune_sub['random_realization'] = numpy.random.normal(size=df_prune_sub.shape[0]) * df_prune_sub["sigR"]
+            df_prune_sub['epsilon_unif'] = numpy.random.uniform(-numpy.arctan(numpy.pi/2),  numpy.arctan(numpy.pi/2), size=df_prune_sub.shape[0]);
+            N_s = df_prune_sub.shape[0];
 
             data_dic=dict()
             for series_name, series in df.iloc[[i]].items():
@@ -103,7 +104,8 @@ def main(one=True):
             data_dic['bR0'] = bR0
 
             data_dic['N_s'] = N_s
-            for series_name, series in df_prune.items():
+
+            for series_name, series in df_prune_sub.items():
                 data_dic[series_name]=series.tolist()
 
             outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_{}.json".format(i))
@@ -157,4 +159,4 @@ def main(one=True):
 
 
 if __name__ == '__main__':
-    main(one=False)
+    main(one=True)
