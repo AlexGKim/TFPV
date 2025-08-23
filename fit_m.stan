@@ -29,8 +29,9 @@ data {
     // matrix[6,6] pop_cov_L; // Cholesky decomposition of covariance matrix
     // vector[5] pop_mn; // in order of  atanAR; bR; sigR; xi_dist; omega_dist; theta_2;
     // matrix[5,5] pop_cov_L; // Cholesky decomposition of covariance matrix
+
+    // Random realization of TF relation and other parameters to integrate over
     int N_s;
-    // array[N_s] vector[5] posterior_samples;
     vector[N_s] atanAR;
     vector[N_s] sigR;
     vector[N_s] theta_2;
@@ -45,7 +46,7 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  // 5 : free NOTE HARD MODEL IS HARDWIRED TO 5!!!!!
+  // 5 : free NOTE HARD MODEL IS HARDWIRED TO 4!!!!!
 
   // int dispersion_case=5; 
 
@@ -75,36 +76,24 @@ transformed data {
 }
 
 parameters {
-    vector<lower=30, upper=42> [N] mu;
+    vector<lower=32, upper=40> [N] mu;
     vector[N] logL;
 }
 
 model {
     vector[N_s] logexp;
+    vector[N] VtoUse;
+    vector[N] m_realize;
     for (m in 1:N_s) {
         
-        // vector[N] logL = omega_dist.*logL_raw + xi_dist./costh;
-        vector[N] VtoUse = pow(10, costh[m] * logL  + random_costh_r[m] ) ./ cos_epsilon[m] ;
-        // vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r - xi_dist .* tan(atanAR);
-        vector[N] m_realize = mu + bR0  + sinth[m] * logL  + random_sinth_r[m]  - Rlim_eff;
+        VtoUse = pow(10, costh[m] * logL  + random_costh_r[m] ) ./ cos_epsilon[m] ;
+        m_realize = mu + bR0  + sinth[m] * logL  + random_sinth_r[m]  - Rlim_eff;
 
-        // print(mu," ", R_, " ", m_realize, " ", R_-m_realize, " ", V_0p4R26_0," ",VtoUse);
         // Truncated normal likelihoods
-        // R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
-        logexp[m] = normal_lpdf(R_ | m_realize, R_MAG_SB26_ERR) - normal_lcdf(0 | m_realize, R_MAG_SB26_ERR);
-        for (n in 1:N) {
-            // V_0p4R26_0[n] ~ normal(VtoUse[n], V_0p4R26_ERR_0[n]) T[Vlim_min_0[n],Vlim_eff_0[n]];
-            logexp[m] = logexp[m] + normal_lpdf(V_0p4R26_0[n] | VtoUse[n], V_0p4R26_ERR_0[n]) 
-                - normal_lccdf(Vlim_min_0[n] | VtoUse[n], V_0p4R26_ERR_0[n])
-                - normal_lcdf(Vlim_eff_0[n] | VtoUse[n], V_0p4R26_ERR_0[n]);
-            // V_0p4R26_0[n] ~ normal(VtoUse[n] - Vmin_0, V_0p4R26_ERR_0[n]) T[0,Vlim_eff_0[n]];
-        }
-        // print(V_0p4R26_0[1] - Vmin_0, " ", VtoUse[1] - Vmin_0," ",(VtoUse[1]-V_0p4R26_0[1])/V_0p4R26_ERR_0[1], " ",cos(epsilon), " ",random_realization .* costh_r );
-
-        // logL ~ normal(xi_dist, omega_dist);
-
-        // random_realization_raw ~ normal(0,1);
-        // target += - N*log(posterior_samples[m,2]);
+        logexp[m] = normal_lpdf(R_ | m_realize, R_MAG_SB26_ERR) - normal_lcdf(0 | m_realize, R_MAG_SB26_ERR)
+                + normal_lpdf(V_0p4R26_0 | VtoUse, V_0p4R26_ERR_0) 
+                - normal_lccdf(Vlim_min_0 | VtoUse, V_0p4R26_ERR_0)
+                - normal_lcdf(Vlim_eff_0 | VtoUse, V_0p4R26_ERR_0);        
     }
     target += log_sum_exp(logexp);
 
