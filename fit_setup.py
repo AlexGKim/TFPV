@@ -64,8 +64,8 @@ def main(one=True):
 
     # df_prune = df_prune[["atanAR","sigR", "xi_dist", "omega_dist",  "theta_2"]]
     df_prune = df_prune[["atanAR","sigR", "theta_2"]]
-    df_prune = df_prune.sample(n=20)  # to avoid correlations
-    df_prune['random_realization_raw'] = numpy.random.normal(size=df_prune.shape[0])
+    df_prune = df_prune.sample(n=10)  # to avoid correlations
+    df_prune['random_realization'] = numpy.random.normal(size=df_prune.shape[0]) * df_prune["sigR"]
     df_prune['epsilon_unif'] = numpy.random.uniform(-numpy.arctan(numpy.pi/2),  numpy.arctan(numpy.pi/2), size=df_prune.shape[0]);
     # # print(numpy.sin(df_prune['theta_2'])*df_prune['sigR'])
     # print(1/numpy.tan(df_prune['theta_2'])* df_prune['sigR'])
@@ -73,7 +73,6 @@ def main(one=True):
     # wef
     N_s = df_prune.shape[0];
 
-    posterior_samples = df_prune.to_numpy()
 
     # pop_mn = df_prune.mean()
 
@@ -93,17 +92,19 @@ def main(one=True):
             for series_name, series in df.iloc[[i]].items():
                 data_dic[series_name]=series.tolist()
             data_dic['N'] = 1
-            data_dic['N_s'] = N_s
             data_dic['Rlim_eff'] = Rlim_eff.iloc[[i]].tolist()
             data_dic['Vlim_eff'] = Vlim_eff[[i]].tolist()
             data_dic['Vlim_min'] = Vlim_min[[i]].tolist()
             data_dic['Vmin'] = Vmin
             data_dic['Vmax'] = Vmax       
-            data_dic['posterior_samples'] = posterior_samples.tolist()
             # data_dic['pop_mn'] = pop_mn.tolist()
             # data_dic['pop_cov_L'] = pop_cov_L.tolist()
             data_dic['V0'] = 10**logV0 
             data_dic['bR0'] = bR0
+
+            data_dic['N_s'] = N_s
+            for series_name, series in df_prune.items():
+                data_dic[series_name]=series.tolist()
 
             outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit_{}.json".format(i))
 
@@ -124,17 +125,20 @@ def main(one=True):
         for series_name, series in df.items():
             data_dic[series_name]=series.tolist()
         data_dic['N'] = len(df)
-        data_dic['N_s'] = N_s
         data_dic['Rlim_eff'] = Rlim_eff.tolist()
         data_dic['Vlim_eff'] = Vlim_eff.tolist()
         data_dic['Vlim_min'] = Vlim_min.tolist()
         data_dic['Vmin'] = Vmin
         data_dic['Vmax'] = Vmax
-        data_dic['posterior_samples'] = posterior_samples.tolist()
         # data_dic['pop_mn'] = pop_mn.tolist()
         # data_dic['pop_cov_L'] = pop_cov_L.tolist()
         data_dic['V0'] = 10**logV0 
         data_dic['bR0'] = bR0
+
+
+        data_dic['N_s'] = N_s
+        for series_name, series in df_prune.items():
+            data_dic[series_name]=series.tolist()
 
         outname = os.path.join(DATA_DIR, RELEASE_DIR, "fit.json")
 

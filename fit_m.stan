@@ -30,7 +30,12 @@ data {
     // vector[5] pop_mn; // in order of  atanAR; bR; sigR; xi_dist; omega_dist; theta_2;
     // matrix[5,5] pop_cov_L; // Cholesky decomposition of covariance matrix
     int N_s;
-    array[N_s] vector[5] posterior_samples;
+    // array[N_s] vector[5] posterior_samples;
+    vector[N_s] atanAR;
+    vector[N_s] sigR;
+    vector[N_s] theta_2;
+    vector[N_s] random_realization;
+    vector[N_s] epsilon_unif;
 }
 
 transformed data {
@@ -61,6 +66,12 @@ transformed data {
 
   // V_0p4R26_0 = V_0p4R26_0 - Vmin_0;
   // Vmax_0 = Vmax_0 - Vmin_0;
+
+  vector[N_s] sinth = sin(atanAR);
+  vector[N_s] costh = cos(atanAR);
+  vector[N_s] random_sinth_r = -costh .* random_realization;
+  vector[N_s] random_costh_r = sinth .* random_realization;    
+  vector[N_s] cos_epsilon = cos(angle_dispersion * tan(epsilon_unif));
 }
 
 parameters {
@@ -69,29 +80,13 @@ parameters {
 }
 
 model {
-    real sinth;
-    real costh ;
-    real sinth_r;
-    real costh_r;    
-    real random_realization;
-    real epsilon;
-
     vector[N_s] logexp;
     for (m in 1:N_s) {
-        sinth = sin(posterior_samples[m,1]);
-        costh = cos(posterior_samples[m,1]);
-        // sinth_r = sin(posterior_samples[m,3]);
-        // costh_r = cos(posterior_samples[m,3]);
-        sinth_r = - costh;
-        costh_r = sinth;
-        random_realization=posterior_samples[m,4]* posterior_samples[m,2];
-
-        epsilon = angle_dispersion * tan(posterior_samples[m,5]);
         
         // vector[N] logL = omega_dist.*logL_raw + xi_dist./costh;
-        vector[N] VtoUse = pow(10, costh .* logL  + random_realization .* costh_r ) ./ cos(epsilon) ;
+        vector[N] VtoUse = pow(10, costh[m] * logL  + random_costh_r[m] ) ./ cos_epsilon[m] ;
         // vector[N] m_realize = bR0 + mu - Rlim_eff + sinth .* logL  + random_realization .* sinth_r - xi_dist .* tan(atanAR);
-        vector[N] m_realize = mu + bR0  + sinth .* logL  + random_realization .* sinth_r  - Rlim_eff;
+        vector[N] m_realize = mu + bR0  + sinth[m] * logL  + random_sinth_r[m]  - Rlim_eff;
 
         // print(mu," ", R_, " ", m_realize, " ", R_-m_realize, " ", V_0p4R26_0," ",VtoUse);
         // Truncated normal likelihoods
@@ -115,13 +110,13 @@ model {
 
 }
 
-generated quantities {
-   vector[N] V_TF ;
-   for (n in 1:N) {
-    V_TF[n]=0;
-   }
-   for (m in 1:N_s) {
-        V_TF = V_TF + V0 * pow(10, cos(posterior_samples[m,1]) .* logL ) ./ cos(angle_dispersion * tan(posterior_samples[m,5])) ;
-    }
-    V_TF = V_TF/N_s;
-}
+// generated quantities {
+//    vector[N] V_TF ;
+//    for (n in 1:N) {
+//     V_TF[n]=0;
+//    }
+//    for (m in 1:N_s) {
+//         V_TF = V_TF + V0 * pow(10, cos(posterior_samples[m,1]) .* logL ) ./ cos(angle_dispersion * tan(posterior_samples[m,5])) ;
+//     }
+//     V_TF = V_TF/N_s;
+// }
