@@ -20,7 +20,7 @@ RELEASE_DIR = os.environ.get('RELEASE_DIR', 'unclustered')
 
 def main():
     nrows=8309
-    nrows=111
+    # nrows=4561
 
     mu=[]
     mu_std=[]
@@ -57,7 +57,8 @@ def main():
         # print(i, mu_32[-1],mu_50[-1], mu_68[-1])
 
 
-    master_file = os.path.join(DATA_DIR, RELEASE_DIR, "DESI-DR1_TF_pv_cat_v13_cut.csv")
+    # master_file = os.path.join(DATA_DIR, RELEASE_DIR, "DESI-DR1_TF_pv_cat_v13_cut.csv")
+    master_file = os.path.join(DATA_DIR, RELEASE_DIR, "DESI-DR1_TF_pv_cat_v14_cut.csv")    
     df_master = pandas.read_csv(master_file)
     df_master = df_master.head(nrows)
     df_master['MU_ALEX'] = mu
@@ -70,7 +71,7 @@ def main():
     # df_master['V_TF_32'] = V_TF_32
     # df_master['V_TF_50'] = V_TF_50
     # df_master['V_TF_68'] = V_TF_68
-    out_file = os.path.join(DATA_DIR, RELEASE_DIR, "DESI-DR1_TF_pv_cat_v13_cut.pkl")
+    out_file = os.path.join(DATA_DIR, RELEASE_DIR, "DESI-DR1_TF_pv_cat_v14_cut.pkl")
     df_master.to_pickle(out_file)
     # dat = QTable.from_pandas(df_master)
     # dat.write('/Users/akim/Projects/TFPV/data/DESI-DR1_TF_pv_cat_v10_cut.fits', format='fits', overwrite=True)

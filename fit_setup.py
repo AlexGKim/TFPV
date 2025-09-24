@@ -29,7 +29,8 @@ rng = numpy.random.default_rng(seed=42)
 
 def main(one=True):
 
-    pvcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v13.fits')
+    # pvcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v13.fits')
+    pvcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v14.fits')
     dat = Table.read(pvcat, format='fits')
     df = dat.to_pandas()
 
@@ -51,7 +52,7 @@ def main(one=True):
     Rlim_eff = Rlim_eff[w]
     Vlim_eff = Vlim_eff[w]
     Vlim_min = Vlim_min[w]
-    outcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v13_cut.csv')
+    outcat = os.path.join(DATA_DIR, RELEASE_DIR, 'DESI-DR1_TF_pv_cat_v14_cut.csv')
     df.to_csv(outcat) 
     df = df[["V_0p4R26","V_0p4R26_ERR","R_MAG_SB26","R_MAG_SB26_ERR","MU_ZCMB"]]
 
