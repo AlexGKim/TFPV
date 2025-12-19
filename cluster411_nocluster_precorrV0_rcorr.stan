@@ -190,8 +190,6 @@ model {
 
 
   random_realization_raw ~ normal (0, 1);
-  target += - N * log(sigR);
-
 
   // if (angle_error==1){
   //   // epsilon_raw ~ cauchy(0,1);
