@@ -88,6 +88,8 @@ data {
   //
   vector[N] z_obs;
   int N_interp;
+  // reddshifts that cover possible true redshifts and their mu values
+  // used for linear interpolation
   vector[N_interp] redshift_nodes;
   vector[N_interp] mu_nodes;
   // ******
@@ -263,6 +265,7 @@ model {
 
   random_realization_raw ~ normal (0, 1);
 
+  z_helio ~ normal(0, 1e-2);
 
   // if (angle_error==1){
   //   // epsilon_raw ~ cauchy(0,1);
