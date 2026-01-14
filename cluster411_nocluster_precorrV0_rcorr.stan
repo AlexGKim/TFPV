@@ -3,9 +3,9 @@
 // Fits in absolute magnitude space to fit all the data as a single cluster
 // And adds a term for the magnitude corrections done in the Hyperfit notebooks
 
-// ./cluster411_nocluster_precorrV0_rcorr sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=3000 num_samples=1000 num_chains=1 init=data/iron_cluster_init_zbins_nocluster_v15_rcorr.json data file=data/iron_cluster_zbins_nocluster_v15_rcorr.json output file=/pscratch/sd/s/sgmoore1/stan_outputs/iron/zbins/unclustered/v15/new_pa/rcorr2/cluster_411_.csv
+// ./cluster411_nocluster_precorrV0_rcorr sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=509 num_samples=500 num_chains=4 init=data/iron_cluster_init_zbins_nocluster_v15_rcorr.json data file=data/iron_cluster_zbins_nocluster_v15_rcorr.json output file=outputs/cluster_411_.csv
 
-// ./cluster411_nocluster_precorrV0_rcorr sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=3000 num_samples=1000 num_chains=1 init=data/iron_cluster_init_zbins_nocluster_v15_rcorr_intdust.json data file=data/iron_cluster_zbins_nocluster_v15_rcorr_intdust.json output file=/pscratch/sd/s/sgmoore1/stan_outputs/iron/zbins/unclustered/v15/new_pa/rcorr/intdust/cluster_411_.csv
+//// ./cluster411_nocluster_precorrV0_rcorr sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=500 num_samples=500 num_chains=4 init=data/iron_cluster_init_zbins_nocluster_v15_rcorr_intdust.json data file=data/iron_cluster_zbins_nocluster_v15_rcorr_intdust.json output file=outputs/cluster_411_.csv
 
 
 functions {
