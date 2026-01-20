@@ -501,7 +501,3 @@ x=numpy.linspace(1.7,2.6,100)
 plt.legend()
 plt.xlabel(r"$\log{(V\_0p4R26)}$")
 plt.show()
-
-
-
-

@@ -24,7 +24,8 @@ OUTPUT_DIR = os.environ.get('OUTPUT_DIR', 'output')
 
 # desi_sga_dir = "/Users/akim/Projects/DESI_SGA/"
 
-# desi_sga_dir = os.path.join(DATA_DIR, "DESI_SGA/")
+desi_sga_dir = os.path.join(DATA_DIR, "DESI_SGA/")
+
 
 rng = numpy.random.default_rng(seed=42)
 
@@ -59,6 +60,7 @@ rng = numpy.random.default_rng(seed=42)
 #                 w=numpy.where(data[k]<0)
 #                 data[k][w[0]]=1e8
 
+
 #             data_dic[k]=data[k][select].tolist()
 
 
@@ -84,8 +86,6 @@ rng = numpy.random.default_rng(seed=42)
 #     with open(outname2, 'w') as f:
 #         f.write(json.dumps(init))
 
-
-
 def iron_cluster_json():
     # fn = "/data/SGA-2020_iron_Vrot"
     fn = os.path.join(DATA_DIR, RELEASE_DIR, 'SGA-2020_iron_Vrot_VI.fits')
@@ -107,6 +107,7 @@ def iron_cluster_json():
     balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
 
     table = Table.read(fn)
+
     pv_df = table.to_pandas()
 
     table = Table.read(os.path.join(DESI_SGA_DIR,"TF","Tully15-Table3.fits"))
@@ -262,6 +263,216 @@ def iron_cluster_json():
     init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
     init["bR_offset"]= (numpy.zeros(data_dic['N_cluster'])).tolist()
     with open(outname2, 'w+') as f:
+        f.write(json.dumps(init))
+
+
+
+def jura_cluster_json(V0=False, precorr=True):
+    # fn = "SGA-2020_jura_Vrot_VI"
+    fn = 'SGA-2020_iron_Vrot_VI'
+
+    Rlim = 17.75
+    Vmin = 70
+    # Vmax = 300. # nothing this bright
+
+    Mlim = -18
+    Vmax = 1e4
+
+    cosi = 1/numpy.sqrt(2)
+    q0=0.2
+    balim = numpy.sqrt(cosi**2 * (1-q0**2) + q0**2)
+
+    table = Table.read("/global/homes/s/sgmoore1/DESI_SGA/TF/Y3/"+fn+".fits")
+    pv_df = table.to_pandas()
+
+    table = Table.read(desi_sga_dir+"/TF/Tully_Kourchi_combined.fits")
+    tully_df = table.to_pandas()
+
+    # # add extra noise degrading data to help fit
+    # dt = {'names':['Vhat','Vhat_noise','Rhat'], 'formats':[float, float,float]}
+    # extradata = numpy.zeros(len(data['Z_DESI']),dtype=dt)
+    # extradata['Vhat_noise'] = 0.02*data["V_0p4R26"]
+    # Rhat_noise = 0.1
+    # extradata['Vhat'] = numpy.random.normal(loc=data["V_0p4R26"], scale=extradata['Vhat_noise'])
+    # extradata['Rhat'] = numpy.random.normal(loc=data['R_MAG_SB26'], scale=Rhat_noise)
+
+    # read in the cluster files
+    N_per_cluster = []
+    mu = []
+    R2t = []
+    Rlim_eff = []
+    cluster_ids = []
+
+    alldf=[]
+   # selection effects
+    for fn in glob.glob(desi_sga_dir+"/TF/Y3/iron/output_*.txt"):
+    # for fn in glob.glob(desi_sga_dir+"/TF/Y1/iron_cut_zbin_mini2/output_*.txt"):
+        Nest = re.search('output_(.+?).txt',fn).group(1)  # number of the galaxy
+        
+        mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
+        # R2t_=tully_df.loc[tully_df["Nest"]==int(Nest)]["R2t"].values[0]
+        
+        df = pandas.read_csv(fn)
+        df = df.rename(columns={'# SGA_ID': 'SGA_ID'})
+        combo_df = df.merge(pv_df, on='SGA_ID')
+
+        # zval = numpy.median(combo_df['Z_DESI'].astype(float))
+        # mu_ = cosmo.distmod(zval).value
+
+        Rcut = numpy.minimum(Rlim, mu_+Mlim)
+        select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
+        combo_df = combo_df[select]
+        
+        if combo_df.shape[0] > 1:
+            _first = "{} & ".format(Nest)
+            _second = "{} & ".format(mu_)
+            # glue these together into a comma string
+            dum = combo_df['SGA_ID'].tolist()
+            for i in range(len(dum)):
+                dum[i] = str(dum[i])
+            my_string = ', '.join(dum)
+            print(_first + _second + my_string + ' \\\\')
+            N_per_cluster.append(combo_df.shape[0])
+            alldf.append(combo_df)
+            Nest = re.search('output_(.+?).txt',fn).group(1)
+            cluster_ids.append(Nest)
+            mu.append(mu_)
+            # R2t.append(R2t_)
+            Rlim_eff.append(Rcut);
+
+    # if there are supernovae out them into data as well
+    nsn=0
+    # table = Table.read("/global/homes/s/sgmoore1/DESI_SGA/TF/Y3/SGA-2020_jura_Vrot_VI_0pt_calib_z0p1.fits")
+    # df = table.to_pandas()
+    # df['SGA_ID']=df['SGA_ID'].astype(int)
+    # df.to_csv('temp.txt',columns=['SGA_ID'],index=False )
+    # mu_sn=37.
+
+    # for index, _ in df.iterrows():
+    #     row=df.iloc[[index]]
+    #     combo_df = row.merge(pv_df, on=['SGA_ID'],suffixes=["","y"]) #,'R_MAG_SB26', 'V_0p4R26','BA'])
+
+    #     Rcut = numpy.minimum(Rlim, combo_df['MU_SECONDARY'].tolist()[0]+Mlim)
+    #     # print((combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) ,(combo_df['R_MAG_SB26'] < Rcut))
+    #     select = (combo_df['R_MAG_SB26'] < Rcut)  & (combo_df['V_0p4R26'] > Vmin) & (combo_df['V_0p4R26'] < Vmax) & (combo_df["BA"] < balim)
+    #     combo_df = combo_df[select]
+    #     if combo_df.shape[0] > 0:
+    #         nsn=nsn+1
+    #         combo_df = combo_df[select]
+    #         combo_df['R_MAG_SB26'] = combo_df['R_MAG_SB26']  - combo_df['MU_SECONDARY'] + mu_sn
+    #         Rcut = Rcut  - combo_df['MU_SECONDARY'].tolist()[0] + mu_sn
+    #         combo_df['R_MAG_SB26_ERR'] = numpy.sqrt(combo_df['R_MAG_SB26_ERR'] + combo_df['MU_ERR']**2) 
+    #         Nest = df["SGA_ID"]
+    #         _first = "{} & ".format(Nest)
+    #         _second = "{} & ".format(mu_sn)
+    #         # glue these together into a comma string
+    #         dum = combo_df['SGA_ID'].tolist()
+    #         # for i in range(len(dum)):
+    #         #     dum[i] = str(dum[i])
+    #         # my_string = ', '.join(dum)
+    #         # print(_first + _second + my_string + ' \\\\')
+    #         N_per_cluster.append(combo_df.shape[0])
+    #         alldf.append(combo_df)
+
+    #         mu.append(mu_sn)
+    #         # R2t.append(0)
+    #         Rlim_eff.append(Rcut);      
+
+    N_cluster=len(alldf)
+
+
+    alldf = pandas.concat(alldf,ignore_index=True)
+    # alldf['V_0p4R26_err'] = alldf['V_0p4R26_ERR'] #rename column just in case
+    
+    alldf = alldf[["SGA_ID", "V_0p4R26","V_0p4R26_err","R_MAG_SB26","R_MAG_SB26_ERR"]]
+
+    # z = astropy.cosmology.z_at_value(cosmo.distmod, numpy.array(mu)*astropy.units.mag)
+    # d = cosmo.luminosity_distance(z)
+    logV0 = numpy.median(numpy.log10(alldf['V_0p4R26']))
+
+
+    data_dic=dict()
+
+    for series_name, series in alldf.items():
+        data_dic[series_name]=series.tolist()
+
+    data_dic['N'] = len(data_dic['SGA_ID'])
+    data_dic['Rlim'] = Rlim
+    data_dic['Mlim'] = Mlim
+    data_dic['Vmin'] = Vmin
+    data_dic['Vmax'] = Vmax
+    data_dic['logV0'] = logV0
+
+    data_dic["N_cluster"] = N_cluster
+    data_dic["N_per_cluster"] = N_per_cluster
+    data_dic["N_sn"] = nsn
+    data_dic["mu"] = mu
+    data_dic["Rlim_eff"] = Rlim_eff
+    # data_dic["cluster_id"] = cluster_ids
+
+    data_dic["aR_init"]= -6.26
+    data_dic["alpha_dist_init"]=1.25
+    data_dic["xi_dist_init"]= 13.3 * numpy.cos(numpy.arctan(data_dic["aR_init"]))
+    data_dic["omega_dist_init"]= .844
+
+    if precorr:
+        data_dic['V0'] = numpy.median(alldf['V_0p4R26'])
+        data_dic['Vmin'] = (Vmin/data_dic['V0'])
+        data_dic['Vmax'] = (Vmax/data_dic['V0'])
+        data_dic["xi_dist_init"] = 0.1
+        data_dic['V_0p4R26_lognorm'] = (alldf['V_0p4R26']/data_dic['V0']).tolist()
+        data_dic['V_0p4R26_lognorm_err'] = (alldf['V_0p4R26_err'] / data_dic['V0']).tolist()
+        
+
+    dum=[]
+    for npc,m in zip(N_per_cluster,mu):
+        for j in range(npc):
+            dum.append(m)
+    data_dic["mu_all"]=dum
+
+    json_object = json.dumps(data_dic)
+
+    # outname = "iron_cluster_Tully_V0_precorr_fixed.json"
+    # outname2 = "iron_cluster_init_Tully_V0_precorr_fixed.json"
+    outname = "iron_cluster_Tully_zbins_test_mini_nocut.json"
+    outname2 = "iron_cluster_init_Tully_zbins_test_mini_nocut.json"
+    # if V0:
+    #     outname = "jura_cluster_full_V0.json"
+    #     outname2 = "jura_cluster_init_full_V0.json"
+    # else:
+    #     outname = "jura_cluster_full.json"
+    #     outname2 = "jura_cluster_init_full.json"        
+
+    with open("data/"+outname, 'w') as f:
+        f.write(json_object)
+
+#  vector[N] v = 373.137*v_raw + 222.371;
+    init = dict()
+
+    init["alpha_dist"]=data_dic["alpha_dist_init"]
+    init["xi_dist"]= data_dic["xi_dist_init"]
+    init["omega_dist"]=data_dic["omega_dist_init"]
+
+    init["atanAR"] = numpy.arctan(data_dic["aR_init"])
+    init['bR'] = (init["xi_dist"] * numpy.tan(init["atanAR"]) + numpy.zeros(N_cluster) - numpy.mean(data_dic['mu'])).tolist()
+    if V0:
+        init['bR'] = (numpy.array(init['bR']) - data_dic["aR_init"] * data_dic['logV0']).tolist()
+
+    init['sigR'] = 0.1
+    init['logV0'] = logV0
+    init['V0'] = data_dic['V0']
+    
+    # logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
+    logL = numpy.log10(data_dic["V_0p4R26"])/numpy.cos(init["atanAR"])
+
+    # if precorr:
+        # logL = (numpy.log10(data_dic["V_0p4R26"]) - logV0)/numpy.cos(init["atanAR"])
+
+    init["logL_raw"]  = ((logL-init["xi_dist"]*numpy.cos(init["atanAR"]))/init["omega_dist"]).tolist()
+
+    init["random_realization_raw"] = (numpy.zeros(data_dic['N'])).tolist()
+    init["bR_offset"]= (numpy.zeros(data_dic['N_cluster'])).tolist()
+    with open("data/"+outname2, 'w') as f:
         f.write(json.dumps(init))
 
 
@@ -479,7 +690,10 @@ def iron_mag_plot():
    # selection effects
     for fn in glob.glob("data/output_*.txt"):
         Nest = re.search('output_(.+?).txt',fn).group(1)
-        mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
+        # mu_ = tully_df.loc[tully_df["Nest"]==int(Nest)]["DM"].values[0]
+        zval = numpy.median(combo_df['Z_DESI'].astype(float))
+        mu_ = cosmo.distmod(zval).value
+        
         df = pandas.read_csv(fn)
         combo_df = df.merge(pv_df, on='SGA_ID')
         Rcut = numpy.minimum(Rlim, mu_+Mlim)
@@ -489,7 +703,7 @@ def iron_mag_plot():
             N_per_cluster.append(combo_df.shape[0])
             alldf.append(combo_df)
             Nest = re.search('output_(.+?).txt',fn).group(1)
-            # mu.append(mu_)
+            mu.append(mu_)
             Rlim_eff.append(Rcut);
 
     N_cluster=len(alldf)
@@ -536,7 +750,7 @@ def all_table():
 if __name__ == '__main__':
     # to_json(frac=0.1,cuts=True)
     # coma_json(cuts=True)
-    iron_cluster_json()
+    jura_cluster_json(V0=True, precorr=True)
     # all_table()
     # iron_mag_plot()
     # for i in range(1,11):
