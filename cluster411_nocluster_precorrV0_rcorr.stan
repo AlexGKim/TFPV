@@ -12,6 +12,64 @@ functions {
   vector V_fiber(vector V, vector epsilon) {
     return V./cos(epsilon);
   }
+
+  /**
+  * Linear interpolation function (optimized for unsorted x_new)
+  *
+  * @param x_new Points at which to interpolate (can be unsorted)
+  * @param x_ref Reference x values (must be sorted)
+  * @param y_ref Reference y values corresponding to x_ref
+  * @return Interpolated y values at x_new (in original order)
+  */
+  vector linear_interp(vector x_new, vector x_ref, vector y_ref) {
+      int n_new = num_elements(x_new);
+      int n_ref = num_elements(x_ref);
+      vector[n_new] y_new;
+      
+      // Convert vector to array for sorting
+      array[n_new] real x_new_array = to_array_1d(x_new);
+      array[n_new] int sorted_idx = sort_indices_asc(x_new_array);
+      
+      // Create sorted x values
+      vector[n_new] x_sorted;
+      for (i in 1:n_new) {
+          x_sorted[i] = x_new[sorted_idx[i]];
+      }
+      
+      // Interpolate on sorted x values (efficient O(n_new + n_ref))
+      int j = 1;  // Index for x_ref
+      vector[n_new] y_sorted;
+      
+      for (i in 1:n_new) {
+          // Find the interval containing x_sorted[i]
+          // Move j forward until x_ref[j+1] >= x_sorted[i]
+          while (j < n_ref && x_ref[j + 1] < x_sorted[i]) {
+              j += 1;
+          }
+          
+          // Handle extrapolation cases
+          if (x_sorted[i] <= x_ref[1]) {
+              // Extrapolate below
+              y_sorted[i] = y_ref[1] + (y_ref[2] - y_ref[1]) / (x_ref[2] - x_ref[1]) * (x_sorted[i] - x_ref[1]);
+          }
+          else if (x_sorted[i] >= x_ref[n_ref]) {
+              // Extrapolate above
+              y_sorted[i] = y_ref[n_ref - 1] + (y_ref[n_ref] - y_ref[n_ref - 1]) / (x_ref[n_ref] - x_ref[n_ref - 1]) * (x_sorted[i] - x_ref[n_ref - 1]);
+          }
+          else {
+              // Interpolate
+              real slope = (y_ref[j + 1] - y_ref[j]) / (x_ref[j + 1] - x_ref[j]);
+              y_sorted[i] = y_ref[j] + slope * (x_sorted[i] - x_ref[j]);
+          }
+      }
+      
+      // Reorder results back to original order
+      for (i in 1:n_new) {
+          y_new[sorted_idx[i]] = y_sorted[i];
+      }
+      
+      return y_new;
+  }
 }
 
 data {
