@@ -2,9 +2,9 @@
 // 
 // Data structure:
 // - x_lst: list of N absolute magnitude arrays (one per redshift bin)
-// - x_unc_lst: list of N absolute magnitude uncertainty arrays (optional)
+// - sigma_x_lst: list of N absolute magnitude uncertainty arrays (optional)
 // - y_lst: list of N log(Vrot/V0) arrays (one per redshift bin)
-// - y_unc_lst: list of N log(Vrot/V0) uncertainty arrays (optional)
+// - sigma_y_lst: list of N log(Vrot/V0) uncertainty arrays (optional)
 //
 // Parameters:
 // - slope: common TFR slope across all redshift bins
@@ -16,42 +16,24 @@ data {
   // Number of redshift bins
   int<lower=1> N_bins;
   
-  // Number of galaxies in each redshift bin
-  array[N_bins] int<lower=0> N_gal;
-  
-  // Total number of galaxies across all bins
+   // Total number of galaxies across all bins
   int<lower=0> N_total;
   
   // Absolute magnitude data (flattened array with ragged structure)
   vector[N_total] x;
   
   // Absolute magnitude uncertainties (optional, set to zero if not available)
-  vector<lower=0>[N_total] x_unc;
+  vector<lower=0>[N_total] sigma_x;
   
   // log(Vrot/V0) data (flattened array with ragged structure)
   vector[N_total] y;
   
   // log(Vrot/V0) uncertainties (optional, set to zero if not available)
-  vector<lower=0>[N_total] y_unc;
+  vector<lower=0>[N_total] sigma_y;
   
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   array[N_total] int<lower=1, upper=N_bins> bin_idx;
 }
-
-transformed data {
-  // Compute start indices for each bin (for efficient indexing)
-  array[N_bins] int start_idx;
-  array[N_bins] int end_idx;
-  
-  start_idx[1] = 1;
-  end_idx[1] = N_gal[1];
-  
-  for (i in 2:N_bins) {
-    start_idx[i] = end_idx[i-1] + 1;
-    end_idx[i] = start_idx[i] + N_gal[i] - 1;
-  }
-}
-
 parameters {
   // Common slope across all redshift bins
   real slope;
@@ -65,28 +47,37 @@ parameters {
   // Intrinsic scatter in y-direction (log velocity)
   real<lower=0> sigma_int_y;
   
+  // Underlying (latent) x for each galaxy
+  vector<lower=0>[N_total] x_TF;
+  
+  // True (latent) x differences for each galaxy
+  // this parameterization is efficient in STAN
+  vector[N_total] dx;
+  
+  // True (latent) y differences for each galaxy
+  vector[N_total] dy;
 }
-
-model {
-  // Priors
-  slope ~ normal(0, 10);
-  intercept ~ normal(0, 10);
-  sigma_int_x ~ normal(0, 1);
-  sigma_int_y ~ normal(0, 1);
-  
-  // Loop over all galaxies
-  for (i in 1:N_total) {
+transformed parameters {
+  vector[N_total] y_TF;
+  for (i in 1 : N_total) {
     int bin = bin_idx[i];
-    
-    // Measurement model: observed values given true values
-    x[i] ~ normal(x_true[i], x_unc[i]);
-    y[i] ~ normal(y_true[i], y_unc[i]);
-    
-    // TFR model: y_true = intercept[bin] + slope * x_true
-    // We model x_true with intrinsic scatter and y_true follows the relation
-    y_true[i] ~ normal(intercept[bin] + slope * x_true[i], sigma_int_y);
+    y_TF[i] = intercept[bin] + slope * x_TF[i];
   }
+}
+model {
+  // True (latent) y values for each galaxy
+  vector[N_total] x_true = x_TF + dx * sigma_int_x;
+  vector[N_total] y_true = y_TF + dy * sigma_int_y;
   
-  // Prior on true x values (can be adjusted based on expected magnitude range)
-  x_true ~ normal(-20, 5);
+  // Measurement model: observed values given true values
+  x ~ normal(x_true, sigma_x);
+  y ~ normal(y_true, sigma_y);
+  
+  dx ~ std_normal();
+  dy ~ std_normal();
+  
+  // Priors
+  // It is standard practice to use half-Cauchy priors for dispersion parameters
+  sigma_int_x ~ cauchy(0, 10);
+  sigma_int_y ~ cauchy(0, 10);
 }
