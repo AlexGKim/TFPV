@@ -78,10 +78,63 @@ def convert_tf_data_to_stan(csv_file, output_file):
     print(f"  sigma_y: all set to {sigma_y[0]}")
 
 
+def create_initial_conditions(csv_file, output_file):
+    """
+    Create initial conditions for Stan parameters.
+    
+    Sets x_TF_std to the standardized x values: x_std = (x - mean_x) / sd_x
+    
+    Parameters
+    ----------
+    csv_file : str
+        Path to input CSV file
+    output_file : str
+        Path to output JSON file for initial conditions
+    """
+    # Read the CSV file
+    x_data = []  # log(Vrot/V0) - this is x (first column in the model)
+    
+    with open(csv_file, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            x_data.append(float(row['log_V_V0']))
+    
+    # Calculate standardization parameters (same as in base.stan transformed data)
+    N_total = len(x_data)
+    mean_x = sum(x_data) / N_total
+    variance_x = sum((x - mean_x)**2 for x in x_data) / (N_total - 1)
+    sd_x = variance_x ** 0.5
+    
+    # Standardize x values: x_std = (x - mean_x) / sd_x
+    x_std = [(x - mean_x) / sd_x for x in x_data]
+    
+    # Create initial conditions dictionary
+    # x_TF_std should be initialized to x_std
+    init_data = {
+        'x_TF_std': x_std
+    }
+    
+    # Write to JSON file
+    with open(output_file, 'w') as f:
+        json.dump(init_data, f, indent=2)
+    
+    # Print summary
+    print(f"\nInitial conditions created!")
+    print(f"Output file: {output_file}")
+    print(f"\nStatistics:")
+    print(f"  mean(x): {mean_x:.3f}")
+    print(f"  sd(x): {sd_x:.3f}")
+    print(f"  x_TF_std (= x_std) range: [{min(x_std):.3f}, {max(x_std):.3f}]")
+
+
 if __name__ == '__main__':
     # Input and output file paths
     input_csv = 'TF_mock_input.csv'
     output_json = 'TF_mock_input.json'
+    init_json = 'TF_mock_init.json'
     
     # Convert the data
     convert_tf_data_to_stan(input_csv, output_json)
+    
+    # Create initial conditions
+    create_initial_conditions(input_csv, init_json)
