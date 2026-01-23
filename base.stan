@@ -1,3 +1,5 @@
+// ./base sample data file=TF_mock_input.json output file=output_base.csv
+
 // Tully-Fisher Relation (TFR) model with multiple redshift bins
 // 
 // Data structure:
@@ -34,21 +36,28 @@ data {
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   array[N_total] int<lower=1, upper=N_bins> bin_idx;
 }
+// standardizing predictor variable
+transformed data {
+  real mean_x = mean(x);
+  real sd_x = sd(x);
+  vector[N_total] x_std = (x - mean_x) / sd_x;
+  vector[N_total] sigma_x_std = sigma_x / sd_x;
+}
 parameters {
   // Common slope across all redshift bins
-  real slope;
+  real slope_std;
   
   // Intercept for each redshift bin
-  vector[N_bins] intercept;
+  vector[N_bins] intercept_std;
   
   // Intrinsic scatter in x-direction (absolute magnitude)
-  real<lower=0> sigma_int_x;
+  real<lower=0> sigma_int_x_std;
   
   // Intrinsic scatter in y-direction (log velocity)
   real<lower=0> sigma_int_y;
   
   // Underlying (latent) x for each galaxy
-  vector<lower=0>[N_total] x_TF;
+  vector<lower=0>[N_total] x_TF_std;
   
   // True (latent) x differences for each galaxy
   // this parameterization is efficient in STAN
@@ -61,23 +70,27 @@ transformed parameters {
   vector[N_total] y_TF;
   for (i in 1 : N_total) {
     int bin = bin_idx[i];
-    y_TF[i] = intercept[bin] + slope * x_TF[i];
+    y_TF[i] = intercept_std[bin] + slope_std * x_TF_std[i];
   }
 }
 model {
   // True (latent) y values for each galaxy
-  vector[N_total] x_true = x_TF + dx * sigma_int_x;
+  vector[N_total] x_true_std = x_TF_std + dx * sigma_int_x_std;
   vector[N_total] y_true = y_TF + dy * sigma_int_y;
   
   // Measurement model: observed values given true values
-  x ~ normal(x_true, sigma_x);
-  y ~ normal(y_true, sigma_y);
+  x ~ normal(x_true_std, sigma_x_std+1e-8);
+  y ~ normal(y_true, sigma_y+1e-8);
   
   dx ~ std_normal();
   dy ~ std_normal();
   
   // Priors
   // It is standard practice to use half-Cauchy priors for dispersion parameters
-  sigma_int_x ~ cauchy(0, 10);
+  sigma_int_x_std ~ cauchy(0, 10);
   sigma_int_y ~ cauchy(0, 10);
+}
+generated quantities {
+  real slope = slope_std / sd_x;
+  vector[N_bins] intercept = intercept_std - slope_std * mean_x / sd_x;
 }
