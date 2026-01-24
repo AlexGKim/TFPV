@@ -46,8 +46,8 @@ def convert_tf_data_to_stan(csv_file, output_file):
     
     # Set uncertainties to small non-zero values (Stan model requires positive values)
     # Using a small value instead of exactly 0.0 to avoid numerical issues
-    sigma_x = [0.01] * N_total
-    sigma_y = [0.01] * N_total
+    sigma_x = [0.0] * N_total
+    sigma_y = [0.0] * N_total
     
     # Create the data dictionary for Stan
     stan_data = {
@@ -110,8 +110,11 @@ def create_initial_conditions(csv_file, output_file):
     
     # Create initial conditions dictionary
     # x_TF_std should be initialized to x_std
+    # sigma_int_x_std and sigma_int_y initialized to 0.01
     init_data = {
-        'x_TF_std': x_std
+        'x_TF_std': x_std,
+        'sigma_int_x_std': 0.05,
+        'sigma_int_y': 0.05
     }
     
     # Write to JSON file
@@ -125,6 +128,8 @@ def create_initial_conditions(csv_file, output_file):
     print(f"  mean(x): {mean_x:.3f}")
     print(f"  sd(x): {sd_x:.3f}")
     print(f"  x_TF_std (= x_std) range: [{min(x_std):.3f}, {max(x_std):.3f}]")
+    print(f"  sigma_int_x_std: {init_data['sigma_int_x_std']}")
+    print(f"  sigma_int_y: {init_data['sigma_int_y']}")
 
 
 if __name__ == '__main__':

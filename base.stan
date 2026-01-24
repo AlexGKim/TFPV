@@ -1,4 +1,6 @@
-// ./base sample data file=TF_mock_input.json init=TF_mock_init.json output file=output_base.csv 
+// ./base sample data file=TF_mock_input.json init=TF_mock_init.json output file=output_base.csv
+// ../cmdstan/bin/stansummary -i slope -i intercept -i sigma_int_x -i sigma_int_y output_base.csv 
+// ../cmdstan/bin/diagnose output_base.csv 
 
 
 // Tully-Fisher Relation (TFR) model with multiple redshift bins
@@ -60,17 +62,19 @@ parameters {
   // Underlying (latent) x for each galaxy
   vector[N_total] x_TF_std;
 }
-transformed parameters {
-  vector[N_total] y_TF = intercept_std[1] + slope_std * x_TF_std;
-//   for (i in 1 : N_total) {
-//     int bin = bin_idx[i];
-//     y_TF[i] = intercept_std[bin] + slope_std * x_TF_std[i];
-//   }
-}
 model {
+  vector[N_total] y_TF = intercept_std[1] + slope_std * x_TF_std;
+// //   for (i in 1 : N_total) {
+// //     int bin = bin_idx[i];
+// //     y_TF[i] = intercept_std[bin] + slope_std * x_TF_std[i];
+// //   }
+// }
+
   // Measurement model: observed values given true values
-  x ~ normal(x_TF_std, sqrt(sigma_x_std^2 + sigma_int_x_std^2));
-  y ~ normal(y_TF, sqrt(sigma_y^2 + sigma_int_y^2));
+  x ~ normal(x_TF_std, sigma_int_x_std);
+  y ~ normal(y_TF, sigma_int_y);
+//   x ~ normal(x_TF_std, sqrt(sigma_x_std^2 + sigma_int_x_std^2));
+//   y ~ normal(y_TF, sqrt(sigma_y^2 + sigma_int_y^2));
   
   // Priors
   // It is standard practice to use half-Cauchy priors for dispersion parameters
@@ -80,4 +84,5 @@ model {
 generated quantities {
   real slope = slope_std / sd_x;
   vector[N_bins] intercept = intercept_std - slope_std * mean_x / sd_x;
+  real sigma_int_x = sigma_int_x_std * sd_x;
 }
