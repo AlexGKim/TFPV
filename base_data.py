@@ -11,20 +11,29 @@ expected by base.stan with:
 
 import csv
 import json
+import numpy as np
 
 
-def convert_tf_data_to_stan(csv_file, output_file):
+def process_tf_data(csv_file, data_output_file, init_output_file):
     """
-    Convert TF_mock_input.csv to Stan JSON format.
+    Process TF mock data: convert to Stan JSON format and create initial conditions.
+    
+    This consolidated method performs both data conversion and initial condition
+    generation in a single pass through the CSV file.
     
     Parameters
     ----------
     csv_file : str
         Path to input CSV file
-    output_file : str
-        Path to output JSON file
+    data_output_file : str
+        Path to output JSON file for Stan data
+    init_output_file : str
+        Path to output JSON file for initial conditions
     """
-    # Read the CSV file
+    
+    # ============================================================================
+    # SECTION 1: READ CSV DATA
+    # ============================================================================
     x_data = []  # log(Vrot/V0) - this is x in the model
     y_data = []  # Absolute magnitude - this is y in the model
     
@@ -34,9 +43,14 @@ def convert_tf_data_to_stan(csv_file, output_file):
             x_data.append(float(row['log_V_V0']))
             y_data.append(float(row['M_abs']))
     
-    # Number of galaxies
-    N_total = len(x_data)
+    # Convert to numpy arrays for calculations
+    x = np.array(x_data)
+    y = np.array(y_data)
+    N_total = len(x)
     
+    # ============================================================================
+    # SECTION 2: CREATE STAN DATA DICTIONARY
+    # ============================================================================
     # Since N_bins = 1, all galaxies are in the same bin
     N_bins = 1
     N_gal = [N_total]
@@ -60,74 +74,78 @@ def convert_tf_data_to_stan(csv_file, output_file):
         'bin_idx': bin_idx
     }
     
-    # Write to JSON file
-    with open(output_file, 'w') as f:
+    # Write Stan data to JSON file
+    with open(data_output_file, 'w') as f:
         json.dump(stan_data, f, indent=2)
     
-    # Print summary statistics
+    # ============================================================================
+    # SECTION 3: CALCULATE STANDARDIZATION AND LINEAR REGRESSION
+    # ============================================================================
+    # Calculate standardization parameters (same as in base.stan transformed data)
+    mean_x = np.mean(x)
+    sd_x = np.std(x, ddof=1)  # ddof=1 for sample standard deviation
+    
+    # Standardize x values: x_std = (x - mean_x) / sd_x
+    x_std = (x - mean_x) / sd_x
+    
+    # Linear regression: y = intercept_std + slope_std * x_std
+    # Use numpy.polyfit with deg=1 to calculate slope and intercept
+    # polyfit returns [slope, intercept] for degree 1 polynomial
+    slope_std, intercept_std = np.polyfit(x_std, y, deg=1)
+    
+    # Calculate slope and intercept in terms of original x
+    # y = intercept_std + slope_std * x_std
+    # y = intercept_std + slope_std * (x - mean_x) / sd_x
+    # y = (intercept_std - slope_std * mean_x / sd_x) + (slope_std / sd_x) * x
+    slope_orig = slope_std / sd_x
+    intercept_orig = intercept_std - slope_std * mean_x / sd_x
+    
+    # For N_bins=1, intercept_std is a single value, but Stan expects a vector
+    # We'll provide it as a list with one element
+    intercept_std_vec = [float(intercept_std)]
+    
+    # ============================================================================
+    # SECTION 4: CREATE INITIAL CONDITIONS DICTIONARY
+    # ============================================================================
+    # Convert numpy arrays to lists for JSON serialization
+    init_data = {
+        'x_TF_std': x_std.tolist(),
+        'slope_std': float(slope_std),
+        'intercept_std': intercept_std_vec,
+        'sigma_int_x_std': 0.05,
+        'sigma_int_y': 0.05
+    }
+    
+    # Write initial conditions to JSON file
+    with open(init_output_file, 'w') as f:
+        json.dump(init_data, f, indent=2)
+    
+    # ============================================================================
+    # SECTION 5: PRINT SUMMARY STATISTICS
+    # ============================================================================
     print(f"Data conversion complete!")
-    print(f"Output file: {output_file}")
+    print(f"Stan data output file: {data_output_file}")
+    print(f"Initial conditions output file: {init_output_file}")
     print(f"\nSummary:")
     print(f"  Number of redshift bins: {N_bins}")
     print(f"  Total number of galaxies: {N_total}")
     print(f"  Galaxies per bin: {N_gal}")
     print(f"\nData ranges:")
-    print(f"  x (log_V_V0): [{min(x_data):.3f}, {max(x_data):.3f}]")
-    print(f"  y (M_abs): [{min(y_data):.3f}, {max(y_data):.3f}]")
+    print(f"  x (log_V_V0): [{np.min(x):.3f}, {np.max(x):.3f}]")
+    print(f"  y (M_abs): [{np.min(y):.3f}, {np.max(y):.3f}]")
     print(f"  sigma_x: all set to {sigma_x[0]}")
     print(f"  sigma_y: all set to {sigma_y[0]}")
-
-
-def create_initial_conditions(csv_file, output_file):
-    """
-    Create initial conditions for Stan parameters.
-    
-    Sets x_TF_std to the standardized x values: x_std = (x - mean_x) / sd_x
-    
-    Parameters
-    ----------
-    csv_file : str
-        Path to input CSV file
-    output_file : str
-        Path to output JSON file for initial conditions
-    """
-    # Read the CSV file
-    x_data = []  # log(Vrot/V0) - this is x (first column in the model)
-    
-    with open(csv_file, 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            x_data.append(float(row['log_V_V0']))
-    
-    # Calculate standardization parameters (same as in base.stan transformed data)
-    N_total = len(x_data)
-    mean_x = sum(x_data) / N_total
-    variance_x = sum((x - mean_x)**2 for x in x_data) / (N_total - 1)
-    sd_x = variance_x ** 0.5
-    
-    # Standardize x values: x_std = (x - mean_x) / sd_x
-    x_std = [(x - mean_x) / sd_x for x in x_data]
-    
-    # Create initial conditions dictionary
-    # x_TF_std should be initialized to x_std
-    # sigma_int_x_std and sigma_int_y initialized to 0.01
-    init_data = {
-        'x_TF_std': x_std,
-        'sigma_int_x_std': 0.05,
-        'sigma_int_y': 0.05
-    }
-    
-    # Write to JSON file
-    with open(output_file, 'w') as f:
-        json.dump(init_data, f, indent=2)
-    
-    # Print summary
-    print(f"\nInitial conditions created!")
-    print(f"Output file: {output_file}")
-    print(f"\nStatistics:")
+    print(f"\nStandardization statistics:")
     print(f"  mean(x): {mean_x:.3f}")
     print(f"  sd(x): {sd_x:.3f}")
-    print(f"  x_TF_std (= x_std) range: [{min(x_std):.3f}, {max(x_std):.3f}]")
+    print(f"  x_TF_std (= x_std) range: [{np.min(x_std):.3f}, {np.max(x_std):.3f}]")
+    print(f"\nLinear regression (y ~ x_TF_std):")
+    print(f"  slope_std: {float(slope_std):.6f}")
+    print(f"  intercept_std: {float(intercept_std):.6f}")
+    print(f"\nLinear regression (y ~ x_original):")
+    print(f"  slope_orig: {slope_orig:.6f}")
+    print(f"  intercept_orig: {intercept_orig:.6f}")
+    print(f"\nInitial scatter parameters:")
     print(f"  sigma_int_x_std: {init_data['sigma_int_x_std']}")
     print(f"  sigma_int_y: {init_data['sigma_int_y']}")
 
@@ -138,8 +156,5 @@ if __name__ == '__main__':
     output_json = 'TF_mock_input.json'
     init_json = 'TF_mock_init.json'
     
-    # Convert the data
-    convert_tf_data_to_stan(input_csv, output_json)
-    
-    # Create initial conditions
-    create_initial_conditions(input_csv, init_json)
+    # Process TF data: convert to Stan format and create initial conditions
+    process_tf_data(input_csv, output_json, init_json)
