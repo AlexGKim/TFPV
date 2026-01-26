@@ -2,7 +2,6 @@
 // ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../cmdstan/bin/diagnose output_base*.csv 
 
-
 // Tully-Fisher Relation (TFR) model with multiple redshift bins
 // 
 // Data structure:
@@ -21,7 +20,7 @@ data {
   // Number of redshift bins
   int<lower=1> N_bins;
   
-   // Total number of galaxies across all bins
+  // Total number of galaxies across all bins
   int<lower=0> N_total;
   
   // Absolute magnitude data (flattened array with ragged structure)
@@ -62,23 +61,31 @@ parameters {
   
   // Underlying (latent) x for each galaxy
   vector[N_total] x_TF_std;
+  
+  vector[N_total] delta_x_TF_std;
+  vector[N_total] delta_y_TF;
 }
 model {
   vector[N_total] y_TF = intercept_std[1] + slope_std * x_TF_std;
-// //   for (i in 1 : N_total) {
-// //     int bin = bin_idx[i];
-// //     y_TF[i] = intercept_std[bin] + slope_std * x_TF_std[i];
-// //   }
-// }
-
-  // Measurement model: observed values given true values
-  x ~ normal(x_TF_std, sqrt(sigma_int_x_std^2 + sigma_x_std^2));
-  y ~ normal(y_TF, sqrt(sigma_int_y^2 + sigma_y^2));
+  // //   for (i in 1 : N_total) {
+  // //     int bin = bin_idx[i];
+  // //     y_TF[i] = intercept_std[bin] + slope_std * x_TF_std[i];
+  // //   }
+  // }
   
+  // Measurement model: observed values given true values
+  // x_std ~ normal(x_TF_std, sqrt(sigma_int_x_std^2 + sigma_x_std^2));
+  // y ~ normal(y_TF, sqrt(sigma_int_y ^ 2 + sigma_y ^ 2));
+ 
+  x_std ~ normal(x_TF_std + delta_x_TF_std * sigma_int_x_std, sigma_x_std);
+  y ~ normal(y_TF + delta_y_TF * sigma_int_y, sigma_y);
+  delta_x_TF_std ~ std_normal();
+  delta_y_TF ~ std_normal();
+
   // Priors
   // It is standard practice to use half-Cauchy priors for dispersion parameters
-  sigma_int_x_std ~ cauchy(0, 5);
-  sigma_int_y ~ cauchy(0, 5*sd_y);
+  sigma_int_x_std ~ cauchy(0, 10);
+  sigma_int_y ~ cauchy(0, 10 * sd_y);
 }
 generated quantities {
   real slope = slope_std / sd_x;
