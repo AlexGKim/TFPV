@@ -36,12 +36,17 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
     # ============================================================================
     x_data = []  # log(Vrot/V0) - this is x in the model
     y_data = []  # Absolute magnitude - this is y in the model
+    sigma_x_data = []  # Uncertainty in log(Vrot/V0)
+    sigma_y_data = []  # Uncertainty in M_abs
     
     with open(csv_file, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
             x_data.append(float(row['log_V_V0']))
             y_data.append(float(row['M_abs']))
+            sigma_x_data.append(float(row['log_V_V0_unc']))
+            sigma_y_data.append(float(row['M_abs_unc']))
+            # Note: zobs column is present but not used by base.stan
     
     # Convert to numpy arrays for calculations
     x = np.array(x_data)
@@ -58,19 +63,15 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
     # Create bin assignment (all galaxies in bin 1)
     bin_idx = [1] * N_total
     
-    # Set uncertainties to small non-zero values (Stan model requires positive values)
-    # Using a small value instead of exactly 0.0 to avoid numerical issues
-    sigma_x = [0.0] * N_total
-    sigma_y = [0.0] * N_total
-    
     # Create the data dictionary for Stan
+    # Using uncertainties from CSV file (log_V_V0_unc and M_abs_unc columns)
     stan_data = {
         'N_bins': N_bins,
         'N_total': N_total,
         'x': x_data,
-        'sigma_x': sigma_x,
+        'sigma_x': sigma_x_data,
         'y': y_data,
-        'sigma_y': sigma_y,
+        'sigma_y': sigma_y_data,
         'bin_idx': bin_idx
     }
     
@@ -133,8 +134,8 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
     print(f"\nData ranges:")
     print(f"  x (log_V_V0): [{np.min(x):.3f}, {np.max(x):.3f}]")
     print(f"  y (M_abs): [{np.min(y):.3f}, {np.max(y):.3f}]")
-    print(f"  sigma_x: all set to {sigma_x[0]}")
-    print(f"  sigma_y: all set to {sigma_y[0]}")
+    print(f"  sigma_x (log_V_V0_unc): {np.array(sigma_x_data).mean():.3f} (mean), range [{np.min(sigma_x_data):.3f}, {np.max(sigma_x_data):.3f}]")
+    print(f"  sigma_y (M_abs_unc): {np.array(sigma_y_data).mean():.3f} (mean), range [{np.min(sigma_y_data):.3f}, {np.max(sigma_y_data):.3f}]")
     print(f"\nStandardization statistics:")
     print(f"  mean(x): {mean_x:.3f}")
     print(f"  sd(x): {sd_x:.3f}")

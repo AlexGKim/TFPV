@@ -43,6 +43,7 @@ data {
 transformed data {
   real mean_x = mean(x);
   real sd_x = sd(x);
+  real sd_y = sd(y);
   vector[N_total] x_std = (x - mean_x) / sd_x;
   vector[N_total] sigma_x_std = sigma_x / sd_x;
 }
@@ -71,15 +72,13 @@ model {
 // }
 
   // Measurement model: observed values given true values
-  x ~ normal(x_TF_std, sigma_int_x_std);
-  y ~ normal(y_TF, sigma_int_y);
-//   x ~ normal(x_TF_std, sqrt(sigma_x_std^2 + sigma_int_x_std^2));
-//   y ~ normal(y_TF, sqrt(sigma_y^2 + sigma_int_y^2));
+  x ~ normal(x_TF_std, sqrt(sigma_int_x_std^2 + sigma_x_std^2));
+  y ~ normal(y_TF, sqrt(sigma_int_y^2 + sigma_y^2));
   
   // Priors
   // It is standard practice to use half-Cauchy priors for dispersion parameters
-  sigma_int_x_std ~ cauchy(0, 10);
-  sigma_int_y ~ cauchy(0, 10);
+  sigma_int_x_std ~ cauchy(0, 5);
+  sigma_int_y ~ cauchy(0, 5*sd_y);
 }
 generated quantities {
   real slope = slope_std / sd_x;
