@@ -56,11 +56,19 @@ parameters {
   vector<upper=0>[N_bins] intercept_std;
   
   // Intrinsic scatter in x-direction (absolute magnitude)
-  real<lower=0> sigma_int_x_std;
+  // real<lower=0> sigma_int_x_std;
   
   // Intrinsic scatter in y-direction (log velocity)
-  real<lower=0> sigma_int_y;
+  // real<lower=0> sigma_int_y;
+
+  // Reparameterized intrinsic scatter
+  real<lower=0> sigma_int_tot_y;           // total intrinsic scatter (projected to y)
+  real<lower=0, upper=pi()/2> theta_int;   // partitioning angle between x and y
   
+}
+transformed parameters {
+  real sigma_int_x_std = sigma_int_tot_y * cos(theta_int) / abs(slope_std);
+  real sigma_int_y = sigma_int_tot_y * sin(theta_int);
 }
 model {
   // marginalize x_TF_std flat
@@ -83,8 +91,8 @@ model {
 
   // Priors
   // It is standard practice to use half-normal priors for dispersion parameters
-  sigma_int_x_std ~ cauchy(0, 5);
-  sigma_int_y ~ cauchy(0, 5 * sd_y);
+  // sigma_int_x_std ~ cauchy(0, 5);
+  sigma_int_tot_y ~ cauchy(0, 0.03*10);
 }
 generated quantities {
   real slope = slope_std / sd_x;
