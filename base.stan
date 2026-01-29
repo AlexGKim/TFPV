@@ -111,7 +111,7 @@ transformed data {
   real haty_max = max(y);
   real theta_int = pi() / 4; // initial guess
   
-  int y_TF_limits = 1;
+  int y_TF_limits = 0;
   int y_selection = 0;
 }
 parameters {
@@ -149,6 +149,7 @@ model {
     if (y_selection == 0) {
       // No prior limits; without selection
       y ~ normal(yfromxstd, sqrt(sigmasq_tot));
+      target += log(abs(slope_std)) * N_total;
     } else {
       // No prior limits; with selection
       y ~ normal(yfromxstd, sqrt(sigmasq_tot)) T[ , haty_max];
@@ -164,13 +165,12 @@ model {
                                              (square(slope_std)
                                               * sigmasq1_std .* sigmasq2)
                                              ./ sigmasq_tot);
-    if (y_selection == 0) {
-      // Prior limits without selection
-      y ~ normal(yfromxstd, sqrt(sigmasq_tot));
-      
-      target += log_diff_exp(normal_lcdf(y_ub | mu_star, sqrt_sigmasq_star),
-                             normal_lcdf(y_lb | mu_star, sqrt_sigmasq_star));
-    } else {
+    
+    y ~ normal(yfromxstd, sqrt(sigmasq_tot));
+    // Prior limits without selection      
+    target += log_diff_exp(normal_lcdf(y_ub | mu_star, sqrt_sigmasq_star),
+                           normal_lcdf(y_lb | mu_star, sqrt_sigmasq_star));
+    if (y_selection != 0) {
       // Prior limits with selection
       // Extra terms needed for sample selection
       vector[N_total] sigma_tot = sqrt(sigmasq_tot);
