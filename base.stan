@@ -110,8 +110,9 @@ transformed data {
   
   real haty_max = max(y);
   real theta_int = pi() / 4; // initial guess
-
-  int y_TF_limits = 0;
+  
+  int y_TF_limits = 1;
+  int y_selection = 0;
 }
 parameters {
   // Common slope across all redshift bins
@@ -137,55 +138,66 @@ transformed parameters {
   real sigma_int_x_std = sigma_int_y / sd_x;
 }
 model {
-
-// likelihood given flat prior in y_TF
+  // likelihood given flat prior in y_TF
   vector[N_total] yfromxstd = intercept_std[1] + slope_std * x_std;
   vector[N_total] sigmasq1_std = square(sigma_int_x_std)
                                  + square(sigma_x_std);
   vector[N_total] sigmasq2 = square(sigma_int_y) + square(sigma_y);
   vector[N_total] sigmasq_tot = square(slope_std) * sigmasq1_std + sigmasq2;
-  y ~ normal(yfromxstd, sqrt(sigmasq_tot));
-
-// extra term for prior limits in y_TF
-if (y_TF_limits == 1) {
-
   
-  
-  
-  vector[N_total] mu_star = (yfromxstd .* sigmasq2
-                             + y * square(slope_std) .* sigmasq1_std)
-                            ./ sigmasq_tot;
-  
-  vector[N_total] sqrt_sigmasq_star = sqrt(
-                                           (square(slope_std) * sigmasq1_std
-                                            .* sigmasq2)
-                                           ./ sigmasq_tot);
-  
-  target += log_diff_exp(normal_lcdf(y_ub | mu_star, sqrt_sigmasq_star),
-                         normal_lcdf(y_lb | mu_star, sqrt_sigmasq_star));
-
-  // Extra terms needed for sample selection
-  vector[N_total] sigma_tot = sqrt(sigmasq_tot);
-  vector[N_total] sigma1_std = sqrt(sigmasq1_std);
-  
-  vector[N_total] zmin = (y_lb - yfromxstd) / abs(slope_std) ./ sigma1_std;
-  vector[N_total] zmax = (y_ub - yfromxstd) / abs(slope_std) ./ sigma1_std;
-  vector[N_total] w = (haty_max - yfromxstd) / abs(slope_std) ./ sigma_tot;
-  vector[N_total] rho = abs(slope_std) * sigma1_std ./ sigma_tot;
-  for (n in 1 : N_total) {
-    // // print(zmin[n], w[n], zmax[n], rho[n]);
-    tuple(real, real) zminw = (zmin[n], w[n]);
-    tuple(real, real) zmaxw = (zmax[n], w[n]);
-    // print((binormal_lcdf(zmaxw | rho[n]), binormal_lcdf(zminw | rho[n])));
-    // target += -log_diff_exp(binormal_lcdf(zmaxw | rho[n]),
-    //                         binormal_lcdf(zminw | rho[n]));
-    print(log(binormal_cdf(zmaxw | rho[n])), " ",
-          log(binormal_cdf(zminw | rho[n])));
-    
-    target += -log_diff_exp(log(binormal_cdf(zmaxw | rho[n])),
-                            log(binormal_cdf(zminw | rho[n])));
+  if (y_TF_limits == 0) {
+    if (y_selection == 0) {
+      // No prior limits; without selection
+      y ~ normal(yfromxstd, sqrt(sigmasq_tot));
+    } else {
+      // No prior limits; with selection
+      y ~ normal(yfromxstd, sqrt(sigmasq_tot)) T[ , haty_max];
+    }
   }
-}  
+  
+  if (y_TF_limits != 0) {
+    vector[N_total] mu_star = (yfromxstd .* sigmasq2
+                               + y * square(slope_std) .* sigmasq1_std)
+                              ./ sigmasq_tot;
+    
+    vector[N_total] sqrt_sigmasq_star = sqrt(
+                                             (square(slope_std)
+                                              * sigmasq1_std .* sigmasq2)
+                                             ./ sigmasq_tot);
+    if (y_selection == 0) {
+      // Prior limits without selection
+      y ~ normal(yfromxstd, sqrt(sigmasq_tot));
+      
+      target += log_diff_exp(normal_lcdf(y_ub | mu_star, sqrt_sigmasq_star),
+                             normal_lcdf(y_lb | mu_star, sqrt_sigmasq_star));
+    } else {
+      // Prior limits with selection
+      // Extra terms needed for sample selection
+      vector[N_total] sigma_tot = sqrt(sigmasq_tot);
+      vector[N_total] sigma1_std = sqrt(sigmasq1_std);
+      
+      vector[N_total] zmin = (y_lb - yfromxstd) / abs(slope_std)
+                             ./ sigma1_std;
+      vector[N_total] zmax = (y_ub - yfromxstd) / abs(slope_std)
+                             ./ sigma1_std;
+      vector[N_total] w = (haty_max - yfromxstd) / abs(slope_std)
+                          ./ sigma_tot;
+      vector[N_total] rho = abs(slope_std) * sigma1_std ./ sigma_tot;
+      for (n in 1 : N_total) {
+        // // print(zmin[n], w[n], zmax[n], rho[n]);
+        tuple(real, real) zminw = (zmin[n], w[n]);
+        tuple(real, real) zmaxw = (zmax[n], w[n]);
+        // print((binormal_lcdf(zmaxw | rho[n]), binormal_lcdf(zminw | rho[n])));
+        // target += -log_diff_exp(binormal_lcdf(zmaxw | rho[n]),
+        //                         binormal_lcdf(zminw | rho[n]));
+        print(log(binormal_cdf(zmaxw | rho[n])), " ",
+              log(binormal_cdf(zminw | rho[n])));
+        
+        target += -log_diff_exp(log(binormal_cdf(zmaxw | rho[n])),
+                                log(binormal_cdf(zminw | rho[n])));
+      }
+    }
+  }
   // Priors
   // It is standard practice to use half-normal priors for dispersion parameters
   // sigma_int_x_std ~ cauchy(0, 5);

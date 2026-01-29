@@ -113,10 +113,10 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
         'x_TF_std': x_std.tolist(),
         'slope_std': float(slope_std),
         'intercept_std': intercept_std_vec,
-        'sigma_int_x_std': 0.05,
-        'sigma_int_y': 0.05
+        'sigma_int_tot_y': 0.05,
+        'theta_int': np.pi/4
     }
-    
+
     # Write initial conditions to JSON file
     with open(init_output_file, 'w') as f:
         json.dump(init_data, f, indent=2)
@@ -147,8 +147,8 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
     print(f"  slope_orig: {slope_orig:.6f}")
     print(f"  intercept_orig: {intercept_orig:.6f}")
     print(f"\nInitial scatter parameters:")
-    print(f"  sigma_int_x_std: {init_data['sigma_int_x_std']}")
-    print(f"  sigma_int_y: {init_data['sigma_int_y']}")
+    print(f"  sigma_int_tot_y: {init_data['sigma_int_tot_y']}")
+    print(f"  theta_int: {init_data['theta_int']}")
 
 
 if __name__ == '__main__':
