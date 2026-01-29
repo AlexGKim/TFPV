@@ -49,10 +49,13 @@ transformed data {
   real y_ub = max(y) - 0.01; // small buffer below max
   
   real haty_max = max(y); // in implementation y_ub > haty_max is requred
-  real theta_int = pi() / 4; // initial guess
   
+  // run configuration parameters
   int y_TF_limits = 1;
   int y_selection = 1;
+  
+  int fit_sigmas = 1;
+  // real theta_int = pi() / 4; // initial guess
 }
 parameters {
   // Common slope across all redshift bins
@@ -69,13 +72,18 @@ parameters {
   
   // Reparameterized intrinsic scatter
   real<lower=0> sigma_int_tot_y; // total intrinsic scatter (projected to y)
-  // real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
+  real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
 }
 transformed parameters {
-  // real sigma_int_x_std = sigma_int_tot_y * cos(theta_int) / abs(slope_std);
-  // real sigma_int_y = sigma_int_tot_y * sin(theta_int);
-  real sigma_int_y = sigma_int_tot_y;
-  real sigma_int_x_std = sigma_int_y / sd_x;
+  real sigma_int_y;
+  real sigma_int_x_std;
+  if (fit_sigmas == 0) {
+    sigma_int_y = sigma_int_tot_y;
+    sigma_int_x_std = sigma_int_y / sd_x;
+  } else {
+    sigma_int_x_std = sigma_int_tot_y * cos(theta_int) / abs(slope_std);
+    sigma_int_y = sigma_int_tot_y * sin(theta_int);
+  }
 }
 model {
   // likelihood given flat prior in y_TF
