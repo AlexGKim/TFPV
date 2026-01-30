@@ -54,8 +54,8 @@ transformed data {
   int y_TF_limits = 1;
   int y_selection = 1;
   
-  int fit_sigmas = 0;
-  real theta_int; // if fit_sigmas ==0
+  int fit_sigmas = 1;
+  // real theta_int; // if fit_sigmas ==0
 }
 parameters {
   // Common slope across all redshift bins
@@ -73,7 +73,7 @@ parameters {
   // Reparameterized intrinsic scatter
   real<lower=0> sigma_int_tot_y; // total intrinsic scatter (projected to y)
   // if fit_sigmas != 0
-  // real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
+  real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
 }
 transformed parameters {
   real sigma_int_y;
@@ -122,25 +122,26 @@ model {
       vector[N_total] z_lb = (haty_max - y_lb) ./ sigma2;
       vector[N_total] z_ub = (haty_max - y_ub) ./ sigma2;
       
-      // log‑CDF (normal_lcdf) – note that normal_lcdf = log(Phi)
-      real log_lcdf_lb = normal_lcdf(z_lb | 0, 1);
-      real log_lcdf_ub = normal_lcdf(z_ub | 0, 1);
-      
-      // log‑PDF (normal_lpdf) – explicit normal‑density formula
-      real log_lpdf_lb = normal_lpdf(z_lb | 0, 1);
-      real log_lpdf_ub = normal_lpdf(z_ub | 0, 1);
-      
-      // log‑normalising constants (the “lnZ” terms)
-      vector[N_total] lnZ_lb = log_sum_exp(
-                                           log(haty_max - y_lb) + log_lcdf_lb,
-                                           log(sigma2) + log_lpdf_lb);
-      
-      vector[N_total] lnZ_ub = log_sum_exp(
-                                           log(haty_max - y_ub) + log_lcdf_ub,
-                                           log(sigma2) + log_lpdf_ub);
+      vector[N_total] lnZ_lb;
+      vector[N_total] lnZ_ub;
+      for (n in 1 : N_total) {
+        // log‑CDF (normal_lcdf) – note that normal_lcdf = log(Phi)
+        real log_lcdf_lb = normal_lcdf(z_lb[n] | 0, 1);
+        real log_lcdf_ub = normal_lcdf(z_ub[n] | 0, 1);
+        
+        // log‑PDF (normal_lpdf) – explicit normal‑density formula
+        real log_lpdf_lb = normal_lpdf(z_lb[n] | 0, 1);
+        real log_lpdf_ub = normal_lpdf(z_ub[n] | 0, 1);
+
+        lnZ_lb[n] = log_sum_exp(log(haty_max - y_lb) + log_lcdf_lb,
+                                log(sigma2[n]) + log_lpdf_lb);
+        
+        lnZ_ub[n] = log_sum_exp(log(haty_max - y_ub) + log_lcdf_ub,
+                                log(sigma2[n]) + log_lpdf_ub);
+      }
       
       // add the whole contribution to the target in one go
-      target += -sum(log_diff_exp(lnZ_lb, lnZ_ub));
+      target += - log_diff_exp(lnZ_lb, lnZ_ub);
     }
   }
   // Priors
