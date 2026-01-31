@@ -133,12 +133,12 @@ model {
 
       for (n in 1 : N_total) {
         // log‑CDF (normal_lcdf) – note that normal_lcdf = log(Phi)
-        real log_lcdf_lb = normal_lcdf(term_lb[n] | 0, 1);
-        real log_lcdf_ub = normal_lcdf(term_ub[n] | 0, 1);
+        real log_lcdf_lb = std_normal_lcdf(term_lb[n]);
+        real log_lcdf_ub = std_normal_lcdf(term_ub[n]);
         
         // log‑PDF (normal_lpdf) – explicit normal‑density formula
-        real log_lpdf_lb = normal_lpdf(term_lb[n] | 0, 1);
-        real log_lpdf_ub = normal_lpdf(term_ub[n] | 0, 1);   // done with this use of term_lb[n]/ub[n]
+        real log_lpdf_lb = std_normal_lpdf(term_lb[n]);
+        real log_lpdf_ub = std_normal_lpdf(term_ub[n]);   // done with this use of term_lb[n]/ub[n]
         term_lb[n] = log_sum_exp(log(haty_max - y_lb) + log_lcdf_lb,
                                 log(sigma2[n]) + log_lpdf_lb);
         
