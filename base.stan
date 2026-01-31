@@ -113,6 +113,7 @@ model {
     y ~ normal(yfromxstd, sqrt(sigmasq_tot));
     target += log(abs(slope_std)) * N_total;
     // Prior limits without selection
+    // containers used for multiple purposes
     vector[N_total] term_lb;
     vector[N_total] term_ub;
 
@@ -120,24 +121,24 @@ model {
       term_lb[n] = normal_lcdf(y_lb | mu_star[n], sqrt_sigmasq_star[n]);
       term_ub[n] = normal_lcdf(y_ub | mu_star[n], sqrt_sigmasq_star[n]);
     }
-    target += log_diff_exp(term_ub, term_lb);
+    target += log_diff_exp(term_ub, term_lb);  // done with this use of term_lb/ub
 
     if (y_selection != 0) {
       vector[N_total] sigma2 = sqrt(sigmasq2);
       
       // standard‑normal arguments for the lower‑ and upper‑bound CDFs
-      vector[N_total] z_lb = (haty_max - y_lb) ./ sigma2;
-      vector[N_total] z_ub = (haty_max - y_ub) ./ sigma2;
+      term_lb = (haty_max - y_lb) ./ sigma2;
+      term_ub = (haty_max - y_ub) ./ sigma2;
       
 
       for (n in 1 : N_total) {
         // log‑CDF (normal_lcdf) – note that normal_lcdf = log(Phi)
-        real log_lcdf_lb = normal_lcdf(z_lb[n] | 0, 1);
-        real log_lcdf_ub = normal_lcdf(z_ub[n] | 0, 1);
+        real log_lcdf_lb = normal_lcdf(term_lb[n] | 0, 1);
+        real log_lcdf_ub = normal_lcdf(term_ub[n] | 0, 1);
         
         // log‑PDF (normal_lpdf) – explicit normal‑density formula
-        real log_lpdf_lb = normal_lpdf(z_lb[n] | 0, 1);
-        real log_lpdf_ub = normal_lpdf(z_ub[n] | 0, 1);
+        real log_lpdf_lb = normal_lpdf(term_lb[n] | 0, 1);
+        real log_lpdf_ub = normal_lpdf(term_ub[n] | 0, 1);   // done with this use of term_lb[n]/ub[n]
         term_lb[n] = log_sum_exp(log(haty_max - y_lb) + log_lcdf_lb,
                                 log(sigma2[n]) + log_lpdf_lb);
         
