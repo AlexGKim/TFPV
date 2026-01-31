@@ -45,8 +45,8 @@ transformed data {
   real sd_y = sd(y);
   vector[N_total] x_std = (x - mean_x) / sd_x;
   vector[N_total] sigma_x_std = sigma_x / sd_x;
-  real y_lb = min(y);
-  real y_ub = max(y) - 0.01; // small buffer below max
+  real y_lb = min(y) + 0.05;
+  real y_ub = max(y) - 0.05; // small buffer below max
   
   real haty_max = max(y); // in implementation y_ub > haty_max is requred
   
@@ -54,8 +54,8 @@ transformed data {
   int y_TF_limits = 1;
   int y_selection = 1;
   
-  int fit_sigmas = 1;
-  // real theta_int; // if fit_sigmas ==0
+  int fit_sigmas = 0;
+  real theta_int; // if fit_sigmas ==0
 }
 parameters {
   // Common slope across all redshift bins
@@ -73,7 +73,7 @@ parameters {
   // Reparameterized intrinsic scatter
   real<lower=0> sigma_int_tot_y; // total intrinsic scatter (projected to y)
   // if fit_sigmas != 0
-  real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
+  // real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
 }
 transformed parameters {
   real sigma_int_y;
@@ -112,9 +112,16 @@ model {
     
     y ~ normal(yfromxstd, sqrt(sigmasq_tot));
     target += log(abs(slope_std)) * N_total;
-    // Prior limits without selection      
-    target += log_diff_exp(normal_lcdf(y_ub | mu_star, sqrt_sigmasq_star),
-                           normal_lcdf(y_lb | mu_star, sqrt_sigmasq_star));
+    // Prior limits without selection
+    vector[N_total] term_lb;
+    vector[N_total] term_ub;
+
+    for (n in 1 : N_total) {
+      term_lb[n] = normal_lcdf(y_lb | mu_star[n], sqrt_sigmasq_star[n]);
+      term_ub[n] = normal_lcdf(y_ub | mu_star[n], sqrt_sigmasq_star[n]);
+    }
+    target += log_diff_exp(term_ub, term_lb);
+
     if (y_selection != 0) {
       vector[N_total] sigma2 = sqrt(sigmasq2);
       
@@ -122,8 +129,7 @@ model {
       vector[N_total] z_lb = (haty_max - y_lb) ./ sigma2;
       vector[N_total] z_ub = (haty_max - y_ub) ./ sigma2;
       
-      vector[N_total] lnZ_lb;
-      vector[N_total] lnZ_ub;
+
       for (n in 1 : N_total) {
         // log‑CDF (normal_lcdf) – note that normal_lcdf = log(Phi)
         real log_lcdf_lb = normal_lcdf(z_lb[n] | 0, 1);
@@ -132,16 +138,15 @@ model {
         // log‑PDF (normal_lpdf) – explicit normal‑density formula
         real log_lpdf_lb = normal_lpdf(z_lb[n] | 0, 1);
         real log_lpdf_ub = normal_lpdf(z_ub[n] | 0, 1);
-
-        lnZ_lb[n] = log_sum_exp(log(haty_max - y_lb) + log_lcdf_lb,
+        term_lb[n] = log_sum_exp(log(haty_max - y_lb) + log_lcdf_lb,
                                 log(sigma2[n]) + log_lpdf_lb);
         
-        lnZ_ub[n] = log_sum_exp(log(haty_max - y_ub) + log_lcdf_ub,
+        term_ub[n] = log_sum_exp(log(haty_max - y_ub) + log_lcdf_ub,
                                 log(sigma2[n]) + log_lpdf_ub);
       }
       
       // add the whole contribution to the target in one go
-      target += - log_diff_exp(lnZ_lb, lnZ_ub);
+      target += - log_diff_exp(term_lb, term_ub);
     }
   }
   // Priors
