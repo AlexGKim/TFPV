@@ -54,8 +54,8 @@ transformed data {
   int y_TF_limits = 1;
   int y_selection = 1;
   
-  int fit_sigmas = 0;
-  real theta_int; // if fit_sigmas ==0
+  int fit_sigmas = 1;
+  // real theta_int; // if fit_sigmas ==0
 }
 parameters {
   // Common slope across all redshift bins
@@ -73,7 +73,7 @@ parameters {
   // Reparameterized intrinsic scatter
   real<lower=0> sigma_int_tot_y; // total intrinsic scatter (projected to y)
   // if fit_sigmas != 0
-  // real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
+  real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
 }
 transformed parameters {
   real sigma_int_y;
@@ -140,10 +140,10 @@ model {
         real log_lpdf_lb = std_normal_lpdf(term_lb[n]);
         real log_lpdf_ub = std_normal_lpdf(term_ub[n]);   // done with this use of term_lb[n]/ub[n]
         term_lb[n] = log_sum_exp(log(haty_max - y_lb) + log_lcdf_lb,
-                                log(sigma2[n]) + log_lpdf_lb);
+                                log_lpdf_lb);
         
         term_ub[n] = log_sum_exp(log(haty_max - y_ub) + log_lcdf_ub,
-                                log(sigma2[n]) + log_lpdf_ub);
+                                log_lpdf_ub);
       }
       
       // add the whole contribution to the target in one go
