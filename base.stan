@@ -36,7 +36,7 @@ data {
   vector<lower=0>[N_total] sigma_y;
   
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
-  array[N_total] int<lower=1, upper=N_bins> bin_idx;
+  // array[N_total] int<lower=1, upper=N_bins> bin_idx;
 }
 // standardizing predictor variable
 transformed data {
@@ -48,7 +48,9 @@ transformed data {
   real y_lb = min(y) + 0.05;
   real y_ub = max(y) - 0.05; // small buffer below max
   
-  real haty_max = max(y); // in implementation y_ub > haty_max is requred
+  real haty_max = max(y); 
+  
+  int bin_idx = 1;
   
   // run configuration parameters
   int y_TF_limits = 1;
@@ -88,7 +90,7 @@ transformed parameters {
 }
 model {
   // likelihood given flat prior in y_TF
-  vector[N_total] yfromxstd = intercept_std[1] + slope_std * x_std;
+  vector[N_total] yfromxstd = intercept_std[bin_idx] + slope_std * x_std;
   vector[N_total] sigmasq1_std = square(sigma_int_x_std)
                                  + square(sigma_x_std);
   vector[N_total] sigmasq2 = square(sigma_int_y) + square(sigma_y);
@@ -116,13 +118,13 @@ model {
     // containers used for multiple purposes
     vector[N_total] term_lb;
     vector[N_total] term_ub;
-
+    
     for (n in 1 : N_total) {
       term_lb[n] = normal_lcdf(y_lb | mu_star[n], sqrt_sigmasq_star[n]);
       term_ub[n] = normal_lcdf(y_ub | mu_star[n], sqrt_sigmasq_star[n]);
     }
-    target += log_diff_exp(term_ub, term_lb);  // done with this use of term_lb/ub
-
+    target += log_diff_exp(term_ub, term_lb); // done with this use of term_lb/ub
+    
     if (y_selection != 0) {
       vector[N_total] sigma2 = sqrt(sigmasq2);
       
@@ -130,7 +132,6 @@ model {
       term_lb = (haty_max - y_lb) ./ sigma2;
       term_ub = (haty_max - y_ub) ./ sigma2;
       
-
       for (n in 1 : N_total) {
         // log‑CDF (normal_lcdf) – note that normal_lcdf = log(Phi)
         real log_lcdf_lb = std_normal_lcdf(term_lb[n]);
@@ -138,16 +139,16 @@ model {
         
         // log‑PDF (normal_lpdf) – explicit normal‑density formula
         real log_lpdf_lb = std_normal_lpdf(term_lb[n]);
-        real log_lpdf_ub = std_normal_lpdf(term_ub[n]);   // done with this use of term_lb[n]/ub[n]
+        real log_lpdf_ub = std_normal_lpdf(term_ub[n]); // done with this use of term_lb[n]/ub[n]
         term_lb[n] = log_sum_exp(log(haty_max - y_lb) + log_lcdf_lb,
-                                log_lpdf_lb);
+                                 log(sigma2[n]) + log_lpdf_lb);
         
         term_ub[n] = log_sum_exp(log(haty_max - y_ub) + log_lcdf_ub,
-                                log_lpdf_ub);
+                                 log(sigma2[n]) + log_lpdf_ub);
       }
       
       // add the whole contribution to the target in one go
-      target += - log_diff_exp(term_lb, term_ub);
+      target += -log_diff_exp(term_lb, term_ub);
     }
   }
   // Priors
