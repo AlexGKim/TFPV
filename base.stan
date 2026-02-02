@@ -45,13 +45,14 @@ transformed data {
   real sd_y = sd(y);
   vector[N_total] x_std = (x - mean_x) / sd_x;
   vector[N_total] sigma_x_std = sigma_x / sd_x;
-  real y_lb = -13.866983927782206; // min(y) + 0.09;  FROM ARIEL FEB 1 2026
-  real y_ub = -24.219628776410502; // max(y) - 0.09; // small buffer below max
-  
-  print(min(y)," ", max(y));
+  real y_lb = -23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
+  real y_ub = -14.623998117629371; // max(y) - 0.09; // small buffer below max
+  //  real y_lb = min(y) + 0.09; // FROM ARIEL FEB 2 2026
+  // real y_ub = max(y) - 0.09; // small buffer below max
+  // print(y_lb," ", y_ub, " ", max(y));
+
 
   real haty_max = max(y)+0.001; // haty_max > y_ub is required
-  
   int bin_idx = 1;
   
   // run configuration parameters
