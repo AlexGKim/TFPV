@@ -18,7 +18,7 @@
 
 data {
   // Number of redshift bins
-  int<lower=1> N_bins;  // For the momment N_bins = 1
+  int<lower=1> N_bins; // For the momment N_bins = 1
   
   // Total number of galaxies across all bins
   int<lower=0> N_total;
@@ -45,14 +45,12 @@ transformed data {
   real sd_y = sd(y);
   vector[N_total] x_std = (x - mean_x) / sd_x;
   vector[N_total] sigma_x_std = sigma_x / sd_x;
+
+  // properties of dataset
   real y_lb = -23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
   real y_ub = -14.623998117629371; // max(y) - 0.09; // small buffer below max
-  //  real y_lb = min(y) + 0.09; // FROM ARIEL FEB 2 2026
-  // real y_ub = max(y) - 0.09; // small buffer below max
-  // print(y_lb," ", y_ub, " ", max(y));
+  real haty_max = -17;
 
-
-  real haty_max = max(y)+0.001; // haty_max > y_ub is required
   int bin_idx = 1;
   
   // run configuration parameters
@@ -79,6 +77,9 @@ parameters {
   real<lower=0> sigma_int_tot_y; // total intrinsic scatter (projected to y)
   // if fit_sigmas != 0
   real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
+
+  // real<lower=0> sigma_int_y;
+  // real<lower=0> sigma_int_x_std;
 }
 transformed parameters {
   real sigma_int_y;
@@ -130,33 +131,28 @@ model {
     
     if (y_selection != 0) {
       vector[N_total] sigma2 = sqrt(sigmasq2);
-      
+      term_lb = (haty_max - y_lb) / sigma2;
+      term_ub = (haty_max - y_ub) / sigma2;
+
       // standard‑normal arguments for the lower‑ and upper‑bound CDFs
-      term_lb = (haty_max - y_lb) ./ sigma2;
-      term_ub = (haty_max - y_ub) ./ sigma2;
-      
+      vector[3] lse_terms;
       for (n in 1 : N_total) {
-        // log‑CDF (normal_lcdf) – note that normal_lcdf = log(Phi)
-        real log_lcdf_lb = std_normal_lcdf(term_lb[n]);
-        real log_lcdf_ub = std_normal_lcdf(term_ub[n]);
-        
-        // log‑PDF (normal_lpdf) – explicit normal‑density formula
-        real log_lpdf_lb = std_normal_lpdf(term_lb[n]);
-        real log_lpdf_ub = std_normal_lpdf(term_ub[n]); // done with this use of term_lb[n]/ub[n]
-        term_lb[n] = log_sum_exp(log(haty_max - y_lb) + log_lcdf_lb,
-                                 log(sigma2[n]) + log_lpdf_lb);
-        
-        term_ub[n] = log_sum_exp(log(haty_max - y_ub) + log_lcdf_ub,
-                                 log(sigma2[n]) + log_lpdf_ub);
+        lse_terms[1] = log(haty_max - y_lb) + std_normal_lcdf(term_lb[n]);
+        lse_terms[2] = log(sigma2[n]) + std_normal_lpdf(term_lb[n]);
+        lse_terms[3] = log(y_ub - haty_max) + std_normal_lcdf(term_ub[n]);
+        term_lb[n] = log_sum_exp(lse_terms);
+        term_ub[n] = log(sigma2[n]) + std_normal_lpdf(term_ub[n]); 
       }
-      
-      // add the whole contribution to the target in one go
+
       target += -log_diff_exp(term_lb, term_ub);
     }
   }
+
+  
   // Priors
   // It is standard practice to use half-normal priors for dispersion parameters
-  // sigma_int_x_std ~ cauchy(0, 5);
+  // sigma_int_x_std ~ cauchy(0, 0.03 * 100 / sd_x);
+  // sigma_int_y ~ cauchy(0, 0.03 * 100);
   sigma_int_tot_y ~ cauchy(0, 0.03 * 100);
 }
 generated quantities {

@@ -39,13 +39,23 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
     sigma_x_data = []  # Uncertainty in log(Vrot/V0)
     sigma_y_data = []  # Uncertainty in M_abs
     
+    # Track filtering statistics
+    total_rows = 0
+    filtered_rows = 0
+    
     with open(csv_file, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            x_data.append(float(row['log_V_V0']))
-            y_data.append(float(row['M_abs']))
-            sigma_x_data.append(float(row['log_V_V0_unc']))
-            sigma_y_data.append(float(row['M_abs_unc']))
+            total_rows += 1
+            y_val = float(row['M_abs'])
+            
+            # Only include rows with y < -17
+            if y_val < -17:
+                x_data.append(float(row['log_V_V0']))
+                y_data.append(y_val)
+                sigma_x_data.append(float(row['log_V_V0_unc']))
+                sigma_y_data.append(float(row['M_abs_unc']))
+                filtered_rows += 1
             # Note: zobs column is present but not used by base.stan
     
     # Convert to numpy arrays for calculations
@@ -127,6 +137,10 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
     print(f"Data conversion complete!")
     print(f"Stan data output file: {data_output_file}")
     print(f"Initial conditions output file: {init_output_file}")
+    print(f"\nFiltering:")
+    print(f"  Total rows in CSV: {total_rows}")
+    print(f"  Rows with y < -17: {filtered_rows}")
+    print(f"  Rows filtered out: {total_rows - filtered_rows}")
     print(f"\nSummary:")
     print(f"  Number of redshift bins: {N_bins}")
     print(f"  Total number of galaxies: {N_total}")
