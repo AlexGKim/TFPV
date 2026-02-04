@@ -47,9 +47,15 @@ transformed data {
   vector[N_total] sigma_x_std = sigma_x / sd_x;
   
   // properties of dataset
-  real y_lb = -23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
-  real y_ub = -14.623998117629371; // max(y) - 0.09; // small buffer below max
+  real y_lb = -23 //-23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
+  real y_ub = -15 //-14.623998117629371; // max(y) - 0.09; // small buffer below max
   real haty_max = -17;
+  
+  // variables used in more complicaed models
+  real log_lb = log(haty_max - y_lb);
+  real log_ub = log(y_ub - haty_max);
+  vector[N_total] sigma_x_std_sq = square(sigma_x_std);
+  vector[N_total] sigma_y_sq = square(sigma_y);
   
   int bin_idx = 1;
   
@@ -92,10 +98,12 @@ transformed parameters {
 model {
   // likelihood given flat prior in y_TF
   vector[N_total] yfromxstd = intercept_std[bin_idx] + slope_std * x_std;
-  vector[N_total] sigmasq1_std = square(sigma_int_x_std)
-                                 + square(sigma_x_std);
-  vector[N_total] sigmasq2 = square(sigma_int_y) + square(sigma_y);
-  vector[N_total] sigmasq_tot = square(slope_std) * sigmasq1_std + sigmasq2;
+  vector[N_total] sigmasq1_std = square(sigma_int_x_std) + sigma_x_std_sq;
+  vector[N_total] sigmasq2 = square(sigma_int_y) + sigma_y_sq;
+  // vector[N_total] sigmasq_tot = square(slope_std) * sigmasq1_std + sigmasq2;
+  vector[N_total] sigmasq_tot = square(slope_std)
+                                * (square(sigma_int_x_std) + sigma_x_std_sq)
+                                + (square(sigma_int_y) + sigma_y_sq);
   
   if (y_TF_limits == 0) {
     // No prior limits; without selection
@@ -115,11 +123,11 @@ model {
     
     y ~ normal(yfromxstd, sqrt(sigmasq_tot));
     target += log(abs(slope_std)) * N_total;
-
+    
     // containers used for multiple purposes
     vector[N_total] term_lb;
     vector[N_total] term_ub;
-
+    
     // Term for the TFR limits
     for (n in 1 : N_total) {
       term_lb[n] = normal_lcdf(y_lb | mu_star[n], sqrt_sigmasq_star[n]);
@@ -129,13 +137,13 @@ model {
     
     // Term for the selection function
     if (y_selection != 0) {
-      vector[N_total] sigma2 = sqrt(sigmasq2);
+      // vector[N_total] sigma2 = sqrt(sigmasq2);
+      vector[N_total] sigma2 = sqrt(square(sigma_int_y) + sigma_y_sq);
+
       term_lb = (haty_max - y_lb) / sigma2;
       term_ub = (y_ub - haty_max) / sigma2;
-
-      vector[N_total] logsigma2 = 0.5 * log(sigmasq2);
-      real log_lb = log(haty_max - y_lb);
-      real log_ub = log(y_ub - haty_max);
+      
+      vector[N_total] logsigma2 = 0.5 * log(square(sigma_int_y) + sigma_y_sq);
       
       // standard‑normal arguments for the lower‑ and upper‑bound CDFs
       vector[3] lse_terms;
