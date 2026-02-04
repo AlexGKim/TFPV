@@ -3,8 +3,7 @@
 Create corner plot from base.stan MCMC output files using ChainConsumer.
 
 This script reads the output_base_?.csv files and creates a corner plot
-of the key parameters: slope, intercept.1, sigma_int_x, sigma_int_y,
-sigma_int_tot_y, theta_int
+of the key parameters: slope, intercept.1, sigma_int_x, sigma_int_y
 """
 
 import pandas as pd
@@ -72,8 +71,7 @@ def create_corner_plot(file_pattern='output_base_*.csv', output_file='base_corne
         'slope': combined_df['slope'].values,
         'intercept': combined_df['intercept.1'].values,
         'sigma_int_x': combined_df['sigma_int_x'].values,
-        'sigma_int_y': combined_df['sigma_int_y'].values,
-        'sigma_int_tot_y': combined_df['sigma_int_tot_y'].values
+        'sigma_int_y': combined_df['sigma_int_y'].values
     }
     
     # Optionally include theta_int

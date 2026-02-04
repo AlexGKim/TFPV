@@ -45,12 +45,12 @@ transformed data {
   real sd_y = sd(y);
   vector[N_total] x_std = (x - mean_x) / sd_x;
   vector[N_total] sigma_x_std = sigma_x / sd_x;
-
+  
   // properties of dataset
   real y_lb = -23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
   real y_ub = -14.623998117629371; // max(y) - 0.09; // small buffer below max
   real haty_max = -17;
-
+  
   int bin_idx = 1;
   
   // run configuration parameters
@@ -77,9 +77,6 @@ parameters {
   real<lower=0> sigma_int_tot_y; // total intrinsic scatter (projected to y)
   // if fit_sigmas != 0
   real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
-
-  // real<lower=0> sigma_int_y;
-  // real<lower=0> sigma_int_x_std;
 }
 transformed parameters {
   real sigma_int_y;
@@ -111,43 +108,48 @@ model {
                                + y * square(slope_std) .* sigmasq1_std)
                               ./ sigmasq_tot;
     
-    vector[N_total] sqrt_sigmasq_star = sqrt(
-                                             (square(slope_std)
-                                              * sigmasq1_std .* sigmasq2)
-                                             ./ sigmasq_tot);
+    vector[N_total] sqrt_sigmasq_star = abs(slope_std)
+                                        * sqrt(
+                                               (sigmasq1_std .* sigmasq2)
+                                               ./ sigmasq_tot);
     
     y ~ normal(yfromxstd, sqrt(sigmasq_tot));
     target += log(abs(slope_std)) * N_total;
-    // Prior limits without selection
+
     // containers used for multiple purposes
     vector[N_total] term_lb;
     vector[N_total] term_ub;
-    
+
+    // Term for the TFR limits
     for (n in 1 : N_total) {
       term_lb[n] = normal_lcdf(y_lb | mu_star[n], sqrt_sigmasq_star[n]);
       term_ub[n] = normal_lcdf(y_ub | mu_star[n], sqrt_sigmasq_star[n]);
     }
     target += log_diff_exp(term_ub, term_lb); // done with this use of term_lb/ub
     
+    // Term for the selection function
     if (y_selection != 0) {
       vector[N_total] sigma2 = sqrt(sigmasq2);
       term_lb = (haty_max - y_lb) / sigma2;
-      term_ub = (haty_max - y_ub) / sigma2;
+      term_ub = (y_ub - haty_max) / sigma2;
 
+      vector[N_total] logsigma2 = 0.5 * log(sigmasq2);
+      real log_lb = log(haty_max - y_lb);
+      real log_ub = log(y_ub - haty_max);
+      
       // standard‑normal arguments for the lower‑ and upper‑bound CDFs
       vector[3] lse_terms;
       for (n in 1 : N_total) {
-        lse_terms[1] = log(haty_max - y_lb) + std_normal_lcdf(term_lb[n]);
-        lse_terms[2] = log(sigma2[n]) + std_normal_lpdf(term_lb[n]);
-        lse_terms[3] = log(y_ub - haty_max) + std_normal_lcdf(term_ub[n]);
+        lse_terms[1] = log_lb + std_normal_lcdf(term_lb[n]);
+        lse_terms[2] = logsigma2[n] + std_normal_lpdf(term_lb[n]);
+        lse_terms[3] = log_ub + std_normal_lcdf(term_ub[n]);
         term_lb[n] = log_sum_exp(lse_terms);
-        term_ub[n] = log(sigma2[n]) + std_normal_lpdf(term_ub[n]); 
+        term_ub[n] = logsigma2[n] + std_normal_lpdf(term_ub[n]);
       }
-
+      
       target += -log_diff_exp(term_lb, term_ub);
     }
   }
-
   
   // Priors
   // It is standard practice to use half-normal priors for dispersion parameters
