@@ -1,6 +1,6 @@
 // ./base sample num_samples=500 num_chains=4 data file=TF_mock_input.json init=TF_mock_init.json output file=output_base.csv
 // ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
-// ../cmdstan/bin/diagnose output_base*.csv 
+// ../cmdstan/bin/diagnose output_base*.csv
 
 // Tully-Fisher Relation (TFR) model with multiple redshift bins
 // 
@@ -148,9 +148,9 @@ model {
       // standard‑normal arguments for the lower‑ and upper‑bound CDFs
       vector[3] lse_terms;
       for (n in 1 : N_total) {
-        lse_terms[1] = log_lb + std_normal_lcdf(term_lb[n]);
+        lse_terms[1] = log_lb + log(Phi_approx(term_lb[n]));
         lse_terms[2] = logsigma2[n] + std_normal_lpdf(term_lb[n]);
-        lse_terms[3] = log_ub + std_normal_lcdf(term_ub[n]);
+        lse_terms[3] = log_ub + log(Phi_approx(term_ub[n]));
         term_lb[n] = log_sum_exp(lse_terms);
         term_ub[n] = logsigma2[n] + std_normal_lpdf(term_ub[n]);
       }
