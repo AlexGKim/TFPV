@@ -163,7 +163,7 @@ model {
   // It is standard practice to use half-normal priors for dispersion parameters
   // sigma_int_x_std ~ cauchy(0, 0.03 * 100 / sd_x);
   // sigma_int_y ~ cauchy(0, 0.03 * 100);
-  sigma_int_tot_y ~ cauchy(0, 0.03 * 100);
+  sigma_int_tot_y ~ cauchy(0, 0.03 * 1000);
 }
 generated quantities {
   real slope = slope_std / sd_x;
