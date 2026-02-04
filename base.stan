@@ -47,8 +47,8 @@ transformed data {
   vector[N_total] sigma_x_std = sigma_x / sd_x;
   
   // properties of dataset
-  real y_lb = -23 //-23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
-  real y_ub = -15 //-14.623998117629371; // max(y) - 0.09; // small buffer below max
+  real y_lb = -23; //-23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
+  real y_ub = -15; //-14.623998117629371; // max(y) - 0.09; // small buffer below max
   real haty_max = -17;
   
   // variables used in more complicaed models
