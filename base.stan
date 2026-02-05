@@ -107,12 +107,11 @@ model {
                                 * (square(sigma_int_x_std) + sigma_x_std_sq)
                                 + (square(sigma_int_y) + sigma_y_sq);
   
-  if (y_TF_limits == 0) {
-    // No prior limits; without selection
-    y ~ normal(yfromxstd, sqrt(sigmasq_tot));
-    target += log(abs(slope_std)) * N_total;
-  }
+  //  term that applies to all cases
+  y ~ normal(yfromxstd, sqrt(sigmasq_tot));
+  target += log(abs(slope_std)) * N_total;
   
+  // if there is a non-zero range of y values allowed by the TFR limits, then we need to apply the selection function
   if (y_TF_limits != 0) {
     vector[N_total] mu_star = (yfromxstd .* sigmasq2
                                + y * square(slope_std) .* sigmasq1_std)
@@ -122,9 +121,6 @@ model {
                                         * sqrt(
                                                (sigmasq1_std .* sigmasq2)
                                                ./ sigmasq_tot);
-    
-    y ~ normal(yfromxstd, sqrt(sigmasq_tot));
-    target += log(abs(slope_std)) * N_total;
     
     // containers used for multiple purposes
     vector[N_total] term_lb;
