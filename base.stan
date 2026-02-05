@@ -50,12 +50,12 @@ transformed data {
   vector[N_total] sigma_x_std = sigma_x / sd_x;
   
   // properties of dataset
-  real y_lb = -23; //-23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
-  real y_ub = -15; //-14.623998117629371; // max(y) - 0.09; // small buffer below max
+  real<upper=haty_max> y_lb = -23; //-23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
+  real<lower=haty_max> y_ub = -15; //-14.623998117629371; // max(y) - 0.09; // small buffer below max
   
   // variables used in more complicaed models
   real log_lb = log(haty_max - y_lb);
-  real log_ub = log(y_ub - haty_max);
+  real log_minus_ub = log(y_ub - haty_max);
   vector[N_total] sigma_x_std_sq = square(sigma_x_std);
   vector[N_total] sigma_y_sq = square(sigma_y);
   
@@ -127,33 +127,33 @@ model {
     target += log(abs(slope_std)) * N_total;
     
     // containers used for multiple purposes
-    vector[N_total] term_lb; 
-    vector[N_total] term_ub; 
+    vector[N_total] term_lb;
+    vector[N_total] term_ub;
     // // Term for the TFR limits
     for (n in 1 : N_total) {
       // log(Phi_approx) lacks precision for this step
       term_lb[n] = normal_lcdf(y_lb | mu_star[n], sqrt_sigmasq_star[n]);
       term_ub[n] = normal_lcdf(y_ub | mu_star[n], sqrt_sigmasq_star[n]);
     }
-
+    
     target += log_diff_exp(term_ub, term_lb); // done with this use of term_lb/ub
     
     // Term for the selection function
     if (y_selection != 0) {
       // vector[N_total] sigma2 = sqrt(sigmasq2);
       vector[N_total] sigma2 = sqrt(square(sigma_int_y) + sigma_y_sq);
-
+      
       term_lb = (haty_max - y_lb) / sigma2;
-      term_ub = (y_ub - haty_max) / sigma2;
+      term_ub = (haty_max - y_ub) / sigma2;
       
       vector[N_total] logsigma2 = 0.5 * log(square(sigma_int_y) + sigma_y_sq);
       
       // standard‑normal arguments for the lower‑ and upper‑bound CDFs
       vector[3] lse_terms;
       for (n in 1 : N_total) {
-        lse_terms[1] = log_lb + log(Phi_approx(term_lb[n]));
+        lse_terms[1] = log_lb + std_normal_lcdf(term_lb[n]);
         lse_terms[2] = logsigma2[n] + std_normal_lpdf(term_lb[n]);
-        lse_terms[3] = log_ub + log(Phi_approx(term_ub[n]));
+        lse_terms[3] = log_minus_ub + std_normal_lcdf(term_ub[n]);
         term_lb[n] = log_sum_exp(lse_terms);
         term_ub[n] = logsigma2[n] + std_normal_lpdf(term_ub[n]);
       }
