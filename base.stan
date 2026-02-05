@@ -35,6 +35,9 @@ data {
   // log(Vrot/V0) uncertainties (optional, set to zero if not available)
   vector<lower=0>[N_total] sigma_y;
   
+  // Selection function parameter
+  real haty_max;
+  
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   // array[N_total] int<lower=1, upper=N_bins> bin_idx;
 }
@@ -49,7 +52,6 @@ transformed data {
   // properties of dataset
   real y_lb = -23; //-23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
   real y_ub = -15; //-14.623998117629371; // max(y) - 0.09; // small buffer below max
-  real haty_max = -17;
   
   // variables used in more complicaed models
   real log_lb = log(haty_max - y_lb);
@@ -125,14 +127,15 @@ model {
     target += log(abs(slope_std)) * N_total;
     
     // containers used for multiple purposes
-    vector[N_total] term_lb;
-    vector[N_total] term_ub;
-    
-    // Term for the TFR limits
+    vector[N_total] term_lb; 
+    vector[N_total] term_ub; 
+    // // Term for the TFR limits
     for (n in 1 : N_total) {
+      // log(Phi_approx) lacks precision for this step
       term_lb[n] = normal_lcdf(y_lb | mu_star[n], sqrt_sigmasq_star[n]);
       term_ub[n] = normal_lcdf(y_ub | mu_star[n], sqrt_sigmasq_star[n]);
     }
+
     target += log_diff_exp(term_ub, term_lb); // done with this use of term_lb/ub
     
     // Term for the selection function
@@ -160,10 +163,7 @@ model {
   }
   
   // Priors
-  // It is standard practice to use half-normal priors for dispersion parameters
-  // sigma_int_x_std ~ cauchy(0, 0.03 * 100 / sd_x);
-  // sigma_int_y ~ cauchy(0, 0.03 * 100);
-  sigma_int_tot_y ~ cauchy(0, 0.03 * 1000);
+  sigma_int_tot_y ~ cauchy(0, 0.03 * 10000);
 }
 generated quantities {
   real slope = slope_std / sd_x;

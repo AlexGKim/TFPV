@@ -14,7 +14,7 @@ import json
 import numpy as np
 
 
-def process_tf_data(csv_file, data_output_file, init_output_file):
+def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16):
     """
     Process TF mock data: convert to Stan JSON format and create initial conditions.
     
@@ -29,6 +29,9 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
         Path to output JSON file for Stan data
     init_output_file : str
         Path to output JSON file for initial conditions
+    haty_max : float, optional
+        Selection function threshold for filtering galaxies (default: -16)
+        Only galaxies with M_abs < haty_max are included
     """
     
     # ============================================================================
@@ -49,8 +52,8 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
             total_rows += 1
             y_val = float(row['M_abs'])
             
-            # Only include rows with y < -17
-            if y_val < -17:
+            # Only include rows with y < haty_max
+            if y_val < haty_max:
                 x_data.append(float(row['log_V_V0']))
                 y_data.append(y_val)
                 sigma_x_data.append(float(row['log_V_V0_unc']))
@@ -82,6 +85,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
         'sigma_x': sigma_x_data,
         'y': y_data,
         'sigma_y': sigma_y_data,
+        'haty_max': haty_max,
         'bin_idx': bin_idx
     }
     
@@ -120,7 +124,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
     # ============================================================================
     # Convert numpy arrays to lists for JSON serialization
     init_data = {
-        'x_TF_std': x_std.tolist(),
+        # 'x_TF_std': x_std.tolist(),
         'slope_std': float(slope_std),
         'intercept_std': intercept_std_vec,
         'sigma_int_tot_y': 0.05,
@@ -139,8 +143,9 @@ def process_tf_data(csv_file, data_output_file, init_output_file):
     print(f"Initial conditions output file: {init_output_file}")
     print(f"\nFiltering:")
     print(f"  Total rows in CSV: {total_rows}")
-    print(f"  Rows with y < -17: {filtered_rows}")
+    print(f"  Rows with y < {haty_max}: {filtered_rows}")
     print(f"  Rows filtered out: {total_rows - filtered_rows}")
+    print(f"  haty_max (selection threshold): {haty_max}")
     print(f"\nSummary:")
     print(f"  Number of redshift bins: {N_bins}")
     print(f"  Total number of galaxies: {N_total}")
