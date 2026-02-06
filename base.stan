@@ -76,25 +76,16 @@ parameters {
   vector<upper=0>[N_bins] intercept_std;
   
   // Intrinsic scatter in x-direction (absolute magnitude)
-  // real<lower=0> sigma_int_x_std;
-  
-  // Intrinsic scatter in y-direction (log velocity)
-  // real<lower=0> sigma_int_y;
-  
-  // Reparameterized intrinsic scatter
-  real<lower=0> sigma_int_tot_y; // total intrinsic scatter (projected to y)
-  // if fit_sigmas != 0
-  real<lower=0, upper=pi() / 2> theta_int; // partitioning angle between x and y
+  real<lower=0> sigma_int_x;   // in x-units
+  real<lower=0> sigma_int_y;   // in y-units
 }
 transformed parameters {
-  real sigma_int_y;
+  // real sigma_int_y;
   real sigma_int_x_std;
   if (fit_sigmas == 0) {
-    sigma_int_y = sigma_int_tot_y;
     sigma_int_x_std = sigma_int_y / sd_x;
   } else {
-    sigma_int_x_std = sigma_int_tot_y * cos(theta_int) / abs(slope_std);
-    sigma_int_y = sigma_int_tot_y * sin(theta_int);
+      sigma_int_x_std = sigma_int_x / sd_x;
   }
 }
 model {
@@ -159,10 +150,11 @@ model {
   }
   
   // Priors
-  sigma_int_tot_y ~ cauchy(0, 0.03 * 10000);
+  sigma_int_x ~ cauchy(0, 0.03 * 10);
+  sigma_int_y ~ cauchy(0, 0.03 * 10);
 }
 generated quantities {
   real slope = slope_std / sd_x;
   vector[N_bins] intercept = intercept_std - slope_std * mean_x / sd_x;
-  real sigma_int_x = sigma_int_x_std * sd_x;
+  // real sigma_int_x = sigma_int_x_std * sd_x;
 }
