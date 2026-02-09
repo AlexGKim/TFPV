@@ -1,6 +1,4 @@
-// ./cluster311 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=1000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_311.csv
-// ./cluster411 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=3000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_411.csv
-// ./cluster511 sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.999 num_warmup=3000 num_samples=1000 num_chains=4 init=data/iron_cluster_init.json data file=data/iron_cluster.json output file=output/cluster_511.csv
+// ./cluster411_nocluster_precorrV0_pa_test sample algorithm=hmc engine=nuts max_depth=17 adapt delta=0.99 num_warmup=200 num_samples=200 num_chains=4 init=data/iron_cluster_init_zbins_nocluster_v14_v2.json data file=data/iron_cluster_zbins_nocluster_v14_v2.json output file=outputs/cluster_411_.csv
 
 functions {
   vector V_fiber(vector V, vector epsilon) {
@@ -14,28 +12,24 @@ data {
   int<lower=0> N_cluster;
   array[N_cluster] int N_per_cluster;
 
-  vector[N] V_0p4R26;
-  vector[N] V_0p4R26_err;
+  vector[N] V_0p4R26_lognorm;
+  vector[N] V_0p4R26_lognorm_err;
   vector[N] R_MAG_SB26;
+  vector[N] R_ABSMAG_SB26;
   vector[N] R_MAG_SB26_ERR;
 
-  // vector[N] Rhat;
-  // vector[N] Vhat;
-  // real Rhat_noise;
-  // vector[N] Vhat_noise;  
 
   //for iron
-  vector[N_cluster] mu;
+  // vector[N_cluster] mu;
+  vector[N] mu_all;
   real Rlim;
-  vector[N_cluster] Rlim_eff;
+  vector[N] Rlim_eff;
   real Vmin;
   real Vmax;
 
   real omega_dist_init;
   real xi_dist_init;
-
-  real logVM_slope;
-  real logVM_zero;
+  real V0;
 }
 
 transformed data {
@@ -45,10 +39,10 @@ transformed data {
   // 2 : log-V dispersion
   // 3 : mag dispersion
   // 4 : perp dispersion
-  int dispersion_case=5;
+  int dispersion_case=4;
 
   int pure = 1;
-  int angle_error = 1;
+  int angle_error = 0;
 
   int flatDistribution = 0;
 
@@ -60,31 +54,24 @@ transformed data {
   real angle_dispersion_deg = 4.217219770730775;
   real angle_dispersion = angle_dispersion_deg/180*pi();
 
+
   // shifted data to align to common magnitude cutoff.  Allows vectorization
   vector[N] R_;
   int index_=1;
   for (i in 1:N_cluster){ 
     for (j in 1:N_per_cluster[i]){
-      R_[index_]=R_MAG_SB26[index_]-Rlim_eff[i];
+      R_[index_]=R_ABSMAG_SB26[index_]-Rlim_eff[i];
       index_=index_+1;
     }
-  }
-
-  vector[N] Vmax_eff;
-  vector[2] dum;
-  dum[1]=Vmax;
-  for (n in 1:N){
-    dum[2]=pow(10,(logVM_slope * mu[n] + logVM_zero));
-    Vmax_eff[n] = min(dum);
   }
 }
 
 
-// from eyeball look at data expect b ~ -7.1, a ~ -6.1
-// average logV ~ 2.14
+// from eyeball look at data expect b ~ -20, a ~ -7
+// average logV ~ 2
 parameters {
   // vector<lower=-pi()/2/angle_dispersion, upper=pi()/2/angle_dispersion>[N] epsilon_raw;    // angle error. There is a 1/cos so avoid extreme
-  vector<lower=-atan(pi()/2), upper=atan(pi()/2)>[N] epsilon_unif;   
+  // vector<lower=-atan(pi()/2), upper=atan(pi()/2)>[N] epsilon_unif;   
   vector[N] logL_raw;       // latent parameter
   // if (flatDistribution == 0)
   // {
@@ -92,10 +79,11 @@ parameters {
   // real<lower=-3, upper=3> alpha_dist;
   real<lower=0.4, upper=2> omega_dist;  
   // real<lower=12, upper=18> xi_dist;
-  real<lower=1.5, upper=2.7> xi_dist; 
+  real<lower=-1.0, upper=2.0> xi_dist;
+  // real<lower=1.5, upper=2.7> xi_dist; 
   // }
 
-  real<lower=atan(-8) , upper=atan(-5)> atanAR; // negative slope positive cosine
+  real<lower=atan(-10) , upper=atan(-5)> atanAR; // negative slope positive cosine
 
   vector[N_cluster] bR;
   // vector[N_cluster] bR_offset;
@@ -107,9 +95,9 @@ parameters {
   real<lower=-pi()/2,upper=pi()/2> theta_2;
 }
 model {
-  // vector[N] epsilon=epsilon_raw*angle_dispersion;
-  vector[N] epsilon = angle_dispersion * tan(epsilon_unif);
   vector[N] logL;
+
+
 
   vector[N] random_realization=random_realization_raw*sigR;
   real sinth = sin(atanAR);
@@ -140,18 +128,32 @@ model {
 
   if (flatDistribution==0) {
     logL=omega_dist*logL_raw+xi_dist/costh;
+    // logL = omega_dist * logL_raw;
   } else {
-    logL=logL_raw*omega_dist_init + xi_dist_init;
+    // logL=logL_raw*omega_dist_init + xi_dist_init;
+    logL = omega_dist * logL_raw;
   } 
 
-  // velocity model with or without axis error
-  vector[N] VtoUse = pow(10, costh*logL  + random_realization*costh_r );
-  if (angle_error == 1){
-      VtoUse = V_fiber(VtoUse,epsilon);
-  } 
+  vector[N] VtoUse = pow(10, costh * logL  + random_realization * costh_r);
+  // if (angle_error == 1){
+  //   VtoUse = V_fiber(VtoUse,epsilon);
+  //  } 
+
+    int N_y = 9;
+      vector[N_y] y_int = to_vector({0.1,0.2,0.3,0.4, 0.5, 0.6, 0.7, 0.8, 0.9});
+      vector[N_y] int_holder;
+      real V_holder;
+      for (n in 1:N) {
+        for (i in 1:N_y) {
+            V_holder =  VtoUse[n]/cos(angle_dispersion*tan(pi()*(y_int[i]-0.5)));
+            int_holder[i] = normal_lpdf(V_0p4R26_lognorm[n] | V_holder , V_0p4R26_lognorm_err[n]) -
+                log_diff_exp(normal_lcdf(Vmax  | V_holder , V_0p4R26_lognorm_err[n]), normal_lcdf(Vmin| V_holder , V_0p4R26_lognorm_err[n]));
+          }
+        target += log_sum_exp(int_holder);
+      }
 
   vector[N] m_realize = sinth * logL  + random_realization*sinth_r - xi_dist * tan(atanAR);
-  vector[N_cluster] a_term = bR + mu - Rlim_eff;
+  vector[N_cluster] a_term = bR - Rlim;
   int index=1;
   for (i in 1:N_cluster){  
     for (j in 1:N_per_cluster[i]){
@@ -160,12 +162,11 @@ model {
     }
     // R_ ~ normal(m_realize, R_err) T[,Rlim_eff[i]];
   }
-  // m_realize = bR + m_realize;
+  
 
-  R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,0];
-  for (n in 1:N) {
-    V_0p4R26[n] ~ normal(VtoUse[n], V_0p4R26_err[n]) T[Vmin,Vmax_eff[n]];
-  }
+  R_ ~ normal(m_realize, R_MAG_SB26_ERR) T[,mean(mu_all)];
+
+  V_0p4R26_lognorm ~ normal(VtoUse, V_0p4R26_lognorm_err) T[Vmin,Vmax];
 
   if (flatDistribution==0)
   {
@@ -178,7 +179,8 @@ model {
 
 
   random_realization_raw ~ normal (0, 1);
-  target += - N * log(sigR);
+  // target += - N * log(sigR);
+
 
   // if (angle_error==1){
   //   // epsilon_raw ~ cauchy(0,1);
