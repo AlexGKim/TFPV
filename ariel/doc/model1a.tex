@@ -33,6 +33,7 @@ Indexing:
 \end{description}
 
 \subsection{Model}
+\label{sec:model}
 For each galaxy $i$:
 \begin{align}
 \hat x_i \mid x_i &\sim \mathcal N(x_i,\sigma_{x,i}),\\
@@ -121,43 +122,51 @@ If $p(y_{\text{TF},i})$ is taken to be (improper) uniform on $\mathbb R$, the tr
 \end{align}
 
 \subsection{Sample Selection}
-In practice, the sample may have incompleteness that biases the analysis.
-Specifically, some of the objects that enter the do not make it into the final sample.
-A classic example is Malmquist bias: given an model for the underlying 
-distribution of absolute magnitudes, not all objects are not detected in a magnitude-limited survey.
+\subsubsection{Sample Selection}
+In practice, sample selection can bias the analysis because the probability that an object enters the final
+sample need not be independent of its measured properties.
+A classic example is Malmquist bias: in a magnitude-limited survey, objects near the detection threshold are
+preferentially scattered into the sample if they are intrinsically brighter (or scattered brighter) than average.
 
+In our survey, the initial parent sample is defined by the SGA catalog.
+We assume that SGA inclusion is complete above its angular-size cutoff and that, conditional on the TF model,
+the SGA selection is independent of the TF observables.  Concretely, letting $S_{\rm SGA}\in\{0,1\}$ denote
+SGA inclusion, we assume
+\begin{align}
+p(\hat x_i,\hat y_i \mid \theta, S_{{\rm SGA},i}=1) = p(\hat x_i,\hat y_i \mid \theta),
+\end{align}
+i.e.\ the angular-size selection does not further truncate the distribution of $(\hat x,\hat y)$ relevant for
+inference on $\theta$.  Under this conditional-independence assumption, the SGA cutoff contributes only an
+overall constant to the likelihood and therefore does not enter the likelihood for the TF parameters.
 
+The observed TF sample is then sculpted by DESI fiber allocation and by redshift-measurement success.
+For the moment, we assume these processes are independent of galaxy properties at fixed redshift bin, so they
+enter only through an overall completeness factor and do not need to be modeled explicitly in the likelihood.
+This assumption should be tested, since fiber allocation and redshift success can depend on quantities such as
+apparent magnitude and surface brightness.
 
-for the selected sample is not the same as the expected distribution of $\hat{x}$ and $\hat{y}$ for the parent population.  In this case, the likelihood for an individual galaxy is the truncated version of the likelihood without selection, and the total likelihood includes a Poisson factor for the total number of selected galaxies.
-Incompleteness can be property of the input catalog and of DESI fiber allocations
-and redshift success. 
-The observables that are relevant for incompleteness are the rotation velocities $\hat x$, and observed
-magnitudes $\hat y + \mu$, and angular sizes $\hat \theta$ that define the cutoff of SGA galaxies.  Anecdotally,
-SGA size uncertainties are small compared to the size of the cutoff region.  As long as $y_{\text{TF}}$ is not
-correlated with $\hat \theta$ at fixed $\hat x$ and $\hat y$, the SGA cutoff can be treated as a cutoff in the observed magnitudes and rotation velocities.  In this case, the likelihood for an individual galaxy is the truncated version of the likelihood without selection, and the total likelihood includes a Poisson factor for the total number of selected galaxies.
-We can also assume that the DESI fiber allocation and redshift success is independent of gakaxy properties.
-Underlying this assumption is DESI main targets affect fiber allocation independent of SGA galaxy angular size
-and that target magnitudes are well above he DESI fiber magnitude limit. 
+Finally, we apply additional quality cuts to mitigate outliers and to restrict the sample to galaxies for which
+the TF model is expected to be valid (e.g.\ excluding dwarf galaxies whose dynamics are not well described by
+the same TF relation).
+These cuts are modeled as hard selection on the measured observables for each galaxy:
+$(\hat x_i,\hat y_i)\in\mathcal S_i$, where $\mathcal S_i$ is the (galaxy-dependent) selection region.
+For galaxy $i$  we take $\mathcal S_i $ to be a rectangle defined by
+\begin{align}
+\hat x_{\min,i}\le \hat x_i\le \hat x_{\max,i},
+\qquad
+\hat y_{\min,i}\le \hat y_i\le \hat y_{\max,i}.
+\end{align}
 
-Additional truncation can be warranted to mitigate outliers and/or to ensure that the model assumptions are valid for the included sample.  For example,
-dwarf galaxies that are intrinsically faint have rotation velocities that are not well described by the Tully Fisher relation of normal galaxies.
-In the case of sample selection, more parameters are needed to describe the the measurements and the model.
+\subsubsection{Model}
+Given the model in \S\ref{sec:model}, one may also introduce a model for the abundance of the parent galaxy population
+as a function of redshift (e.g., a constant comoving number density).
+This allows the selection fraction to be computed from the selection function, and hence yields a derived prediction for the expected number of observed galaxies, $\bar N$. Because $\bar N$ depends on the TF parameters through the selection probability, including an 
+count term to the likelihood provides additional constraining power on those parameters.
 
-
-
-
-\begin{description}
-    \item[$\hat y_{\text{max},j}$, $\hat y_{\text{min},j}$:] Maximum/minimum observed $\hat y$ for redshift bin $j$.
-    Recall that given the model assumptions, the absolute magnitude is derived by subtracting fiducial distance moduli from
-    the observed magmitude.  Similarly, the limiting magnitudes can be dervied by subtracting $\mu$ from the observed
-    limiting magnitudes, e.g.. $\hat y_{\text{max},j} = \hat Y_{\text{max}} + \mu_i$ for all $j$.
-    \item[$\hat x_{\text{max},j}$, $\hat x_{\text{min},j}$:] Maximum/minimum observed $\hat x$ for redshift bin $j$.
-    % \item[$f$:] Fraction of galaxies in the parent population that are included in the sample after selection.  This is generally model dependent, and can
-    % be calculated given the selection function and the distribution of $y_{\text{TF}}$ in the parent population.
-    \item[$N = fN_0$:] Number of galaxies expected in the sample.  $N_0$ is the number of galaxies expected in the sample if there were no selection.
-    $f$ is the fraction of galaxies in the parent population expected to be included in the sample after selection.  This is generally 
-    a ``derived parameter'' being calculated given the selection function, redshift distribution of galaxies, and the distribution of $y_{\text{TF}}$ in the parent population.
-\end{description}
+For simplicity and tractability, we do not introduce a model for the parent population abundance at this stage,
+and instead treat the expected number of observed galaxies $\bar{N}$ as a free parameter in the likelihood. 
+This allows us to constrain the TF parameters from the observed distribution of $(\hat x,\hat y)$,
+while avoiding the need to specify a model for the parent population abundance and its evolution with redshift.
 
 \subsubsection{Total Likelihood}
 Let $\theta \equiv \big(s,\{c_j\},\sigma_{\text{int},x},\sigma_{\text{int},y}\big)$ and let $N$ denote the expected
