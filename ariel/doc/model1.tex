@@ -1,0 +1,159 @@
+\section{Simple Model With No Peculiar Velocities}
+To warm up, consider a simple model.
+\subsection{Data}
+\begin{description}
+    \item[$N_{\text{bins}}$:] Number of redshift bins.
+    \item[$N_{\text{total}}$:] Total number of galaxies across all bins.
+    \item[$x$:] log$\left(\frac{V_{\text{rot}}}{V_0}\right)$ data (flattened array with ragged structure). 
+    \item[$\sigma_x$:] log$\left(\frac{V_{\text{rot}}}{V_0}\right)$ uncertainties (set to zero if not available).
+    \item[$y$:] Absolute magnitude data (flattened array with ragged structure).
+    \item[$\sigma_y$:] Absolute magnitude uncertainties (set to zero if not available). 
+    \item[$\text{bin}_{\text{idx}}$:] Bin assignment for each galaxy (maps galaxy index to redshift bin).
+\end{description}
+
+\subsection{Parameters}
+\begin{description}
+    \item[$s$] Common slope across all redshift bins (real).
+    \item[$c$] Intercept for each redshift bin (vector of size $N_{\text{bins}}$).
+    \item[$\sigma_{\text{int}_x}$] Intrinsic scatter in the $x$-direction.
+    \item[$\sigma_{\text{int}_y}$] Intrinsic scatter in the $y$-direction.
+    \item[$x_{\text{TF}}$] Underlying (latent) $x$ for each galaxy. 
+    \item[$\delta x$] True (latent) $x$ unit differences for each galaxy.
+    \item[$\delta y$] True (latent) $y$ unit differences for each galaxy.
+\end{description}
+
+\subsection{Transformed Parameters}
+Let \( y_{\text{TF}} \) be computed as:
+\[
+y_{\text{TF}}[i] = \text{c}[\text{bin}_{\text{idx}}[i]] + s x_{\text{TF}}[i]
+\]
+for \( i = 1, \ldots, N_{\text{total}} \).
+
+\subsection{Model}
+Galaxies have an intrinsic parameter $y_\text{TF}$.  
+The galaxy absolute magnitude $y$ is drawn from drawn a Normal distribution around
+$y$ with dispersion $\sigma^{\text{int}}_y$. 
+The galaxy log-rotation velocity $x$ is drawn from a Normal distribution around the inverse TF relation
+$(y_\text{TF}-c)/s$ with dispersion $\sigma^{\text{int}}_x$. For the moment the two realizations are independent although
+covariance may be added later.  The ``observed''  $\hat{x}$ and  $\hat{y}$ are drawn from normal distributions based with dispersions
+$\sigma_x$ and $\sigma_y$ the measurement uncertainties, which are assumed to be independent.
+
+Writing this out
+\begin{align}
+    p(\hat{x}| x) & \sim \mathcal{N}(x | \sigma_x) \\
+    p(\hat{y}| y) & \sim \mathcal{N}(y | \sigma_y) \\
+    p(x | y_{TF}) & \sim \mathcal{N}((y_{TF}-c)/s | \sigma_x^{int})\\
+    p(y | y_{TF}) & \sim \mathcal{N}(y_{TF} | \sigma_y^{int})
+\end{align}
+
+\subsection{No Sample Selection}
+The likelihood for the parameters we really care about is
+\begin{align}
+\mathcal{L}(s,c, \sigma_{\text{int}_x}, \sigma_{\text{int}_y}; \hat{x}, \hat{y}) & = p(\hat{x}, \hat{y} |s,c, \sigma_{\text{int}_x}, \sigma_{\text{int}_y} )\\
+& = \int dx\, dy\, dy_{TF}\,  p(\hat{x}, \hat{y}|x, y, y_{TF}, s,c, \sigma_{\text{int}_x}, \sigma_{\text{int}_y} ) \\
+& \times 
+p(x, y| y_{TF}, s,c, \sigma_{\text{int}_x}, \sigma_{\text{int}_y} ) p(y_{TF} |  s,c, \sigma_{\text{int}_x}, \sigma_{\text{int}_y} ) \\
+& = \int dx\, dy\, dy_{TF}\,    p(\hat{x}| x) 
+    p(\hat{y}| y)
+    p(x | y_{TF}) 
+    p(y | y_{TF}) p(y_{TF})\\
+&= \int dx\, dy\, dy_{TF}\,\mathcal{N}(\hat{x} -x | \sigma_x) 
+    \mathcal{N}(\hat{y} - y | \sigma_y) \\
+    & \times 
+    \mathcal{N}(x-(y_{TF}-c)/s | \sigma_x^{int})
+   \mathcal{N}(y-y_{TF} | \sigma_y^{int}) p(y_{TF}) \\
+  &  = \int  dy_{TF}\, \mathcal{N}(\hat{x} -(y_{TF}-c)/s | \sigma_1) 
+    \mathcal{N}(\hat{y} - y_{TF} | \sigma_2)  p(y_{TF})
+\end{align}
+where
+\begin{align}
+    \sigma_1^2 &= \sigma_x^2 + \sigma^2_{\text{int}_x}\\
+    \sigma_2^2 &= \sigma_y^2 + \sigma^2_{\text{int}_y}
+\end{align}
+
+For the posterior the flat priors are used, except that
+it is common practice to have a weak prior for the dispersion parameters:
+\[
+\sigma_{\text{int}_x} \sim \text{Cauchy}(0, 5 \cdot sd[x])
+\]
+\[
+\sigma_{\text{int}_y} \sim \text{Cauchy}(0, 5 \cdot sd[y])
+\]
+
+\subsubsection{$p(y_{TF})$ constant}
+We have yet to specify $p(y_{TF})$. In the case of no sample selection
+\begin{align}
+\mathcal{L}(s,c, \sigma_{\text{int}_x}, \sigma_{\text{int}_y}; \hat{x}, \hat{y}) 
+&  = \frac{1}{2N} \int_{-N}^{N}  dy_{TF}\, \mathcal{N}(\hat{x} -(y_{TF}-c)/s | \sigma_1) 
+    \mathcal{N}(\hat{y} - y_{TF} | \sigma_2) \\
+& =
+\frac{|s|}{2N}\mathcal{N}\left(\hat{y}-(c+s \hat{x}), \sigma_\text{tot}\right)
+\left(\Phi\left(\frac{N-\mu_*}{\sigma_*}\right) - \Phi\left(\frac{-N-\mu_*}{\sigma_*}\right) \right) 
+\end{align}
+where
+\begin{align}
+    \sigma_\text{tot}^2 & = s^2\sigma_1^2+\sigma_2^2\\
+    \mu_* &= \frac{(s\hat{x} + c) \sigma_2^2 + \hat{y}s^2\sigma_1^2}{\sigma_\text{tot}^2}\\
+    \sigma_*^2 &= \frac{s^2\sigma_1^2\sigma_2^2}{\sigma_\text{tot}^2}.
+\end{align}
+
+In the case of sample selection with a maximum magnitude cutoff
+$\hat{y}_{max}$, the normalization factor is
+\begin{align}
+\mathcal{Z} & =
+\frac{1}{2N}\int_{-N}^N
+dy_{TF}\, \Phi\left(
+\frac{\hat{y}_{max}-y_{TF}}
+{\sigma_2}\right)
+\\
+& \approx \frac{1}{2} + \frac{\hat{y}_{max}}{2N}.
+\end{align}
+The dependence on $\sigma_2$ enters
+at higher orders of $1/N$.
+
+As $N \rightarrow \infty$,
+\begin{align}
+\mathcal{L}(s,c, \sigma_{\text{int}_x}, \sigma_{\text{int}_y}; \hat{x}, \hat{y}) 
+&  \propto
+|s|\mathcal{N}\left(\hat{y}-(c+s \hat{x}), \sigma_\text{tot}\right)
+\end{align}
+even with sample selection.
+
+
+\subsubsection{$p(y_{TF})$ top-hat}
+Take $p(y_{TF})$ to be a tophat from $y_\text{min}$ to $y_\text{max}$.
+The likelihood without sample selection is
+\begin{align}
+\mathcal{L}(s,c, \sigma_{\text{int}_x}, \sigma_{\text{int}_y}; \hat{x}, \hat{y}) 
+&  =\frac{1}{y_{max}-y_{min}} \int_{y_{min}}^{y_{max}}  dy_{TF}\, \mathcal{N}(\hat{x} -(y_{TF}-c)/s | \sigma_1) 
+    \mathcal{N}(\hat{y} - y_{TF} | \sigma_2) \\
+& = \frac{|s|}{y_{max}-y_{min}}
+\mathcal{N}\left(\hat{y}-(c+s \hat{x}), \sigma_\text{tot}\right) \left(\Phi\left(\frac{y_{max}-\mu_*}{\sigma_*}\right) - \Phi\left(\frac{y_{min}-\mu_*}{\sigma_*}\right) \right) 
+\end{align}
+where
+ $\Phi$ is the standard normal CDF.
+
+
+In the case of sample selection with a maximum $\hat{y}_{max}$,
+\begin{align}
+({y_{max}-y_{min}} )\mathcal{Z} & = 
+\int_{y_{min}}^{y_{max}} 
+dy_{TF}\, \Phi\left(
+\frac{\hat{y}_{max}-y_{TF}}
+{\sigma_2}\right)
+\\
+& =  (\hat{y}_{max} - y_{min}) \Phi\left(\frac{\hat{y}_{max} - y_{min}}{\sigma_2}\right) + \sigma_2  \phi\left(\frac{{\hat{y}_{max} - y_{min}}}{\sigma_2}\right) \\
+&  +  ( y_{max} - \hat{y}_{max} ) \Phi\left(\frac{\hat{y}_{max} - y_{max}}{\sigma_2}\right) - \sigma_2  \phi\left(\frac{{\hat{y}_{max} - y_{max}}}{\sigma_2}\right) .
+\end{align}
+The equation is written such that each term is positive, which can be helpful to keep track of during implementation.
+
+Putting everything together, the likelihood with sample selection is 
+\begin{align}
+\mathcal{L}& = \frac{|s|
+\mathcal{N}\left(\hat{y}-(c+s \hat{x}), \sigma_\text{tot}\right) \left(\Phi\left(\frac{y_{max}-\mu_*}{\sigma_*}\right) - \Phi\left(\frac{y_{min}-\mu_*}{\sigma_*}\right) \right) }
+{
+ (\hat{y}_{max} - y_{min}) \Phi\left(\frac{\hat{y}_{max} - y_{min}}{\sigma_2}\right) + \sigma_2  \phi\left(\frac{{\hat{y}_{max} - y_{min}}}{\sigma_2}\right) 
+  +  ( y_{max} - \hat{y}_{max} ) \Phi\left(\frac{\hat{y}_{max} - y_{max}}{\sigma_2}\right) - \sigma_2  \phi\left(\frac{{\hat{y}_{max} - y_{max}}}{\sigma_2}\right) 
+}.
+\end{align}
+

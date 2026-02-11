@@ -1,0 +1,208 @@
+\section{Simple Model With No Peculiar Velocities}
+Consider a simple model in which peculiar velocities are not included and the background cosmology is known.
+In this case observed magnitudes can be converted to absolute magnitudes, and observed redshifts can be
+converted to distances.
+
+\subsection{Notation}
+Indexing:
+\begin{itemize}
+    \item Galaxy index: $i = 1,\ldots,N_{\text{total}}$
+    \item Redshift-bin index: $j = 1,\ldots,N_{\text{bins}}$
+\end{itemize}
+
+\subsection{Data}
+\begin{description}
+    \item[$N_{\text{bins}}$:] Number of redshift bins.
+    \item[$N_{\text{total}}$:] Total number of galaxies across all bins.
+    \item[$\hat x_i$:] Observed $\log\!\left(\frac{V_{\text{rot}}}{V_0}\right)$ for galaxy $i$.
+    \item[$\sigma_{x,i}$:] Uncertainty on $\hat x_i$ (set to zero if not available).
+    \item[$\hat y_i$:] Observed absolute magnitude for galaxy $i$.
+    \item[$\sigma_{y,i}$:] Uncertainty on $\hat y_i$ (set to zero if not available).
+    \item[$b_i$:] Redshift-bin index for galaxy $i$, with $b_i\in\{1,\ldots,N_{\text{bins}}\}$.
+\end{description}
+
+\subsection{Parameters}
+\begin{description}
+    \item[$s$:] Common slope across all redshift bins (real; assume $s\neq 0$).
+    \item[$c_j$:] Intercept for redshift bin $j$, $j=1,\ldots,N_{\text{bins}}$.
+    \item[$\sigma_{\text{int},x}$:] Intrinsic scatter in the $x$-direction (common to all galaxies; $\ge 0$).
+    \item[$\sigma_{\text{int},y}$:] Intrinsic scatter in the $y$-direction (common to all galaxies; $\ge 0$).
+    \item[$y_{\text{TF},i}$:] Latent ``on-relation'' absolute magnitude for galaxy $i$.
+    \item[$x_i$:] Latent true $x$ for galaxy $i$.
+    \item[$y_i$:] Latent true $y$ for galaxy $i$.
+\end{description}
+
+\subsection{Model}
+For each galaxy $i$:
+\begin{align}
+\hat x_i \mid x_i &\sim \mathcal N(x_i,\sigma_{x,i}),\\
+\hat y_i \mid y_i &\sim \mathcal N(y_i,\sigma_{y,i}),\\
+x_i \mid y_{{\rm TF},i}, s, c_{b_i} &\sim \mathcal N\!\left(\frac{y_{{\rm TF},i}-c_{b_i}}{s},\sigma_{{\rm int},x}\right),\\
+y_i \mid y_{{\rm TF},i} &\sim \mathcal N(y_{{\rm TF},i},\sigma_{{\rm int},y}).
+\end{align}
+Measurement errors are assumed independent, and (for now) intrinsic scatters in $x$ and $y$ are independent.
+
+\subsection{No Sample Selection}
+\subsubsection{Total Likelihood}
+Assuming galaxies are independent, the total likelihood is
+\begin{align}
+\mathcal L(s,\{c_j\},\sigma_{\text{int},x},\sigma_{\text{int},y};\{\hat x_i\},\{\hat y_i\})
+= \prod_{i=1}^{N_{\text{total}}} \mathcal L_i(s,c_{b_i},\sigma_{\text{int},x},\sigma_{\text{int},y};\hat x_i,\hat y_i).
+\end{align}
+
+\subsubsection{Likelihood for an Individual Galaxy}
+Define
+\begin{align}
+\mathcal L_i
+&= p(\hat x_i,\hat y_i \mid s,c_{b_i},\sigma_{\text{int},x},\sigma_{\text{int},y}).
+\end{align}
+Marginalizing over latent variables:
+\begin{align}
+\mathcal L_i
+&= \int dx_i\,dy_i\,dy_{\text{TF},i}\;
+p(\hat x_i\mid x_i)\,p(\hat y_i\mid y_i)\,
+p(x_i\mid y_{\text{TF},i},s,c_{b_i})\,p(y_i\mid y_{\text{TF},i})\,p(y_{\text{TF},i}).
+\end{align}
+
+Convolving intrinsic and measurement scatter gives
+\begin{align}
+\sigma_{1,i}^2 &= \sigma_{x,i}^2+\sigma_{\text{int},x}^2,\\
+\sigma_{2,i}^2 &= \sigma_{y,i}^2+\sigma_{\text{int},y}^2,
+\end{align}
+so that
+\begin{align}
+\hat x_i \mid y_{\text{TF},i} &\sim \mathcal N\!\left(\frac{y_{\text{TF},i}-c_{b_i}}{s},\sigma_{1,i}\right),\\
+\hat y_i \mid y_{\text{TF},i} &\sim \mathcal N(y_{\text{TF},i},\sigma_{2,i}),
+\end{align}
+and therefore the per-galaxy likelihood can be written as
+\begin{align}
+\mathcal L_i
+&= \int dy_{\text{TF},i}\;
+\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF},i}-c_{b_i}}{s},\sigma_{1,i}\right)\,
+\mathcal N(\hat y_i;y_{\text{TF},i},\sigma_{2,i})\,
+p(y_{\text{TF},i}).
+\end{align}
+
+\subsubsection{Closed Form for a Top-Hat Prior on $y_{\text{TF},i}$}
+Let $p(y_{\text{TF},i})$ be uniform on $[y_{\min},y_{\max}]$:
+\begin{align}
+p(y_{\text{TF},i})=
+\begin{cases}
+\frac{1}{y_{\max}-y_{\min}}, & y_{\min}\le y_{\text{TF},i}\le y_{\max},\\
+0, & \text{otherwise}.
+\end{cases}
+\end{align}
+Then
+\begin{align}
+\mathcal L_i
+&= \frac{1}{y_{\max}-y_{\min}}
+\int_{y_{\min}}^{y_{\max}} dy_{\text{TF},i}\;
+\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF},i}-c_{b_i}}{s},\sigma_{1,i}\right)\,
+\mathcal N(\hat y_i;y_{\text{TF},i},\sigma_{2,i})\\
+&= \frac{|s|}{y_{\max}-y_{\min}}\;
+\mathcal N\!\left(\hat y_i; c_{b_i}+s\hat x_i,\ \sigma_{\text{tot},i}\right)
+\left[
+\Phi\!\left(\frac{y_{\max}-\mu_{*,i}}{\sigma_{*,i}}\right)
+-
+\Phi\!\left(\frac{y_{\min}-\mu_{*,i}}{\sigma_{*,i}}\right)
+\right],
+\end{align}
+where $\Phi$ is the standard normal CDF and
+\begin{align}
+\sigma_{\text{tot},i}^2 &= s^2\sigma_{1,i}^2+\sigma_{2,i}^2,\\
+\mu_{*,i} &= \frac{(s\hat x_i+c_{b_i})\,\sigma_{2,i}^2+\hat y_i\,s^2\sigma_{1,i}^2}{\sigma_{\text{tot},i}^2},\\
+\sigma_{*,i}^2 &= \frac{s^2\sigma_{1,i}^2\sigma_{2,i}^2}{\sigma_{\text{tot},i}^2}.
+\end{align}
+
+\paragraph{Case of no limits on $y_{\text{TF},i}$}
+If $p(y_{\text{TF},i})$ is taken to be (improper) uniform on $\mathbb R$, the truncated-CDF factor tends to 1 and
+\begin{align}
+\mathcal L_i \propto |s|\;\mathcal N\!\left(\hat y_i; c_{b_i}+s\hat x_i,\ \sigma_{\text{tot},i}\right).
+\end{align}
+
+\subsection{Sample Selection}
+In practice, the sample may have incompleteness that biases the analysis.
+Specifically, some of the objects that enter the do not make it into the final sample.
+A classic example is Malmquist bias: given an model for the underlying 
+distribution of absolute magnitudes, not all objects are not detected in a magnitude-limited survey.
+
+
+
+for the selected sample is not the same as the expected distribution of $\hat{x}$ and $\hat{y}$ for the parent population.  In this case, the likelihood for an individual galaxy is the truncated version of the likelihood without selection, and the total likelihood includes a Poisson factor for the total number of selected galaxies.
+Incompleteness can be property of the input catalog and of DESI fiber allocations
+and redshift success. 
+The observables that are relevant for incompleteness are the rotation velocities $\hat x$, and observed
+magnitudes $\hat y + \mu$, and angular sizes $\hat \theta$ that define the cutoff of SGA galaxies.  Anecdotally,
+SGA size uncertainties are small compared to the size of the cutoff region.  As long as $y_{\text{TF}}$ is not
+correlated with $\hat \theta$ at fixed $\hat x$ and $\hat y$, the SGA cutoff can be treated as a cutoff in the observed magnitudes and rotation velocities.  In this case, the likelihood for an individual galaxy is the truncated version of the likelihood without selection, and the total likelihood includes a Poisson factor for the total number of selected galaxies.
+We can also assume that the DESI fiber allocation and redshift success is independent of gakaxy properties.
+Underlying this assumption is DESI main targets affect fiber allocation independent of SGA galaxy angular size
+and that target magnitudes are well above he DESI fiber magnitude limit. 
+
+Additional truncation can be warranted to mitigate outliers and/or to ensure that the model assumptions are valid for the included sample.  For example,
+dwarf galaxies that are intrinsically faint have rotation velocities that are not well described by the Tully Fisher relation of normal galaxies.
+In the case of sample selection, more parameters are needed to describe the the measurements and the model.
+
+
+
+
+\begin{description}
+    \item[$\hat y_{\text{max},j}$, $\hat y_{\text{min},j}$:] Maximum/minimum observed $\hat y$ for redshift bin $j$.
+    Recall that given the model assumptions, the absolute magnitude is derived by subtracting fiducial distance moduli from
+    the observed magmitude.  Similarly, the limiting magnitudes can be dervied by subtracting $\mu$ from the observed
+    limiting magnitudes, e.g.. $\hat y_{\text{max},j} = \hat Y_{\text{max}} + \mu_i$ for all $j$.
+    \item[$\hat x_{\text{max},j}$, $\hat x_{\text{min},j}$:] Maximum/minimum observed $\hat x$ for redshift bin $j$.
+    % \item[$f$:] Fraction of galaxies in the parent population that are included in the sample after selection.  This is generally model dependent, and can
+    % be calculated given the selection function and the distribution of $y_{\text{TF}}$ in the parent population.
+    \item[$N = fN_0$:] Number of galaxies expected in the sample.  $N_0$ is the number of galaxies expected in the sample if there were no selection.
+    $f$ is the fraction of galaxies in the parent population expected to be included in the sample after selection.  This is generally 
+    a ``derived parameter'' being calculated given the selection function, redshift distribution of galaxies, and the distribution of $y_{\text{TF}}$ in the parent population.
+\end{description}
+
+\subsubsection{Total Likelihood}
+Let $\theta \equiv \big(s,\{c_j\},\sigma_{\text{int},x},\sigma_{\text{int},y}\big)$ and let $N$ denote the expected
+number of galaxies in the \emph{observed} (selected) sample. Let $N_{\text{total}}$ be the observed number of galaxies.
+
+Assuming a Poisson model for the total number of selected galaxies and conditional independence of galaxy measurements,
+the total likelihood is
+\begin{align}
+\mathcal L(\theta, N;\{\hat x_i\},\{\hat y_i\})
+&=
+\frac{e^{-N}N^{N_{\text{total}}}}{N_{\text{total}}!}
+\ \prod_{i=1}^{N_{\text{total}}}
+p(\hat x_i,\hat y_i \mid \theta, S_i=1),
+\end{align}
+where $S_i=1$ denotes that galaxy $i$ is included by the selection.
+
+Writing the selected-sample (truncated) per-galaxy density explicitly,
+\begin{align}
+p(\hat x_i,\hat y_i \mid \theta, S_i=1, b_i=j)
+&=
+\frac{
+p(\hat x_i,\hat y_i \mid \theta, b_i=j)\,
+\mathbf 1\!\left[(\hat x_i,\hat y_i)\in\mathcal S_j\right]
+}{
+P(S=1\mid \theta, b_i=j)
+},
+\\
+P(S=1\mid \theta, b_i=j)
+&=
+\int\!\!\!\int_{(\hat x,\hat y)\in\mathcal S_j}
+p(\hat x,\hat y \mid \theta, b_i=j)\, d\hat x\, d\hat y,
+\end{align}
+and the selection region for bin $j$ can be taken as the rectangle
+\begin{align}
+\mathcal S_j
+=
+\Big\{(\hat x,\hat y):
+\hat x_{\min,j}\le \hat x\le \hat x_{\max,j},\ 
+\hat y_{\min,j}\le \hat y\le \hat y_{\max,j}
+\Big\}.
+\end{align}
+
+\subsection{Priors}
+Use flat priors for $(s,\{c_j\})$ and weakly informative priors for the intrinsic scatters:
+\begin{align}
+\sigma_{\text{int},x} &\sim \text{Half-Cauchy}\!\left(0,\ 5\cdot \mathrm{sd}[\{\hat x_i\}]\right),\\
+\sigma_{\text{int},y} &\sim \text{Half-Cauchy}\!\left(0,\ 5\cdot \mathrm{sd}[\{\hat y_i\}]\right).
+\end{align}
