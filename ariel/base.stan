@@ -24,16 +24,16 @@ data {
   int<lower=0> N_total;
   
   // Absolute magnitude data (flattened array with ragged structure)
-  vector[N_total] x;
-  
-  // Absolute magnitude uncertainties (optional, set to zero if not available)
-  vector<lower=0>[N_total] sigma_x;
-  
-  // log(Vrot/V0) data (flattened array with ragged structure)
   vector[N_total] y;
   
-  // log(Vrot/V0) uncertainties (optional, set to zero if not available)
+  // Absolute magnitude uncertainties (optional, set to zero if not available)
   vector<lower=0>[N_total] sigma_y;
+  
+  // log(Vrot/V0) data (flattened array with ragged structure)
+  vector[N_total] x;
+  
+  // log(Vrot/V0) uncertainties (optional, set to zero if not available)
+  vector<lower=0>[N_total] sigma_x;
   
   // Selection function parameter
   real haty_max;
