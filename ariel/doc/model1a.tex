@@ -228,7 +228,8 @@ This case is implemented in {\tt base.stan} with {\tt int y\_TF\_limits = 1};
   {\tt y\_selection = 1}; {\tt plane\_cut = 0;}and when run with Ariel's mock after application of
 a maximum $\hat{y}_{\max}$
   the input $s$ and $c$ are recovered to incredible precision,
-  and the intrinsic dispersions to 1$\sigma$.
+  and the intrinsic dispersions to 1$\sigma$.  Note that the analysis model for $p(y_{TF})$ is inconsistent
+  with the mock so some deviation is to be expected.
 
 \subsubsection{Selection domain: upper limit in $\hat{y}$ and a fixed half-plane cut}
 \label{subsec:selection_yhatmax_halfplane}
@@ -311,8 +312,10 @@ This integral has no analytic solution and is integrated numerically.
 This case is implemented in {\tt base.stan} with {\tt int y\_TF\_limits = 1};
   {\tt y\_selection = 1}; {\tt plane\_cut = 1;}and when run with Ariel's mock after application of
 a maximum $\hat{y}_{\max}$
-  the input $s$ and $c$ are recovered to TBD %incredible precision,
- % and the intrinsic dispersions to 1$\sigma$.
+  the input $s$ and $c$ are recovered tp incredible precision,
+  and the intrinsic dispersions to 1$\sigma$ in preliminary tests.
+ Note that the analysis model for $p(y_{TF})$ is inconsistent
+  with the mock so some deviation is to be expected.
 
 \subsection{Priors}
 Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:
