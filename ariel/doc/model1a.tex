@@ -219,53 +219,92 @@ P(S_i=1\mid \theta)
 \label{subsec:selection_yhatmax_halfplane}
 There seems to be a small population of luminous galaxies that have lower rotational velocities than given by the TF relation.
 We consider a sample constructed by imposing (i) an \emph{upper limit} on the measured value $\hat y$
-and (ii) a \emph{fixed half-plane cut} in the measured $(\hat x,\hat y)$-plane. Thus $\mathcal S_i$ is
-defined by the intersection
+and (ii) a \emph{fixed half-plane cut} in the measured $(\hat x,\hat y)$-plane. 
+
+Given the domain
 \begin{align}
-\hat y_i \le \hat y_{\max,i},
+\mathcal S_i:\qquad 
+\hat y_i \le \hat y_{\max, i},
 \qquad
-\hat y_i - a\,\hat x_i - b \ge 0,
+\hat y_i-a\,\hat x_i-b \ge 0
+\ \ \Longleftrightarrow\ \
+a\,\hat x_i+b \le \hat y_i \le \hat y_{\max, i},
 \end{align}
-where $(a,b)$ are fixed constants defining the half-plane boundary.
-
-Assuming independent Gaussian measurement errors,
-\begin{align}
-\hat x_i \sim \mathcal N(x_i,\sigma_{1,i}^2),
+where $(a,b)$ are fixed constants defining the half-plane boundary, introduce the sheared coordinates $(\hat u,\hat y)$ by defining
+\begin{equation}
+\hat u \equiv \hat y - a\,\hat x - b,
+\qquad\text{and}\qquad
+\hat y \equiv \hat y.
+\end{equation}
+In these coordinates, the oblique constraint becomes the constant bound
+\begin{equation}
+\hat y-a\,\hat x-b \ge 0 \quad\Longleftrightarrow\quad \hat u \ge 0,
+\end{equation}
+and the upper cut remains
+\begin{equation}
+\hat y \le \hat y_{\max,i}.
+\end{equation}
+Therefore the selection region is
+\begin{equation}
+\mathcal S_i=\{(\hat u,\hat y):\ \hat u\ge 0,\ \hat y\le \hat y_{\max,i}\}.
+\end{equation}
+If $a\neq 0$, the inverse transformation is
+\begin{equation}
+\hat x = \frac{\hat y-b-\hat u}{a},
 \qquad
-\hat y_i \sim \mathcal N(y_i,\sigma_{2,i}^2),
-\end{align}
-the selection probability conditional on the latent $(x_i,y_i)$ can be written as a bivariate normal CDF.
-Define
-\begin{align}
-u_i(x_i,y_i) &\equiv \frac{\hat y_{\max,i}-y_i}{\sigma_{2,i}},\\
-v_i(x_i,y_i) &\equiv \frac{y_i-a\,x_i-b}{\sqrt{\sigma_{2,i}^2+a^2\sigma_{1,i}^2}},\\
-\rho_i &\equiv -\,\frac{\sigma_{2,i}}{\sqrt{\sigma_{2,i}^2+a^2\sigma_{1,i}^2}},
-\end{align}
-then
-\begin{align}
-P(S_i=1\mid x_i,y_i)
-&=
-P\!\left(\hat y_i \le \hat y_{\max,i},\ \hat y_i-a\,\hat x_i-b\ge 0\ \bigm|\ x_i,y_i\right)\\
-&=
-\Phi_2\!\Big(u_i(x_i,y_i),\,v_i(x_i,y_i);\ \rho_i\Big),
-\end{align}
-where $\Phi_2(\cdot,\cdot;\rho)$ denotes the standard bivariate normal CDF with correlation $\rho$.
+\hat y=\hat y,
+\end{equation}
+and the Jacobian determinant is constant:
+\begin{equation}
+\left|\frac{\partial(\hat x,\hat y)}{\partial(\hat u,\hat y)}\right|=\frac{1}{|a|},
+\qquad\text{so}\qquad
+d\hat x\,d\hat y = \frac{1}{|a|}\,d\hat u\,d\hat y.
+\end{equation}
 
-Marginalizing over the latent distribution gives
+The selection probability can be written in the new coordinates as
 \begin{align}
-P(S_i=1\mid \theta)
-=
-\iint P(S_i=1\mid x_i,y_i)\,p(x_i,y_i\mid \theta)\,dx_i\,dy_i.
-\end{align}
-If, for example, $(x_i,y_i)$ are uniform on $[x_{\min},x_{\max}]\times [y_{\min},y_{\max}]$, then
-\begin{align}
-P(S_i=1\mid \theta)
-=
-\frac{1}{(x_{\max}-x_{\min})(y_{\max}-y_{\min})}
-\int_{x_{\min}}^{x_{\max}}\int_{y_{\min}}^{y_{\max}}
-\Phi_2\!\Big(u_i(x,y),\,v_i(x,y);\ \rho_i\Big)\,dy\,dx.
+P(S_i=1\mid\theta)
+& =
+\int dy_{\mathrm{TF},i}\; p(y_{\mathrm{TF},i})
+\int_{-\infty}^{\hat y_{\max,i}} d\hat y
+\int_{0}^{\infty} d\hat u\;
+\frac{1}{|a|}\,
+\mathcal N\!\left(\frac{\hat y-b-\hat u}{a};\frac{y_{\mathrm{TF},i}-c}{s},\sigma_{1,i}\right)\,
+\mathcal N\!\left(\hat y;y_{\mathrm{TF},i},\sigma_{2,i}\right)
 \end{align}
 
+Given the parameterization
+\begin{equation}
+\rho \;=\; \frac{\sigma_{2,i}}{\sqrt{\sigma_{2,i}^2 + a^2\,\sigma_{1,i}^2}}
+\end{equation}
+
+\begin{equation}
+\alpha \;=\; \frac{b - \bigl(\mu_{2,i}-a\,\mu_{1,i}\bigr)}{\sqrt{\sigma_{2,i}^2 + a^2\,\sigma_{1,i}^2}}
+\;=\;
+\frac{b - \left(y_{\mathrm{TF},i}-a\,\frac{y_{\mathrm{TF},i}-c}{s}\right)}{\sqrt{\sigma_{2,i}^2 + a^2\,\sigma_{1,i}^2}}
+\end{equation}
+
+\begin{equation}
+\beta \;=\; \frac{\hat y_{\max,i} - \mu_{2,i}}{\sigma_{2,i}}
+\;=\;
+\frac{\hat y_{\max,i} - y_{\mathrm{TF},i}}{\sigma_{2,i}}
+\end{equation}
+
+\begin{align}
+P(S_i=1\mid\theta)
+& =
+\int dy_{\mathrm{TF},i}\; p(y_{\mathrm{TF},i})
+\Phi_2\left(-\alpha, \beta; -\rho \right)
+\end{align}
+where $\Phi_2$ is the bivariate standard normal cumulative distribution function.
+
+\paragraph{Case of limits on $y_{\rm TF}$}
+\begin{align}
+P(S_i=1\mid\theta)
+& = \frac{1}{y_{max}-y_{min}}
+\int_{y_{min}}^{y_{max}} dy_{\mathrm{TF},i}\; 
+\Phi_2\left(-\alpha, \beta; -\rho \right)
+\end{align}
 
 
 
