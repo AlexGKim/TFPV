@@ -279,15 +279,12 @@ Given the parameterization
 \end{equation}
 
 \begin{equation}
-\alpha \;=\; \frac{b - \bigl(\mu_{2,i}-a\,\mu_{1,i}\bigr)}{\sqrt{\sigma_{2,i}^2 + a^2\,\sigma_{1,i}^2}}
-\;=\;
+\alpha =
 \frac{b - \left(y_{\mathrm{TF},i}-a\,\frac{y_{\mathrm{TF},i}-c}{s}\right)}{\sqrt{\sigma_{2,i}^2 + a^2\,\sigma_{1,i}^2}}
 \end{equation}
 
 \begin{equation}
-\beta \;=\; \frac{\hat y_{\max,i} - \mu_{2,i}}{\sigma_{2,i}}
-\;=\;
-\frac{\hat y_{\max,i} - y_{\mathrm{TF},i}}{\sigma_{2,i}}
+\beta = \frac{\hat y_{\max,i} - y_{\mathrm{TF},i}}{\sigma_{2,i}}
 \end{equation}
 
 \begin{align}
@@ -298,7 +295,33 @@ P(S_i=1\mid\theta)
 \end{align}
 where $\Phi_2$ is the bivariate standard normal cumulative distribution function.
 
+
+The integral is not solved analytically.  There may be an efficient way to solve this numerically.
+
+\begin{align}
+P(S_i=1\mid\theta)
+&=
+\int_{-\infty}^{\hat y_{\max,i}} d\hat y
+\int_{0}^{\infty} d\hat u\;
+\frac{1}{|a|}\;
+\mathbb{E}_{\,y_{\mathrm{TF},i}\sim \mathcal N(\hat y,\sigma_{2,i})}
+\!\left[
+\mathcal N\!\left(
+\frac{\hat y-b-\hat u}{a}\;;\;\frac{y_{\mathrm{TF},i}-c}{s},\sigma_{1,i}
+\right)
+\right].
+\end{align}
+
 \paragraph{Case of limits on $y_{\rm TF}$}
+Consider
+\begin{equation}
+p\!\left(y_{\mathrm{TF},i}\right)=
+\begin{cases}
+\dfrac{1}{y_{\max}-y_{\min}}, & y_{\min}\le y_{\mathrm{TF},i}\le y_{\max},\\[6pt]
+0, & \text{otherwise.}
+\end{cases}
+\end{equation}
+
 \begin{align}
 P(S_i=1\mid\theta)
 & = \frac{1}{y_{max}-y_{min}}

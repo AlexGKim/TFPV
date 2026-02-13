@@ -16,6 +16,158 @@
 // - sigma_int_y: intrinsic scatter in y-axis (log velocity)
 // - intercept[i]: TFR intercept for the i-th redshift bin
 
+functions {
+  real binormal_cdf(tuple(real, real) z, real rho) {
+    real z1 = z.1;
+    real z2 = z.2;
+    if (z1 == 0 && z2 == 0) {
+      return 0.25 + asin(rho) / (2 * pi());
+    }
+    real denom = sqrt((1 + rho) * (1 - rho));
+    real term1 = z1 == 0 ? (z2 > 0 ? 0.25 : -0.25)
+                 : owens_t(z1, (z2 / z1 - rho) / denom);
+    real term2 = z2 == 0 ? (z1 > 0 ? 0.25 : -0.25)
+                 : owens_t(z2, (z1 / z2 - rho) / denom);
+    real z1z2 = z1 * z2;
+    real delta = z1z2 < 0 || (z1z2 == 0 && (z1 + z2) < 0);
+    return 0.5 * (Phi(z1) + Phi(z2) - delta) - term1 - term2;
+  }
+  real integrate_binormal_trapez(real y_min,
+                                 real y_max,
+                                 real yhat_max,
+                                 real s_plane,
+                                 real c_plane,
+                                 real s,
+                                 real c,
+                                 real sigma1,
+                                 real sigma2,
+                                 int N) {
+    real h = (y_max - y_min) / N;
+    real sigma_tot = sqrt(sigma2 ^ 2 + s_plane ^ 2 * sigma1 ^ 2);
+    real rho = sigma2 / sigma_tot;
+    real alpha_n;
+    real beta_n;
+    real sum;
+    
+    // Evaluate integrand at left endpoint
+    alpha_n = (c_plane - (y_min - s_plane * (y_min - c) / s)) / sigma_tot;
+    beta_n = (yhat_max - y_min) / sigma2;
+    sum = binormal_cdf((-alpha_n, beta_n) | -rho);
+    
+    // Evaluate integrand at interior points
+    for (n in 1 : (N - 1)) {
+      real y_TF = y_min + n * h;
+      alpha_n = (c_plane - (y_TF - s_plane * (y_TF - c) / s)) / sigma_tot;
+      beta_n = (yhat_max - y_TF) / sigma2;
+      sum += 2.0 * binormal_cdf((-alpha_n, beta_n) | -rho);
+    }
+    
+    // Evaluate integrand at right endpoint
+    alpha_n = (c_plane - (y_max - s_plane * (y_max - c) / s)) / sigma_tot;
+    beta_n = (yhat_max - y_max) / sigma2;
+    sum += binormal_cdf((-alpha_n, beta_n) | -rho);
+    
+    // Trapezoidal rule with top-hat normalization
+    return (h / 2.0) * sum / (y_max - y_min);
+  }
+  
+  /**
+  * Compute the selection probability integral using Gauss-Legendre quadrature
+  * with 30 nodes.
+  *
+  * Integrates:
+  *   P(S=1|theta) = (1/(y_max - y_min)) * 
+  *       int_{y_min}^{y_max} Phi_2(-alpha(y_TF), beta(y_TF); -rho) dy_TF
+  *
+  * where:
+  *   sigma_tot = sqrt(sigma2^2 + s_plane^2 * sigma1^2)
+  *   rho       = sigma2 / sigma_tot
+  *   alpha(y)  = (c_plane - (y - s_plane*(y - c)/s)) / sigma_tot
+  *   beta(y)   = (yhat_max - y) / sigma2
+  *
+  * @param y_min      Lower bound of top-hat prior on y_TF
+  * @param y_max      Upper bound of top-hat prior on y_TF
+  * @param yhat_max   Upper selection cut on observed y-hat
+  * @param s_plane    Slope of the half-plane cut (in working coordinates)
+  * @param c_plane    Intercept of the half-plane cut (in working coordinates)
+  * @param s          TF slope (in working coordinates)
+  * @param c          TF intercept (in working coordinates)
+  * @param sigma1     sqrt(sigma_{x,i}^2 + sigma_{int,x}^2) in working coords
+  * @param sigma2     sqrt(sigma_{y,i}^2 + sigma_{int,y}^2)
+  * @return           The selection probability P(S_i=1|theta)
+  */
+  real integrate_binormal_gl(real y_min,
+                             real y_max,
+                             real yhat_max,
+                             real s_plane,
+                             real c_plane,
+                             real s,
+                             real c,
+                             real sigma1,
+                             real sigma2) {
+    // ---- 30-point Gauss-Legendre nodes and weights on [-1, 1] ----
+    // Precomputed to full double precision.
+    int N_gl = 30;
+    
+    array[30] real nodes = {-0.99689348407464954, -0.98366812327974720,
+                            -0.96002186496830751, -0.92620004742927432,
+                            -0.88256053579205268, -0.82956576238276839,
+                            -0.76777743210482619, -0.69785049479331579,
+                            -0.62052618298924286, -0.53662414814201989,
+                            -0.44703376953808918, -0.35270472553087811,
+                            -0.25463692616788985, -0.15386991360858355,
+                            -0.05147184255531770, 0.05147184255531770,
+                            0.15386991360858355, 0.25463692616788985,
+                            0.35270472553087811, 0.44703376953808918,
+                            0.53662414814201989, 0.62052618298924286,
+                            0.69785049479331579, 0.76777743210482619,
+                            0.82956576238276839, 0.88256053579205268,
+                            0.92620004742927432, 0.96002186496830751,
+                            0.98366812327974720, 0.99689348407464954};
+    
+    array[30] real weights = {0.00796819249616661, 0.01846646831109096,
+                              0.02878470788332337, 0.03879919745483482,
+                              0.04840267283059405, 0.05749315621761907,
+                              0.06597422988218050, 0.07375597473770521,
+                              0.08075589522942022, 0.08689978720108298,
+                              0.09212252223778613, 0.09636873717464426,
+                              0.09959342058679527, 0.10176238974840550,
+                              0.10285265289355884, 0.10285265289355884,
+                              0.10176238974840550, 0.09959342058679527,
+                              0.09636873717464426, 0.09212252223778613,
+                              0.08689978720108298, 0.08075589522942022,
+                              0.07375597473770521, 0.06597422988218050,
+                              0.05749315621761907, 0.04840267283059405,
+                              0.03879919745483482, 0.02878470788332337,
+                              0.01846646831109096, 0.00796819249616661};
+    
+    // ---- Map from [-1,1] to [y_min, y_max] ----
+    real half_width = 0.5 * (y_max - y_min);
+    real midpoint = 0.5 * (y_max + y_min);
+    
+    // ---- Quantities that don't depend on y_TF ----
+    real sigma_tot = sqrt(square(sigma2) + square(s_plane) * square(sigma1));
+    real rho = sigma2 / sigma_tot;
+    // alpha(y_TF) = (c_plane - y_TF * (1 - s_plane/s) + s_plane*c/s) / sigma_tot
+    // Factor out the y_TF-dependent and constant parts:
+    real alpha_slope = -(1.0 - s_plane / s) / sigma_tot;
+    real alpha_offset = (c_plane + s_plane * c / s) / sigma_tot;
+    real inv_sigma2 = inv(sigma2);
+    
+    // ---- Quadrature sum ----
+    real sum = 0.0;
+    for (k in 1 : N_gl) {
+      real y_TF = midpoint + half_width * nodes[k];
+      real alpha_k = alpha_offset + alpha_slope * y_TF;
+      real beta_k = (yhat_max - y_TF) * inv_sigma2;
+      sum += weights[k] * binormal_cdf((-alpha_k, beta_k) | -rho);
+    }
+    
+    // half_width from the change of variables; 1/(y_max - y_min) from the top-hat
+    // half_width / (y_max - y_min) = 1/2
+    return 0.5 * sum;
+  }
+}
 data {
   // Number of redshift bins
   int<lower=1> N_bins; // For the momment N_bins = 1
@@ -64,9 +216,18 @@ transformed data {
   // run configuration parameters
   int y_TF_limits = 1;
   int y_selection = 1;
+  int plane_cut = 1;
   
   int fit_sigmas = 1;
   // real theta_int; // if fit_sigmas ==0
+  
+  // for now put the slice cut here
+  real slope_plane = -8;
+  real intercept_plane = -30;
+  real slope_plane_std = slope_plane * sd_x;
+  real intercept_plane_std = intercept_plane
+                             + slope_plane_std * mean_x / sd_x;
+  ;
 }
 parameters {
   // Common slope across all redshift bins
@@ -76,8 +237,8 @@ parameters {
   vector<upper=0>[N_bins] intercept_std;
   
   // Intrinsic scatter in x-direction (absolute magnitude)
-  real<lower=0> sigma_int_x;   // in x-units
-  real<lower=0> sigma_int_y;   // in y-units
+  real<lower=0> sigma_int_x; // in x-units
+  real<lower=0> sigma_int_y; // in y-units
 }
 transformed parameters {
   // real sigma_int_y;
@@ -85,7 +246,7 @@ transformed parameters {
   if (fit_sigmas == 0) {
     sigma_int_x_std = sigma_int_y / sd_x;
   } else {
-      sigma_int_x_std = sigma_int_x / sd_x;
+    sigma_int_x_std = sigma_int_x / sd_x;
   }
 }
 model {
@@ -126,7 +287,7 @@ model {
     target += log_diff_exp(term_ub, term_lb); // done with this use of term_lb/ub
     
     // Term for the selection function
-    if (y_selection != 0) {
+    if (y_selection != 0 && plane_cut == 0) {
       // vector[N_total] sigma2 = sqrt(sigmasq2);
       vector[N_total] sigma2 = sqrt(square(sigma_int_y) + sigma_y_sq);
       
@@ -146,6 +307,14 @@ model {
       }
       
       target += -log_diff_exp(term_lb, term_ub);
+    } else if (y_selection != 0 && plane_cut == 1) {
+      for (n in 1 : N_total) {
+        target += -log(
+                       integrate_binormal_gl(y_lb, y_ub, haty_max,
+                         slope_plane_std, intercept_plane_std, slope_std,
+                         intercept_std[bin_idx], sqrt(sigmasq1_std[n]),
+                         sqrt(sigmasq2[n])));
+      }
     }
   }
   

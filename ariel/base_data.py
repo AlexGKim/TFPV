@@ -173,7 +173,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16):
 if __name__ == '__main__':
     # Input and output file paths
     # input_csv = 'TF_mock_input.csv'
-    input_csv = 'TF_mock_tophat-mag_input.csv'
+    input_csv = 'data/TF_mock_tophat-mag_input.csv'
     output_json = 'TF_mock_input.json'
     init_json = 'TF_mock_init.json'
     
