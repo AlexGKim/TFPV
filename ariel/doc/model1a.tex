@@ -305,7 +305,13 @@ P(S_i=1\mid\theta)
 \int dy_{\mathrm{TF},i}\; p(y_{\mathrm{TF},i})
 \Phi_2\left(-\alpha, \beta; -\rho \right)
 \end{align}
-bu definition, where $\Phi_2$ is the bivariate standard normal cumulative distribution function.
+by definition, where $\Phi_2$ is the bivariate standard normal cumulative distribution function.
+
+This case is implemented in {\tt base.stan} with {\tt int y\_TF\_limits = 1};
+  {\tt y\_selection = 1}; {\tt plane\_cut = 1;}and when run with Ariel's mock after application of
+a maximum $\hat{y}_{\max}$
+  the input $s$ and $c$ are recovered to TBD %incredible precision,
+ % and the intrinsic dispersions to 1$\sigma$.
 
 \subsection{Priors}
 Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:
@@ -313,8 +319,3 @@ Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scat
 \sigma_{\text{int},x} &\sim \text{Half-Cauchy}\!\left(0,\ 5\cdot \mathrm{sd}[\{\hat x_i\}]\right),\\
 \sigma_{\text{int},y} &\sim \text{Half-Cauchy}\!\left(0,\ 5\cdot \mathrm{sd}[\{\hat y_i\}]\right).
 \end{align}
-This case is implemented in {\tt base.stan} with {\tt int y\_TF\_limits = 1};
-  {\tt y\_selection = 1}; {\tt plane\_cut = 1;}and when run with Ariel's mock after application of
-a maximum $\hat{y}_{\max}$
-  the input $s$ and $c$ are recovered to TBD %incredible precision,
- % and the intrinsic dispersions to 1$\sigma$.
