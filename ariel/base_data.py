@@ -14,7 +14,7 @@ import json
 import numpy as np
 
 
-def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16):
+def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, sample_size=None):
     """
     Process TF mock data: convert to Stan JSON format and create initial conditions.
     
@@ -64,7 +64,42 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16):
     # Convert to numpy arrays for calculations
     x = np.array(x_data)
     y = np.array(y_data)
+    sigma_x = np.array(sigma_x_data)
+    sigma_y = np.array(sigma_y_data)
+    
+    # ============================================================================
+    # SECTION 1.5: RANDOM SAMPLING (if sample_size is specified)
+    # ============================================================================
+    N_filtered = len(x)
+    
+    if sample_size is not None and sample_size < N_filtered:
+        # Set random seed for reproducibility
+        np.random.seed(42)
+        
+        # Randomly sample indices
+        sample_indices = np.random.choice(N_filtered, size=sample_size, replace=False)
+        
+        # Apply sampling
+        x = x[sample_indices]
+        y = y[sample_indices]
+        sigma_x = sigma_x[sample_indices]
+        sigma_y = sigma_y[sample_indices]
+        
+        print(f"\nRandom sampling:")
+        print(f"  Filtered data size: {N_filtered}")
+        print(f"  Requested sample size: {sample_size}")
+        print(f"  Final sample size: {len(x)}")
+    elif sample_size is not None and sample_size >= N_filtered:
+        print(f"\nNote: Requested sample size ({sample_size}) >= filtered data size ({N_filtered})")
+        print(f"  Using all {N_filtered} filtered galaxies")
+    
     N_total = len(x)
+    
+    # Convert back to lists for JSON serialization
+    x_data = x.tolist()
+    y_data = y.tolist()
+    sigma_x_data = sigma_x.tolist()
+    sigma_y_data = sigma_y.tolist()
     
     # ============================================================================
     # SECTION 2: CREATE STAN DATA DICTIONARY
@@ -138,7 +173,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16):
     # ============================================================================
     # SECTION 5: PRINT SUMMARY STATISTICS
     # ============================================================================
-    print(f"Data conversion complete!")
+    print(f"\nData conversion complete!")
     print(f"Stan data output file: {data_output_file}")
     print(f"Initial conditions output file: {init_output_file}")
     print(f"\nFiltering:")
@@ -148,7 +183,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16):
     print(f"  haty_max (selection threshold): {haty_max}")
     print(f"\nSummary:")
     print(f"  Number of redshift bins: {N_bins}")
-    print(f"  Total number of galaxies: {N_total}")
+    print(f"  Final sample size: {N_total}")
     print(f"  Galaxies per bin: {N_gal}")
     print(f"\nData ranges:")
     print(f"  x (log_V_V0): [{np.min(x):.3f}, {np.max(x):.3f}]")
@@ -171,11 +206,35 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16):
 
 
 if __name__ == '__main__':
-    # Input and output file paths
-    # input_csv = 'TF_mock_input.csv'
-    input_csv = 'data/TF_mock_tophat-mag_input.csv'
-    output_json = 'TF_mock_input.json'
-    init_json = 'TF_mock_init.json'
+    # ============================================================================
+    # USER CONFIGURATION - Modify these variables as needed
+    # ============================================================================
     
+    # Input file path
+    input_csv = 'data/TF_mock_tophat-mag_input.csv'
+    
+    # Selection function threshold
+    haty_max = -16
+    
+    # Final sample size (set to None to use all filtered data)
+    # Examples:
+    #   sample_size = None    # Use all filtered data
+    #   sample_size = 100     # Randomly sample 100 galaxies
+    #   sample_size = 500     # Randomly sample 500 galaxies
+    sample_size = 1000 #None
+    
+    # ============================================================================
+    # Generate output filenames based on sample size
+    # ============================================================================
+    if sample_size is not None:
+        output_json = f'TF_mock_input_n{sample_size}.json'
+        init_json = f'TF_mock_init_n{sample_size}.json'
+    else:
+        output_json = 'TF_mock_input.json'
+        init_json = 'TF_mock_init.json'
+    
+    # ============================================================================
     # Process TF data: convert to Stan format and create initial conditions
-    process_tf_data(input_csv, output_json, init_json)
+    # ============================================================================
+    process_tf_data(input_csv, output_json, init_json,
+                   haty_max=haty_max, sample_size=sample_size)

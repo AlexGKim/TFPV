@@ -306,6 +306,7 @@ P(S_i=1\mid\theta)
 \Phi_2\left(-\alpha, \beta; -\rho \right)
 \end{align}
 by definition, where $\Phi_2$ is the bivariate standard normal cumulative distribution function.
+This integral has no analytic solution and is integrated numerically.
 
 This case is implemented in {\tt base.stan} with {\tt int y\_TF\_limits = 1};
   {\tt y\_selection = 1}; {\tt plane\_cut = 1;}and when run with Ariel's mock after application of

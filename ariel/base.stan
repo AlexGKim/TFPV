@@ -151,7 +151,7 @@ functions {
     // alpha(y_TF) = (c_plane - y_TF * (1 - s_plane/s) + s_plane*c/s) / sigma_tot
     // Factor out the y_TF-dependent and constant parts:
     real alpha_slope = -(1.0 - s_plane / s) / sigma_tot;
-    real alpha_offset = (c_plane + s_plane * c / s) / sigma_tot;
+    real alpha_offset = (c_plane - s_plane * c / s) / sigma_tot;
     real inv_sigma2 = inv(sigma2);
     
     // ---- Quadrature sum ----
