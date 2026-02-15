@@ -116,4 +116,7 @@ def create_corner_plot(file_pattern='output_base_*.csv', output_file='base_corne
 
 if __name__ == '__main__':
     # Create the corner plot from all output_base_*.csv files
-    create_corner_plot(file_pattern='output_base_n1000_*.csv', output_file='base_corner_plot_n1000.png')
+    infile = "output_base_n10000_*.csv"
+    outfile = "base_corner_plot_n10000.png" 
+
+    create_corner_plot(file_pattern=infile, output_file=outfile)
