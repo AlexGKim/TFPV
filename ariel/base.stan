@@ -260,6 +260,8 @@ data {
   
   // Selection function parameter
   real haty_max;
+  real slope_plane;
+  real intercept_plane;
   
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   // array[N_total] int<lower=1, upper=N_bins> bin_idx;
@@ -293,8 +295,7 @@ transformed data {
   // real theta_int; // if fit_sigmas ==0
   
   // for now put the slice cut here
-  real slope_plane = -8;
-  real intercept_plane = -30;
+
   real slope_plane_std = slope_plane * sd_x;
   real intercept_plane_std = intercept_plane
                              + slope_plane_std * mean_x / sd_x;

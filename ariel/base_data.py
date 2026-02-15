@@ -14,7 +14,8 @@ import json
 import numpy as np
 
 
-def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, sample_size=None):
+def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, sample_size=None,
+                    plane_cut=False, slope_plane=None, intercept_plane=None):
     """
     Process TF mock data: convert to Stan JSON format and create initial conditions.
     
@@ -32,7 +33,21 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     haty_max : float, optional
         Selection function threshold for filtering galaxies (default: -16)
         Only galaxies with M_abs < haty_max are included
+    sample_size : int, optional
+        Number of galaxies to randomly sample from filtered data (default: None, use all)
+    plane_cut : bool, optional
+        Whether to apply half-plane cut (default: False)
+    slope_plane : float, optional
+        Slope parameter (bar_s) for half-plane cut: bar_s * x + bar_c <= y
+        Required if plane_cut=True
+    intercept_plane : float, optional
+        Intercept parameter (bar_c) for half-plane cut: bar_s * x + bar_c <= y
+        Required if plane_cut=True
     """
+    
+    # Validate plane cut parameters
+    if plane_cut and (slope_plane is None or intercept_plane is None):
+        raise ValueError("slope_plane and intercept_plane must be provided when plane_cut=True")
     
     # ============================================================================
     # SECTION 1: READ CSV DATA
@@ -45,20 +60,34 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     # Track filtering statistics
     total_rows = 0
     filtered_rows = 0
+    plane_filtered_rows = 0
     
     with open(csv_file, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
             total_rows += 1
+            x_val = float(row['log_V_V0'])
             y_val = float(row['M_abs'])
             
-            # Only include rows with y < haty_max
+            # Apply y < haty_max filter
             if y_val < haty_max:
-                x_data.append(float(row['log_V_V0']))
-                y_data.append(y_val)
-                sigma_x_data.append(float(row['log_V_V0_unc']))
-                sigma_y_data.append(float(row['M_abs_unc']))
                 filtered_rows += 1
+                
+                # Apply half-plane cut if requested: bar_s * x + bar_c <= y
+                if plane_cut:
+                    plane_boundary = slope_plane * x_val + intercept_plane
+                    if plane_boundary <= y_val:
+                        x_data.append(x_val)
+                        y_data.append(y_val)
+                        sigma_x_data.append(float(row['log_V_V0_unc']))
+                        sigma_y_data.append(float(row['M_abs_unc']))
+                        plane_filtered_rows += 1
+                else:
+                    # No plane cut, include all galaxies that pass y < haty_max
+                    x_data.append(x_val)
+                    y_data.append(y_val)
+                    sigma_x_data.append(float(row['log_V_V0_unc']))
+                    sigma_y_data.append(float(row['M_abs_unc']))
             # Note: zobs column is present but not used by base.stan
     
     # Convert to numpy arrays for calculations
@@ -124,6 +153,11 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
         'bin_idx': bin_idx
     }
     
+    # Add plane cut parameters if specified
+    if plane_cut:
+        stan_data['slope_plane'] = slope_plane
+        stan_data['intercept_plane'] = intercept_plane
+    
     # Write Stan data to JSON file
     with open(data_output_file, 'w') as f:
         json.dump(stan_data, f, indent=2)
@@ -179,6 +213,10 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     print(f"\nFiltering:")
     print(f"  Total rows in CSV: {total_rows}")
     print(f"  Rows with y < {haty_max}: {filtered_rows}")
+    if plane_cut:
+        print(f"  Rows passing plane cut (bar_s * x + bar_c <= y): {plane_filtered_rows}")
+        print(f"  Rows filtered out by plane cut: {filtered_rows - plane_filtered_rows}")
+        print(f"  Plane parameters: bar_s = {slope_plane}, bar_c = {intercept_plane}")
     print(f"  Rows filtered out: {total_rows - filtered_rows}")
     print(f"  haty_max (selection threshold): {haty_max}")
     print(f"\nSummary:")
@@ -215,13 +253,16 @@ if __name__ == '__main__':
     
     # Selection function threshold
     haty_max = -16
-    
+    plane_cut=True
+    slope_plane=-8
+    intercept_plane=-20.2
+
     # Final sample size (set to None to use all filtered data)
     # Examples:
     #   sample_size = None    # Use all filtered data
     #   sample_size = 100     # Randomly sample 100 galaxies
     #   sample_size = 500     # Randomly sample 500 galaxies
-    sample_size = 1000 #None
+    sample_size = 10000 #None
     
     # ============================================================================
     # Generate output filenames based on sample size
@@ -237,4 +278,5 @@ if __name__ == '__main__':
     # Process TF data: convert to Stan format and create initial conditions
     # ============================================================================
     process_tf_data(input_csv, output_json, init_json,
-                   haty_max=haty_max, sample_size=sample_size)
+                   haty_max=haty_max, sample_size=sample_size,
+                   plane_cut=plane_cut, slope_plane=slope_plane, intercept_plane=intercept_plane)
