@@ -254,8 +254,8 @@ if __name__ == '__main__':
     # Selection function threshold
     haty_max = -16
     plane_cut=True
-    slope_plane=-8
-    intercept_plane=-20.2
+    slope_plane=-8.5
+    intercept_plane=-20.5
 
     # Final sample size (set to None to use all filtered data)
     # Examples:

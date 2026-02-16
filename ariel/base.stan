@@ -70,174 +70,6 @@ functions {
     // Trapezoidal rule with top-hat normalization
     return (h / 2.0) * sum / (y_max - y_min);
   }
-  
-  // /**
-  // * Compute the selection probability integral using Gauss-Legendre quadrature
-  // * with 30 nodes.
-  // *
-  // * Integrates:
-  // *   P(S=1|theta) = (1/(y_max - y_min)) * 
-  // *       int_{y_min}^{y_max} Phi_2(-alpha(y_TF), beta(y_TF); -rho) dy_TF
-  // *
-  // * where:
-  // *   sigma_tot = sqrt(sigma2^2 + s_plane^2 * sigma1^2)
-  // *   rho       = sigma2 / sigma_tot
-  // *   alpha(y)  = (c_plane - (y - s_plane*(y - c)/s)) / sigma_tot
-  // *   beta(y)   = (haty_max - y) / sigma2
-  // *
-  // * @param y_min      Lower bound of top-hat prior on y_TF
-  // * @param y_max      Upper bound of top-hat prior on y_TF
-  // * @param haty_max   Upper selection cut on observed y-hat
-  // * @param s_plane    Slope of the half-plane cut (in working coordinates)
-  // * @param c_plane    Intercept of the half-plane cut (in working coordinates)
-  // * @param s          TF slope (in working coordinates)
-  // * @param c          TF intercept (in working coordinates)
-  // * @param sigma1     sqrt(sigma_{x,i}^2 + sigma_{int,x}^2) in working coords
-  // * @param sigma2     sqrt(sigma_{y,i}^2 + sigma_{int,y}^2)
-  // * @return           The selection probability P(S_i=1|theta)
-  // */
-  // real integrate_binormal_gl(real y_min,
-  //                            real y_max,
-  //                            real haty_max,
-  //                            real s_plane,
-  //                            real c_plane,
-  //                            real s,
-  //                            real c,
-  //                            real sigma1,
-  //                            real sigma2) {
-  //   // ---- 30-point Gauss-Legendre nodes and weights on [-1, 1] ----
-  //   // Precomputed to full double precision.
-  //   int N_gl = 30;
-  
-  //   array[30] real nodes = {-0.99689348407464954, -0.98366812327974720,
-  //                           -0.96002186496830751, -0.92620004742927432,
-  //                           -0.88256053579205268, -0.82956576238276839,
-  //                           -0.76777743210482619, -0.69785049479331579,
-  //                           -0.62052618298924286, -0.53662414814201989,
-  //                           -0.44703376953808918, -0.35270472553087811,
-  //                           -0.25463692616788985, -0.15386991360858355,
-  //                           -0.05147184255531770, 0.05147184255531770,
-  //                           0.15386991360858355, 0.25463692616788985,
-  //                           0.35270472553087811, 0.44703376953808918,
-  //                           0.53662414814201989, 0.62052618298924286,
-  //                           0.69785049479331579, 0.76777743210482619,
-  //                           0.82956576238276839, 0.88256053579205268,
-  //                           0.92620004742927432, 0.96002186496830751,
-  //                           0.98366812327974720, 0.99689348407464954};
-  
-  //   array[30] real weights = {0.00796819249616661, 0.01846646831109096,
-  //                             0.02878470788332337, 0.03879919745483482,
-  //                             0.04840267283059405, 0.05749315621761907,
-  //                             0.06597422988218050, 0.07375597473770521,
-  //                             0.08075589522942022, 0.08689978720108298,
-  //                             0.09212252223778613, 0.09636873717464426,
-  //                             0.09959342058679527, 0.10176238974840550,
-  //                             0.10285265289355884, 0.10285265289355884,
-  //                             0.10176238974840550, 0.09959342058679527,
-  //                             0.09636873717464426, 0.09212252223778613,
-  //                             0.08689978720108298, 0.08075589522942022,
-  //                             0.07375597473770521, 0.06597422988218050,
-  //                             0.05749315621761907, 0.04840267283059405,
-  //                             0.03879919745483482, 0.02878470788332337,
-  //                             0.01846646831109096, 0.00796819249616661};
-  
-  //   // ---- Map from [-1,1] to [y_min, y_max] ----
-  //   real half_width = 0.5 * (y_max - y_min);
-  //   real midpoint = 0.5 * (y_max + y_min);
-  
-  //   // ---- Quantities that don't depend on y_TF ----
-  //   real sigma_tot = sqrt(square(sigma2) + square(s_plane) * square(sigma1));
-  //   real rho = sigma2 / sigma_tot;
-  //   // alpha(y_TF) = (c_plane - y_TF * (1 - s_plane/s) + s_plane*c/s) / sigma_tot
-  //   // Factor out the y_TF-dependent and constant parts:
-  //   real alpha_slope = -(1.0 - s_plane / s) / sigma_tot;
-  //   real alpha_offset = (c_plane - s_plane * c / s) / sigma_tot;
-  //   real inv_sigma2 = inv(sigma2);
-  
-  //   // ---- Quadrature sum ----
-  //   real sum = 0.0;
-  //   for (k in 1 : N_gl) {
-  //     real y_TF = midpoint + half_width * nodes[k];
-  //     real alpha_k = alpha_offset + alpha_slope * y_TF;
-  //     real beta_k = (haty_max - y_TF) * inv_sigma2;
-  //     sum += weights[k] * binormal_cdf((-alpha_k, beta_k) | -rho);
-  //   }
-  
-  //   // half_width from the change of variables; 1/(y_max - y_min) from the top-hat
-  //   // half_width / (y_max - y_min) = 1/2
-  //   return 0.5 * sum;
-  // }
-  real selection_probability_uniform_yTF(
-         real y_tf_min,
-         real y_tf_max,
-         real y_hat_max_i,
-         real sigma1_i,
-         real sigma2_i,
-         real s,
-         real c,
-         real bar_s,
-         real bar_c
-       ) {
-    array[30] real nodes = {-0.99689348407464954, -0.98366812327974720,
-                            -0.96002186496830751, -0.92620004742927432,
-                            -0.88256053579205268, -0.82956576238276839,
-                            -0.76777743210482619, -0.69785049479331579,
-                            -0.62052618298924286, -0.53662414814201989,
-                            -0.44703376953808918, -0.35270472553087811,
-                            -0.25463692616788985, -0.15386991360858355,
-                            -0.05147184255531770, 0.05147184255531770,
-                            0.15386991360858355, 0.25463692616788985,
-                            0.35270472553087811, 0.44703376953808918,
-                            0.53662414814201989, 0.62052618298924286,
-                            0.69785049479331579, 0.76777743210482619,
-                            0.82956576238276839, 0.88256053579205268,
-                            0.92620004742927432, 0.96002186496830751,
-                            0.98366812327974720, 0.99689348407464954};
-    
-    array[30] real weights = {0.00796819249616661, 0.01846646831109096,
-                              0.02878470788332337, 0.03879919745483482,
-                              0.04840267283059405, 0.05749315621761907,
-                              0.06597422988218050, 0.07375597473770521,
-                              0.08075589522942022, 0.08689978720108298,
-                              0.09212252223778613, 0.09636873717464426,
-                              0.09959342058679527, 0.10176238974840550,
-                              0.10285265289355884, 0.10285265289355884,
-                              0.10176238974840550, 0.09959342058679527,
-                              0.09636873717464426, 0.09212252223778613,
-                              0.08689978720108298, 0.08075589522942022,
-                              0.07375597473770521, 0.06597422988218050,
-                              0.05749315621761907, 0.04840267283059405,
-                              0.03879919745483482, 0.02878470788332337,
-                              0.01846646831109096, 0.00796819249616661};
-    int N = num_elements(nodes);
-    
-    real den = sqrt(sigma2_i ^ 2 + bar_s ^ 2 * sigma1_i ^ 2);
-    real neg_rho = -sigma2_i / den;
-    
-    real slope = 1.0 - bar_s / s;
-    real offset_ = bar_c - bar_s * c / s;
-    
-    real half_width = 0.5 * (y_tf_max - y_tf_min);
-    real midpoint = 0.5 * (y_tf_max + y_tf_min);
-    
-    real accum = 0.0;
-    for (k in 1 : N) {
-      real y_tf = midpoint + half_width * nodes[k];
-      real neg_alpha = -(offset_ - slope * y_tf) / den;
-      real beta = (y_hat_max_i - y_tf) / sigma2_i;
-      
-      // Stan built-in: binormal_cdf(z1, z2, rho)
-      // returns Φ2(z1, z2; rho)
-      accum += weights[k] * binormal_cdf((neg_alpha, beta) | neg_rho);
-    }
-    
-    real val = accum / 2.0;
-    if (val < 0.0) 
-      val = 0.0;
-    if (val > 1.0) 
-      val = 1.0;
-    return val;
-  }
 }
 data {
   // Number of redshift bins
@@ -289,13 +121,13 @@ transformed data {
   // run configuration parameters
   int y_TF_limits = 1;
   int y_selection = 1;
-  int plane_cut = 0;
+  int plane_cut = 1;
   
   int fit_sigmas = 1;
   // real theta_int; // if fit_sigmas ==0
   
   // for now put the slice cut here
-
+  
   real slope_plane_std = slope_plane * sd_x;
   real intercept_plane_std = intercept_plane
                              + slope_plane_std * mean_x / sd_x;
@@ -381,31 +213,12 @@ model {
       target += -log_diff_exp(term_lb, term_ub);
     } else if (y_selection != 0 && plane_cut == 1) {
       // for (n in 1 : N_total) {
-      //   target += -log(
-      //                  integrate_binormal_gl(y_min, y_max, haty_max,
-      //                    slope_plane_std, intercept_plane_std, slope_std,
-      //                    intercept_std[bin_idx], sqrt(sigmasq1_std[n]),
-      //                    sqrt(sigmasq2[n])));
-      // }
-      //for now they all hace the same uncertainties
-      // target += - N_total * log(
-      //                 integrate_binormal_gl(y_min, y_max, haty_max,
-      //                   slope_plane_std, intercept_plane_std, slope_std,
-      //                   intercept_std[bin_idx], sqrt(sigmasq1_std[1]),
-      //                   sqrt(sigmasq2[1])));
-      
-      // target += -N_total
-      //           * log(
-      //                 selection_probability_uniform_yTF(y_min, y_max,
-      //                   haty_max, slope_std, intercept_std[bin_idx],
-      //                   slope_plane_std, intercept_plane_std,
-      //                   sqrt(sigmasq1_std[1]), sqrt(sigmasq2[1])));
-            target += -N_total
+      target += -N_total
                 * log(
-                      integrate_binormal_trapez(y_min, y_max,
-                        haty_max, slope_std, intercept_std[bin_idx],
-                        slope_plane_std, intercept_plane_std,
-                        sqrt(sigmasq1_std[1]), sqrt(sigmasq2[1]),1000));
+                      integrate_binormal_trapez(y_min, y_max, haty_max,
+                        slope_std, intercept_std[bin_idx], slope_plane_std,
+                        intercept_plane_std, sqrt(sigmasq1_std[1]),
+                        sqrt(sigmasq2[1]), 1000));
     }
   }
   
