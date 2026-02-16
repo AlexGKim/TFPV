@@ -1,0 +1,267 @@
+
+\section{General Model with Peculiar Velocities }
+Now consider a model that considers peculiar velocities.
+\subsection{Data and Model Parameters}
+
+\subsubsection{Data}
+For $i=1,\dots,N_{\text{total}}$:
+\begin{description}
+    \item[$N_{\text{total}}$:] Total number of galaxies.
+    \item[$\hat{x}_i$:] Observed $x\equiv \log\!\left(\frac{V_{\text{rot}}}{V_0}\right)$.
+    \item[$\sigma_{x,i}$:] Uncertainty on $\hat{x}_i$ (note: errors may be closer to Normal in $V$ than in $\log V$).
+    \item[$\hat{y}_i$:] Observed apparent magnitude.
+    \item[$\sigma_{y,i}$:] Uncertainty on $\hat{y}_i$ (set to zero if negligible).
+    \item[$\hat{z}_i$:] Observed redshift in the CMB frame (treated as exact below).
+\end{description}
+
+\subsubsection{Parameters}
+\begin{description}
+    \item[$s$:] Common slope (real, $s\neq 0$).
+    \item[$c$:] Common intercept (real).
+    \item[$\sigma_{\text{int},x}$:] Intrinsic scatter in the $x$-direction (positive).
+    \item[$\sigma_{\text{int},M}$:] Intrinsic scatter in absolute magnitude (positive).
+    \item[$M_{{\text{TF}},i}$:] Latent TF absolute magnitude (array length $N_{\text{total}}$).
+    \item[$z_{{\mathrm{CMB}},i}$:] Latent cosmological redshift (array length $N_{\text{total}}$).
+    \item[$z_{{\mathrm{PV}},i}$:] Latent peculiar-velocity redshift contribution (array length $N_{\text{total}}$).
+\end{description}
+
+\subsubsection{Transformed Parameters}
+Define (per galaxy)
+\begin{equation}
+    z_i = (1+z_{{\mathrm{CMB}},i})(1+z_{{\mathrm{PV}},i})-1,
+\end{equation}
+and the distance modulus
+\begin{equation}
+    \mu_i = \mu(z_{{\mathrm{CMB}},i}).
+\end{equation}
+
+\subsection{Model}
+
+\paragraph{Distributional convention.}
+We write $\mathcal{N}(u\mid m,\sigma^2)$ for a univariate Normal density in $u$ with mean $m$ and variance $\sigma^2$,
+and $\mathcal{N}(\mathbf{u}\mid \mathbf{m},\Sigma)$ for a multivariate Normal density.
+
+\paragraph{Latent-variable model (per galaxy).}
+Introduce latent $x_i$ (log rotation velocity) and latent absolute magnitude $M_i$.
+Then
+\begin{align}
+    x_i \mid M_{{\text{TF}},i} &\sim \mathcal{N}\!\left(\frac{M_{{\text{TF}},i}-c}{s},\,\sigma_{\text{int},x}^2\right),\\
+    M_i \mid M_{{\text{TF}},i} &\sim \mathcal{N}\!\left(M_{{\text{TF}},i},\,\sigma_{\text{int},M}^2\right),\\
+    \hat{x}_i \mid x_i &\sim \mathcal{N}\!\left(x_i,\,\sigma_{x,i}^2\right),\\
+    \hat{y}_i \mid M_i, z_{{\mathrm{CMB}},i} &\sim \mathcal{N}\!\left(M_i+\mu(z_{{\mathrm{CMB}},i}),\,\sigma_{y,i}^2\right),\\
+    \hat{z}_i & = (1+z_{{\mathrm{CMB}},i})(1+z_{{\mathrm{PV}},i})-1,
+\end{align}
+where redshift measurement uncertainty is negligible.
+
+\paragraph{Peculiar-velocity redshift.}
+\begin{equation}
+    1+z_{\mathrm{PV}} = \sqrt{\frac{1+\beta}{1-\beta}} \approx 1+\beta,
+    \qquad\Rightarrow\qquad
+    z_{\mathrm{PV}}\approx \beta.
+\end{equation}
+Assume a zero-mean Gaussian prior for the vector of peculiar-redshift contributions
+\begin{equation}
+    \mathbf{z}_{\mathrm{PV}} \sim \mathcal{N}(\mathbf{0},\, C_{vv}).
+\end{equation}
+
+\subsection{Likelihood}
+
+Let $\mathbf{\hat x},\mathbf{\hat y},\mathbf{\hat z}$ denote the data vectors and similarly for latent vectors.
+A joint likelihood for $(s,c,\sigma_{\text{int},x},\sigma_{\text{int},M})$ is
+\begin{align}
+\mathcal{L}
+&\equiv p(\mathbf{\hat{x}},\mathbf{\hat{y}},\mathbf{\hat{z}}\mid s,c,\sigma_{\text{int},x},\sigma_{\text{int},M})\\
+&=
+\int d\mathbf{x}\, d\mathbf{M}\, d\mathbf{M}_{\text{TF}}\, d\mathbf{z}_{\mathrm{CMB}}\, d\mathbf{z}_{\mathrm{PV}}\nonumber\\
+&\hspace{2.1cm}\times
+\Bigg[
+\prod_{i=1}^{N_{\text{total}}}
+p(\hat{x}_i\mid x_i)\,
+p(\hat{y}_i\mid M_i,z_{{\mathrm{CMB}},i})\,
+p(\hat{z}_i\mid z_{{\mathrm{CMB}},i},z_{{\mathrm{PV}},i})\,
+p(x_i\mid M_{{\text{TF}},i})\,
+p(M_i\mid M_{{\text{TF}},i})
+\Bigg]\nonumber\\
+&\hspace{2.1cm}\times
+p(\mathbf{M}_{\text{TF}})\,p(\mathbf{z}_{\mathrm{CMB}})\,p(\mathbf{z}_{\mathrm{PV}}).
+\end{align}
+
+\subsubsection{Integrating out $x_i$ and $M_i$}
+Define
+\begin{equation}
+    \sigma_{1,i}^2 \equiv \sigma_{x,i}^2+\sigma_{\text{int},x}^2,
+    \qquad
+    \sigma_{2,i}^2 \equiv \sigma_{y,i}^2+\sigma_{\text{int},M}^2.
+\end{equation}
+Then
+\begin{align}
+\mathcal{L}
+&=
+\int d\mathbf{M}_{\text{TF}}\, d\mathbf{z}_{\mathrm{CMB}}\, d\mathbf{z}_{\mathrm{PV}}\nonumber\\
+&\hspace{2.1cm}\times
+\Bigg[
+\prod_{i=1}^{N_{\text{total}}}
+\mathcal{N}\!\left(\hat{x}_i \mid \frac{M_{{\text{TF}},i}-c}{s},\,\sigma_{1,i}^2\right)\,
+\mathcal{N}\!\left(\hat{y}_i \mid M_{{\text{TF}},i}+\mu(z_{{\mathrm{CMB}},i}),\,\sigma_{2,i}^2\right)\,
+\delta_{\mathrm D}\!\left(\hat{z}_i-\Big[(1+z_{{\mathrm{CMB}},i})(1+z_{{\mathrm{PV}},i})-1\Big]\right)
+\Bigg]\nonumber\\
+&\hspace{2.1cm}\times
+\mathcal{N}(\mathbf{z}_{\mathrm{PV}}\mid \mathbf{0},C_{vv})\;
+p(\mathbf{M}_{\text{TF}})\,p(\mathbf{z}_{\mathrm{CMB}}).
+\end{align}
+
+\subsubsection{Integrating out $z_{\mathrm{PV}}$ via the Dirac delta}
+For each $i$,
+\begin{equation}
+    \hat{z}_i=(1+z_{{\mathrm{CMB}},i})(1+z_{{\mathrm{PV}},i})-1
+    \quad\Longrightarrow\quad
+    z_{{\mathrm{PV}},i}^\star(z_{{\mathrm{CMB}},i})=\frac{1+\hat{z}_i}{1+z_{{\mathrm{CMB}},i}}-1,
+\end{equation}
+and
+\begin{equation}
+\delta_{\mathrm D}\!\left(\hat{z}_i-\Big[(1+z_{{\mathrm{CMB}},i})(1+z_{{\mathrm{PV}},i})-1\Big]\right)
+=
+\frac{1}{\big|1+z_{{\mathrm{CMB}},i}\big|}\;
+\delta_{\mathrm D}\!\left(z_{{\mathrm{PV}},i}-z_{{\mathrm{PV}},i}^\star(z_{{\mathrm{CMB}},i})\right).
+\end{equation}
+Therefore, letting $\mathbf{z}_{\mathrm{PV}}^\star(\mathbf{z}_{\mathrm{CMB}})$ denote the vector with components
+$z_{{\mathrm{PV}},i}^\star(z_{{\mathrm{CMB}},i})$,
+\begin{align}
+\mathcal{L}
+&=
+\int d\mathbf{M}_{\text{TF}}\, d\mathbf{z}_{\mathrm{CMB}}\;
+\Bigg[
+\prod_{i=1}^{N_{\text{total}}}
+\mathcal{N}\!\left(\hat{x}_i \mid \frac{M_{{\text{TF}},i}-c}{s},\,\sigma_{1,i}^2\right)\,
+\mathcal{N}\!\left(\hat{y}_i \mid M_{{\text{TF}},i}+\mu(z_{{\mathrm{CMB}},i}),\,\sigma_{2,i}^2\right)\,
+\frac{1}{\big|1+z_{{\mathrm{CMB}},i}\big|}
+\Bigg]\nonumber\\
+&\hspace{2.1cm}\times
+\mathcal{N}\!\Big(\mathbf{z}_{\mathrm{PV}}^\star(\mathbf{z}_{\mathrm{CMB}})\mid \mathbf{0},C_{vv}\Big)\;
+p(\mathbf{M}_{\text{TF}})\,p(\mathbf{z}_{\mathrm{CMB}}).
+\label{eq:model2_like_reduced_edited}
+\end{align}
+
+\subsubsection{Corrected magnitude}
+Define, for each $i$,
+\begin{equation}
+    \hat{Y}_i(z_{{\mathrm{CMB}},i}) \equiv \hat{y}_i-\mu(z_{{\mathrm{CMB}},i}),
+\end{equation}
+so that
+\begin{equation}
+\mathcal{N}\!\left(\hat{y}_i \mid M_{{\text{TF}},i}+\mu(z_{{\mathrm{CMB}},i}),\,\sigma_{2,i}^2\right)
+=
+\mathcal{N}\!\left(\hat{Y}_i(z_{{\mathrm{CMB}},i}) \mid M_{{\text{TF}},i},\,\sigma_{2,i}^2\right).
+\end{equation}
+
+\subsubsection{$p(M_{\text{TF}})$ uniform on $[M_{\min},M_{\max}]$}
+Assume independent uniform priors
+$p(M_{{\text{TF}},i})=\frac{1}{M_{\max}-M_{\min}}\mathbf{1}[M_{\min}\le M_{{\text{TF}},i}\le M_{\max}]$.
+Then the $M_{{\text{TF}},i}$ integrals factorize:
+\begin{equation}
+\int d\mathbf{M}_{\text{TF}} \,\prod_{i=1}^{N_{\text{total}}}(\cdots)
+=
+\prod_{i=1}^{N_{\text{total}}}\mathcal{L}_{M,i}(z_{{\mathrm{CMB}},i}),
+\end{equation}
+where
+\begin{align}
+\mathcal{L}_{M,i}(z_{{\mathrm{CMB}},i})
+&\equiv
+\int_{M_{\min}}^{M_{\max}} \frac{dM_{\text{TF}}}{M_{\max}-M_{\min}}\;
+\mathcal{N}\!\left(\hat{x}_i \mid \frac{M_{\text{TF}}-c}{s},\,\sigma_{1,i}^2\right)\,
+\mathcal{N}\!\left(\hat{Y}_i(z_{{\mathrm{CMB}},i}) \mid M_{\text{TF}},\,\sigma_{2,i}^2\right)\\
+&=
+\frac{|s|}{M_{\max}-M_{\min}}\,
+\mathcal{N}\!\left(\hat{Y}_i(z_{{\mathrm{CMB}},i})\mid c+s\hat{x}_i,\,\sigma_{\text{tot},i}^2\right)\,
+\left[
+\Phi\!\left(\frac{M_{\max}-\mu_{\ast,i}}{\sigma_{\ast,i}}\right)
+-
+\Phi\!\left(\frac{M_{\min}-\mu_{\ast,i}}{\sigma_{\ast,i}}\right)
+\right],
+\end{align}
+with
+\begin{align}
+    \sigma_{\text{tot},i}^2 &= s^2\sigma_{1,i}^2+\sigma_{2,i}^2,\\
+    \mu_{\ast,i} &=
+    \frac{(s\hat{x}_i+c)\sigma_{2,i}^2+\hat{Y}_i(z_{{\mathrm{CMB}},i})\,s^2\sigma_{1,i}^2}{\sigma_{\text{tot},i}^2},\\
+    \sigma_{\ast,i}^2 &=
+    \frac{s^2\sigma_{1,i}^2\sigma_{2,i}^2}{\sigma_{\text{tot},i}^2},
+\end{align}
+and $\Phi$ the standard Normal CDF. 
+If $M_{\min}\to -\infty$ and $M_{\max}\to +\infty$, then the bracketed CDF term $\to 1$.
+
+
+Combining, the likelihood becomes
+\begin{align}
+\mathcal{L}
+&=
+\int d\mathbf{z}_{\mathrm{CMB}}\;
+\mathcal{N}\!\Big(\mathbf{z}_{\mathrm{PV}}^\star(\mathbf{z}_{\mathrm{CMB}})\mid \mathbf{0},C_{vv}\Big)\;
+p(\mathbf{z}_{\mathrm{CMB}})\;
+\prod_{i=1}^{N_{\text{total}}}
+\left[
+\frac{1}{|1+z_{{\mathrm{CMB}},i}|}\;
+\mathcal{L}_{M,i}(z_{{\mathrm{CMB}},i})
+\right].
+\end{align}
+
+An alternative form that suggests a numerical approximation is
+\begin{align}
+\mathcal{L}
+& =
+\mathbb{E}_{\mathbf{Z}_{\mathrm{PV}}\sim \mathcal{N}(\mathbf{0},C_{vv})}
+\left[
+p\!\big(\mathbf{z}_{\mathrm{CMB}}^\star(\mathbf{Z}_{\mathrm{PV}})\big)\;
+\prod_{i=1}^{N_{\text{total}}}
+\left(
+\frac{ 1}{\left|1+Z_{\mathrm{PV},i}\right|}\;
+\mathcal{L}_{M,i}\!\Big(z_{\mathrm{CMB},i}^\star(Z_{\mathrm{PV},i})\Big)
+\right)
+\right]\\
+z_{\mathrm{CMB},i}^\star(Z_{\mathrm{PV},i}) & =\frac{1+\hat{z}_i}{1+Z_{\mathrm{PV},i}}-1.
+\end{align}
+
+
+\subsubsection{Sample Selection}
+There is a maximum magnitude cutoff $\hat{y}_{\max}$
+\begin{align}
+\mathcal{L}_{\mathrm{sel}}
+&\equiv
+p(\mathbf{\hat x},\mathbf{\hat y},\mathbf{\hat z}\mid s,c,\sigma_{\mathrm{int},x},\sigma_{\mathrm{int},M},\mathrm{selected})
+=
+\frac{\mathcal{L}}{\mathcal{Z}}.
+\end{align}
+
+
+% Assume \mathbf{M}_{\mathrm{TF}} = (M_{\mathrm{TF},1},\dots,M_{\mathrm{TF},N_{\text{total}}})
+% with each M_{\mathrm{TF},i}\in[M_{\min},M_{\max}] so the M-integral factorizes.
+\begin{align}
+(M_{\max}-M_{\min})^{N_{\text{total}}}\,\mathcal{Z}
+&=
+\int d\mathbf{z}_{\mathrm{CMB}}\; p(\mathbf{z}_{\mathrm{CMB}})
+\prod_{i=1}^{N_{\text{total}}}
+\int_{M_{\min}}^{M_{\max}} dM_{\mathrm{TF},i}\;
+\Phi\!\left(
+\frac{\hat{y}_{\max}-\big(M_{\mathrm{TF},i}+\mu(z_{\mathrm{CMB},i})\big)}{\sigma_{2,i}}
+\right)
+\\
+&=
+\int d\mathbf{z}_{\mathrm{CMB}}\; p(\mathbf{z}_{\mathrm{CMB}})
+\prod_{i=1}^{N_{\text{total}}}
+\Bigg[
+\big(Y_{\max,i}-M_{\min}\big)\,
+\Phi\!\left(\frac{Y_{\max,i}-M_{\min}}{\sigma_{2,i}}\right)
++\sigma_{2,i}\,
+\phi\!\left(\frac{Y_{\max,i}-M_{\min}}{\sigma_{2,i}}\right)
+\nonumber\\
+&\hspace{7.5em}
++\big(M_{\max}-Y_{\max,i}\big)\,
+\Phi\!\left(\frac{Y_{\max,i}-M_{\max}}{\sigma_{2,i}}\right)
+-\sigma_{2,i}\,
+\phi\!\left(\frac{Y_{\max,i}-M_{\max}}{\sigma_{2,i}}\right)
+\Bigg],
+\end{align}
+where
+\begin{equation}
+Y_{\max,i} \equiv \hat{y}_{\max}-\mu(z_{\mathrm{CMB},i}).
+\end{equation}
