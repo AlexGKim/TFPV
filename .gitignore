@@ -1,3 +1,4 @@
 fit*.json
 fit*.csv
+*.png
 output*/

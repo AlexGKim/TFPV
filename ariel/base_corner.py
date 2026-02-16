@@ -8,7 +8,7 @@ of the key parameters: slope, intercept.1, sigma_int_x, sigma_int_y
 
 import pandas as pd
 import numpy as np
-from chainconsumer import ChainConsumer, Chain
+from chainconsumer import ChainConsumer, Chain, Truth
 import glob
 
 
@@ -31,7 +31,8 @@ def load_stan_csv(filename):
     return df
 
 
-def create_corner_plot(file_pattern='output_base_*.csv', output_file='base_corner_plot.png', include_theta_int=False):
+def create_corner_plot(file_pattern='output_base_*.csv', output_file='base_corner_plot.png',
+                       include_theta_int=False, truth_values=None):
     """
     Create a corner plot from combined Stan output files.
     
@@ -43,6 +44,9 @@ def create_corner_plot(file_pattern='output_base_*.csv', output_file='base_corne
         Path to save the corner plot (default: 'base_corner_plot.png')
     include_theta_int : bool
         Whether to include theta_int in the corner plot (default: False)
+    truth_values : dict, optional
+        Dictionary of true parameter values to plot as reference lines
+        Example: {"slope": -8.0, "intercept": -20.0, "sigma_int_x": 0.03, "sigma_int_y": 0.03}
     """
     # Find all matching files
     files = sorted(glob.glob(file_pattern))
@@ -95,6 +99,10 @@ def create_corner_plot(file_pattern='output_base_*.csv', output_file='base_corne
     c = ChainConsumer()
     c.add_chain(chain)
     
+    # Add truth values if provided
+    if truth_values is not None:
+        c.add_truth(Truth(location=truth_values))
+    
     # Generate the corner plot
     fig = c.plotter.plot()
     
@@ -117,6 +125,14 @@ def create_corner_plot(file_pattern='output_base_*.csv', output_file='base_corne
 if __name__ == '__main__':
     # Create the corner plot from all output_base_*.csv files
     infile = "output_base_n10000_*.csv"
-    outfile = "base_corner_plot_n10000.png" 
+    outfile = "base_corner_plot_n10000.png"
+    
+    # Define true parameter values
+    truth = {
+        "slope": -8.0,
+        "intercept": -20.0,
+        "sigma_int_x": 0.03,
+        "sigma_int_y": 0.03
+    }
 
-    create_corner_plot(file_pattern=infile, output_file=outfile)
+    create_corner_plot(file_pattern=infile, output_file=outfile, truth_values=truth)
