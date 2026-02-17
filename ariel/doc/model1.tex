@@ -26,17 +26,20 @@ converted to distances and observed magnitudes can be converted to absolute magn
 Each galaxy has a latent parameter that determines its TF properties.  The galaxy absolute magnitude and
 rotation velocity are drawn independently and
 probabilistically based on this parameter using the TF relation.  Measurement errors are
-independent.  Specifically, for each galaxy $i$:
+independent and normally distributed.  Specifically, for each galaxy $i$:
 \begin{align}
-\hat x_i \mid x_i &\sim \mathcal N(x_i,\sigma_{x,i}),\\
-\hat y_i \mid y_i &\sim \mathcal N(y_i,\sigma_{y,i}),\\
+y_i \mid y_{{\rm TF},i} &\sim \mathcal N(y_{{\rm TF},i},\sigma_{{\rm int},y})\\
 x_i \mid y_{{\rm TF},i}, s, c &\sim \mathcal N\!\left(\frac{y_{{\rm TF},i}-c}{s},\sigma_{{\rm int},x}\right),\\
-y_i \mid y_{{\rm TF},i} &\sim \mathcal N(y_{{\rm TF},i},\sigma_{{\rm int},y}).
+\hat x_i \mid x_i &\sim \mathcal N(x_i,\sigma_{x,i}),\\
+\hat y_i \mid y_i &\sim \mathcal N(y_i,\sigma_{y,i}).
 \end{align}
+The velocity uncertainties are normal in log-space, which is probably not entirely accurate but may be sufficient for our purposes.
+The benefit of this model is that the likelihood for each galaxy can be computed in closed form, which makes inference tractable and efficient.
 
-The velocity uncertainties are normal in log-space, which is probably not entirely accurate.
 \subsection{Complete Sample}
-It is useful to go through the case of a complete sample, even though that is not the case for the DESI TF sample.
+It is illustrative to consider a model that does not include sample selection, helping us to
+prepare for a model, discussed in \S\ref{sec:selection}, which includes sample selection as needed for the DESI TF sample.
+
 \subsubsection{Total Likelihood}
 The total likelihood is
 \begin{align}
@@ -118,6 +121,7 @@ independently.
 
 These cases are implemented in {\tt base.stan} and when run with Ariel's mock returns the input $s$ and $c$ to incredible precision.
 \subsection{Sample Selection}
+\label{sec:selection}
 \subsubsection{Motivation}
 In practice, sample selection can bias the analysis because the probability that an object enters the final
 sample need not be independent of its measured properties.
@@ -314,17 +318,16 @@ For the case with limits this is
 P(S_i=1\mid\theta)
 & = \frac{1}{y_{max}-y_{min}}
 \int_{y_{min}}^{y_{max}} dy_{\mathrm{TF}}
-\Phi_2\left(-\alpha, \beta; -\rho \right)
+\Phi_2\left(-\alpha, \beta; -\rho \right).
 \end{align}
-
 This case is implemented in {\tt base.stan} with {\tt int y\_TF\_limits = 1};
   {\tt y\_selection = 1}; {\tt plane\_cut = 1;}and when run with Ariel's mock after application of
 a maximum $\hat{y}_{\max}$
-  the input $s$ and $c$ are recovered to incredible precision,
-  and the intrinsic dispersions to 1$\sigma$ in preliminary tests.
+  the input $s$ and $c$ are recovered to excellent accuracy and precision within
+1$\sigma$.
 
 
-\paragraph{With a two-sided half-plane cut (parallel case, $\bar{s}_1=\bar{s}_2\equiv\bar{s}$)}
+\paragraph{With a two-sided half-plane cut, parallel case, $\bar{s}_1=\bar{s}_2\equiv\bar{s}$}
 
 When the two half-plane boundaries are parallel, i.e.\
 $\bar{s}_1=\bar{s}_2\equiv\bar{s}$, the selection domain is
@@ -354,8 +357,7 @@ P(\hat u\ge0,\;\hat y\le\hat y_{\max})
 \;-\;
 P(\hat u\ge\bar{c}_2-\bar{c}_1,\;\hat y\le\hat y_{\max}).
 \end{equation}
-Each term is a bivariate normal CDF of the same form as in
-Section~\ref{subsec:selection_yhatmax_halfplane}. Defining
+Each term is a bivariate normal CDF of the same form as before. Defining
 \begin{equation}
 \rho \;=\; \frac{\sigma_{2,i}}{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
 \end{equation}
@@ -390,9 +392,9 @@ P(S_i=1\mid\theta)
 &=\frac{1}{y_{\max}-y_{\min}}
 \int_{y_{\min}}^{y_{\max}} dy_{\mathrm{TF}}\;
 \Big[\Phi_2\!\left(-\alpha_1,\;\beta;\;-\rho\right)
-     -\Phi_2\!\left(-\alpha_2,\;\beta;\;-\rho\right)\Big],
+     -\Phi_2\!\left(-\alpha_2,\;\beta;\;-\rho\right)\Big].
 \end{align}
-which is integrated numerically.
+
  
 
 \subsection{Priors}
