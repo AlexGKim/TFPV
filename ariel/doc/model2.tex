@@ -1,11 +1,11 @@
 \section{Inferring the Absolute Magnitude of an Individual Galaxy from its Rotation Velocity}
 \label{sec:infer_single_galaxy_y}
 
-Assume we have already fit the TF model to a (possibly selection-corrected) sample and obtained the posterior
+Assume we have already fit the TF model to a sample and obtained the posterior
 \begin{equation}
 p(\theta \mid \{\hat x_i,\hat y_i\}_{i=1}^N),
 \qquad
-\theta \equiv (s,c,\sigma_{\rm int,x},\sigma_{\rm int,y}).
+\theta \equiv (s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}).
 \end{equation}
 We now consider a \emph{new} galaxy, denoted by ``$\star$'', for which we measure a rotation-velocity proxy
 $\hat x_\star$ with uncertainty $\sigma_{x,\star}$, and we wish to infer its true absolute magnitude $y_\star$
@@ -27,25 +27,25 @@ p(y_\star \mid \hat x_\star, \cdots)\;\approx\; \frac{1}{M}\sum_{m=1}^M
 p\!\left(y_\star \mid \hat x_\star, \sigma_{x,\star}, \theta^{(m)}\right).
 \end{equation}
 
-\subsection{Closed form when $p(y_{\rm TF})$ is (improper) uniform on $\mathbb{R}$}
+\subsection{Closed form when $p(y_{\text{TF}})$ is uniform on $\mathbb{R}$}
 Adopt the same generative structure as in \S\ref{sec:model}, and define
 \begin{equation}
-\sigma_{1,\star}^2 \equiv \sigma_{x,\star}^2 + \sigma_{\rm int,x}^2,
+\sigma_{1,\star}^2 \equiv \sigma_{x,\star}^2 + \sigma_{\text{int},x}^2,
 \end{equation}
 so that (after marginalizing over the latent true $x_\star$)
 \begin{equation}
-\hat x_\star \mid y_{{\rm TF},\star},\theta \sim
-\mathcal N\!\left(\frac{y_{{\rm TF},\star}-c}{s},\ \sigma_{1,\star}\right),
+\hat x_\star \mid y_{\text{TF},\star},\theta \sim
+\mathcal N\!\left(\frac{y_{\text{TF},\star}-c}{s},\ \sigma_{1,\star}\right),
 \qquad
-y_\star \mid y_{{\rm TF},\star},\theta \sim \mathcal N\!\left(y_{{\rm TF},\star},\ \sigma_{\rm int,y}\right).
+y_\star \mid y_{\text{TF},\star},\theta \sim \mathcal N\!\left(y_{\text{TF},\star},\ \sigma_{\text{int},y}\right).
 \end{equation}
-If we take $p(y_{{\rm TF},\star})\propto 1$ on $\mathbb{R}$, then the conditional distribution of the latent
+If we take $p(y_{\text{TF},\star})\propto 1$ on $\mathbb{R}$, then the conditional distribution of the latent
 on-relation magnitude is
 \begin{equation}
-y_{{\rm TF},\star}\mid \hat x_\star,\theta \sim
+y_{\text{TF},\star}\mid \hat x_\star,\theta \sim
 \mathcal N\!\left(c+s\,\hat x_\star,\ |s|\,\sigma_{1,\star}\right).
 \end{equation}
-Marginalizing over $y_{{\rm TF},\star}$ yields a simple Gaussian predictive distribution for the galaxy's true
+Marginalizing over $y_{\text{TF},\star}$ yields a simple Gaussian predictive distribution for the galaxy's true
 absolute magnitude:
 \begin{equation}
 y_\star \mid \hat x_\star,\sigma_{x,\star},\theta \sim
@@ -53,53 +53,34 @@ y_\star \mid \hat x_\star,\sigma_{x,\star},\theta \sim
 c+s\,\hat x_\star,\ \sigma_{y\mid x,\star}
 \right),
 \qquad
-\sigma_{y\mid x,\star}^2 \equiv s^2\,\sigma_{1,\star}^2 + \sigma_{\rm int,y}^2.
+\sigma_{y\mid x,\star}^2 \equiv s^2\,\sigma_{1,\star}^2 + \sigma_{\text{int},y}^2.
 \label{eq:y_given_xhat}
 \end{equation}
 Thus, for a fixed parameter vector $\theta$, the TF-based point prediction and uncertainty are
 \begin{equation}
 \mathbb E[y_\star \mid \hat x_\star,\theta] = c+s\,\hat x_\star,
 \qquad
-{\rm Var}(y_\star \mid \hat x_\star,\theta)= s^2(\sigma_{x,\star}^2+\sigma_{\rm int,x}^2)+\sigma_{\rm int,y}^2.
+\text{Var}(y_\star \mid \hat x_\star,\theta)= s^2(\sigma_{x,\star}^2+\sigma_{\text{int},x}^2)+\sigma_{\text{int},y}^2.
 \end{equation}
 
-\paragraph{Including a measurement model for a future magnitude observation.}
-If instead we want the predictive distribution for a \emph{measured} absolute magnitude $\hat y_\star$ with known
-measurement uncertainty $\sigma_{y,\star}$, then
-\begin{equation}
-\hat y_\star \mid \hat x_\star,\sigma_{x,\star},\theta \sim
-\mathcal N\!\left(
-c+s\,\hat x_\star,\ \sqrt{\sigma_{y\mid x,\star}^2+\sigma_{y,\star}^2}
-\right).
-\end{equation}
 
-\subsection{Using a bounded top-hat prior on $y_{\rm TF}$}
-If, as in \S\ref{sec:simple_noPV}, we take
-$y_{{\rm TF},\star}\sim{\rm Uniform}(y_{\min},y_{\max})$, then
+\subsection{Top-Hat Model for $y_{\text{TF},i}$}
+In \S\ref{sec:simple_noPV}, we considdered a model with a uniform prior on $y_{\text{TF}}$ over a finite interval $[y_{\min},y_{\max}]$.
+For consistency, the inferred posterior for $y_{\text{TF},\star}$ is then
 \begin{equation}
-y_{{\rm TF},\star}\mid \hat x_\star,\theta
+y_{\text{TF},\star}\mid \hat x_\star,\theta
 \ \propto\
-\mathcal N\!\left(\hat x_\star;\frac{y_{{\rm TF},\star}-c}{s},\sigma_{1,\star}\right)\,
-\mathbf{1}\{y_{\min}\le y_{{\rm TF},\star}\le y_{\max}\},
+\mathcal N\!\left(\hat x_\star;\frac{y_{\text{TF},\star}-c}{s},\sigma_{1,\star}\right)\,
+\mathbf{1}\{y_{\min}\le y_{\text{TF},\star}\le y_{\max}\},
 \end{equation}
 i.e. a truncated normal distribution with (untruncated) location $c+s\hat x_\star$ and scale $|s|\sigma_{1,\star}$.
 The resulting $p(y_\star\mid \hat x_\star,\theta)$ is no longer exactly Gaussian because it is the convolution of a
-truncated normal ($y_{\rm TF}$) with a normal ($y_\star\mid y_{\rm TF}$).
+truncated normal ($y_{\text{TF}}$) with a normal ($y_\star\mid y_{\text{TF}}$).
 
-A convenient and exact approach is Monte Carlo composition, conditional on each posterior draw $\theta^{(m)}$:
+To characterize the posterior predictive distribution, a convenient approach is to use
+Monte Carlo composition, conditional on each posterior draw $\theta^{(m)}$:
 \begin{align}
-y_{{\rm TF},\star}^{(m,k)} &\sim {\rm TruncNormal}\!\left(c^{(m)}+s^{(m)}\hat x_\star,\ |s^{(m)}|\sigma_{1,\star}^{(m)};\ [y_{\min},y_{\max}]\right),\\
-y_{\star}^{(m,k)} &\sim \mathcal N\!\left(y_{{\rm TF},\star}^{(m,k)},\ \sigma_{\rm int,y}^{(m)}\right),
+y_{\text{TF},\star}^{(m,k)} &\sim \text{TruncNormal}\!\left(c^{(m)}+s^{(m)}\hat x_\star,\ |s^{(m)}|\sigma_{1,\star}^{(m)};\ [y_{\min},y_{\max}]\right),\\
+y_{\star}^{(m,k)} &\sim \mathcal N\!\left(y_{\text{TF},\star}^{(m,k)},\ \sigma_{\text{int},y}^{(m)}\right),
 \end{align}
 and then pool $\{y_{\star}^{(m,k)}\}$ over $(m,k)$ to obtain posterior means and credible intervals.
-
-\subsection{Recommended reporting}
-Given posterior draws $\theta^{(m)}$, a simple summary for the galaxy is:
-\begin{itemize}
-\item A posterior predictive median (or mean) for $y_\star$;
-\item A central credible interval (e.g.\ 68\% or 95\%) from the mixture distribution in Eq.~\eqref{eq:posterior_predictive_y};
-\item Optionally, a decomposition of the conditional variance in Eq.~\eqref{eq:y_given_xhat} into the contributions from
-measurement uncertainty in $\hat x_\star$, intrinsic scatter in $x$, and intrinsic scatter in $y$.
-\end{itemize}
-This procedure propagates uncertainty in the TF calibration $(s,c)$ and in the intrinsic-scatter parameters into the
-inferred magnitude for the individual galaxy.

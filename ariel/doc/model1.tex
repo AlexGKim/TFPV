@@ -28,8 +28,8 @@ rotation velocity are drawn independently and
 probabilistically based on this parameter using the TF relation.  Measurement errors are
 independent and normally distributed.  Specifically, for each galaxy $i$:
 \begin{align}
-y_i \mid y_{{\rm TF},i} &\sim \mathcal N(y_{{\rm TF},i},\sigma_{{\rm int},y})\\
-x_i \mid y_{{\rm TF},i}, s, c &\sim \mathcal N\!\left(\frac{y_{{\rm TF},i}-c}{s},\sigma_{{\rm int},x}\right),\\
+y_i \mid y_{\text{TF},i} &\sim \mathcal N(y_{\text{TF},i},\sigma_{\text{int},y})\\
+x_i \mid y_{\text{TF},i}, s, c &\sim \mathcal N\!\left(\frac{y_{\text{TF},i}-c}{s},\sigma_{\text{int},x}\right),\\
 \hat x_i \mid x_i &\sim \mathcal N(x_i,\sigma_{x,i}),\\
 \hat y_i \mid y_i &\sim \mathcal N(y_i,\sigma_{y,i}).
 \end{align}
@@ -41,15 +41,16 @@ It is illustrative to consider a model that does not include sample selection, h
 prepare for a model, discussed in \S\ref{sec:selection}, which includes sample selection as needed for the DESI TF sample.
 
 \subsubsection{Total Likelihood}
+Let $\theta \equiv \big(s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}\big)$.
 The total likelihood is
 \begin{align}
-\mathcal L(s,c,\sigma_{\text{int},x},\sigma_{\text{int},y};\{\hat x_i\},\{\hat y_i\})
-= \prod_{i=1}^{N} \mathcal L_i(s,c,\sigma_{\text{int},x},\sigma_{\text{int},y};\hat x_i,\hat y_i),
+\mathcal L(\theta;\{\hat x_i\},\{\hat y_i\})
+= \prod_{i=1}^{N} \mathcal L_i(\theta;\hat x_i,\hat y_i),
 \end{align}
 where
 \begin{align}
 \mathcal L_i
-&= p(\hat x_i,\hat y_i \mid s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}).
+&= p(\hat x_i,\hat y_i \mid \theta).
 \end{align}
 \subsubsection{Likelihood for an Individual Galaxy}
 
@@ -81,7 +82,7 @@ p(y_{\text{TF}}).
 \end{align}
 
 \subsubsection{Closed Form for a Top-Hat Model for $y_{\text{TF},i}$}
-Let $p(y_{\text{TF},i})$ be uniform on $[y_{\min},y_{\max}]$:
+Let $y_{\text{TF},i}\sim\text{Uniform}(y_{\min},y_{\max})$, i.e.,
 \begin{align}
 p(y_{\text{TF},i})=
 \begin{cases}
@@ -112,60 +113,60 @@ where $\Phi$ is the standard normal CDF and
 \end{align}
 
 \paragraph{Case of no limits on $y_{\text{TF},i}$}
-If $p(y_{\text{TF},i})$ is taken to be (improper) uniform on $\mathbb R$, the truncated-CDF factor tends to 1 and
+If $p(y_{\text{TF},i})$ is taken to be (improper) uniform on $\mathbb{R}$, the truncated-CDF factor tends to 1 and
 \begin{align}
 \mathcal L_i \propto |s|\;\mathcal N\!\left(\hat y_i; c+s\hat x_i,\ \sigma_{\text{tot},i}\right).
 \end{align}
-Without the CDF factor, $\sigma_{{\rm int},x}$ and $\sigma_{{\rm int},y}$ are degenerate and cannot be determined
+Without the CDF factor, $\sigma_{\text{int},x}$ and $\sigma_{\text{int},y}$ are degenerate and cannot be determined
 independently.
 
 These cases are implemented in {\tt base.stan} and when run with Ariel's mock returns the input $s$ and $c$ to incredible precision.
 \subsection{Sample Selection}
 \label{sec:selection}
-\subsubsection{Motivation}
+\subsubsection{DESI TF Sample Selection}
 In practice, sample selection can bias the analysis because the probability that an object enters the final
 sample need not be independent of its measured properties.
 A classic example is Malmquist bias: in a magnitude-limited survey, objects near the detection threshold are
 preferentially scattered into the sample if they are intrinsically brighter (or scattered brighter) than average.
 
-In our survey, the initial parent sample is defined by the SGA catalog.
+In the DESI TF survey, the initial parent sample is defined by the SGA catalog.
 We assume that SGA inclusion is complete above its angular-size cutoff and that, conditional on the TF model,
-the SGA selection is independent of the TF observables.  In particular, sample selection does not depend on observed magnitude.
-Concretely, letting $S_{\rm SGA}\in\{0,1\}$ denote
+the SGA selection is independent of the TF observables.  In particular, there are no low surface-brightness galaxies that escape
+inclusion in the SGA catalog conditional on the angular size selection.
+Concretely, letting $S_{\text{SGA}}\in\{0,1\}$ denote
 SGA inclusion, we assume
 \begin{align}
-p(\hat x_i,\hat y_i \mid \theta, S_{{\rm SGA},i}=1) = p(\hat x_i,\hat y_i \mid \theta),
+p(\hat x_i,\hat y_i \mid \theta, S_{\text{SGA},i}=1) = p(\hat x_i,\hat y_i \mid \theta).
 \end{align}
-i.e.\ the angular-size selection does not further truncate the distribution of $(\hat x,\hat y)$ relevant for
-inference on $\theta$.  Under this conditional-independence assumption, the SGA cutoff contributes only an
+Under this conditional-independence assumption, the SGA cutoff contributes only an
 overall constant to the likelihood and therefore does not affect TF parameter estimation.
 
-The observed TF sample is then sculpted by DESI fiber allocation and by redshift-measurement success.
+The observed TF sample is then sculpted by DESI fiber allocation and subsequent redshift-measurement success.
 For the moment, we assume these processes are independent of galaxy properties, so they
 enter only through an overall completeness factor and do not need to be modeled explicitly in the likelihood.
 This assumption should be tested, since fiber allocation and redshift success can depend on quantities such as
 angular size, apparent magnitude and surface brightness.
 
-Finally, we apply additional quality cuts to mitigate outliers and to restrict the sample to galaxies for which
+Finally, we apply additional quality cuts to mitigate catastrophic
+outliers and to restrict the sample to galaxies for which
 the TF model is expected to be valid (e.g.\ excluding dwarf galaxies whose dynamics are not well described by
-the same TF relation).
+the normal-galaxy TF relation).
 These cuts are modeled as hard selection on the measured observables for each galaxy:
-$(\hat x_i,\hat y_i)\in\mathcal S_i$, where $\mathcal S_i$ is the (galaxy-dependent) selection region.
+$(\hat x_i,\hat y_i)\in\mathcal S$, where $\mathcal S$ is the selection region.
 This is the sample selection considered in this section.
 
 \subsubsection{Model}
 Given the model in \S\ref{sec:model}, one could also introduce a model for the abundance of the parent galaxy population
 as a function of redshift (e.g., constant per comoving number density).
 The expected number of sample galaxies, $\bar N$ is then calculable from the model and is dependent
-on the TF parameters. The actual sample size can then provide additional information and help constrain the TF parameters.
+on the TF parameters. The realized sample size could then inform the inference of the TF parameters.
 
 For simplicity and tractability, we do not introduce a model for the parent population abundance
 and instead treat the expected number of observed galaxies $\bar{N}$ as a free parameter in the likelihood:
 $\bar N$ does not depend on the TF parameters.
-As a result, the TF parameters are constrained only by the observed distribution of $(\hat x,\hat y)$.
+In this case, the TF parameters are constrained only by the observed distribution of $(\hat x,\hat y)$.
 
 \subsubsection{Total Likelihood }
-Let $\theta \equiv \big(s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}\big)$.
 Assuming (i) a Poisson model for the observed sample size and (ii) conditional independence of galaxy measurements,
 the total (extended) likelihood is
 \begin{align}
@@ -208,8 +209,8 @@ $\mathcal S_i $ is defined by
 \begin{align}
 \hat y_i\le \hat y_{\max}.
 \end{align}
-There $y_{\max}$ is meant to eliminate ``all'' of the dwarf galaxies from the sample.
-Selection will be galaxy-independent though this doesn't have to be the case in general.
+The $y_{\max}$ is intended to eliminate dwarf galaxies from the sample, so think of
+sacrificing completeness for purity, which should be OK considering the large size of the DESI TF sample.
 
 Then
 \begin{align}
@@ -225,21 +226,19 @@ P(S_i=1\mid \theta)
 &\qquad\qquad
 +(y_{\max}-\hat y_{\max})\,\Phi\!\left(\frac{\hat y_{\max}-y_{\max}}{\sigma_{2,i}}\right)
 -\sigma_{2,i}\,\phi\!\left(\frac{\hat y_{\max}-y_{\max}}{\sigma_{2,i}}\right)
-\Bigg].
+\Bigg],
 \end{align}
+where $\phi$ is the standard normal PDF.
+The integral over $\hat{x}$ is equal to 1 since there is no selection on $\hat{x}$.
 The galaxy-dependence of this term enters only through $\sigma_{2,i}$, which depends on the measurement uncertainty $\sigma_{y,i}$.
-
-This case is implemented in {\tt base.stan} with {\tt int y\_TF\_limits = 1};
-  {\tt y\_selection = 1}; {\tt plane\_cut = 0;}and when run with Ariel's mock after application of
-a maximum $\hat{y}_{\max}$
-  the input $s$ and $c$ are recovered to incredible precision,
-  and the intrinsic dispersions to 1$\sigma$.
 
 \subsubsection{Selection domain: upper limit in $\hat{y}$ and a fixed half-plane cut}
 \label{subsec:selection_yhatmax_halfplane}
 There is also a small population of luminous galaxies that have lower rotational velocities than given by the TF relation.
 We consider a sample constructed by imposing (i) an \emph{upper limit} on the measured value $\hat y$
 and (ii) a \emph{fixed half-plane cut} in the measured $(\hat x,\hat y)$-plane.
+The half-plane cut is selected by the scientist to maintain a pure sample of normal galaxies
+without overly sacrificing completeness, and for a good choice the fit results should be insensitive to perturbations of the half-plane cut parameters. 
 
 Given the domain
 \begin{align}
@@ -311,26 +310,21 @@ P(S_i=1\mid\theta)
 \Phi_2\left(-\alpha, \beta; -\rho \right)
 \end{align}
 by definition, where $\Phi_2$ is the bivariate standard normal cumulative distribution function.
-This integral has no analytic solution and is integrated numerically.
+This integral has no analytic solution.
 
-For the case with limits this is
+\paragraph{Closed Form for a Top-Hat Model for $y_{\text{TF},i}$}
+For the uniform prior $y_{\text{TF}}\sim\text{Uniform}(y_{\min},y_{\max})$, i.e., $p(y_{\text{TF}})=1/(y_{\max}-y_{\min})$, this becomes
 \begin{align}
 P(S_i=1\mid\theta)
 & = \frac{1}{y_{max}-y_{min}}
 \int_{y_{min}}^{y_{max}} dy_{\mathrm{TF}}
 \Phi_2\left(-\alpha, \beta; -\rho \right).
 \end{align}
-This case is implemented in {\tt base.stan} with {\tt int y\_TF\_limits = 1};
-  {\tt y\_selection = 1}; {\tt plane\_cut = 1;}and when run with Ariel's mock after application of
-a maximum $\hat{y}_{\max}$
-  the input $s$ and $c$ are recovered to excellent accuracy and precision within
-1$\sigma$.
 
 
-\paragraph{With a two-sided half-plane cut, parallel case, $\bar{s}_1=\bar{s}_2\equiv\bar{s}$}
-
-When the two half-plane boundaries are parallel, i.e.\
-$\bar{s}_1=\bar{s}_2\equiv\bar{s}$, the selection domain is
+\subsubsection{Selection domain: upper limit in $\hat{y}$ and a two-sided parallel half-plane cut}
+To handle potential catastrophic outliers on both sides of the TF relation, we can consider a sample constructed by imposing (i) an \emph{upper limit} on the measured value $\hat y$ and (ii) a \emph{two-sided parallel half-plane cut} in the measured $(\hat x,\hat y)$-plane.
+The selection domain is
 \begin{equation}
 \mathcal S_i:\qquad
 \bar{s}\,\hat x_i+\bar{c}_1 \;\le\; \hat y_i \;\le\; \min\!\big\{\hat y_{\max},\;\bar{s}\,\hat x_i+\bar{c}_2\big\}.
@@ -386,7 +380,8 @@ Note that $\alpha_1$ and $\alpha_2$ differ only by the replacement
 $\bar{c}_1\to\bar{c}_2$, and the correlation parameter $\rho$ is
 identical in both terms since it depends only on $\bar{s}$.
 
-For a uniform prior $p(y_{\mathrm{TF},i})=1/(y_{\max}-y_{\min})$ this becomes
+\paragraph{Closed Form for a Top-Hat Model for $y_{\text{TF},i}$}
+For the uniform prior $y_{\text{TF}}\sim\text{Uniform}(y_{\min},y_{\max})$, i.e., $p(y_{\text{TF}})=1/(y_{\max}-y_{\min})$, this becomes
 \begin{align}
 P(S_i=1\mid\theta)
 &=\frac{1}{y_{\max}-y_{\min}}
@@ -395,7 +390,6 @@ P(S_i=1\mid\theta)
      -\Phi_2\!\left(-\alpha_2,\;\beta;\;-\rho\right)\Big].
 \end{align}
 
- 
 
 \subsection{Priors}
 Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:
