@@ -322,6 +322,78 @@ a maximum $\hat{y}_{\max}$
   the input $s$ and $c$ are recovered tp incredible precision,
   and the intrinsic dispersions to 1$\sigma$ in preliminary tests.
 
+
+\paragraph{With a two-sided half-plane cut (parallel case, $\bar{s}_1=\bar{s}_2\equiv\bar{s}$)}
+
+When the two half-plane boundaries are parallel, i.e.\
+$\bar{s}_1=\bar{s}_2\equiv\bar{s}$, the selection domain is
+\begin{equation}
+\mathcal S_i:\qquad
+\bar{s}\,\hat x_i+\bar{c}_1 \;\le\; \hat y_i \;\le\; \min\!\big\{\hat y_{\max,i},\;\bar{s}\,\hat x_i+\bar{c}_2\big\}.
+\end{equation}
+In the sheared coordinates $\hat u\equiv\hat y-\bar{s}\,\hat x-\bar{c}_1$, the lower
+oblique cut gives $\hat u\ge0$ as before, while the upper oblique cut
+$\hat y\le\bar{s}\,\hat x+\bar{c}_2$ becomes the constant bound
+\begin{equation}
+\hat u \;\le\; \bar{c}_2-\bar{c}_1,
+\end{equation}
+so the selection region is
+\begin{equation}
+\mathcal S_i=\bigl\{(\hat u,\hat y):\;
+0\le\hat u\le\bar{c}_2-\bar{c}_1,\quad
+\hat y\le\hat y_{\max,i}\bigr\}.
+\end{equation}
+The constraint on $\hat u$ is a finite interval, so the integral over the
+selection region can be decomposed as a difference of two quadrant
+integrals:
+\begin{equation}
+P(\hat u\ge0,\;\hat u\le\bar{c}_2-\bar{c}_1,\;\hat y\le\hat y_{\max,i})
+\;=\;
+P(\hat u\ge0,\;\hat y\le\hat y_{\max,i})
+\;-\;
+P(\hat u\ge\bar{c}_2-\bar{c}_1,\;\hat y\le\hat y_{\max,i}).
+\end{equation}
+Each term is a bivariate normal CDF of the same form as in
+Section~\ref{subsec:selection_yhatmax_halfplane}. Defining
+\begin{equation}
+\rho \;=\; \frac{\sigma_{2,i}}{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
+\end{equation}
+\begin{equation}
+\alpha_1 \;=\;
+\frac{\bar{c}_1-\!\left(y_{\mathrm{TF},i}
+  -\bar{s}\,\dfrac{y_{\mathrm{TF},i}-c}{s}\right)}
+{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
+\qquad
+\alpha_2 \;=\;
+\frac{\bar{c}_2-\!\left(y_{\mathrm{TF},i}
+  -\bar{s}\,\dfrac{y_{\mathrm{TF},i}-c}{s}\right)}
+{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
+\end{equation}
+\begin{equation}
+\beta \;=\; \frac{\hat y_{\max,i}-y_{\mathrm{TF},i}}{\sigma_{2,i}},
+\end{equation}
+the selection probability is
+\begin{align}
+P(S_i=1\mid\theta)
+&=\int dy_{\mathrm{TF},i}\;p(y_{\mathrm{TF},i})\;
+\Big[\Phi_2\!\left(-\alpha_1,\;\beta;\;-\rho\right)
+     -\Phi_2\!\left(-\alpha_2,\;\beta;\;-\rho\right)\Big].
+\end{align}
+Note that $\alpha_1$ and $\alpha_2$ differ only by the replacement
+$\bar{c}_1\to\bar{c}_2$, and the correlation parameter $\rho$ is
+identical in both terms since it depends only on $\bar{s}$.
+
+For a uniform prior $p(y_{\mathrm{TF},i})=1/(y_{\max}-y_{\min})$ this becomes
+\begin{align}
+P(S_i=1\mid\theta)
+&=\frac{1}{y_{\max}-y_{\min}}
+\int_{y_{\min}}^{y_{\max}} dy_{\mathrm{TF},i}\;
+\Big[\Phi_2\!\left(-\alpha_1,\;\beta;\;-\rho\right)
+     -\Phi_2\!\left(-\alpha_2,\;\beta;\;-\rho\right)\Big],
+\end{align}
+which is integrated numerically.
+ 
+
 \subsection{Priors}
 Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:
 \begin{align}
