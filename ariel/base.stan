@@ -153,6 +153,10 @@ data {
   real intercept_plane;
   real intercept_plane2;
   
+  // Properties of dataset
+  real<upper=haty_max> y_min;
+  real<lower=haty_max> y_max;
+  
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   // array[N_total] int<lower=1, upper=N_bins> bin_idx;
 }
@@ -164,11 +168,7 @@ transformed data {
   vector[N_total] x_std = (x - mean_x) / sd_x;
   vector[N_total] sigma_x_std = sigma_x / sd_x;
   
-  // properties of dataset
-  real<upper=haty_max> y_min = -23; //-23.361639168868468; // min(y) + 0.09;  FROM ARIEL FEB 2 2026
-  real<lower=haty_max> y_max = -15; //-14.623998117629371; // max(y) - 0.09; // small buffer below max
-  
-  // variables used in more complicaed models
+  // variables used in more complicated models
   real log_lb = log(haty_max - y_min);
   real log_minus_ub = log(y_max - haty_max);
   vector[N_total] sigma_x_std_sq = square(sigma_x_std);
@@ -195,7 +195,7 @@ transformed data {
 }
 parameters {
   // Common slope across all redshift bins
-  real<lower=-12 * sd_x, upper=-4 * sd_x> slope_std;
+  real<lower=-8 * sd_x, upper=-4 * sd_x> slope_std;
   
   // Intercept for each redshift bin
   vector<upper=-10>[N_bins] intercept_std;
@@ -272,13 +272,14 @@ model {
       
       target += -log_diff_exp(term_lb, term_ub);
     } else if (y_selection != 0 && plane_cut == 1) {
-      // for (n in 1 : N_total) {
-      target += -N_total
-                * log(
-                      integrate_binormal_strip_trapez(y_min, y_max, haty_max,
-                        slope_std, intercept_std[bin_idx], slope_plane_std,
-                        intercept_plane_std, intercept_plane2_std,
-                        sqrt(sigmasq1_std[1]), sqrt(sigmasq2[1]), 1000));
+      for (n in 1 : N_total) {
+        target += -log(
+                       integrate_binormal_strip_trapez(y_min, y_max,
+                         haty_max, slope_std, intercept_std[bin_idx],
+                         slope_plane_std, intercept_plane_std,
+                         intercept_plane2_std, sqrt(sigmasq1_std[n]),
+                         sqrt(sigmasq2[n]), 100));
+      }
     }
   }
   

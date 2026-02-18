@@ -157,6 +157,8 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
         'y': y_data,
         'sigma_y': sigma_y_data,
         'haty_max': haty_max,
+        'y_min': -23.0,
+        'y_max': -15.0,
         'bin_idx': bin_idx
     }
 
