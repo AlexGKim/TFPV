@@ -16,105 +16,117 @@ import matplotlib.pyplot as plt
 
 
 def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, sample_size=None,
-                    plane_cut=False, slope_plane=None, intercept_plane=None):
+                    plane_cut=False, slope_plane=None, intercept_plane=None, intercept_plane2=None):
     """
     Process TF mock data: convert to Stan JSON format and create initial conditions.
-    
-    This consolidated method performs both data conversion and initial condition
-    generation in a single pass through the CSV file.
-    
+
     Parameters
     ----------
-    csv_file : str
-        Path to input CSV file
-    data_output_file : str
-        Path to output JSON file for Stan data
-    init_output_file : str
-        Path to output JSON file for initial conditions
-    haty_max : float, optional
-        Selection function threshold for filtering galaxies (default: -16)
-        Only galaxies with M_abs < haty_max are included
-    sample_size : int, optional
-        Number of galaxies to randomly sample from filtered data (default: None, use all)
+    ...
     plane_cut : bool, optional
-        Whether to apply half-plane cut (default: False)
+        Whether to apply half-plane cut(s) (default: False)
+
     slope_plane : float, optional
-        Slope parameter (bar_s) for half-plane cut: bar_s * x + bar_c <= y
-        Required if plane_cut=True
+        Slope parameter (bar_s) for half-plane cut(s): y = bar_s * x + bar_c
+
     intercept_plane : float, optional
-        Intercept parameter (bar_c) for half-plane cut: bar_s * x + bar_c <= y
+        Intercept parameter (bar_c1) for lower bound:
+            bar_s * x + intercept_plane <= y
         Required if plane_cut=True
+
+    intercept_plane2 : float, optional
+        Optional second intercept (bar_c2) for upper oblique bound:
+            y <= bar_s * x + intercept_plane2
+        If provided, the sample cut becomes two-sided parallel:
+            bar_s*x + c1 <= y <= min(haty_max, bar_s*x + c2)
     """
-    
+
     # Validate plane cut parameters
     if plane_cut and (slope_plane is None or intercept_plane is None):
         raise ValueError("slope_plane and intercept_plane must be provided when plane_cut=True")
-    
+
+    # If two-sided, enforce ordering c1 < c2 (so lower line is always below upper line)
+    two_sided = plane_cut and (intercept_plane2 is not None)
+    if two_sided and not (intercept_plane < intercept_plane2):
+        raise ValueError(
+            f"For a two-sided parallel cut, require intercept_plane < intercept_plane2. "
+            f"Got {intercept_plane} and {intercept_plane2}."
+        )
+
     # ============================================================================
     # SECTION 1: READ CSV DATA
     # ============================================================================
-    x_data = []  # log(Vrot/V0) - this is x in the model
-    y_data = []  # Absolute magnitude - this is y in the model
+    x_data = []        # log(Vrot/V0)
+    y_data = []        # Absolute magnitude
     sigma_x_data = []  # Uncertainty in log(Vrot/V0)
     sigma_y_data = []  # Uncertainty in M_abs
-    
+
     # Track filtering statistics
     total_rows = 0
-    filtered_rows = 0
-    plane_filtered_rows = 0
-    
+    y_filtered_rows = 0
+    plane_pass_rows = 0
+
     with open(csv_file, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
             total_rows += 1
             x_val = float(row['log_V_V0'])
             y_val = float(row['M_abs'])
-            
-            # Apply y < haty_max filter
+
+            # Apply y upper limit (note: magnitudes: "brighter" is more negative)
+            # Your original code uses y_val < haty_max; keep that behavior.
             if y_val < haty_max:
-                filtered_rows += 1
-                
-                # Apply half-plane cut if requested: bar_s * x + bar_c <= y
+                y_filtered_rows += 1
+
                 if plane_cut:
-                    plane_boundary = slope_plane * x_val + intercept_plane
-                    if plane_boundary <= y_val:
-                        x_data.append(x_val)
-                        y_data.append(y_val)
-                        sigma_x_data.append(float(row['log_V_V0_unc']))
-                        sigma_y_data.append(float(row['M_abs_unc']))
-                        plane_filtered_rows += 1
+                    lower_bound = slope_plane * x_val + intercept_plane
+
+                    if not two_sided:
+                        # One-sided: lower_bound <= y
+                        if lower_bound <= y_val:
+                            x_data.append(x_val)
+                            y_data.append(y_val)
+                            sigma_x_data.append(float(row['log_V_V0_unc']))
+                            sigma_y_data.append(float(row['M_abs_unc']))
+                            plane_pass_rows += 1
+                    else:
+                        # Two-sided: lower_bound <= y <= min(haty_max, upper_bound)
+                        upper_bound_oblique = slope_plane * x_val + intercept_plane2
+                        upper_bound = min(haty_max, upper_bound_oblique)
+
+                        if (lower_bound <= y_val) and (y_val <= upper_bound):
+                            x_data.append(x_val)
+                            y_data.append(y_val)
+                            sigma_x_data.append(float(row['log_V_V0_unc']))
+                            sigma_y_data.append(float(row['M_abs_unc']))
+                            plane_pass_rows += 1
                 else:
-                    # No plane cut, include all galaxies that pass y < haty_max
+                    # No plane cut
                     x_data.append(x_val)
                     y_data.append(y_val)
                     sigma_x_data.append(float(row['log_V_V0_unc']))
                     sigma_y_data.append(float(row['M_abs_unc']))
-            # Note: zobs column is present but not used by base.stan
-    
+
     # Convert to numpy arrays for calculations
     x = np.array(x_data)
     y = np.array(y_data)
     sigma_x = np.array(sigma_x_data)
     sigma_y = np.array(sigma_y_data)
-    
+
     # ============================================================================
     # SECTION 1.5: RANDOM SAMPLING (if sample_size is specified)
     # ============================================================================
     N_filtered = len(x)
-    
+
     if sample_size is not None and sample_size < N_filtered:
-        # Set random seed for reproducibility
         np.random.seed(42)
-        
-        # Randomly sample indices
         sample_indices = np.random.choice(N_filtered, size=sample_size, replace=False)
-        
-        # Apply sampling
+
         x = x[sample_indices]
         y = y[sample_indices]
         sigma_x = sigma_x[sample_indices]
         sigma_y = sigma_y[sample_indices]
-        
+
         print(f"\nRandom sampling:")
         print(f"  Filtered data size: {N_filtered}")
         print(f"  Requested sample size: {sample_size}")
@@ -122,27 +134,21 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     elif sample_size is not None and sample_size >= N_filtered:
         print(f"\nNote: Requested sample size ({sample_size}) >= filtered data size ({N_filtered})")
         print(f"  Using all {N_filtered} filtered galaxies")
-    
+
     N_total = len(x)
-    
+
     # Convert back to lists for JSON serialization
     x_data = x.tolist()
     y_data = y.tolist()
     sigma_x_data = sigma_x.tolist()
     sigma_y_data = sigma_y.tolist()
-    
+
     # ============================================================================
     # SECTION 2: CREATE STAN DATA DICTIONARY
     # ============================================================================
-    # Since N_bins = 1, all galaxies are in the same bin
     N_bins = 1
-    N_gal = [N_total]
-    
-    # Create bin assignment (all galaxies in bin 1)
     bin_idx = [1] * N_total
-    
-    # Create the data dictionary for Stan
-    # Using uncertainties from CSV file (log_V_V0_unc and M_abs_unc columns)
+
     stan_data = {
         'N_bins': N_bins,
         'N_total': N_total,
@@ -153,222 +159,193 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
         'haty_max': haty_max,
         'bin_idx': bin_idx
     }
-    
-    # Add plane cut parameters if specified
+
     if plane_cut:
         stan_data['slope_plane'] = slope_plane
-        stan_data['intercept_plane'] = intercept_plane
-    
-    # Write Stan data to JSON file
+        stan_data['intercept_plane'] = intercept_plane  # keep original name (c1)
+        if two_sided:
+            stan_data['intercept_plane2'] = intercept_plane2  # new (c2)
+
     with open(data_output_file, 'w') as f:
         json.dump(stan_data, f, indent=2)
-    
+
     # ============================================================================
     # SECTION 3: CALCULATE STANDARDIZATION AND LINEAR REGRESSION
     # ============================================================================
-    # Calculate standardization parameters (same as in base.stan transformed data)
     mean_x = np.mean(x)
-    sd_x = np.std(x, ddof=1)  # ddof=1 for sample standard deviation
-    
-    # Standardize x values: x_std = (x - mean_x) / sd_x
+    sd_x = np.std(x, ddof=1)
+
     x_std = (x - mean_x) / sd_x
-    
-    # Linear regression: y = intercept_std + slope_std * x_std
-    # Use numpy.polyfit with deg=1 to calculate slope and intercept
-    # polyfit returns [slope, intercept] for degree 1 polynomial
+
     slope_std, intercept_std = np.polyfit(x_std, y, deg=1)
-    
-    # Calculate slope and intercept in terms of original x
-    # y = intercept_std + slope_std * x_std
-    # y = intercept_std + slope_std * (x - mean_x) / sd_x
-    # y = (intercept_std - slope_std * mean_x / sd_x) + (slope_std / sd_x) * x
+
     slope_orig = slope_std / sd_x
     intercept_orig = intercept_std - slope_std * mean_x / sd_x
-    
-    # For N_bins=1, intercept_std is a single value, but Stan expects a vector
-    # We'll provide it as a list with one element
+
     intercept_std_vec = [float(intercept_std)]
-    
+
     # ============================================================================
     # SECTION 4: CREATE INITIAL CONDITIONS DICTIONARY
     # ============================================================================
-    # Convert numpy arrays to lists for JSON serialization
     init_data = {
-        # 'x_TF_std': x_std.tolist(),
         'slope_std': float(slope_std),
         'intercept_std': intercept_std_vec,
         'sigma_int_tot_y': 0.05,
         'theta_int': np.pi/4
     }
 
-    # Write initial conditions to JSON file
     with open(init_output_file, 'w') as f:
         json.dump(init_data, f, indent=2)
-    
+
     # ============================================================================
     # SECTION 5: PRINT SUMMARY STATISTICS
     # ============================================================================
     print(f"\nData conversion complete!")
     print(f"Stan data output file: {data_output_file}")
     print(f"Initial conditions output file: {init_output_file}")
+
     print(f"\nFiltering:")
     print(f"  Total rows in CSV: {total_rows}")
-    print(f"  Rows with y < {haty_max}: {filtered_rows}")
+    print(f"  Rows with y < {haty_max}: {y_filtered_rows}")
+
     if plane_cut:
-        print(f"  Rows passing plane cut (bar_s * x + bar_c <= y): {plane_filtered_rows}")
-        print(f"  Rows filtered out by plane cut: {filtered_rows - plane_filtered_rows}")
-        print(f"  Plane parameters: bar_s = {slope_plane}, bar_c = {intercept_plane}")
-    print(f"  Rows filtered out: {total_rows - filtered_rows}")
+        if not two_sided:
+            print(f"  Rows passing plane cut (bar_s * x + c1 <= y): {plane_pass_rows}")
+            print(f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}")
+            print(f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}")
+        else:
+            print(f"  Rows passing two-sided plane cut (c1 <= y - bar_s*x <= c2): {plane_pass_rows}")
+            print(f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}")
+            print(f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}, c2 = {intercept_plane2}")
+
+    print(f"  Rows filtered out (by y cut only): {total_rows - y_filtered_rows}")
     print(f"  haty_max (selection threshold): {haty_max}")
+
     print(f"\nSummary:")
     print(f"  Number of redshift bins: {N_bins}")
     print(f"  Final sample size: {N_total}")
-    print(f"  Galaxies per bin: {N_gal}")
-    print(f"\nData ranges:")
-    print(f"  x (log_V_V0): [{np.min(x):.3f}, {np.max(x):.3f}]")
-    print(f"  y (M_abs): [{np.min(y):.3f}, {np.max(y):.3f}]")
-    print(f"  sigma_x (log_V_V0_unc): {np.array(sigma_x_data).mean():.3f} (mean), range [{np.min(sigma_x_data):.3f}, {np.max(sigma_x_data):.3f}]")
-    print(f"  sigma_y (M_abs_unc): {np.array(sigma_y_data).mean():.3f} (mean), range [{np.min(sigma_y_data):.3f}, {np.max(sigma_y_data):.3f}]")
-    print(f"\nStandardization statistics:")
-    print(f"  mean(x): {mean_x:.3f}")
-    print(f"  sd(x): {sd_x:.3f}")
-    print(f"  x_TF_std (= x_std) range: [{np.min(x_std):.3f}, {np.max(x_std):.3f}]")
-    print(f"\nLinear regression (y ~ x_TF_std):")
-    print(f"  slope_std: {float(slope_std):.6f}")
-    print(f"  intercept_std: {float(intercept_std):.6f}")
-    print(f"\nLinear regression (y ~ x_original):")
-    print(f"  slope_orig: {slope_orig:.6f}")
-    print(f"  intercept_orig: {intercept_orig:.6f}")
-    print(f"\nInitial scatter parameters:")
-    print(f"  sigma_int_tot_y: {init_data['sigma_int_tot_y']}")
-    print(f"  theta_int: {init_data['theta_int']}")
+
+    if N_total > 0:
+        print(f"\nData ranges:")
+        print(f"  x (log_V_V0): [{np.min(x):.3f}, {np.max(x):.3f}]")
+        print(f"  y (M_abs): [{np.min(y):.3f}, {np.max(y):.3f}]")
+        print(f"  sigma_x (log_V_V0_unc): {np.array(sigma_x_data).mean():.3f} (mean), range [{np.min(sigma_x_data):.3f}, {np.max(sigma_x_data):.3f}]")
+        print(f"  sigma_y (M_abs_unc): {np.array(sigma_y_data).mean():.3f} (mean), range [{np.min(sigma_y_data):.3f}, {np.max(sigma_y_data):.3f}]")
+
+        print(f"\nStandardization statistics:")
+        print(f"  mean(x): {mean_x:.3f}")
+        print(f"  sd(x): {sd_x:.3f}")
+        print(f"  x_TF_std (= x_std) range: [{np.min(x_std):.3f}, {np.max(x_std):.3f}]")
+
+        print(f"\nLinear regression (y ~ x_TF_std):")
+        print(f"  slope_std: {float(slope_std):.6f}")
+        print(f"  intercept_std: {float(intercept_std):.6f}")
+
+        print(f"\nLinear regression (y ~ x_original):")
+        print(f"  slope_orig: {slope_orig:.6f}")
+        print(f"  intercept_orig: {intercept_orig:.6f}")
+
+        print(f"\nInitial scatter parameters:")
+        print(f"  sigma_int_tot_y: {init_data['sigma_int_tot_y']}")
+        print(f"  theta_int: {init_data['theta_int']}")
+    else:
+        print("\nWARNING: Final sample size is 0 after cuts.")
 
 
 def plot_tf_data(json_file, output_file='tf_scatter_plot.png'):
     """
     Create scatter plot with error bars from TF data JSON file.
-    
-    Parameters
-    ----------
-    json_file : str
-        Path to input JSON file containing TF data
-    output_file : str
-        Path to output plot file (default: 'tf_scatter_plot.png')
     """
-    
-    # Read JSON data
     with open(json_file, 'r') as f:
         data = json.load(f)
-    
-    # Extract data arrays
+
     x = np.array(data['x'])
     y = np.array(data['y'])
     sigma_x = np.array(data['sigma_x'])
     sigma_y = np.array(data['sigma_y'])
-    
-    # Get additional info
+
     N_total = data['N_total']
     haty_max = data.get('haty_max', None)
     slope_plane = data.get('slope_plane', None)
     intercept_plane = data.get('intercept_plane', None)
-    
-    # Create figure and axis
+    intercept_plane2 = data.get('intercept_plane2', None)
+
     fig, ax = plt.subplots(figsize=(10, 8))
-    
-    # Create scatter plot with error bars
+
     ax.errorbar(x, y, xerr=sigma_x, yerr=sigma_y,
                 fmt='o', markersize=3, alpha=0.6,
                 elinewidth=0.5, capsize=0,
                 label=f'N = {N_total}')
-    
-    # Add horizontal line for haty_max if present
+
     if haty_max is not None:
         ax.axhline(y=haty_max, color='red', linestyle='--',
                    linewidth=2, alpha=0.8,
                    label=f'$\\hat{{y}}_{{\\rm max}}$ = {haty_max}')
-    
-    # Add half-plane cut line if present
-    if slope_plane is not None and intercept_plane is not None:
+
+    # Plot one or two parallel plane-cut boundaries if present
+    if slope_plane is not None and intercept_plane is not None and len(x) > 0:
         x_range = np.array([np.min(x) - 0.1, np.max(x) + 0.1])
-        y_plane = slope_plane * x_range + intercept_plane
-        ax.plot(x_range, y_plane, 'g--', linewidth=2, alpha=0.8,
-                label=f'Plane cut: y = {slope_plane:.1f}x + {intercept_plane:.1f}')
-    
-    # Labels and title
+
+        y_plane1 = slope_plane * x_range + intercept_plane
+        ax.plot(x_range, y_plane1, 'g--', linewidth=2, alpha=0.8,
+                label=f'Plane cut 1: y = {slope_plane:.1f}x + {intercept_plane:.1f}')
+
+        if intercept_plane2 is not None:
+            y_plane2 = slope_plane * x_range + intercept_plane2
+            ax.plot(x_range, y_plane2, 'g-.', linewidth=2, alpha=0.8,
+                    label=f'Plane cut 2: y = {slope_plane:.1f}x + {intercept_plane2:.1f}')
+
     ax.set_xlabel(r'$\hat{x}$ = log($V_{\rm rot}/V_0$)', fontsize=12)
     ax.set_ylabel(r'$\hat{y}$ = $M_{\rm abs}$ (absolute magnitude)', fontsize=12)
     ax.set_title('Tully-Fisher Mock Data', fontsize=14, fontweight='bold')
-    
-    # Invert y-axis (brighter magnitudes are more negative)
+
     ax.invert_yaxis()
-    
-    # Grid
     ax.grid(True, alpha=0.3, linestyle='--')
-    
-    # Legend
     ax.legend(loc='best', fontsize=10)
-    
-    # Tight layout
+
     plt.tight_layout()
-    
-    # Save figure (without showing)
     plt.savefig(output_file, dpi=150, bbox_inches='tight')
-    plt.close(fig)  # Close figure to avoid display
+    plt.close(fig)
     print(f"\nPlot saved to: {output_file}")
-    
-    # Print summary statistics
+
     print(f"\nData summary:")
     print(f"  Number of galaxies: {N_total}")
-    print(f"  x range: [{np.min(x):.3f}, {np.max(x):.3f}]")
-    print(f"  y range: [{np.min(y):.3f}, {np.max(y):.3f}]")
-    print(f"  sigma_x: mean = {np.mean(sigma_x):.4f}, range = [{np.min(sigma_x):.4f}, {np.max(sigma_x):.4f}]")
-    print(f"  sigma_y: mean = {np.mean(sigma_y):.4f}, range = [{np.min(sigma_y):.4f}, {np.max(sigma_y):.4f}]")
+    if len(x) > 0:
+        print(f"  x range: [{np.min(x):.3f}, {np.max(x):.3f}]")
+        print(f"  y range: [{np.min(y):.3f}, {np.max(y):.3f}]")
+        print(f"  sigma_x: mean = {np.mean(sigma_x):.4f}, range = [{np.min(sigma_x):.4f}, {np.max(sigma_x):.4f}]")
+        print(f"  sigma_y: mean = {np.mean(sigma_y):.4f}, range = [{np.min(sigma_y):.4f}, {np.max(sigma_y):.4f}]")
     if haty_max is not None:
         print(f"  haty_max: {haty_max}")
     if slope_plane is not None and intercept_plane is not None:
-        print(f"  Plane cut: y = {slope_plane}x + {intercept_plane}")
+        print(f"  Plane cut 1: y = {slope_plane}x + {intercept_plane}")
+        if intercept_plane2 is not None:
+            print(f"  Plane cut 2: y = {slope_plane}x + {intercept_plane2}")
 
 
 if __name__ == '__main__':
-    # ============================================================================
-    # USER CONFIGURATION - Modify these variables as needed
-    # ============================================================================
-    
-    # Input file path
     input_csv = 'data/TF_mock_tophat-mag_input.csv'
-    
-    # Selection function threshold
-    haty_max = -16
-    plane_cut=True
-    slope_plane=-8.5
-    intercept_plane=-20.5
 
-    # Final sample size (set to None to use all filtered data)
-    # Examples:
-    #   sample_size = None    # Use all filtered data
-    #   sample_size = 100     # Randomly sample 100 galaxies
-    #   sample_size = 500     # Randomly sample 500 galaxies
-    sample_size = 10000 #None
-    
-    # ============================================================================
-    # Generate output filenames based on sample size
-    # ============================================================================
+    haty_max = -16
+
+    plane_cut = True
+    slope_plane = -8.5
+    intercept_plane = -20.5     # c1 (lower oblique bound)
+    intercept_plane2 = -19.1    # c2 (upper oblique bound); set to None for one-sided
+
+    sample_size = 10000  # or None
+
     if sample_size is not None:
         output_json = f'TF_mock_input_n{sample_size}.json'
         init_json = f'TF_mock_init_n{sample_size}.json'
     else:
         output_json = 'TF_mock_input.json'
         init_json = 'TF_mock_init.json'
-    
-    # ============================================================================
-    # Process TF data: convert to Stan format and create initial conditions
-    # ============================================================================
+
     process_tf_data(input_csv, output_json, init_json,
-                   haty_max=haty_max, sample_size=sample_size,
-                   plane_cut=plane_cut, slope_plane=slope_plane, intercept_plane=intercept_plane)
-    
-    # ============================================================================
-    # Create plot of the processed data
-    # ============================================================================
+                    haty_max=haty_max, sample_size=sample_size,
+                    plane_cut=plane_cut, slope_plane=slope_plane,
+                    intercept_plane=intercept_plane, intercept_plane2=intercept_plane2)
+
     plot_output = output_json.replace('.json', '_plot.png')
     plot_tf_data(output_json, plot_output)
