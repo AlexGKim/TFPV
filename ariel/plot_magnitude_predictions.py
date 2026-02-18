@@ -73,9 +73,10 @@ def plot_magnitude_comparison(csv_file, output_file='magnitude_comparison.png', 
     
     plt.tight_layout()
     
-    # Save figure
+    # Save figure (without showing)
     print(f"Saving plot to {output_file}...")
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.close(fig)  # Close figure to avoid display
     print(f"Plot saved successfully!")
     
     # Print statistics
@@ -95,8 +96,6 @@ def plot_magnitude_comparison(csv_file, output_file='magnitude_comparison.png', 
                  (M_abs_obs <= M_abs_pred_upper)).sum()
     fraction_within = within_ci / n_galaxies
     print(f"  Fraction of observed M_abs within predicted 68% CI: {fraction_within:.3f} ({within_ci}/{n_galaxies})")
-    
-    plt.show()
 
 
 def plot_residuals(csv_file, output_file='magnitude_residuals.png', max_galaxies=None):
@@ -159,9 +158,10 @@ def plot_residuals(csv_file, output_file='magnitude_residuals.png', max_galaxies
     
     plt.tight_layout()
     
-    # Save figure
+    # Save figure (without showing)
     print(f"Saving residuals plot to {output_file}...")
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.close(fig)  # Close figure to avoid display
     print(f"Residuals plot saved successfully!")
     
     # Print statistics
@@ -169,8 +169,6 @@ def plot_residuals(csv_file, output_file='magnitude_residuals.png', max_galaxies
     print(f"  Mean residual: {residuals.mean():.3f}")
     print(f"  Std residual: {residuals.std():.3f}")
     print(f"  RMS residual: {np.sqrt(np.mean(residuals**2)):.3f}")
-    
-    plt.show()
 
 
 def main():
