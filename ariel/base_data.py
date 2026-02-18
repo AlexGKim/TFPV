@@ -12,6 +12,7 @@ expected by base.stan with:
 import csv
 import json
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, sample_size=None,
@@ -243,6 +244,91 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     print(f"  theta_int: {init_data['theta_int']}")
 
 
+def plot_tf_data(json_file, output_file='tf_scatter_plot.png'):
+    """
+    Create scatter plot with error bars from TF data JSON file.
+    
+    Parameters
+    ----------
+    json_file : str
+        Path to input JSON file containing TF data
+    output_file : str
+        Path to output plot file (default: 'tf_scatter_plot.png')
+    """
+    
+    # Read JSON data
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+    
+    # Extract data arrays
+    x = np.array(data['x'])
+    y = np.array(data['y'])
+    sigma_x = np.array(data['sigma_x'])
+    sigma_y = np.array(data['sigma_y'])
+    
+    # Get additional info
+    N_total = data['N_total']
+    haty_max = data.get('haty_max', None)
+    slope_plane = data.get('slope_plane', None)
+    intercept_plane = data.get('intercept_plane', None)
+    
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Create scatter plot with error bars
+    ax.errorbar(x, y, xerr=sigma_x, yerr=sigma_y,
+                fmt='o', markersize=3, alpha=0.6,
+                elinewidth=0.5, capsize=0,
+                label=f'N = {N_total}')
+    
+    # Add horizontal line for haty_max if present
+    if haty_max is not None:
+        ax.axhline(y=haty_max, color='red', linestyle='--',
+                   linewidth=2, alpha=0.8,
+                   label=f'$\\hat{{y}}_{{\\rm max}}$ = {haty_max}')
+    
+    # Add half-plane cut line if present
+    if slope_plane is not None and intercept_plane is not None:
+        x_range = np.array([np.min(x) - 0.1, np.max(x) + 0.1])
+        y_plane = slope_plane * x_range + intercept_plane
+        ax.plot(x_range, y_plane, 'g--', linewidth=2, alpha=0.8,
+                label=f'Plane cut: y = {slope_plane:.1f}x + {intercept_plane:.1f}')
+    
+    # Labels and title
+    ax.set_xlabel(r'$\hat{x}$ = log($V_{\rm rot}/V_0$)', fontsize=12)
+    ax.set_ylabel(r'$\hat{y}$ = $M_{\rm abs}$ (absolute magnitude)', fontsize=12)
+    ax.set_title('Tully-Fisher Mock Data', fontsize=14, fontweight='bold')
+    
+    # Invert y-axis (brighter magnitudes are more negative)
+    ax.invert_yaxis()
+    
+    # Grid
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    # Legend
+    ax.legend(loc='best', fontsize=10)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save figure (without showing)
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    plt.close(fig)  # Close figure to avoid display
+    print(f"\nPlot saved to: {output_file}")
+    
+    # Print summary statistics
+    print(f"\nData summary:")
+    print(f"  Number of galaxies: {N_total}")
+    print(f"  x range: [{np.min(x):.3f}, {np.max(x):.3f}]")
+    print(f"  y range: [{np.min(y):.3f}, {np.max(y):.3f}]")
+    print(f"  sigma_x: mean = {np.mean(sigma_x):.4f}, range = [{np.min(sigma_x):.4f}, {np.max(sigma_x):.4f}]")
+    print(f"  sigma_y: mean = {np.mean(sigma_y):.4f}, range = [{np.min(sigma_y):.4f}, {np.max(sigma_y):.4f}]")
+    if haty_max is not None:
+        print(f"  haty_max: {haty_max}")
+    if slope_plane is not None and intercept_plane is not None:
+        print(f"  Plane cut: y = {slope_plane}x + {intercept_plane}")
+
+
 if __name__ == '__main__':
     # ============================================================================
     # USER CONFIGURATION - Modify these variables as needed
@@ -280,3 +366,9 @@ if __name__ == '__main__':
     process_tf_data(input_csv, output_json, init_json,
                    haty_max=haty_max, sample_size=sample_size,
                    plane_cut=plane_cut, slope_plane=slope_plane, intercept_plane=intercept_plane)
+    
+    # ============================================================================
+    # Create plot of the processed data
+    # ============================================================================
+    plot_output = output_json.replace('.json', '_plot.png')
+    plot_tf_data(output_json, plot_output)
