@@ -283,8 +283,8 @@ model {
   }
   
   // Priors
-  sigma_int_x ~ cauchy(0, 0.03 * 50);
-  sigma_int_y ~ cauchy(0, 0.03 * 50);
+  sigma_int_x ~ cauchy(0, 0.03 * 15);
+  sigma_int_y ~ cauchy(0, 0.03 * 15);
 }
 generated quantities {
   real slope = slope_std / sd_x;
