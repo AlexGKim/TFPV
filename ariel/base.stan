@@ -70,6 +70,63 @@ functions {
     // Trapezoidal rule with top-hat normalization
     return (h / 2.0) * sum / (y_max - y_min);
   }
+  
+  // Two-sided (parallel) half-plane strip: c1 <= y - s_plane*x <= c2, plus y <= haty_max
+  real integrate_binormal_strip_trapez(
+         real y_min,
+         real y_max,
+         real haty_max,
+         real s,
+         real c,
+         real s_plane,
+         real c_plane1,
+         real c_plane2,
+         real sigma1,
+         real sigma2,
+         int N
+       ) {
+    real h = (y_max - y_min) / N;
+    
+    // For the parallel-strip derivation, both bounds share the same s_plane, hence same rho
+    real sigma_tot = sqrt(sigma2 ^ 2 + s_plane ^ 2 * sigma1 ^ 2);
+    real rho = sigma2 / sigma_tot;
+    
+    real sum;
+    real alpha1;
+    real alpha2;
+    real beta;
+    
+    // left endpoint
+    alpha1 = (c_plane1 - (y_min - s_plane * (y_min - c) / s)) / sigma_tot;
+    alpha2 = (c_plane2 - (y_min - s_plane * (y_min - c) / s)) / sigma_tot;
+    beta = (haty_max - y_min) / sigma2;
+    
+    sum = (binormal_cdf((-alpha1, beta) | -rho)
+           - binormal_cdf((-alpha2, beta) | -rho));
+    
+    // interior points
+    for (n in 1 : (N - 1)) {
+      real y_TF = y_min + n * h;
+      alpha1 = (c_plane1 - (y_TF - s_plane * (y_TF - c) / s)) / sigma_tot;
+      alpha2 = (c_plane2 - (y_TF - s_plane * (y_TF - c) / s)) / sigma_tot;
+      beta = (haty_max - y_TF) / sigma2;
+      
+      sum += 2.0
+             * (binormal_cdf((-alpha1, beta) | -rho)
+                - binormal_cdf((-alpha2, beta) | -rho));
+    }
+    
+    // right endpoint
+    alpha1 = (c_plane1 - (y_max - s_plane * (y_max - c) / s)) / sigma_tot;
+    alpha2 = (c_plane2 - (y_max - s_plane * (y_max - c) / s)) / sigma_tot;
+    beta = (haty_max - y_max) / sigma2;
+    
+    sum += (binormal_cdf((-alpha1, beta) | -rho)
+            - binormal_cdf((-alpha2, beta) | -rho));
+    
+    // trapezoid + top-hat normalization
+    return (h / 2.0) * sum / (y_max - y_min);
+  }
 }
 data {
   // Number of redshift bins
@@ -94,6 +151,7 @@ data {
   real haty_max;
   real slope_plane;
   real intercept_plane;
+  real intercept_plane2;
   
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   // array[N_total] int<lower=1, upper=N_bins> bin_idx;
@@ -131,6 +189,8 @@ transformed data {
   real slope_plane_std = slope_plane * sd_x;
   real intercept_plane_std = intercept_plane
                              + slope_plane_std * mean_x / sd_x;
+  real intercept_plane2_std = intercept_plane2
+                              + slope_plane_std * mean_x / sd_x;
   ;
 }
 parameters {
@@ -215,16 +275,16 @@ model {
       // for (n in 1 : N_total) {
       target += -N_total
                 * log(
-                      integrate_binormal_trapez(y_min, y_max, haty_max,
+                      integrate_binormal_strip_trapez(y_min, y_max, haty_max,
                         slope_std, intercept_std[bin_idx], slope_plane_std,
-                        intercept_plane_std, sqrt(sigmasq1_std[1]),
-                        sqrt(sigmasq2[1]), 1000));
+                        intercept_plane_std, intercept_plane2_std,
+                        sqrt(sigmasq1_std[1]), sqrt(sigmasq2[1]), 1000));
     }
   }
   
   // Priors
-  sigma_int_x ~ cauchy(0, 0.03 * 10);
-  sigma_int_y ~ cauchy(0, 0.03 * 10);
+  sigma_int_x ~ cauchy(0, 0.03 * 50);
+  sigma_int_y ~ cauchy(0, 0.03 * 50);
 }
 generated quantities {
   real slope = slope_std / sd_x;
