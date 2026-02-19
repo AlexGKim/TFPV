@@ -219,8 +219,13 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
     init_data = {
         'slope_std': float(slope_std),
         'intercept_std': intercept_std_vec,
-        'sigma_int_tot_y': 0.05,
-        'theta_int': np.pi/4
+        'slope_orig': float(slope_orig),
+        'intercept_orig': float(intercept_orig),
+        'sigma_int_x': 0.1,
+        'sigma_int_y': 0.1,
+        'mean_x': float(mean_x),
+        'sd_x': float(sd_x)
+        # 'theta_int': np.pi/4
     }
     
     with open(init_output_file, 'w') as f:
@@ -276,8 +281,8 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
         print(f"  intercept_orig: {intercept_orig:.6f}")
         
         print(f"\nInitial scatter parameters:")
-        print(f"  sigma_int_tot_y: {init_data['sigma_int_tot_y']}")
-        print(f"  theta_int: {init_data['theta_int']}")
+        print(f"  sigma_int_x: {init_data['sigma_int_x']}")
+        print(f"  sigma_int_y: {init_data['sigma_int_y']}")
     else:
         print("\nWARNING: Final sample size is 0 after cuts.")
     
@@ -364,7 +369,7 @@ def plot_desi_tf_data(x_all, y_all, sigma_x_all, sigma_y_all,
 if __name__ == '__main__':
     input_fits = 'data/DESI-DR1_TF_pv_cat_v15.fits'
     
-    haty_max = -17.5
+    haty_max = -18
     
     plane_cut = True
     slope_plane = -6.5

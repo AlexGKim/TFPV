@@ -380,6 +380,22 @@ Note that $\alpha_1$ and $\alpha_2$ differ only by the replacement
 $\bar{c}_1\to\bar{c}_2$, and the correlation parameter $\rho$ is
 identical in both terms since it depends only on $\bar{s}$.
 
+When using the Owen’s-$t$ representation (for $z_1=-\alpha_j,\ z_2=\beta$ and correlation $-\rho$),
+$$\Phi_2(z_1,z_2;-\rho)
+=\tfrac12\!\left[\Phi(z_1)+\Phi(z_2)-\delta(z_1,z_2)\right]
+- T\!\left(z_1,\frac{z_2/z_1+\rho}{\sqrt{1-\rho^2}}\right)
+- T\!\left(z_2,\frac{z_1/z_2+\rho}{\sqrt{1-\rho^2}}\right),$$
+so the bracket in the integrand becomes
+$$\begin{aligned}
+\Phi_2(-\alpha_1,\beta;-\rho)-\Phi_2(-\alpha_2,\beta;-\rho)
+&=\tfrac12\Big(\Phi(-\alpha_1)-\Phi(-\alpha_2)\;-\;\big[\delta(-\alpha_1,\beta)-\delta(-\alpha_2,\beta)\big]\Big)\\
+&\quad-\Bigg[T\!\left(-\alpha_1,\frac{\beta/(-\alpha_1)+\rho}{\sqrt{1-\rho^2}}\right)
+          -T\!\left(-\alpha_2,\frac{\beta/(-\alpha_2)+\rho}{\sqrt{1-\rho^2}}\right)\Bigg]\\
+&\quad-\Bigg[T\!\left(\beta,\frac{(-\alpha_1)/\beta+\rho}{\sqrt{1-\rho^2}}\right)
+          -T\!\left(\beta,\frac{(-\alpha_2)/\beta+\rho}{\sqrt{1-\rho^2}}\right)\Bigg],
+\end{aligned}$$
+where the cancellation is the common $\tfrac12\Phi(\beta)$ term.
+
 \paragraph{Closed Form for a Top-Hat Model for $y_{\text{TF},i}$}
 For the uniform prior $y_{\text{TF}}\sim\text{Uniform}(y_{\min},y_{\max})$, i.e., $p(y_{\text{TF}})=1/(y_{\max}-y_{\min})$, this becomes
 \begin{align}

@@ -79,54 +79,176 @@ functions {
          real s,
          real c,
          real s_plane,
-         real c_plane1,
-         real c_plane2,
+         real c1_plane,
+         real c2_plane,
          real sigma1,
          real sigma2,
          int N
        ) {
-    real h = (y_max - y_min) / N;
+    real h = (y_max - y_min) / (N - 1);
     
-    // For the parallel-strip derivation, both bounds share the same s_plane, hence same rho
-    real sigma_tot = sqrt(sigma2 ^ 2 + s_plane ^ 2 * sigma1 ^ 2);
+    real sigma_tot = sqrt(square(sigma2) + square(s_plane) * square(sigma1));
     real rho = sigma2 / sigma_tot;
     
-    real sum;
-    real alpha1;
-    real alpha2;
-    real beta;
+    real sum = 0;
     
-    // left endpoint
-    alpha1 = (c_plane1 - (y_min - s_plane * (y_min - c) / s)) / sigma_tot;
-    alpha2 = (c_plane2 - (y_min - s_plane * (y_min - c) / s)) / sigma_tot;
-    beta = (haty_max - y_min) / sigma2;
-    
-    sum = (binormal_cdf((-alpha1, beta) | -rho)
-           - binormal_cdf((-alpha2, beta) | -rho));
-    
-    // interior points
-    for (n in 1 : (N - 1)) {
-      real y_TF = y_min + n * h;
-      alpha1 = (c_plane1 - (y_TF - s_plane * (y_TF - c) / s)) / sigma_tot;
-      alpha2 = (c_plane2 - (y_TF - s_plane * (y_TF - c) / s)) / sigma_tot;
-      beta = (haty_max - y_TF) / sigma2;
+    for (i in 1 : N) {
+      real y_TF = y_min + (i - 1) * h;
       
-      sum += 2.0
-             * (binormal_cdf((-alpha1, beta) | -rho)
-                - binormal_cdf((-alpha2, beta) | -rho));
+      real mu = y_TF - s_plane * (y_TF - c) / s;
+      real alpha1 = (c1_plane - mu) / sigma_tot;
+      real alpha2 = (c2_plane - mu) / sigma_tot;
+      real beta = (haty_max - y_TF) / sigma2;
+      
+      real term = binormal_cdf((-alpha1, beta) | -rho)
+                  - binormal_cdf((-alpha2, beta) | -rho);
+      
+      real w = (i == 1 || i == N) ? 1.0 : 2.0;
+      sum += w * term;
     }
     
-    // right endpoint
-    alpha1 = (c_plane1 - (y_max - s_plane * (y_max - c) / s)) / sigma_tot;
-    alpha2 = (c_plane2 - (y_max - s_plane * (y_max - c) / s)) / sigma_tot;
-    beta = (haty_max - y_max) / sigma2;
-    
-    sum += (binormal_cdf((-alpha1, beta) | -rho)
-            - binormal_cdf((-alpha2, beta) | -rho));
-    
-    // trapezoid + top-hat normalization
     return (h / 2.0) * sum / (y_max - y_min);
   }
+
+    real integrate_binormal_strip_gl16(
+      real y_min,
+      real y_max,
+      real haty_max,
+      real s,
+      real c,
+      real s_plane,
+      real c1_plane,
+      real c2_plane,
+      real sigma1,
+      real sigma2,
+      vector x, vector w
+  ) {
+    // 16-point Gauss-Legendre nodes/weights on [-1, 1]
+
+    real L = y_max - y_min;
+    real mid  = 0.5 * (y_max + y_min);
+    real half = 0.5 * L;
+
+    // precompute constants
+    real sigma_tot = sqrt(square(sigma2) + square(s_plane) * square(sigma1));
+    real inv_sigma_tot = inv(sigma_tot);
+    real inv_sigma2 = inv(sigma2);
+    real rho = sigma2 * inv_sigma_tot;
+
+    // mu(y) = y - s_plane*(y-c)/s = (1 - s_plane/s)*y + (s_plane*c/s)
+    real a = 1.0 - s_plane / s;
+    real b = (s_plane * c) / s;
+
+    // alpha2 = alpha1 + d_alpha
+    real d_alpha = (c2_plane - c1_plane) * inv_sigma_tot;
+
+    real acc = 0;
+    for (k in 1:16) {
+      real y_TF = mid + half * x[k];
+
+      real mu = a * y_TF + b;
+      real alpha1 = (c1_plane - mu) * inv_sigma_tot;
+      real beta   = (haty_max - y_TF) * inv_sigma2;
+
+      real term =
+          binormal_cdf((-alpha1,           beta) | -rho)
+        - binormal_cdf((-(alpha1 + d_alpha), beta) | -rho);
+
+      acc += w[k] * term;
+    }
+
+    // integral ≈ half * acc; divide by (y_max - y_min) for Uniform averaging -> (half/L)*acc = 0.5*acc
+    return 0.5 * acc;
+  }
+
+  // Fast path assumes z1 != 0 and z2 != 0 so we can avoid special-case branching.
+  // It also assumes denom = sqrt(1 - rho^2) is provided.
+  real binormal_cdf_diff_z1_fast(real z1a, real z1b,
+                                 real z2,
+                                 real rho,
+                                 real denom) {
+    // delta simplifies when z1 and z2 are nonzero: delta = (z1*z2 < 0)
+    int delta_a = (z1a * z2 < 0);
+    int delta_b = (z1b * z2 < 0);
+
+    // Owen's T pieces
+    real t1 = owens_t(z1a, (z2 / z1a - rho) / denom)
+            - owens_t(z1b, (z2 / z1b - rho) / denom);
+
+    real t2 = owens_t(z2,  (z1a / z2 - rho) / denom)
+            - owens_t(z2,  (z1b / z2 - rho) / denom);
+
+    // Note Phi(z2) cancels in the difference, so don't compute it.
+    return 0.5 * (Phi_approx(z1a) - Phi_approx(z1b) - (delta_a - delta_b)) - t1 - t2;
+  }
+
+
+  real integrate_binormal_strip_gl16_fast(
+      real y_min,
+      real y_max,
+      real haty_max,
+      real s,
+      real c,
+      real s_plane,
+      real c1_plane,
+      real c2_plane,
+      real sigma1,
+      real sigma2,
+      vector x, vector w
+  ) {
+    real L    = y_max - y_min;
+    real mid  = 0.5 * (y_max + y_min);
+    real half = 0.5 * L;
+
+    // Precompute sigma_tot, rho, denom once
+    real sp_sig1 = s_plane * sigma1;
+    real sigma_tot = sqrt(square(sigma2) + square(sp_sig1));
+    real inv_sigma_tot = 1.0 / sigma_tot;
+    real inv_sigma2    = 1.0 / sigma2;
+
+    // Your original uses binormal_cdf(..., -rho)
+    real rho_bvn = -(sigma2 * inv_sigma_tot);
+
+    // denom = sqrt(1 - rho^2) = |s_plane*sigma1|/sigma_tot (algebraically equivalent here)
+    real denom = abs(sp_sig1) * inv_sigma_tot;
+
+    // mu(y) = (1 - s_plane/s)*y + (s_plane*c/s)
+    real a_mu = 1.0 - s_plane / s;
+    real b_mu = (s_plane * c) / s;
+
+    // alpha1(y) = (c1_plane - mu(y)) / sigma_tot = A + B * xk (affine in node)
+    // since y = mid + half*xk and mu is affine in y
+    real mu_mid   = a_mu * mid  + b_mu;
+    real mu_slope = a_mu * half;
+
+    real alpha_base  = (c1_plane - mu_mid) * inv_sigma_tot;
+    real alpha_slope = (-mu_slope) * inv_sigma_tot;
+
+    // beta(y) = (haty_max - y)/sigma2 = beta_base + beta_slope*xk
+    real beta_base  = (haty_max - mid) * inv_sigma2;
+    real beta_slope = (-half) * inv_sigma2;
+
+    // constant strip width in alpha-space
+    real d_alpha = (c2_plane - c1_plane) * inv_sigma_tot;
+
+    real acc = 0;
+    for (k in 1:16) {
+      real xk = x[k];
+
+      real alpha1 = alpha_base + alpha_slope * xk;
+      real beta   = beta_base  + beta_slope  * xk;
+
+      // z1a = -alpha1 ; z1b = -(alpha1 + d_alpha) = z1a - d_alpha
+      real z1a = -alpha1;
+      real z1b = z1a - d_alpha;
+
+      acc += w[k] * binormal_cdf_diff_z1_fast(z1a, z1b, beta, rho_bvn, denom);
+    }
+
+    // same scaling you had: integral ≈ half*acc ; then /L => 0.5*acc
+    return 0.5 * acc;
+  }
+
 }
 data {
   // Number of redshift bins
@@ -191,18 +313,45 @@ transformed data {
                              + slope_plane_std * mean_x / sd_x;
   real intercept_plane2_std = intercept_plane2
                               + slope_plane_std * mean_x / sd_x;
-  ;
+
+  vector[16] gl_x;
+  vector[16] gl_w;
+  {
+    array[16] real x_ = {
+      -0.9894009349916499, -0.9445750230732326,
+      -0.8656312023878317, -0.7554044083550030,
+      -0.6178762444026437, -0.4580167776572274,
+      -0.2816035507792589, -0.09501250983763744,
+       0.09501250983763744, 0.2816035507792589,
+       0.4580167776572274,  0.6178762444026437,
+       0.7554044083550030,  0.8656312023878317,
+       0.9445750230732326,  0.9894009349916499
+    };
+    array[16] real w_ = {
+      0.027152459411754095, 0.06225352393864789,
+      0.09515851168249278,  0.12462897125553387,
+      0.14959598881657673,  0.16915651939500254,
+      0.18260341504492359,  0.18945061045506850,
+      0.18945061045506850,  0.18260341504492359,
+      0.16915651939500254,  0.14959598881657673,
+      0.12462897125553387,  0.09515851168249278,
+      0.06225352393864789,  0.027152459411754095
+    };
+    gl_x = to_vector(x_);
+    gl_w = to_vector(w_);
+  }
+
 }
 parameters {
   // Common slope across all redshift bins
-  real<lower=-8 * sd_x, upper=-4 * sd_x> slope_std;
+  real<lower=-12 * sd_x, upper=-2 * sd_x> slope_std;
   
   // Intercept for each redshift bin
-  vector<upper=-10>[N_bins] intercept_std;
+  vector<lower=-24 + slope_std * mean_x / sd_x, upper=-14 + slope_std * mean_x / sd_x>[N_bins] intercept_std;
   
   // Intrinsic scatter in x-direction (absolute magnitude)
-  real<lower=0> sigma_int_x; // in x-units
-  real<lower=0> sigma_int_y; // in y-units
+  real<lower=0, upper=1> sigma_int_x; // in x-units
+  real<lower=0, upper=1> sigma_int_y; // in y-units
 }
 transformed parameters {
   // real sigma_int_y;
@@ -274,18 +423,18 @@ model {
     } else if (y_selection != 0 && plane_cut == 1) {
       for (n in 1 : N_total) {
         target += -log(
-                       integrate_binormal_strip_trapez(y_min, y_max,
+                       integrate_binormal_strip_gl16_fast(y_min, y_max,
                          haty_max, slope_std, intercept_std[bin_idx],
                          slope_plane_std, intercept_plane_std,
                          intercept_plane2_std, sqrt(sigmasq1_std[n]),
-                         sqrt(sigmasq2[n]), 100));
+                         sqrt(sigmasq2[n]), gl_x, gl_w));
       }
     }
   }
   
   // Priors
-  sigma_int_x ~ cauchy(0, 0.03 * 50);
-  sigma_int_y ~ cauchy(0, 0.03 * 50);
+  sigma_int_x ~ cauchy(0, 1);
+  sigma_int_y ~ cauchy(0, 1);
 }
 generated quantities {
   real slope = slope_std / sd_x;
