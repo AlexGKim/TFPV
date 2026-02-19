@@ -13,7 +13,8 @@ from astropy.io import fits
 
 
 def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max=-16,
-                         plane_cut=False, slope_plane=None, intercept_plane=None, intercept_plane2=None):
+                         plane_cut=False, slope_plane=None, intercept_plane=None, intercept_plane2=None,
+                         n_objects=None, random_seed=None):
     """
     Process DESI TF data: convert to Stan JSON format and create initial conditions.
 
@@ -40,6 +41,14 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
             y <= bar_s * x + intercept_plane2
         If provided, the sample cut becomes two-sided parallel:
             bar_s*x + c1 <= y <= min(haty_max, bar_s*x + c2)
+    n_objects : int, optional
+        Maximum number of objects to include in the selected sample.
+        If None (default), all objects passing the selection cuts are used.
+        If set and smaller than the number of objects passing cuts, a random
+        subsample of size n_objects is drawn without replacement.
+    random_seed : int, optional
+        Seed for the random number generator used when subsampling (default: None).
+        Only used when n_objects is set.
     """
 
     # Validate plane cut parameters
@@ -153,7 +162,24 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
     y = np.array(y_data)
     sigma_x = np.array(sigma_x_data)
     sigma_y = np.array(sigma_y_data)
-    
+
+    N_after_cuts = len(x)
+
+    # Subsample if n_objects is specified and smaller than the available sample
+    if n_objects is not None and n_objects < N_after_cuts:
+        rng = np.random.default_rng(random_seed)
+        idx = rng.choice(N_after_cuts, size=n_objects, replace=False)
+        idx.sort()
+        x = x[idx]
+        y = y[idx]
+        sigma_x = sigma_x[idx]
+        sigma_y = sigma_y[idx]
+        x_data = x.tolist()
+        y_data = y.tolist()
+        sigma_x_data = sigma_x.tolist()
+        sigma_y_data = sigma_y.tolist()
+        print(f"  Subsampled from {N_after_cuts} to {n_objects} objects (random_seed={random_seed})")
+
     N_total = len(x)
     
     # ============================================================================
@@ -369,12 +395,15 @@ def plot_desi_tf_data(x_all, y_all, sigma_x_all, sigma_y_all,
 if __name__ == '__main__':
     input_fits = 'data/DESI-DR1_TF_pv_cat_v15.fits'
     
-    haty_max = -18
+    haty_max = -19.
     
     plane_cut = True
     slope_plane = -6.5
     intercept_plane = -20.5     # c1 (lower oblique bound)
     intercept_plane2 = -18.5    # c2 (upper oblique bound); set to None for one-sided
+
+    n_objects = 1000            # set to an int to subsample the selected objects, e.g. 500
+    random_seed = None          # set to an int for reproducible subsampling, e.g. 42
     
     output_json = 'DESI_TF_input.json'
     init_json = 'DESI_TF_init.json'
@@ -383,10 +412,12 @@ if __name__ == '__main__':
     x_all, y_all, sigma_x_all, sigma_y_all, x_sel, y_sel, sigma_x_sel, sigma_y_sel = process_desi_tf_data(
         input_fits, output_json, init_json,
         haty_max=haty_max,
-        plane_cut=plane_cut, 
+        plane_cut=plane_cut,
         slope_plane=slope_plane,
-        intercept_plane=intercept_plane, 
-        intercept_plane2=intercept_plane2
+        intercept_plane=intercept_plane,
+        intercept_plane2=intercept_plane2,
+        n_objects=n_objects,
+        random_seed=random_seed
     )
     
     # Create plot showing both complete and selected samples
