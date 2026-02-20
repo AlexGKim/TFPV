@@ -151,7 +151,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     y_min =  -23.0
     y_max = -15.0
     mu_y_TF = 0.5 * (y_min + y_max)
-    tau = (y_max - y_min)/np.sqrt(12)
+    tau = (y_max - y_min)/np.sqrt(12)*1.5
 
     stan_data = {
         'N_bins': N_bins,

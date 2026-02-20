@@ -196,7 +196,7 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
         y_max_data = -15.0
     
     mu_y_TF = float(np.mean(y)) if N_total > 0 else 0.0
-    tau = float(np.std(y, ddof=1)) if N_total > 1 else 1.0
+    tau = 1.5 *float(np.std(y, ddof=1)) if N_total > 1 else 1.0
 
     stan_data = {
         'N_bins': N_bins,
@@ -407,7 +407,7 @@ if __name__ == '__main__':
     intercept_plane = -20.5     # c1 (lower oblique bound)
     intercept_plane2 = -18.5    # c2 (upper oblique bound); set to None for one-sided
 
-    n_objects = 1000            # set to an int to subsample the selected objects, e.g. 500
+    n_objects = None            # set to an int to subsample the selected objects, e.g. 500
     random_seed = None          # set to an int for reproducible subsampling, e.g. 42
     
     output_json = 'DESI_TF_input.json'
