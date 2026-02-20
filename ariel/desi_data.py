@@ -195,6 +195,9 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
         y_min_data = -23.0
         y_max_data = -15.0
     
+    mu_y_TF = float(np.mean(y)) if N_total > 0 else 0.0
+    tau = float(np.std(y, ddof=1)) if N_total > 1 else 1.0
+
     stan_data = {
         'N_bins': N_bins,
         'N_total': N_total,
@@ -204,7 +207,9 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
         'sigma_y': sigma_y_data,
         'haty_max': haty_max,
         'y_min': y_min_data,
-        'y_max': y_max_data
+        'y_max': y_max_data,
+        'mu_y_TF': mu_y_TF,
+        'tau': tau
     }
     
     if plane_cut:
@@ -395,7 +400,7 @@ def plot_desi_tf_data(x_all, y_all, sigma_x_all, sigma_y_all,
 if __name__ == '__main__':
     input_fits = 'data/DESI-DR1_TF_pv_cat_v15.fits'
     
-    haty_max = -19.
+    haty_max = -18.
     
     plane_cut = True
     slope_plane = -6.5
