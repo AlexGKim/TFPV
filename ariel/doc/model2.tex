@@ -84,3 +84,60 @@ y_{\text{TF},\star}^{(m,k)} &\sim \text{TruncNormal}\!\left(c^{(m)}+s^{(m)}\hat 
 y_{\star}^{(m,k)} &\sim \mathcal N\!\left(y_{\text{TF},\star}^{(m,k)},\ \sigma_{\text{int},y}^{(m)}\right),
 \end{align}
 and then pool $\{y_{\star}^{(m,k)}\}$ over $(m,k)$ to obtain posterior means and credible intervals.
+
+\subsection{Normal Model for $y_{\text{TF},i}$}
+Assume the latent on-relation magnitude has a Gaussian population distribution,
+\begin{equation}
+y_{\text{TF}} \sim \mathcal N(\mu_{\text{TF}},\tau),
+\end{equation}
+where $\tau$ is the standard deviation. As above, define
+\begin{equation}
+\sigma_{1,\star}^2 \equiv \sigma_{x,\star}^2+\sigma_{\text{int},x}^2,
+\end{equation}
+so that the $\hat x_\star$ likelihood given $y_{\text{TF},\star}$ is
+\begin{equation}
+\hat x_\star \mid y_{\text{TF},\star},\theta \sim
+\mathcal N\!\left(\frac{y_{\text{TF},\star}-c}{s},\ \sigma_{1,\star}\right).
+\end{equation}
+Equivalently, viewed as a likelihood in $y_{\text{TF},\star}$, this is
+\begin{equation}
+p(\hat x_\star\mid y_{\text{TF},\star},\theta)
+\ \propto\
+\exp\!\left[-\frac{(y_{\text{TF},\star}-(c+s\hat x_\star))^2}{2\,s^2\sigma_{1,\star}^2}\right],
+\end{equation}
+i.e.
+\begin{equation}
+y_{\text{TF},\star}\ \text{``measured by''}\ \hat x_\star
+\quad\text{with}\quad
+y_{\text{TF},\star}\approx c+s\hat x_\star,\ \ \text{sd}=|s|\sigma_{1,\star}.
+\end{equation}
+
+\paragraph{Posterior for $y_{\text{TF},\star}$ (conjugate normal-normal).}
+Combining the normal prior $y_{\text{TF},\star}\sim \mathcal N(\mu_{\text{TF}},\tau)$ with the (normal-in-$y_{\text{TF}}$) likelihood implied by $\hat x_\star$ yields
+\begin{equation}
+y_{\text{TF},\star}\mid \hat x_\star,\sigma_{x,\star},\theta,\mu_{\text{TF}},\tau
+\sim \mathcal N\!\left(\mu_{\text{post}},\ \sigma_{\text{post}}\right),
+\end{equation}
+with
+\begin{align}
+\sigma_{\text{post}}^2
+&=
+\left(\frac{1}{\tau^2}+\frac{1}{s^2\sigma_{1,\star}^2}\right)^{-1},\\[3pt]
+\mu_{\text{post}}
+&=
+\sigma_{\text{post}}^2
+\left(
+\frac{\mu_{\text{TF}}}{\tau^2}
++
+\frac{c+s\hat x_\star}{s^2\sigma_{1,\star}^2}
+\right).
+\end{align}
+This shows explicitly the shrinkage toward $\mu_{\text{TF}}$: the posterior mean is an inverse-variance--weighted average of $\mu_{\text{TF}}$ and $c+s\hat x_\star$.
+
+To characterize the posterior predictive distribution, a convenient approach is to use
+Monte Carlo composition, conditional on each posterior draw $\theta^{(m)}$:
+\begin{align}
+y_{\text{TF},\star}^{(m,k)} &\sim \text{TruncNormal}\!\left(c^{(m)}+s^{(m)}\hat x_\star,\ |s^{(m)}|\sigma_{1,\star}^{(m)};\ [y_{\min},y_{\max}]\right),\\
+y_{\star}^{(m,k)} &\sim \mathcal N\!\left(y_{\text{TF},\star}^{(m,k)},\ \sigma_{\text{int},y}^{(m)}\right),
+\end{align}
+and then pool $\{y_{\star}^{(m,k)}\}$ over $(m,k)$ to obtain posterior means and credible intervals.
