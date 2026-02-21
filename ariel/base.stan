@@ -91,8 +91,8 @@ functions {
     real rho = sigma2 / sigma_tot;
     
     real sum = 0;
-    
-    for (i in 1 : N) {
+      {
+      int  i=1;
       real y_TF = y_min + (i - 1) * h;
       
       real mu = y_TF - s_plane * (y_TF - c) / s;
@@ -103,10 +103,34 @@ functions {
       real term = binormal_cdf((-alpha1, beta) | -rho)
                   - binormal_cdf((-alpha2, beta) | -rho);
       
-      real w = (i == 1 || i == N) ? 1.0 : 2.0;
-      sum += w * term;
-    }
-    
+      sum +=  term;
+      }
+    for (i in 2 : N-1) {
+      real y_TF = y_min + (i - 1) * h;
+      
+      real mu = y_TF - s_plane * (y_TF - c) / s;
+      real alpha1 = (c1_plane - mu) / sigma_tot;
+      real alpha2 = (c2_plane - mu) / sigma_tot;
+      real beta = (haty_max - y_TF) / sigma2;
+      
+      real term = binormal_cdf((-alpha1, beta) | -rho)
+                  - binormal_cdf((-alpha2, beta) | -rho);
+      
+      sum += 2 * term;
+    }{
+      int i=N;
+      real y_TF = y_min + (i - 1) * h;
+      
+      real mu = y_TF - s_plane * (y_TF - c) / s;
+      real alpha1 = (c1_plane - mu) / sigma_tot;
+      real alpha2 = (c2_plane - mu) / sigma_tot;
+      real beta = (haty_max - y_TF) / sigma2;
+      
+      real term = binormal_cdf((-alpha1, beta) | -rho)
+                  - binormal_cdf((-alpha2, beta) | -rho);
+      
+      sum +=  term;
+  }
     return (h / 2.0) * sum / (y_max - y_min);
   }
   
@@ -560,14 +584,14 @@ model {
       
       target += -log_diff_exp(term_lb, term_ub);
     } else if (y_selection != 0 && plane_cut == 1) {
-      for (n in 1 : N_total) {
-        target += -log(
-                       integrate_binormal_strip_gl_fast(y_min, y_max,
+      // for (n in 1 : N_total) {
+        target += - N_total * log(
+                       integrate_binormal_strip_trapez(y_min, y_max,
                          haty_max, slope_std, intercept_std[bin_idx],
                          slope_plane_std, intercept_plane_std,
-                         intercept_plane2_std, sqrt(sigmasq1_std[n]),
-                         sqrt(sigmasq2[n]), gl_x, gl_w));
-      }
+                         intercept_plane2_std, sqrt(sigmasq1_std[1]),
+                         sqrt(sigmasq2[1]), 258));
+      // }
     }
   }
   
