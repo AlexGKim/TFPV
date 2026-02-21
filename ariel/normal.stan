@@ -116,8 +116,8 @@ data {
   real<upper=haty_max> y_min;
   real<lower=haty_max> y_max;
   
-  real mu_y_TF;
-  real<lower=0> tau;
+  // real mu_y_TF;
+  // real<lower=0> tau;
   
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   // array[N_total] int<lower=1, upper=N_bins> bin_idx;
@@ -156,7 +156,7 @@ transformed data {
 }
 parameters {
   // Common slope across all redshift bins
-  real<lower=-18 * sd_x, upper=-4 * sd_x> slope_std;
+  real<lower=-10 * sd_x, upper=-5* sd_x> slope_std;
   
   // Intercept for each redshift bin
   
@@ -166,6 +166,9 @@ parameters {
   // Intrinsic scatter in x-direction (absolute magnitude)
   real<lower=0, upper=1> sigma_int_x; // in x-units
   real<lower=0, upper=40> sigma_int_y; // in y-units
+  
+  real<upper=0> mu_y_TF;
+  real<lower=0, upper=10> tau;
 }
 transformed parameters {
   // real sigma_int_y;
@@ -219,10 +222,10 @@ model {
                                       sqrt(sigmasq2[n])));
     }
   }
-
+  
   // Priors
   sigma_int_x ~ cauchy(0, 0.3);
-  sigma_int_y ~ cauchy(0, 2);
+  sigma_int_y ~ cauchy(0, 0.3);
 }
 generated quantities {
   real slope = slope_std / sd_x;

@@ -199,7 +199,9 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
         'slope_std': float(slope_std),
         'intercept_std': intercept_std_vec,
         'sigma_int_tot_y': 0.05,
-        'theta_int': np.pi/4
+        'theta_int': np.pi/4,
+        'mu_y_TF': mu_y_TF,
+        'tau': tau
     }
 
     with open(init_output_file, 'w') as f:

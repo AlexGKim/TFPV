@@ -126,8 +126,8 @@ if __name__ == '__main__':
     # Create the corner plot from all output_base_*.csv files
     infile = "DESI_TF_*.csv"
     outfile = "DESI_TF.png"
-    # infile = "output_base_n1000_*.csv"
-    # outfile = "output_base_n1000.png"
+    infile = "TF_mock_base_*.csv"
+    outfile = "TF_mock_base.png"
     # Define true parameter values
     truth = {
         "slope": -8.0,
