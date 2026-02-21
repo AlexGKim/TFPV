@@ -81,7 +81,7 @@ and therefore the per-galaxy likelihood can be written as
 p(y_{\text{TF}}).
 \end{align}
 
-\subsubsection{Closed Form for a Top-Hat Model for $y_{\text{TF},i}$}
+\subsubsection{Top-Hat Model for $y_{\text{TF},i}$}
 Let $y_{\text{TF},i}\sim\text{Uniform}(y_{\min},y_{\max})$, i.e.,
 \begin{align}
 p(y_{\text{TF},i})=
@@ -121,6 +121,35 @@ Without the CDF factor, $\sigma_{\text{int},x}$ and $\sigma_{\text{int},y}$ are 
 independently.
 
 These cases are implemented in {\tt base.stan} and when run with Ariel's mock returns the input $s$ and $c$ to incredible precision.
+
+\subsubsection{Normal Model for $y_{\text{TF},i}$}
+Let $y_{\text{TF},i}\sim\mathcal{N}(\mu_{\mathrm{TF}},\tau)$.
+Then
+\begin{align}
+\mathcal L_i
+&= 
+\int_{-\infty}^{\infty} dy_{\text{TF}}\; \mathcal{N}(\mu_{\mathrm{TF}},\tau)
+\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma_{1,i}\right)\,
+\mathcal N(\hat y_i;y_{\text{TF}},\sigma_{2,i})\\
+&=
+\mathcal N_2\!\left(
+\begin{bmatrix}\hat x_i\\ \hat y_i\end{bmatrix};
+\begin{bmatrix}\dfrac{\mu_{\mathrm{TF}}-c}{s}\\[4pt] \mu_{\mathrm{TF}}\end{bmatrix},
+\Sigma_i
+\right),
+\end{align}
+where
+\begin{equation}
+\Sigma_i
+=
+\begin{bmatrix}
+\dfrac{\tau^{2}}{s^{2}}+\sigma_{1,i}^{2} & \dfrac{\tau^{2}}{s}\\[6pt]
+\dfrac{\tau^{2}}{s} & \tau^{2}+\sigma_{2,i}^{2}
+\end{bmatrix},
+\qquad s\neq 0.
+\end{equation}
+
+
 \subsection{Sample Selection}
 \label{sec:selection}
 \subsubsection{DESI TF Sample Selection}
@@ -312,7 +341,7 @@ P(S_i=1\mid\theta)
 by definition, where $\Phi_2$ is the bivariate standard normal cumulative distribution function.
 This integral has no analytic solution.
 
-\paragraph{Closed Form for a Top-Hat Model for $y_{\text{TF},i}$}
+\paragraph{Top-Hat Model for $y_{\text{TF},i}$}
 For the uniform prior $y_{\text{TF}}\sim\text{Uniform}(y_{\min},y_{\max})$, i.e., $p(y_{\text{TF}})=1/(y_{\max}-y_{\min})$, this becomes
 \begin{align}
 P(S_i=1\mid\theta)
@@ -380,7 +409,9 @@ Note that $\alpha_1$ and $\alpha_2$ differ only by the replacement
 $\bar{c}_1\to\bar{c}_2$, and the correlation parameter $\rho$ is
 identical in both terms since it depends only on $\bar{s}$.
 
-\paragraph{Closed Form for a Top-Hat Model for $y_{\text{TF},i}$}
+
+
+\subsubsection{Top-Hat Model for $y_{\text{TF},i}$}
 For the uniform prior $y_{\text{TF}}\sim\text{Uniform}(y_{\min},y_{\max})$, i.e., $p(y_{\text{TF}})=1/(y_{\max}-y_{\min})$, this becomes
 \begin{align}
 P(S_i=1\mid\theta)
@@ -390,6 +421,132 @@ P(S_i=1\mid\theta)
      -\Phi_2\!\left(-\alpha_2,\;\beta;\;-\rho\right)\Big].
 \end{align}
 
+\subsubsection{Normal Model for $y_{\mathrm{TF},i}$ }
+
+We begin with
+\begin{align}
+P(S_i=1\mid\theta)
+&=
+\int_{-\infty}^{\hat{y}_{\max}} d\hat{y}
+\int_{0}^{\bar{c}_2-\bar{c}_1} d\hat{u}\;
+\frac{1}{|\bar{s}|}
+\int_{-\infty}^{\infty} dy_{\mathrm{TF}}\;
+\mathcal{N}(y_{\mathrm{TF}};\,\mu_{\mathrm{TF}},\tau)\,
+\mathcal{N}\!\left(\frac{\hat{y}-\bar{c}_1-\hat{u}}{\bar{s}};
+                   \frac{y_{\mathrm{TF}}-c}{s},\,\sigma_{1,i}\right)
+\mathcal{N}\!\left(\hat{y};\,y_{\mathrm{TF}},\,\sigma_{2,i}\right).
+\label{eq:start}
+\end{align}
+
+\paragraph{Step 1: Use the scaling identity to express the second factor as a density in $\hat u$.}
+
+Using the identity, valid for any $a$,
+\begin{equation}
+\frac{1}{|\bar s|}\,
+\mathcal{N}\!\left(\frac{a-\hat u}{\bar s};\,\mu,\,\sigma_{1,i}\right)
+=
+\mathcal{N}\!\left(\hat u;\,a-\bar s\,\mu,\,|\bar s|\,\sigma_{1,i}\right),
+\end{equation}
+with $a=\hat y-\bar c_1$ and $\mu=(y_{\mathrm{TF}}-c)/s$, we obtain
+\begin{equation}
+\frac{1}{|\bar{s}|}
+\mathcal{N}\!\left(\frac{\hat{y}-\bar{c}_1-\hat{u}}{\bar{s}};
+                   \frac{y_{\mathrm{TF}}-c}{s},\,\sigma_{1,i}\right)
+=
+\mathcal{N}\!\left(\hat{u};\,
+\hat{y}-\bar{c}_1-\frac{\bar s}{s}(y_{\mathrm{TF}}-c),\,
+|\bar s|\,\sigma_{1,i}\right).
+\label{eq:scale-u}
+\end{equation}
+
+Then the model implied by the integrand can be written as the linear--Gaussian system
+\begin{align}
+y_{\mathrm{TF}} &\sim \mathcal{N}(\mu_{\mathrm{TF}},\tau),\\
+\hat y \mid y_{\mathrm{TF}} &= y_{\mathrm{TF}} + \varepsilon_2,
+\qquad \varepsilon_2 \sim \mathcal{N}(0,\sigma_{2,i}),\\
+\hat u \mid (\hat y,y_{\mathrm{TF}})
+&= \hat y - \bar c_1 - \frac{\bar s}{s}(y_{\mathrm{TF}}-c) + \varepsilon_1,
+\qquad \varepsilon_1 \sim \mathcal{N}(0,|\bar s|\,\sigma_{1,i}),
+\end{align}
+with $\varepsilon_1,\varepsilon_2$ independent and independent of $y_{\mathrm{TF}}$.
+
+Equivalently, after substitution $\hat y = y_{\mathrm{TF}}+\varepsilon_2$,
+\begin{equation}
+\hat u
+=
+\Bigl(1-\frac{\bar s}{s}\Bigr)y_{\mathrm{TF}}
++\Bigl(\frac{\bar s}{s}c-\bar c_1\Bigr)
++\varepsilon_2+\varepsilon_1.
+\end{equation}
+
+\paragraph{Step 2: Identify the bivariate normal distribution of $(\hat y,\hat u)$.}
+
+From the linear--Gaussian representation above, $(\hat y,\hat u)$ is bivariate normal with
+
+\textit{Means:}
+\begin{equation}
+\mu_{\hat y} = \mathbb{E}[\hat y] = \mu_{\mathrm{TF}},
+\qquad
+\mu_{\hat u} = \mathbb{E}[\hat u]
+=
+\Bigl(1-\frac{\bar s}{s}\Bigr)\mu_{\mathrm{TF}}
++\Bigl(\frac{\bar s}{s}c-\bar c_1\Bigr).
+\end{equation}
+
+\textit{Variances:}
+\begin{equation}
+\sigma_{\hat y}^2
+= \mathrm{Var}(\hat y)
+= \tau^2+\sigma_{2,i}^2,
+\end{equation}
+\begin{equation}
+\sigma_{\hat u}^2
+= \mathrm{Var}(\hat u)
+=
+\Bigl(1-\frac{\bar s}{s}\Bigr)^2\tau^2
++\sigma_{2,i}^2
++\bar s^2\sigma_{1,i}^2.
+\end{equation}
+
+\textit{Covariance:}
+\begin{equation}
+\mathrm{Cov}(\hat y,\hat u)
+=
+\Bigl(1-\frac{\bar s}{s}\Bigr)\tau^2+\sigma_{2,i}^2.
+\end{equation}
+
+Define the correlation
+\begin{equation}
+\rho
+=
+\frac{\mathrm{Cov}(\hat y,\hat u)}{\sigma_{\hat y}\,\sigma_{\hat u}}.
+\end{equation}
+
+\paragraph{Step 3: Express $P(S_i=1\mid\theta)$ as a difference of bivariate normal CDFs.}
+
+Let
+\begin{equation}
+\beta
+=
+\frac{\hat y_{\max}-\mu_{\hat y}}{\sigma_{\hat y}},
+\qquad
+\gamma_0
+=
+\frac{0-\mu_{\hat u}}{\sigma_{\hat u}},
+\qquad
+\gamma_1
+=
+\frac{(\bar c_2-\bar c_1)-\mu_{\hat u}}{\sigma_{\hat u}}.
+\end{equation}
+Then
+\begin{align}
+P(S_i=1\mid\theta)
+&=
+P\bigl(\hat y\le \hat y_{\max},\ 0\le \hat u\le \bar c_2-\bar c_1\bigr)\\
+&=
+\Phi_2(\beta,\gamma_1;\rho)-\Phi_2(\beta,\gamma_0;\rho),
+\end{align}
+where $\Phi_2(\cdot,\cdot;\rho)$ is the standard bivariate normal CDF with correlation $\rho$.
 
 \subsection{Priors}
 Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:
@@ -397,3 +554,20 @@ Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scat
 \sigma_{\text{int},x} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right),\\
 \sigma_{\text{int},y} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right).
 \end{align}
+
+
+% When using the Owen’s-$t$ representation (for $z_1=-\alpha_j,\ z_2=\beta$ and correlation $-\rho$),
+% $$\Phi_2(z_1,z_2;-\rho)
+% =\tfrac12\!\left[\Phi(z_1)+\Phi(z_2)-\delta(z_1,z_2)\right]
+% - T\!\left(z_1,\frac{z_2/z_1+\rho}{\sqrt{1-\rho^2}}\right)
+% - T\!\left(z_2,\frac{z_1/z_2+\rho}{\sqrt{1-\rho^2}}\right),$$
+% so the bracket in the integrand becomes
+% $$\begin{aligned}
+% \Phi_2(-\alpha_1,\beta;-\rho)-\Phi_2(-\alpha_2,\beta;-\rho)
+% &=\tfrac12\Big(\Phi(-\alpha_1)-\Phi(-\alpha_2)\;-\;\big[\delta(-\alpha_1,\beta)-\delta(-\alpha_2,\beta)\big]\Big)\\
+% &\quad-\Bigg[T\!\left(-\alpha_1,\frac{\beta/(-\alpha_1)+\rho}{\sqrt{1-\rho^2}}\right)
+%           -T\!\left(-\alpha_2,\frac{\beta/(-\alpha_2)+\rho}{\sqrt{1-\rho^2}}\right)\Bigg]\\
+% &\quad-\Bigg[T\!\left(\beta,\frac{(-\alpha_1)/\beta+\rho}{\sqrt{1-\rho^2}}\right)
+%           -T\!\left(\beta,\frac{(-\alpha_2)/\beta+\rho}{\sqrt{1-\rho^2}}\right)\Bigg],
+% \end{aligned}$$
+% where the cancellation is the common $\tfrac12\Phi(\beta)$ term.

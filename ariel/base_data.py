@@ -148,6 +148,10 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     # ============================================================================
     N_bins = 1
     bin_idx = [1] * N_total
+    y_min =  -23.0
+    y_max = -15.0
+    mu_y_TF = 0.5 * (y_min + y_max)
+    tau = (y_max - y_min)/np.sqrt(12)*1.5
 
     stan_data = {
         'N_bins': N_bins,
@@ -157,7 +161,11 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
         'y': y_data,
         'sigma_y': sigma_y_data,
         'haty_max': haty_max,
-        'bin_idx': bin_idx
+        'y_min': y_min,
+        'y_max': y_max,
+        'bin_idx': bin_idx,
+        'mu_y_TF': mu_y_TF,
+        'tau': tau
     }
 
     if plane_cut:

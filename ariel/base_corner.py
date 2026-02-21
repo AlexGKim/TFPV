@@ -124,9 +124,10 @@ def create_corner_plot(file_pattern='output_base_*.csv', output_file='base_corne
 
 if __name__ == '__main__':
     # Create the corner plot from all output_base_*.csv files
-    infile = "output_base_n10000_*.csv"
-    outfile = "base_corner_plot_n10000.png"
-    
+    infile = "DESI_TF_*.csv"
+    outfile = "DESI_TF.png"
+    # infile = "output_base_n1000_*.csv"
+    # outfile = "output_base_n1000.png"
     # Define true parameter values
     truth = {
         "slope": -8.0,
