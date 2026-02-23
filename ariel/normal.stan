@@ -1,4 +1,4 @@
-// ./normal sample num_samples=500 num_chains=4 data file=MOCK_n10000_input.json init=MOCK_n100000_init.json output file=MOCK_n10000_normal.csv
+// ./normal sample num_samples=500 num_chains=4 data file=MOCK_n10000_input.json init=MOCK_n10000_init.json output file=MOCK_n10000_normal.csv
 // ./normal sample num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_normal.csv
 // ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../cmdstan/bin/diagnose output_base*.csv
