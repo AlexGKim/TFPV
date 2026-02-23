@@ -1,4 +1,5 @@
-// ./base sample num_samples=500 num_chains=4 data file=TF_mock_input.json init=TF_mock_init.json output file=output_base.csv
+// ./normal sample num_samples=500 num_chains=4 data file=MOCK_n10000_input.json init=MOCK_n100000_init.json output file=MOCK_n10000_normal.csv
+// ./normal sample num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_normal.csv
 // ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../cmdstan/bin/diagnose output_base*.csv
 
@@ -32,7 +33,22 @@ functions {
     real delta = z1z2 < 0 || (z1z2 == 0 && (z1 + z2) < 0);
     return 0.5 * (Phi(z1) + Phi(z2) - delta) - term1 - term2;
   }
-  
+    // skips one Phi that cancels out in the difference, so more accurate for large arguments
+  real binormal_strip_cdf(tuple(real, real) z, real rho) {
+    real z1 = z.1;
+    real z2 = z.2;
+    if (z1 == 0 && z2 == 0) {
+      return 0.25 + asin(rho) / (2 * pi());
+    }
+    real denom = sqrt((1 + rho) * (1 - rho));
+    real term1 = z1 == 0 ? (z2 > 0 ? 0.25 : -0.25)
+                 : owens_t(z1, (z2 / z1 - rho) / denom);
+    real term2 = z2 == 0 ? (z1 > 0 ? 0.25 : -0.25)
+                 : owens_t(z2, (z1 / z2 - rho) / denom);
+    real z1z2 = z1 * z2;
+    real delta = z1z2 < 0 || (z1z2 == 0 && (z1 + z2) < 0);
+    return 0.5 * (Phi(z2) - delta) - term1 - term2;
+  }
   real P_binormal_strip(real mu_y_TF,
                         real tau, // SD of y_TF  (i.e., y_TF ~ Normal(mu_y_TF, Sigma))
                         real haty_max,
@@ -83,8 +99,8 @@ functions {
     gamma1 = (delta_c - mu_u) / sqrt(var_u);
     
     // Probability of the strip under bivariate normal
-    return binormal_cdf((beta, gamma1) | rho)
-           - binormal_cdf((beta, gamma0) | rho);
+    return binormal_strip_cdf((beta, gamma1) | rho)
+           - binormal_strip_cdf((beta, gamma0) | rho);
   }
 }
 data {
@@ -116,8 +132,8 @@ data {
   real<upper=haty_max> y_min;
   real<lower=haty_max> y_max;
   
-  // real mu_y_TF;
-  // real<lower=0> tau;
+  real mu_y_TF;
+  real<lower=0> tau;
   
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   // array[N_total] int<lower=1, upper=N_bins> bin_idx;
@@ -156,7 +172,7 @@ transformed data {
 }
 parameters {
   // Common slope across all redshift bins
-  real<lower=-10 * sd_x, upper=-5* sd_x> slope_std;
+  real<lower=-8.5 * sd_x, upper=-5.5* sd_x> slope_std;
   
   // Intercept for each redshift bin
   
@@ -164,11 +180,12 @@ parameters {
          upper=-14 + slope_std * mean_x / sd_x>[N_bins] intercept_std;
   
   // Intrinsic scatter in x-direction (absolute magnitude)
-  real<lower=0, upper=1> sigma_int_x; // in x-units
-  real<lower=0, upper=40> sigma_int_y; // in y-units
-  
-  real<upper=0> mu_y_TF;
-  real<lower=0, upper=10> tau;
+  real<lower=0, upper=0.5> sigma_int_x; // in x-units
+  real<lower=0, upper=4> sigma_int_y; // in y-units
+
+  // fails to converge if we try to fit mu_y_TF and tau
+  // real<upper=0> mu_y_TF;
+  // real<lower=0, upper=10> tau;
 }
 transformed parameters {
   // real sigma_int_y;
@@ -213,19 +230,28 @@ model {
       
       target += multi_normal_lpdf([x_std[n], y[n]]' | mu_prior, Sigma_i);
       
-      target += -log(
+      // target += -log(
+      //                P_binormal_strip(mu_y_TF, tau, haty_max, slope_std,
+      //                                 intercept_std[bin_idx],
+      //                                 slope_plane_std, intercept_plane_std,
+      //                                 intercept_plane2_std,
+      //                                 sqrt(sigmasq1_std[n]),
+      //                                 sqrt(sigmasq2[n])));
+    }
+          target += -N_total * log(
                      P_binormal_strip(mu_y_TF, tau, haty_max, slope_std,
                                       intercept_std[bin_idx],
                                       slope_plane_std, intercept_plane_std,
                                       intercept_plane2_std,
-                                      sqrt(sigmasq1_std[n]),
-                                      sqrt(sigmasq2[n])));
-    }
+                                      sqrt(sigmasq1_std[1]),
+                                      sqrt(sigmasq2[1])));
   }
   
   // Priors
   sigma_int_x ~ cauchy(0, 0.3);
-  sigma_int_y ~ cauchy(0, 0.3);
+  sigma_int_y ~ cauchy(0, 1);
+
+  // tau ~ cauchy(0, 3);
 }
 generated quantities {
   real slope = slope_std / sd_x;

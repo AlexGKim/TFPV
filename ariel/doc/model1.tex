@@ -421,6 +421,45 @@ P(S_i=1\mid\theta)
      -\Phi_2\!\left(-\alpha_2,\;\beta;\;-\rho\right)\Big].
 \end{align}
 
+% Transformation 2: concentrate quadrature near the transition at y_{\mathrm{TF}} \approx \hat y_{\max}
+While in principle the integrand can be rougly described as a top-hat function of $y_{\mathrm{TF}}$,
+the sloped selection region should be selected such that the range of $y_{\mathrm{TF}}$ covers
+only one edge of the selection region, so that the integrand is close to 1 for $y_{\mathrm{TF}}$ below the transition and close to 0 for $y_{\mathrm{TF}}$ above the transition.
+  For the purpose of numerical integration, it is helpful to concentrate quadrature points near the transition at $y_{\mathrm{TF}}\approx\hat y_{\max}$, where the integrand changes rapidly.
+\begin{equation}
+t \equiv \beta = \frac{\hat y_{\max}-y_{\mathrm{TF}}}{\sigma_{2,i}},
+\qquad\Longleftrightarrow\qquad
+y_{\mathrm{TF}} = \hat y_{\max}-\sigma_{2,i}\,t,
+\qquad
+dy_{\mathrm{TF}} = -\sigma_{2,i}\,dt.
+\end{equation}
+
+\begin{equation}
+t = \sinh u,
+\qquad\Longleftrightarrow\qquad
+u = \operatorname{asinh}(t),
+\qquad
+dt = \cosh u\,du.
+\end{equation}
+
+\begin{equation}
+y_{\mathrm{TF}}(u) = \hat y_{\max}-\sigma_{2,i}\,\sinh u,
+\qquad
+dy_{\mathrm{TF}} = -\sigma_{2,i}\cosh u\,du.
+\end{equation}
+
+\begin{equation}
+\int_{y_{\min}}^{y_{\max}} f(y_{\mathrm{TF}})\,dy_{\mathrm{TF}}
+=
+\sigma_{2,i}\int_{u_{\min}}^{u_{\max}}
+f\!\Big(\hat y_{\max}-\sigma_{2,i}\sinh u\Big)\,\cosh u\,du,
+\end{equation}
+
+\begin{equation}
+u_{\min} = \operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{\max}}{\sigma_{2,i}}\right),
+\qquad
+u_{\max} = \operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{\min}}{\sigma_{2,i}}\right).
+\end{equation}
 \subsubsection{Normal Model for $y_{\mathrm{TF},i}$ }
 
 We begin with

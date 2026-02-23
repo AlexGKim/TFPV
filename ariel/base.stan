@@ -1,4 +1,6 @@
-// ./base sample num_samples=500 num_chains=4 data file=TF_mock_input.json init=TF_mock_init.json output file=output_base.csv
+// ./base sample num_samples=500 num_chains=4 data file=MOCK_n10000_input.json init=MOCK_n10000_init.json output file=MOCK_n10000_base.csv
+// ./base sample num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_base.csv
+// ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../cmdstan/bin/diagnose output_base*.csv
 
@@ -88,6 +90,26 @@ functions {
     real delta = z1z2 < 0 || (z1z2 == 0 && (z1 + z2) < 0);
     return 0.5 * (Phi(z1) - delta) - term1 - term2;
   }
+
+  // skips one Phi that cancels out in the difference, so more accurate for large arguments
+  real integrand(tuple(real, real, real) z, real rho) {
+    real z1 = z.1;
+    real z2 = z.2;
+    real z3 = z.3;
+    // if (z1 == 0 && z2 == 0) {
+    //   return 0.25 + asin(rho) / (2 * pi());
+    // }
+    real denom = sqrt((1 + rho) * (1 - rho));
+    real term1 = z1 == 0 ? (z2 > 0 ? 0.25 : -0.25)
+                 : owens_t(z1, (z2 / z1 - rho) / denom);
+    real term2 = z2 == 0 ? (z1 > 0 ? 0.25 : -0.25)
+                 : owens_t(z2, (z1 / z2 - rho) / denom);
+    real z1z2 = z1 * z2;
+    real delta = z1z2 < 0 || (z1z2 == 0 && (z1 + z2) < 0);
+    return 0.5 * (Phi(z1) - delta) - term1 - term2;
+  }
+
+
   // Two-sided (parallel) half-plane strip: c1 <= y - s_plane*x <= c2, plus y <= haty_max
   real integrate_binormal_strip_trapez(
          real y_min,
@@ -151,7 +173,222 @@ functions {
     }
     return (h / 2.0) * sum / (y_max - y_min);
   }
+  
+  // Vectorized over N:
+  // returns, elementwise in i,
+  //   binormal_strip_cdf((z1a[i], z2[i]) | rho) - binormal_strip_cdf((z1b[i], z2[i]) | rho)
+  //
+  // Key speedup: owens_t is called on vectors of length N (4 calls total),
+  // instead of scalar owens_t inside an i-loop.
+  vector binormal_strip_cdf_diff_same_z2_vec(
+           vector z1a,
+           vector z1b,
+           vector z2,
+           real rho
+         ) {
+    int N = rows(z2);
+    real denom = sqrt((1 + rho) * (1 - rho));
+    
+    vector[N] a1; // (z2/z1a - rho)/denom
+    vector[N] a2; // (z1a/z2 - rho)/denom
+    vector[N] a3; // (z2/z1b - rho)/denom
+    vector[N] a4; // (z1b/z2 - rho)/denom
+    
+    // delta per your scalar definition, stored as 0/1 real
+    vector[N] delta_a;
+    vector[N] delta_b;
+    
+    // flags for the exact scalar corner cases
+    array[N] int z1a0;
+    array[N] int z1b0;
+    array[N] int z20;
+    array[N] int both0_a;
+    array[N] int both0_b;
+    
+    // build "a" safely (no division by 0), and compute delta exactly as in scalar code
+    for (i in 1 : N) {
+      real z1az2 = z1a[i] * z2[i];
+      real z1bz2 = z1b[i] * z2[i];
+      
+      z1a0[i] = (z1a[i] == 0);
+      z1b0[i] = (z1b[i] == 0);
+      z20[i] = (z2[i] == 0);
+      
+      both0_a[i] = (z1a0[i] == 1 && z20[i] == 1);
+      both0_b[i] = (z1b0[i] == 1 && z20[i] == 1);
+      
+      delta_a[i] = (z1az2 < 0) || ((z1az2 == 0) && ((z1a[i] + z2[i]) < 0));
+      delta_b[i] = (z1bz2 < 0) || ((z1bz2 == 0) && ((z1b[i] + z2[i]) < 0));
+      
+      // only form ratios when safe; dummy values otherwise (will be overridden)
+      a1[i] = (z1a0[i] == 1) ? 0 : ((z2[i] / z1a[i] - rho) / denom);
+      a3[i] = (z1b0[i] == 1) ? 0 : ((z2[i] / z1b[i] - rho) / denom);
+      
+      a2[i] = (z20[i] == 1) ? 0 : ((z1a[i] / z2[i] - rho) / denom);
+      a4[i] = (z20[i] == 1) ? 0 : ((z1b[i] / z2[i] - rho) / denom);
+    }
+    
+    // 4 vectorized owens_t calls (length N each)
+    vector[N] t1a = owens_t(z1a, a1);
+    vector[N] t2a = owens_t(z2, a2);
+    vector[N] t1b = owens_t(z1b, a3);
+    vector[N] t2b = owens_t(z2, a4);
+    
+    // start with the Owen's-T values, then override the exact scalar special-cases
+    vector[N] term1a = t1a;
+    vector[N] term2a = t2a;
+    vector[N] term1b = t1b;
+    vector[N] term2b = t2b;
+    
+    for (i in 1 : N) {
+      if (z1a0[i] == 1) 
+        term1a[i] = (z2[i] > 0 ? 0.25 : -0.25);
+      if (z1b0[i] == 1) 
+        term1b[i] = (z2[i] > 0 ? 0.25 : -0.25);
+      
+      if (z20[i] == 1) 
+        term2a[i] = (z1a[i] > 0 ? 0.25 : -0.25);
+      if (z20[i] == 1) 
+        term2b[i] = (z1b[i] > 0 ? 0.25 : -0.25);
+    }
+    
+    vector[N] Fa = 0.5 * (Phi(z1a) - delta_a) - term1a - term2a;
+    vector[N] Fb = 0.5 * (Phi(z1b) - delta_b) - term1b - term2b;
+    
+    // exact (0,0) override
+    {
+      real c00 = 0.25 + asin(rho) / (2 * pi());
+      for (i in 1 : N) {
+        if (both0_a[i] == 1) 
+          Fa[i] = c00;
+        if (both0_b[i] == 1) 
+          Fb[i] = c00;
+      }
+    }
+    
+    return Fa - Fb;
+  }
+  
+  // Vectorized over N integration samples (trapezoid rule),
+  // matching your integrate_binormal_strip_trapez() but doing the heavy work in vectors.
+  real integrate_binormal_strip_trapez_vecN(
+         real y_min,
+         real y_max,
+         real haty_max,
+         real s,
+         real c,
+         real s_plane,
+         real c1_plane,
+         real c2_plane,
+         real sigma1,
+         real sigma2,
+         int N
+       ) {
+    if (N < 2) 
+      reject("integrate_binormal_strip_trapez_vecN: N must be >= 2");
+    
+    real h = (y_max - y_min) / (N - 1);
+    
+    real sigma_tot = sqrt(square(sigma2) + square(s_plane) * square(sigma1));
+    real rho = sigma2 / sigma_tot;
+    
+    // vector[N] y_TF = linspaced_vector(N, y_min, y_max);
+    vector[N] y_TF;
+    for (n in 1 : N) 
+      y_TF[n] = y_min + (n - 1) * h; // h = (y_max - y_min)/(N-1)
+    
+    vector[N] mu = y_TF - (s_plane / s) * (y_TF - c);
+    vector[N] alpha1 = (c1_plane - mu) / sigma_tot;
+    vector[N] alpha2 = (c2_plane - mu) / sigma_tot;
+    vector[N] beta = (haty_max - y_TF) / sigma2;
+    
+    // term[i] = binormal_strip_cdf((-alpha1[i], beta[i]) | -rho)
+    //         - binormal_strip_cdf((-alpha2[i], beta[i]) | -rho)
+    vector[N] term = binormal_strip_cdf_diff_same_z2_vec(-alpha1, -alpha2,
+                       beta, -rho);
+    
+    // trapezoid weights
+    vector[N] w = rep_vector(2.0, N);
+    w[1] = 1.0;
+    w[N] = 1.0;
+    
+    return (h / 2.0) * dot_product(w, term) / (y_max - y_min);
+  }
+  real integrate_binormal_strip_sinh_gl(
+         real y_min,
+         real y_max,
+         real haty_max,
+         real s,
+         real c,
+         real s_plane,
+         real c1_plane,
+         real c2_plane,
+         real sigma1,
+         real sigma2,
+         vector gl_x,
+         vector gl_w
+       ) {
+    int K = size(gl_x);
+    
+    // Basic checks (optional but helpful)
+    if (size(gl_w) != K) 
+      reject("integrate_binormal_strip_sinh_gl: gl_x and gl_w must have same length");
+    if (sigma2 <= 0) 
+      reject("integrate_binormal_strip_sinh_gl: sigma2 must be > 0");
+    if (y_max <= y_min) 
+      reject("integrate_binormal_strip_sinh_gl: require y_max > y_min");
+    
+    // Precompute constants for this i
+    real D = sqrt(square(sigma2) + square(s_plane * sigma1));
+    real rho = sigma2 / D;
+    
+    // Clamp rho away from +/-1 for numerical safety in the CDF implementation
+    rho = fmin(1 - 1e-12, fmax(-1 + 1e-12, rho));
+    
+    // sinh-transform bounds:
+    // u = asinh( (haty_max - y_TF)/sigma2 )
+    real u_min = asinh((haty_max - y_max) / sigma2);
+    real u_max = asinh((haty_max - y_min) / sigma2);
+    
+    // Map Gauss-Legendre nodes from [-1,1] -> [u_min,u_max]
+    real mid = 0.5 * (u_min + u_max);
+    real half = 0.5 * (u_max - u_min);
+    
+    real inv_s = 1.0 / s;
+    real acc = 0;
+    
+    for (k in 1 : K) {
+      real u = mid + half * gl_x[k];
+      
+      // t = beta = (haty_max - y_TF)/sigma2
+      real t = sinh(u);
+      
+      // Back-transform to y_TF
+      real y_tf = haty_max - sigma2 * t;
+      
+      // m(y_tf) = y_tf - s_plane * (y_tf - c)/s
+      real m = y_tf - s_plane * (y_tf - c) * inv_s;
+      
+      // z1 = -alpha_k = (m - c_k)/D
+      real z1_1 = (m - c1_plane) / D;
+      real z1_2 = (m - c2_plane) / D;
+      
+      // z2 = beta = t
+      real z2 = t;
+      
+      // integrand in u-space includes Jacobian sigma2*cosh(u)
+      real diff = binormal_strip_cdf((z1_1, z2) | -rho)
+                  - binormal_strip_cdf((z1_2, z2) | -rho);
+      
+      acc += gl_w[k] * diff * cosh(u);
+    }
+    
+    // Integral over y_TF:
+    // ∫ f(y_TF) dy_TF = sigma2 * ∫ f(haty_max - sigma2*sinh u) cosh(u) du
+    return sigma2 * half * acc;
+  }
 }
+
 data {
   // Number of redshift bins
   int<lower=1> N_bins; // For the momment N_bins = 1
@@ -215,6 +452,40 @@ transformed data {
                              + slope_plane_std * mean_x / sd_x;
   real intercept_plane2_std = intercept_plane2
                               + slope_plane_std * mean_x / sd_x;
+  array[32] real gl_x_arr = {-0.9972638618494815635, -0.9856115115452683354,
+                         -0.9647622555875064308, -0.9349060759377396892,
+                         -0.8963211557660521240, -0.8493676137325699701,
+                         -0.7944837959679424070, -0.7321821187402896804,
+                         -0.6630442669302152010, -0.5877157572407623290,
+                         -0.5068999089322293900, -0.4213512761306353454,
+                         -0.3318686022821276498, -0.2392873622521370745,
+                         -0.1444719615827964935, -0.0483076656877383162,
+                         0.0483076656877383162, 0.1444719615827964935,
+                         0.2392873622521370745, 0.3318686022821276498,
+                         0.4213512761306353454, 0.5068999089322293900,
+                         0.5877157572407623290, 0.6630442669302152010,
+                         0.7321821187402896804, 0.7944837959679424070,
+                         0.8493676137325699701, 0.8963211557660521240,
+                         0.9349060759377396892, 0.9647622555875064308,
+                         0.9856115115452683354, 0.9972638618494815635};
+  vector[32] gl_x = to_vector(gl_x_arr);
+  array[32] real gl_w_arr = {0.0070186100094700966, 0.0162743947309056706,
+                         0.0253920653092620595, 0.0342738629130214331,
+                         0.0428358980222266807, 0.0509980592623761762,
+                         0.0586840934785355471, 0.0658222227763618468,
+                         0.0723457941088485062, 0.0781938957870703065,
+                         0.0833119242269467552, 0.0876520930044038111,
+                         0.0911738786957638847, 0.0938443990808045656,
+                         0.0956387200792748594, 0.0965400885147278006,
+                         0.0965400885147278006, 0.0956387200792748594,
+                         0.0938443990808045656, 0.0911738786957638847,
+                         0.0876520930044038111, 0.0833119242269467552,
+                         0.0781938957870703065, 0.0723457941088485062,
+                         0.0658222227763618468, 0.0586840934785355471,
+                         0.0509980592623761762, 0.0428358980222266807,
+                         0.0342738629130214331, 0.0253920653092620595,
+                         0.0162743947309056706, 0.0070186100094700966};
+  vector[32] gl_w = to_vector(gl_w_arr);
 }
 parameters {
   // Common slope across all redshift bins
@@ -297,14 +568,32 @@ model {
       
       target += -log_diff_exp(term_lb, term_ub);
     } else if (y_selection != 0 && plane_cut == 1) {
-      // for (n in 1 : N_total) {
-      target += -N_total
-                * log(
-                      integrate_binormal_strip_trapez(y_min, y_max, haty_max,
-                        slope_std, intercept_std[bin_idx], slope_plane_std,
-                        intercept_plane_std, intercept_plane2_std,
-                        sqrt(sigmasq1_std[1]), sqrt(sigmasq2[1]), 258));
-      // }
+      for (n in 1 : N_total) {
+        //   target += -log(
+        //                  integrate_binormal_strip_trapez(y_min, y_max,
+        //                    haty_max, slope_std, intercept_std[bin_idx],
+        //                    slope_plane_std, intercept_plane_std,
+        //                    intercept_plane2_std, sqrt(sigmasq1_std[1]),
+        //                    sqrt(sigmasq2[1]), 32));
+        target += log(
+                      integrate_binormal_strip_sinh_gl(y_min, y_max,
+                        haty_max, slope_std, intercept_std[bin_idx],
+                        slope_plane_std, intercept_plane_std,
+                        intercept_plane2_std, sqrt(sigmasq1_std[1]),
+                        sqrt(sigmasq2[1]), gl_x, gl_w));
+      }
+      // target += - N_total * log(
+      //          integrate_binormal_strip_trapez(y_min, y_max,
+      //            haty_max, slope_std, intercept_std[bin_idx],
+      //            slope_plane_std, intercept_plane_std,
+      //            intercept_plane2_std, sqrt(sigmasq1_std[1]),
+      //            sqrt(sigmasq2[1]), 128));
+      //                 target += - N_total * log(
+      //  integrate_binormal_strip_sinh_gl(y_min, y_max,
+      //    haty_max, slope_std, intercept_std[bin_idx],
+      //    slope_plane_std, intercept_plane_std,
+      //    intercept_plane2_std, sqrt(sigmasq1_std[1]),
+      //    sqrt(sigmasq2[1]), gl_x, gl_w));
     }
   }
   

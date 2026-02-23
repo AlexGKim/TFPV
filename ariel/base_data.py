@@ -151,7 +151,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     y_min =  -23.0
     y_max = -15.0
     mu_y_TF = 0.5 * (y_min + y_max)
-    tau = (y_max - y_min)/np.sqrt(12)*1.5
+    tau = (y_max - y_min)/np.sqrt(12)*1.
 
     stan_data = {
         'N_bins': N_bins,
@@ -346,16 +346,19 @@ if __name__ == '__main__':
     sample_size = 10000  # or None
 
     if sample_size is not None:
-        output_json = f'TF_mock_input_n{sample_size}.json'
-        init_json = f'TF_mock_init_n{sample_size}.json'
+        output_json = f'MOCK_n{sample_size}_input.json'
+        init_json = f'MOCK_n{sample_size}_init.json'
     else:
-        output_json = 'TF_mock_input.json'
-        init_json = 'TF_mock_init.json'
+        output_json = 'MOCK_input.json'
+        init_json = 'MOCK_init.json'
+
+    # output_json = 'MOXK_input.json'
+    # init_json = 'MOXK_init.json'        
 
     process_tf_data(input_csv, output_json, init_json,
                     haty_max=haty_max, sample_size=sample_size,
                     plane_cut=plane_cut, slope_plane=slope_plane,
                     intercept_plane=intercept_plane, intercept_plane2=intercept_plane2)
 
-    plot_output = output_json.replace('.json', '_plot.png')
+    plot_output = output_json.replace('.json', '.png')
     plot_tf_data(output_json, plot_output)

@@ -410,8 +410,8 @@ if __name__ == '__main__':
     n_objects = None            # set to an int to subsample the selected objects, e.g. 500
     random_seed = None          # set to an int for reproducible subsampling, e.g. 42
     
-    output_json = 'DESI_TF_input.json'
-    init_json = 'DESI_TF_init.json'
+    output_json = 'DESI_input.json'
+    init_json = 'DESI_init.json'
     
     # Process data and get both complete and selected samples
     x_all, y_all, sigma_x_all, sigma_y_all, x_sel, y_sel, sigma_x_sel, sigma_y_sel = process_desi_tf_data(
@@ -426,7 +426,7 @@ if __name__ == '__main__':
     )
     
     # Create plot showing both complete and selected samples
-    plot_output = output_json.replace('.json', '_plot.png')
+    plot_output = output_json.replace('.json', '.png')
     plot_desi_tf_data(
         x_all, y_all, sigma_x_all, sigma_y_all,
         x_sel, y_sel, sigma_x_sel, sigma_y_sel,
