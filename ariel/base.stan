@@ -90,7 +90,7 @@ functions {
     real delta = z1z2 < 0 || (z1z2 == 0 && (z1 + z2) < 0);
     return 0.5 * (Phi(z1) - delta) - term1 - term2;
   }
-
+  
   // skips one Phi that cancels out in the difference, so more accurate for large arguments
   real integrand(tuple(real, real, real) z, real rho) {
     real z1 = z.1;
@@ -108,8 +108,7 @@ functions {
     real delta = z1z2 < 0 || (z1z2 == 0 && (z1 + z2) < 0);
     return 0.5 * (Phi(z1) - delta) - term1 - term2;
   }
-
-
+  
   // Two-sided (parallel) half-plane strip: c1 <= y - s_plane*x <= c2, plus y <= haty_max
   real integrate_binormal_strip_trapez(
          real y_min,
@@ -355,92 +354,118 @@ functions {
     real half = 0.5 * (u_max - u_min);
     
     real inv_s = 1.0 / s;
-    real acc = 0;
+    // real acc = 0;
     
-    for (k in 1 : K) {
-      real u = mid + half * gl_x[k];
-      
-      // t = beta = (haty_max - y_TF)/sigma2
-      real t = sinh(u);
-      
-      // Back-transform to y_TF
-      real y_tf = haty_max - sigma2 * t;
-      
-      // m(y_tf) = y_tf - s_plane * (y_tf - c)/s
-      real m = y_tf - s_plane * (y_tf - c) * inv_s;
-      
-      // z1 = -alpha_k = (m - c_k)/D
-      real z1_1 = (m - c1_plane) / D;
-      real z1_2 = (m - c2_plane) / D;
-      
-      // z2 = beta = t
-      real z2 = t;
-      
-      // integrand in u-space includes Jacobian sigma2*cosh(u)
-      real diff = binormal_strip_cdf((z1_1, z2) | -rho)
-                  - binormal_strip_cdf((z1_2, z2) | -rho);
-      
-      acc += gl_w[k] * diff * cosh(u);
-    }
+    // for (k in 1 : K) {
+    //   real u = mid + half * gl_x[k];
     
+    //   // t = beta = (haty_max - y_TF)/sigma2
+    //   real t = sinh(u);
+    
+    //   // Back-transform to y_TF
+    //   real y_tf = haty_max - sigma2 * t;
+    
+    //   // m(y_tf) = y_tf - s_plane * (y_tf - c)/s
+    //   real m = y_tf - s_plane * (y_tf - c) * inv_s;
+    
+    //   // z1 = -alpha_k = (m - c_k)/D
+    //   real z1_1 = (m - c1_plane) / D;
+    //   real z1_2 = (m - c2_plane) / D;
+    
+    //   // z2 = beta = t
+    //   real z2 = t;
+    
+    //   // integrand in u-space includes Jacobian sigma2*cosh(u)
+    //   real diff = binormal_strip_cdf((z1_1, z2) | -rho)
+    //               - binormal_strip_cdf((z1_2, z2) | -rho);
+    //   acc += gl_w[k] * diff * cosh(u);
+    // }
+    
+    // for (k in 1 : K) {
+    
+    vector[K] u = mid + half * gl_x;
+    
+    // t = beta = (haty_max - y_TF)/sigma2
+    vector[K] t = sinh(u);
+    
+    // Back-transform to y_TF
+    vector[K] y_tf = haty_max - sigma2 * t;
+    
+    // // m(y_tf) = y_tf - s_plane * (y_tf - c)/s
+    // vector[K] m = y_tf - s_plane * (y_tf - c) * inv_s;
+    
+    // // z1 = -alpha_k = (m - c_k)/D
+    // vector[K] z1_1 = (m - c1_plane) / D;
+    // vector[K] z1_2 = (m - c2_plane) / D;
+    
+    // // z2 = beta = t
+    // vector[K] z2 = t;
+    
+    // integrand in u-space includes Jacobian sigma2*cosh(u)
+    vector[K] diff = strip_integrand(y_tf, s, c, c1_plane, c2_plane,
+                                     haty_max, sigma1, sigma2, s_plane);
+    // acc += gl_w[k] * diff * cosh(u);
+    real acc = sum(gl_w .* diff .* cosh(u));
     // Integral over y_TF:
     // ∫ f(y_TF) dy_TF = sigma2 * ∫ f(haty_max - sigma2*sinh u) cosh(u) du
     return sigma2 * half * acc;
   }
-
+  
   // Bracket term:
   //   Phi2(-alpha1, beta; -rho) - Phi2(-alpha2, beta; -rho)
   // for each y_TF in the input vector.
   vector strip_integrand(vector y_TF,
-                            real bar_s, real bar_c1, real bar_c2,
-                            real yhat_max,
-                            real sigma1_i, real sigma2_i,
-                            real c, real s) {
+                         real s,
+                         real c,
+                         real bar_c1,
+                         real bar_c2,
+                         real yhat_max,
+                         real sigma1_i,
+                         real sigma2_i,
+                         real bar_s) {
     int N = num_elements(y_TF);
-
+    
     real denom = sqrt(square(sigma2_i) + square(bar_s) * square(sigma1_i));
-    real rho   = sigma2_i / denom;
+    real rho = sigma2_i / denom;
     real sqrt1mr2 = sqrt(1.0 - square(rho));
-
+    
     // y_shift = y_TF - bar_s * (y_TF - c)/s = (1 - bar_s/s)*y_TF + (bar_s*c/s)
     real k = 1.0 - bar_s / s;
     real b = bar_s * c / s;
-
+    
     vector[N] y_shift = k * y_TF + b;
-    vector[N] alpha1  = (bar_c1 - y_shift) / denom;
-    vector[N] alpha2  = (bar_c2 - y_shift) / denom;
-    vector[N] beta    = (yhat_max - y_TF) / sigma2_i;
-
+    vector[N] alpha1 = (bar_c1 - y_shift) / denom;
+    vector[N] alpha2 = (bar_c2 - y_shift) / denom;
+    vector[N] beta = (yhat_max - y_TF) / sigma2_i;
+    
     vector[N] z1a = -alpha1;
     vector[N] z1b = -alpha2;
-
+    
     // delta(-alpha1,beta) - delta(-alpha2,beta), vectorized via step()
     // step(x)=1 if x>0 else 0
     vector[N] delta_diff;
-    for (n in 1:N) {
+    for (n in 1 : N) {
       delta_diff[n] = 0.0;
-      if (beta[n] > 0 && alpha1[n] <= 0 && alpha2[n] > 0)
+      if (beta[n] > 0 && alpha1[n] <= 0 && alpha2[n] > 0) 
         delta_diff[n] = -1.0;
-      else if (beta[n] < 0 && alpha1[n] < 0 && alpha2[n] >= 0)
-        delta_diff[n] =  1.0;
+      else if (beta[n] < 0 && alpha1[n] < 0 && alpha2[n] >= 0) 
+        delta_diff[n] = 1.0;
     }
-
+    
     // Owen's-t arguments, vectorized
     vector[N] a_z1a = (beta ./ z1a + rho) / sqrt1mr2;
     vector[N] a_z1b = (beta ./ z1b + rho) / sqrt1mr2;
-    vector[N] a_b1  = (z1a  ./ beta + rho) / sqrt1mr2;
-    vector[N] a_b2  = (z1b  ./ beta + rho) / sqrt1mr2;
-
+    vector[N] a_b1 = (z1a ./ beta + rho) / sqrt1mr2;
+    vector[N] a_b2 = (z1b ./ beta + rho) / sqrt1mr2;
+    
     // Assemble bracket
-    vector[N] out =
-        0.5 * (Phi(z1a) - Phi(z1b) - delta_diff)
-      - (owens_t(z1a,  a_z1a) - owens_t(z1b,  a_z1b))
-      - (owens_t(beta, a_b1)  - owens_t(beta, a_b2));
-
+    vector[N] out = 0.5 * (Phi_approx(z1a) - Phi_approx(z1b) - delta_diff)
+                    - (owens_t(z1a, a_z1a) - owens_t(z1b, a_z1b))
+                    - (owens_t(beta, a_b1) - owens_t(beta, a_b2));
+    
     return out;
   }
 }
-
 data {
   // Number of redshift bins
   int<lower=1> N_bins; // For the momment N_bins = 1
@@ -505,38 +530,38 @@ transformed data {
   real intercept_plane2_std = intercept_plane2
                               + slope_plane_std * mean_x / sd_x;
   array[32] real gl_x_arr = {-0.9972638618494815635, -0.9856115115452683354,
-                         -0.9647622555875064308, -0.9349060759377396892,
-                         -0.8963211557660521240, -0.8493676137325699701,
-                         -0.7944837959679424070, -0.7321821187402896804,
-                         -0.6630442669302152010, -0.5877157572407623290,
-                         -0.5068999089322293900, -0.4213512761306353454,
-                         -0.3318686022821276498, -0.2392873622521370745,
-                         -0.1444719615827964935, -0.0483076656877383162,
-                         0.0483076656877383162, 0.1444719615827964935,
-                         0.2392873622521370745, 0.3318686022821276498,
-                         0.4213512761306353454, 0.5068999089322293900,
-                         0.5877157572407623290, 0.6630442669302152010,
-                         0.7321821187402896804, 0.7944837959679424070,
-                         0.8493676137325699701, 0.8963211557660521240,
-                         0.9349060759377396892, 0.9647622555875064308,
-                         0.9856115115452683354, 0.9972638618494815635};
+                             -0.9647622555875064308, -0.9349060759377396892,
+                             -0.8963211557660521240, -0.8493676137325699701,
+                             -0.7944837959679424070, -0.7321821187402896804,
+                             -0.6630442669302152010, -0.5877157572407623290,
+                             -0.5068999089322293900, -0.4213512761306353454,
+                             -0.3318686022821276498, -0.2392873622521370745,
+                             -0.1444719615827964935, -0.0483076656877383162,
+                             0.0483076656877383162, 0.1444719615827964935,
+                             0.2392873622521370745, 0.3318686022821276498,
+                             0.4213512761306353454, 0.5068999089322293900,
+                             0.5877157572407623290, 0.6630442669302152010,
+                             0.7321821187402896804, 0.7944837959679424070,
+                             0.8493676137325699701, 0.8963211557660521240,
+                             0.9349060759377396892, 0.9647622555875064308,
+                             0.9856115115452683354, 0.9972638618494815635};
   vector[32] gl_x = to_vector(gl_x_arr);
   array[32] real gl_w_arr = {0.0070186100094700966, 0.0162743947309056706,
-                         0.0253920653092620595, 0.0342738629130214331,
-                         0.0428358980222266807, 0.0509980592623761762,
-                         0.0586840934785355471, 0.0658222227763618468,
-                         0.0723457941088485062, 0.0781938957870703065,
-                         0.0833119242269467552, 0.0876520930044038111,
-                         0.0911738786957638847, 0.0938443990808045656,
-                         0.0956387200792748594, 0.0965400885147278006,
-                         0.0965400885147278006, 0.0956387200792748594,
-                         0.0938443990808045656, 0.0911738786957638847,
-                         0.0876520930044038111, 0.0833119242269467552,
-                         0.0781938957870703065, 0.0723457941088485062,
-                         0.0658222227763618468, 0.0586840934785355471,
-                         0.0509980592623761762, 0.0428358980222266807,
-                         0.0342738629130214331, 0.0253920653092620595,
-                         0.0162743947309056706, 0.0070186100094700966};
+                             0.0253920653092620595, 0.0342738629130214331,
+                             0.0428358980222266807, 0.0509980592623761762,
+                             0.0586840934785355471, 0.0658222227763618468,
+                             0.0723457941088485062, 0.0781938957870703065,
+                             0.0833119242269467552, 0.0876520930044038111,
+                             0.0911738786957638847, 0.0938443990808045656,
+                             0.0956387200792748594, 0.0965400885147278006,
+                             0.0965400885147278006, 0.0956387200792748594,
+                             0.0938443990808045656, 0.0911738786957638847,
+                             0.0876520930044038111, 0.0833119242269467552,
+                             0.0781938957870703065, 0.0723457941088485062,
+                             0.0658222227763618468, 0.0586840934785355471,
+                             0.0509980592623761762, 0.0428358980222266807,
+                             0.0342738629130214331, 0.0253920653092620595,
+                             0.0162743947309056706, 0.0070186100094700966};
   vector[32] gl_w = to_vector(gl_w_arr);
 }
 parameters {
@@ -627,12 +652,12 @@ model {
         //                    slope_plane_std, intercept_plane_std,
         //                    intercept_plane2_std, sqrt(sigmasq1_std[1]),
         //                    sqrt(sigmasq2[1]), 32));
-        // target += log(
-        //               integrate_binormal_strip_sinh_gl(y_min, y_max,
-        //                 haty_max, slope_std, intercept_std[bin_idx],
-        //                 slope_plane_std, intercept_plane_std,
-        //                 intercept_plane2_std, sqrt(sigmasq1_std[1]),
-        //                 sqrt(sigmasq2[1]), gl_x, gl_w));
+        target += log(
+                      integrate_binormal_strip_sinh_gl(y_min, y_max,
+                        haty_max, slope_std, intercept_std[bin_idx],
+                        slope_plane_std, intercept_plane_std,
+                        intercept_plane2_std, sqrt(sigmasq1_std[1]),
+                        sqrt(sigmasq2[1]), gl_x, gl_w));
       }
       // target += - N_total * log(
       //          integrate_binormal_strip_trapez(y_min, y_max,
@@ -641,11 +666,11 @@ model {
       //            intercept_plane2_std, sqrt(sigmasq1_std[1]),
       //            sqrt(sigmasq2[1]), 128));
       //                 target += - N_total * log(
-      target += - N_total *log( integrate_binormal_strip_sinh_gl(y_min, y_max,
-         haty_max, slope_std, intercept_std[bin_idx],
-         slope_plane_std, intercept_plane_std,
-         intercept_plane2_std, sqrt(sigmasq1_std[1]),
-         sqrt(sigmasq2[1]), gl_x, gl_w));
+      // target += - N_total *log( integrate_binormal_strip_sinh_gl(y_min, y_max,
+      //    haty_max, slope_std, intercept_std[bin_idx],
+      //    slope_plane_std, intercept_plane_std,
+      //    intercept_plane2_std, sqrt(sigmasq1_std[1]),
+      //    sqrt(sigmasq2[1]), gl_x, gl_w));
     }
   }
   
