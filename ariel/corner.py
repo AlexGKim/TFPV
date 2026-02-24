@@ -2,7 +2,7 @@
 """
 Create corner plots from Stan MCMC output files using ChainConsumer.
 
-Reads one or two sets of Stan CSV output files (matched by glob pattern) and
+Reads one or more sets of Stan CSV output files (matched by glob patterns) and
 produces a corner plot of the key parameters: slope, intercept, sigma_int_x,
 sigma_int_y (and optionally theta_int).
 
@@ -10,11 +10,20 @@ Usage
 -----
 As a script (command line)::
 
-    python corner.py DESI_base_?.csv --output DESI_base.png
-    python corner.py DESI_base_?.csv --infile2 MOCK_n10000_base_?.csv --output compare.png
-    python corner.py DESI_base_?.csv --infile2 MOCK_n10000_base_?.csv \\
+    # Single chain
+    python corner.py 'DESI_base_?.csv' --output DESI_base.png
+
+    # Two chains overlaid
+    python corner.py 'DESI_base_?.csv' 'MOCK_n10000_base_?.csv' --output compare.png
+
+    # Three chains with truth lines
+    python corner.py 'DESI_base_?.csv' 'DESI_normal_?.csv' 'MOCK_n10000_base_?.csv' \\
         --output compare.png --theta-int \\
         --truth slope=-8.0 intercept=-20.0 sigma_int_x=0.03 sigma_int_y=0.03
+
+    # Override legend names (one --name per infile, in order)
+    python corner.py 'DESI_base_?.csv' 'MOCK_n10000_base_?.csv' \\
+        --name 'DESI' --name 'Mock' --output compare.png
 
 As a module (edit the __main__ block at the bottom)::
 
@@ -115,16 +124,17 @@ def _print_stats(df, label):
 # Main plotting function
 # ---------------------------------------------------------------------------
 
-def create_corner_plot(file_pattern, output_file='corner_plot.png',
+def create_corner_plot(file_patterns, output_file='corner_plot.png',
                        include_theta_int=False, truth_values=None,
-                       file_pattern2=None, name1=None, name2=None):
+                       names=None):
     """
-    Create a corner plot from one or two sets of Stan output files.
+    Create a corner plot from one or more sets of Stan output files.
 
     Parameters
     ----------
-    file_pattern : str
-        Glob pattern for the first set of Stan CSV files.
+    file_patterns : str or list of str
+        Glob pattern(s) for the Stan CSV files.  A single string is treated as
+        a list of one element.
     output_file : str
         Path to save the output PNG (default: ``'corner_plot.png'``).
     include_theta_int : bool
@@ -132,39 +142,40 @@ def create_corner_plot(file_pattern, output_file='corner_plot.png',
     truth_values : dict, optional
         Mapping of parameter name → true value, drawn as reference lines.
         Example: ``{"slope": -8.0, "intercept": -20.0}``.
-    file_pattern2 : str, optional
-        Glob pattern for a second set of Stan CSV files to overlay.
-    name1 : str, optional
-        Legend label for the first chain.  Defaults to *file_pattern* with
-        ``.csv`` stripped.
-    name2 : str, optional
-        Legend label for the second chain.  Defaults to *file_pattern2* with
-        ``.csv`` stripped.
+    names : list of str, optional
+        Legend labels, one per entry in *file_patterns*.  Any missing entries
+        default to the corresponding pattern with ``.csv`` stripped.
 
     Returns
     -------
     matplotlib.figure.Figure
     """
-    # Derive legend names from file patterns when not supplied explicitly
-    if name1 is None:
-        name1 = file_pattern.replace('.csv', '')
-    if name2 is None and file_pattern2 is not None:
-        name2 = file_pattern2.replace('.csv', '')
+    # Normalise to a list
+    if isinstance(file_patterns, str):
+        file_patterns = [file_patterns]
 
-    # --- chain 1 ---
-    print(f"\n=== Chain 1: {file_pattern} ===")
-    df1 = load_params(file_pattern, include_theta_int=include_theta_int)
-    _print_stats(df1, name1)
+    # Build / fill-in names list
+    if names is None:
+        names = [None] * len(file_patterns)
+    else:
+        # Pad with None if fewer names than patterns were supplied
+        names = list(names) + [None] * (len(file_patterns) - len(names))
+
+    resolved_names = [
+        (n if n is not None else pat.replace('.csv', ''))
+        for pat, n in zip(file_patterns, names)
+    ]
 
     c = ChainConsumer()
-    c.add_chain(Chain(samples=df1, name=name1))
 
-    # --- chain 2 (optional) ---
-    if file_pattern2 is not None:
-        print(f"\n=== Chain 2: {file_pattern2} ===")
-        df2 = load_params(file_pattern2, include_theta_int=include_theta_int)
-        _print_stats(df2, name2)
-        c.add_chain(Chain(samples=df2, name=name2))
+    first_df = None
+    for i, (pat, name) in enumerate(zip(file_patterns, resolved_names), start=1):
+        print(f"\n=== Chain {i}: {pat} ===")
+        df = load_params(pat, include_theta_int=include_theta_int)
+        _print_stats(df, name)
+        c.add_chain(Chain(samples=df, name=name))
+        if first_df is None:
+            first_df = df
 
     # --- truth lines ---
     if truth_values is not None:
@@ -175,10 +186,10 @@ def create_corner_plot(file_pattern, output_file='corner_plot.png',
     fig.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"\nCorner plot saved to: {output_file}")
 
-    # --- summary ---
+    # --- summary (based on first chain's columns) ---
     print("\nSummary statistics:")
     summary = c.analysis.get_summary()
-    for param in df1.columns:
+    for param in first_df.columns:
         if param in summary:
             print(f"\n{param}:")
             for key, value in summary[param].items():
@@ -219,15 +230,12 @@ def _build_parser():
         epilog=__doc__,
     )
     p.add_argument(
-        'infile',
-        help="Glob pattern for the first set of Stan CSV files "
-             "(quote the pattern to prevent shell expansion, e.g. 'DESI_base_?.csv').",
-    )
-    p.add_argument(
-        '--infile2',
-        default=None,
+        'infiles',
+        nargs='+',
         metavar='PATTERN',
-        help="Glob pattern for a second set of Stan CSV files to overlay.",
+        help="One or more glob patterns for Stan CSV files "
+             "(quote each pattern to prevent shell expansion, "
+             "e.g. 'DESI_base_?.csv' 'MOCK_n10000_base_?.csv').",
     )
     p.add_argument(
         '--output', '-o',
@@ -236,16 +244,13 @@ def _build_parser():
         help="Output PNG filename (default: corner_plot.png).",
     )
     p.add_argument(
-        '--name1',
+        '--name',
+        dest='names',
+        action='append',
         default=None,
         metavar='LABEL',
-        help="Legend label for the first chain (default: infile with .csv stripped).",
-    )
-    p.add_argument(
-        '--name2',
-        default=None,
-        metavar='LABEL',
-        help="Legend label for the second chain (default: infile2 with .csv stripped).",
+        help="Legend label for a chain (repeat once per infile, in order). "
+             "Defaults to the pattern with .csv stripped.",
     )
     p.add_argument(
         '--theta-int',
@@ -278,26 +283,27 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         args = _build_parser().parse_args()
         create_corner_plot(
-            file_pattern=args.infile,
+            file_patterns=args.infiles,
             output_file=args.output,
             include_theta_int=args.theta_int,
             truth_values=_parse_truth(args.truth),
-            file_pattern2=args.infile2,
-            name1=args.name1,
-            name2=args.name2,
+            names=args.names,
         )
     else:
         # ------------------------------------------------------------------
         # Hard-coded configuration — edit these variables as needed.
         # ------------------------------------------------------------------
-        infile  = "DESI_base_?.csv"
-        # infile2 = "DESI_normal_?.csv"
-        outfile = "DESI_base_vs_normal.png"
-
-        infile  = "MOCK_n10000_base_?.csv"
-        # infile2 = "MOCK_n10000_normal_?.csv"
-        infile2 = None
-        outfile = "MOCK_n10000_base.png"
+        infiles = [
+            "MOCK_n10000_base_?.csv",
+            "MOCK_n10000_pm0.5_base_?.csv",
+            "MOCK_n10000_pm1_base_?.csv",
+        ]
+        # infiles = [
+        #     "DESI_base_?.csv",
+        #     "DESI_normal_?.csv",
+        # ]
+        outfile = "MOCK_n10000_pm.png"
+        # outfile = "DESI_base_vs_normal.png"
 
         truth = {
             "slope":       -8.0,
@@ -307,8 +313,7 @@ if __name__ == '__main__':
         }
 
         create_corner_plot(
-            file_pattern=infile,
+            file_patterns=infiles,
             output_file=outfile,
             truth_values=truth,
-            file_pattern2=infile2,
         )
