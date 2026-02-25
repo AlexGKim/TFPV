@@ -52,6 +52,7 @@ functions {
   real P_binormal_strip(real mu_y_TF,
                         real tau, // SD of y_TF  (i.e., y_TF ~ Normal(mu_y_TF, Sigma))
                         real haty_max,
+                        real haty_min,
                         real s,
                         real c,
                         real s_plane, // \bar{s}
@@ -68,7 +69,9 @@ functions {
     real var_u;
     real cov_yhat_u;
     real rho;
-    real beta;
+    real beta_max;
+    real beta_min;
+
     real gamma0;
     real gamma1;
     
@@ -94,13 +97,17 @@ functions {
     rho = fmin(1 - 1e-12, fmax(-1 + 1e-12, rho));
     
     // Standardized limits
-    beta = (haty_max - mu_yhat) / sqrt(var_yhat);
+    beta_max = (haty_max - mu_yhat) / sqrt(var_yhat);
+    beta_min = (haty_min - mu_yhat) / sqrt(var_yhat);
+
     gamma0 = (0 - mu_u) / sqrt(var_u);
     gamma1 = (delta_c - mu_u) / sqrt(var_u);
     
     // Probability of the strip under bivariate normal
-    return binormal_strip_cdf((beta, gamma1) | rho)
-           - binormal_strip_cdf((beta, gamma0) | rho);
+    return binormal_strip_cdf((beta_max, gamma1) | rho)
+           - binormal_strip_cdf((beta_max, gamma0) | rho)
+           - binormal_strip_cdf((beta_min, gamma1) | rho)
+           + binormal_strip_cdf((beta_min, gamma0) | rho);
   }
 }
 data {
@@ -124,13 +131,15 @@ data {
   
   // Selection function parameter
   real haty_max;
+  real haty_min;
+
   real slope_plane;
   real intercept_plane;
   real intercept_plane2;
   
   // Properties of dataset
-  real<upper=haty_max> y_min;
-  real<lower=haty_max> y_max;
+  // real<upper=haty_max> y_min;
+  // real<lower=haty_max> y_max;
   
   real mu_y_TF;
   real<lower=0> tau;
@@ -147,8 +156,8 @@ transformed data {
   vector[N_total] sigma_x_std = sigma_x / sd_x;
   
   // variables used in more complicated models
-  real log_lb = log(haty_max - y_min);
-  real log_minus_ub = log(y_max - haty_max);
+  // real log_lb = log(haty_max - y_min);
+  // real log_minus_ub = log(y_max - haty_max);
   vector[N_total] sigma_x_std_sq = square(sigma_x_std); //////// DEBUG
   vector[N_total] sigma_y_sq = square(sigma_y);
   
@@ -231,7 +240,7 @@ model {
       target += multi_normal_lpdf([x_std[n], y[n]]' | mu_prior, Sigma_i);
       
       // target += -log(
-      //                P_binormal_strip(mu_y_TF, tau, haty_max, slope_std,
+      //                P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
       //                                 intercept_std[bin_idx],
       //                                 slope_plane_std, intercept_plane_std,
       //                                 intercept_plane2_std,
@@ -239,7 +248,7 @@ model {
       //                                 sqrt(sigmasq2[n])));
     }
           target += -N_total * log(
-                     P_binormal_strip(mu_y_TF, tau, haty_max, slope_std,
+                     P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
                                       intercept_std[bin_idx],
                                       slope_plane_std, intercept_plane_std,
                                       intercept_plane2_std,
