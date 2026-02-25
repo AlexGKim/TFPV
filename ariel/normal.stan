@@ -141,8 +141,8 @@ data {
   // real<upper=haty_max> y_min;
   // real<lower=haty_max> y_max;
   
-  real mu_y_TF;
-  real<lower=0> tau;
+  // real mu_y_TF;
+  // real<lower=0> tau;
   
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   // array[N_total] int<lower=1, upper=N_bins> bin_idx;
@@ -193,8 +193,8 @@ parameters {
   real<lower=0, upper=4> sigma_int_y; // in y-units
 
   // fails to converge if we try to fit mu_y_TF and tau
-  // real<upper=0> mu_y_TF;
-  // real<lower=0, upper=10> tau;
+  real<upper=0> mu_y_TF;
+  real<lower=0, upper=100> tau;
 }
 transformed parameters {
   // real sigma_int_y;
@@ -260,7 +260,7 @@ model {
   sigma_int_x ~ cauchy(0, 0.3);
   sigma_int_y ~ cauchy(0, 1);
 
-  // tau ~ cauchy(0, 3);
+  tau ~ cauchy(0, 100);
 }
 generated quantities {
   real slope = slope_std / sd_x;

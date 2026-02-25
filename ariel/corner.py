@@ -297,13 +297,13 @@ if __name__ == '__main__':
             # "MOCK_n10000_base_?.csv",
             # "MOCK_n10000_max0.5_base_?.csv",
             # "MOCK_n10000_min0.5_base_?.csv",
-            "MOCK_n10000_normal_?.csv",
+            "MOCK_normal_?.csv",
         ]
         # infiles = [
         #     "DESI_base_?.csv",
         #     "DESI_normal_?.csv",
         # ]
-        outfile = "MOCK_n10000.png"
+        outfile = "MOCK_normal.png"
         # outfile = "DESI_base_vs_normal.png"
 
         truth = {
