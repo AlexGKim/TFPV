@@ -683,6 +683,127 @@ P(S_i=1\mid\theta)
 \end{aligned}
 \end{equation}
 
+\subsubsection{Top-Hat Model for $y_{\mathrm{TF},i}$}
+For the uniform prior
+\[
+y_{\mathrm{TF}}\sim \mathrm{Uniform}(y_{\min},y_{\max}),
+\qquad
+p(y_{\mathrm{TF}})=\frac{1}{y_{\max}-y_{\min}},
+\]
+the selection probability is
+\begin{align}
+P(S_i=1\mid\theta)
+&=\frac{1}{y_{\max}-y_{\min}}
+\int_{y_{\min}}^{y_{\max}} dy_{\mathrm{TF}}\;
+I(y_{\mathrm{TF}}),
+\\[3pt]
+I(y_{\mathrm{TF}})
+&\equiv
+\Big(
+\big[\Phi_2(-\alpha_1,\beta_{\max};-\rho)-\Phi_2(-\alpha_2,\beta_{\max};-\rho)\big]
+-
+\big[\Phi_2(-\alpha_1,\beta_{\min};-\rho)-\Phi_2(-\alpha_2,\beta_{\min};-\rho)\big]
+\Big),
+\end{align}
+with $\alpha_1,\alpha_2,\rho$ as defined above and
+\[
+\beta_{\max}=\frac{\hat y_{\max}-y_{\mathrm{TF}}}{\sigma_{2,i}},
+\qquad
+\beta_{\min}=\frac{\hat y_{\min}-y_{\mathrm{TF}}}{\sigma_{2,i}}.
+\]
+
+As a function of $y_{\mathrm{TF}}$, the integrand $I(y_{\mathrm{TF}})$ is typically close to a top-hat:
+it rises from $\approx 0$ to $\approx 1$ across a narrow transition region around
+$y_{\mathrm{TF}}\approx \hat y_{\min}$ (where $\beta_{\min}\approx 0$), and falls back from $\approx 1$
+to $\approx 0$ around $y_{\mathrm{TF}}\approx \hat y_{\max}$ (where $\beta_{\max}\approx 0$).
+For numerical integration it is therefore useful to concentrate quadrature points near \emph{both} edges.
+
+A convenient approach is to split the integral and apply an asinh--sinh
+reparameterization around each transition. Choose a split point $y_\star$ between the edges, e.g.
+\[
+y_\star \equiv \mathrm{clip}\!\left(\frac{\hat y_{\min}+\hat y_{\max}}{2},\,y_{\min},\,y_{\max}\right),
+\qquad
+\int_{y_{\min}}^{y_{\max}} = \int_{y_{\min}}^{y_\star}+\int_{y_\star}^{y_{\max}}.
+\]
+
+\paragraph{Lower-edge reparameterization (near $\hat y_{\min}$).}
+Define
+\[
+t_- \equiv \frac{y_{\mathrm{TF}}-\hat y_{\min}}{\sigma_{2,i}},
+\qquad\Longleftrightarrow\qquad
+y_{\mathrm{TF}}=\hat y_{\min}+\sigma_{2,i}\,t_-,
+\qquad
+dy_{\mathrm{TF}}=\sigma_{2,i}\,dt_-,
+\]
+and then
+\[
+t_-=\sinh u_-,
+\qquad
+dt_-=\cosh u_-\,du_-,
+\]
+so
+\[
+y_{\mathrm{TF}}(u_-)=\hat y_{\min}+\sigma_{2,i}\sinh u_-,
+\qquad
+dy_{\mathrm{TF}}=\sigma_{2,i}\cosh u_-\,du_-.
+\]
+The corresponding bounds are
+\[
+u_-^{\min}=\operatorname{asinh}\!\left(\frac{y_{\min}-\hat y_{\min}}{\sigma_{2,i}}\right),
+\qquad
+u_-^{\star}=\operatorname{asinh}\!\left(\frac{y_{\star}-\hat y_{\min}}{\sigma_{2,i}}\right),
+\]
+and therefore
+\[
+\int_{y_{\min}}^{y_\star} I(y_{\mathrm{TF}})\,dy_{\mathrm{TF}}
+=
+\sigma_{2,i}\int_{u_-^{\min}}^{u_-^{\star}}
+I\!\Big(\hat y_{\min}+\sigma_{2,i}\sinh u_-\Big)\,\cosh u_-\,du_-.
+\]
+
+\paragraph{Upper-edge reparameterization (near $\hat y_{\max}$).}
+Define
+\[
+t_+ \equiv \frac{\hat y_{\max}-y_{\mathrm{TF}}}{\sigma_{2,i}},
+\qquad\Longleftrightarrow\qquad
+y_{\mathrm{TF}}=\hat y_{\max}-\sigma_{2,i}\,t_+,
+\qquad
+dy_{\mathrm{TF}}=-\sigma_{2,i}\,dt_+,
+\]
+and again set $t_+=\sinh u_+$, so that
+\[
+y_{\mathrm{TF}}(u_+)=\hat y_{\max}-\sigma_{2,i}\sinh u_+,
+\qquad
+dy_{\mathrm{TF}}=-\sigma_{2,i}\cosh u_+\,du_+.
+\]
+Using the orientation change to keep increasing limits, one convenient form is
+\[
+\int_{y_\star}^{y_{\max}} I(y_{\mathrm{TF}})\,dy_{\mathrm{TF}}
+=
+\sigma_{2,i}\int_{u_+^{\max}}^{u_+^{\star}}
+I\!\Big(\hat y_{\max}-\sigma_{2,i}\sinh u_+\Big)\,\cosh u_+\,du_+,
+\]
+with
+\[
+u_+^{\star}=\operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{\star}}{\sigma_{2,i}}\right),
+\qquad
+u_+^{\max}=\operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{\max}}{\sigma_{2,i}}\right).
+\]
+
+\paragraph{Quadrature-friendly expression.}
+Putting the two pieces together,
+\begin{equation}
+P(S_i=1\mid\theta)
+=
+\frac{\sigma_{2,i}}{y_{\max}-y_{\min}}
+\left[
+\int_{u_-^{\min}}^{u_-^{\star}}
+I\!\Big(\hat y_{\min}+\sigma_{2,i}\sinh u_-\Big)\,\cosh u_-\,du_-
++
+\int_{u_+^{\max}}^{u_+^{\star}}
+I\!\Big(\hat y_{\max}-\sigma_{2,i}\sinh u_+\Big)\,\cosh u_+\,du_+
+\right].
+\end{equation}
 The solutions for the top-hat and normal distributions are as before, with
 the subtraction of the $\hat y_{\min}$-terms from the $\hat y_{\max}$-terms.  
 
