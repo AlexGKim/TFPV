@@ -610,7 +610,81 @@ P\bigl(\hat y\le \hat y_{\max},\ 0\le \hat u\le \bar c_2-\bar c_1\bigr)\\
 \end{align}
 where $\Phi_2(\cdot,\cdot;\rho)$ is the standard bivariate normal CDF with correlation $\rho$.
 
+\subsubsection{Selection domain: lower and upper limits in $\hat{y}$ and a two-sided parallel half-plane cut}
 
+To handle potential catastrophic outliers on both sides of the TF relation while enforcing a finite observed range in $\hat y$, we construct a sample by imposing (i) \emph{lower and upper limits} on the measured value $\hat y$ and (ii) a \emph{two-sided parallel half-plane cut} in the measured $(\hat x,\hat y)$-plane. The selection domain is
+\begin{equation}
+\mathcal S_i:\qquad
+\max\!\big\{\hat y_{\min},\;\bar{s}\,\hat x_i+\bar{c}_1\big\}
+\;\le\;
+\hat y_i
+\;\le\;
+\min\!\big\{\hat y_{\max},\;\bar{s}\,\hat x_i+\bar{c}_2\big\}.
+\end{equation}
+
+In the sheared coordinates $\hat u\equiv\hat y-\bar{s}\,\hat x-\bar{c}_1$, the lower oblique cut gives $\hat u\ge 0$ as before, while the upper oblique cut $\hat y\le\bar{s}\,\hat x+\bar{c}_2$ becomes the constant bound
+\begin{equation}
+\hat u \;\le\; \bar{c}_2-\bar{c}_1.
+\end{equation}
+The $\hat y$-cuts remain axis-aligned, so the selection region can be written as
+\begin{equation}
+\mathcal S_i=\bigl\{(\hat u,\hat y):\;
+0\le\hat u\le\bar{c}_2-\bar{c}_1,\quad
+\hat y_{\min}\le \hat y \le \hat y_{\max}\bigr\}.
+\end{equation}
+
+Because both $\hat u$ and $\hat y$ are constrained to finite intervals, the selection probability can be expressed by inclusion--exclusion as a difference of four quadrant integrals:
+\begin{equation}
+\begin{aligned}
+&P\bigl(0\le\hat u\le\bar{c}_2-\bar{c}_1,\;\hat y_{\min}\le \hat y\le \hat y_{\max}\bigr)\\
+&\quad=
+P(\hat u\ge 0,\;\hat y\le \hat y_{\max})
+-
+P(\hat u\ge \bar{c}_2-\bar{c}_1,\;\hat y\le \hat y_{\max})
+-
+P(\hat u\ge 0,\;\hat y\le \hat y_{\min})
++
+P(\hat u\ge \bar{c}_2-\bar{c}_1,\;\hat y\le \hat y_{\min}).
+\end{aligned}
+\end{equation}
+Each term is a bivariate normal CDF of the same form as in the one-sided $\hat y$-cut case.
+
+Define
+\begin{equation}
+\rho \;=\; \frac{\sigma_{2,i}}{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
+\end{equation}
+\begin{equation}
+\alpha_1 \;=\;
+\frac{\bar{c}_1-\!\left(y_{\mathrm{TF},i}
+  -\bar{s}\,\dfrac{y_{\mathrm{TF},i}-c}{s}\right)}
+{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
+\qquad
+\alpha_2 \;=\;
+\frac{\bar{c}_2-\!\left(y_{\mathrm{TF},i}
+  -\bar{s}\,\dfrac{y_{\mathrm{TF},i}-c}{s}\right)}
+{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
+\end{equation}
+and the standardized $\hat y$-bounds
+\begin{equation}
+\beta_{\max} \;=\; \frac{\hat y_{\max}-y_{\mathrm{TF},i}}{\sigma_{2,i}},
+\qquad
+\beta_{\min} \;=\; \frac{\hat y_{\min}-y_{\mathrm{TF},i}}{\sigma_{2,i}}.
+\end{equation}
+Then the selection probability is
+\begin{equation}
+\begin{aligned}
+P(S_i=1\mid\theta)
+&=\int dy_{\mathrm{TF}}\;p(y_{\mathrm{TF}})\;
+\Big(
+\big[\Phi_2(-\alpha_1,\beta_{\max};-\rho)-\Phi_2(-\alpha_2,\beta_{\max};-\rho)\big]\\
+&\qquad\qquad\qquad\qquad-
+\big[\Phi_2(-\alpha_1,\beta_{\min};-\rho)-\Phi_2(-\alpha_2,\beta_{\min};-\rho)\big]
+\Big).
+\end{aligned}
+\end{equation}
+
+The solutions for the top-hat and normal distributions are as before, with
+the subtraction of the $\hat y_{\min}$-terms from the $\hat y_{\max}$-terms.  
 
 \subsection{Priors}
 Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:

@@ -294,15 +294,16 @@ if __name__ == '__main__':
         # Hard-coded configuration — edit these variables as needed.
         # ------------------------------------------------------------------
         infiles = [
-            "MOCK_n10000_base_?.csv",
-            "MOCK_n10000_pm0.5_base_?.csv",
-            "MOCK_n10000_pm1_base_?.csv",
+            # "MOCK_n10000_base_?.csv",
+            # "MOCK_n10000_max0.5_base_?.csv",
+            # "MOCK_n10000_min0.5_base_?.csv",
+            "MOCK_n10000_normal_?.csv",
         ]
         # infiles = [
         #     "DESI_base_?.csv",
         #     "DESI_normal_?.csv",
         # ]
-        outfile = "MOCK_n10000_pm.png"
+        outfile = "MOCK_n10000.png"
         # outfile = "DESI_base_vs_normal.png"
 
         truth = {
