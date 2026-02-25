@@ -3,27 +3,15 @@
 Create corner plots from Stan MCMC output files using ChainConsumer.
 
 Reads one or more sets of Stan CSV output files (matched by glob patterns) and
-produces a corner plot of the key parameters: slope, intercept, sigma_int_x,
-sigma_int_y (and optionally theta_int).
+produces a corner plot of selected parameters, automatically skipping any
+parameters that are not present in the CSV output.
 
 Usage
 -----
 As a script (command line)::
 
-    # Single chain
     python corner.py 'DESI_base_?.csv' --output DESI_base.png
-
-    # Two chains overlaid
     python corner.py 'DESI_base_?.csv' 'MOCK_n10000_base_?.csv' --output compare.png
-
-    # Three chains with truth lines
-    python corner.py 'DESI_base_?.csv' 'DESI_normal_?.csv' 'MOCK_n10000_base_?.csv' \\
-        --output compare.png --theta-int \\
-        --truth slope=-8.0 intercept=-20.0 sigma_int_x=0.03 sigma_int_y=0.03
-
-    # Override legend names (one --name per infile, in order)
-    python corner.py 'DESI_base_?.csv' 'MOCK_n10000_base_?.csv' \\
-        --name 'DESI' --name 'Mock' --output compare.png
 
 As a module (edit the __main__ block at the bottom)::
 
@@ -43,46 +31,24 @@ from chainconsumer import Chain, ChainConsumer, Truth
 # ---------------------------------------------------------------------------
 
 def load_stan_csv(filename):
-    """
-    Load a single Stan CSV output file, skipping comment lines.
-
-    Parameters
-    ----------
-    filename : str
-        Path to the Stan CSV file.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame containing the MCMC samples.
-    """
+    """Load a single Stan CSV output file, skipping comment lines."""
     return pd.read_csv(filename, comment='#')
+
+
+def _first_existing_column(df, candidates):
+    """Return the first column name in *candidates* that exists in df.columns, else None."""
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
 
 
 def load_params(file_pattern):
     """
-    Load and combine Stan CSV files matching *file_pattern* and extract the
-    standard TF parameters.
-
-    Parameters
-    ----------
-    file_pattern : str
-        Glob pattern to match Stan output files.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame of extracted parameter samples with columns
-        ``slope``, ``intercept``, ``sigma_int_x``, ``sigma_int_y``
-        (and optionally ``theta_int``).
-
-    Raises
-    ------
-    FileNotFoundError
-        If no files match *file_pattern*.
+    Load and combine Stan CSV files matching *file_pattern* and extract a set of
+    parameters if present. Missing parameters are skipped (not an error).
     """
     files = sorted(glob.glob(file_pattern))
-
     if not files:
         raise FileNotFoundError(f"No files found matching pattern: {file_pattern}")
 
@@ -96,15 +62,38 @@ def load_params(file_pattern):
     combined = pd.concat(all_dfs, ignore_index=True)
     print(f"  → {len(combined)} total samples")
 
-    params = {
-        'slope':       combined['slope'].values,
-        'intercept':   combined['intercept.1'].values,
-        'sigma_int_x': combined['sigma_int_x'].values,
-        'sigma_int_y': combined['sigma_int_y'].values,
-        'mu_{y_TF}': combined['mu_y_TF'].values,
-        'tau': combined['tau'].values,
+    # Desired plot parameters (key = label used in corner plot)
+    # Values are candidate CSV column names to search for.
+    wanted = {
+        "slope":        ["slope"],
+        "intercept":    ["intercept.1", "intercept[1]", "intercept"],  # common Stan CSV variants
+        "sigma_int_x":  ["sigma_int_x"],
+        "sigma_int_y":  ["sigma_int_y"],
+        "mu_{y_TF}":    ["mu_y_TF"],
+        "tau":          ["tau"],
+        # Add more here if you like; they will be included only if present.
+        # "theta_int":  ["theta_int"],
     }
 
+    params = {}
+    missing = []
+    found_cols = {}
+
+    for label, candidates in wanted.items():
+        col = _first_existing_column(combined, candidates)
+        if col is None:
+            missing.append(label)
+            continue
+        found_cols[label] = col
+        params[label] = combined[col].to_numpy()
+
+    if missing:
+        print("  Skipping missing parameter(s): " + ", ".join(missing))
+    if not params:
+        raise ValueError(
+            f"No requested parameters were found in files matching pattern: {file_pattern}\n"
+            f"Available columns include (first file): {list(all_dfs[0].columns)[:30]} ..."
+        )
 
     return pd.DataFrame(params)
 
@@ -114,8 +103,7 @@ def _print_stats(df, label):
     print(f"\nParameter statistics ({label}):")
     for col in df.columns:
         v = df[col].values
-        print(f"  {col}:  mean={np.mean(v):.6f}  std={np.std(v):.6f}  "
-              f"median={np.median(v):.6f}")
+        print(f"  {col}:  mean={np.mean(v):.6f}  std={np.std(v):.6f}  median={np.median(v):.6f}")
 
 
 # ---------------------------------------------------------------------------
@@ -128,25 +116,10 @@ def create_corner_plot(file_patterns, output_file='corner_plot.png',
     """
     Create a corner plot from one or more sets of Stan output files.
 
-    Parameters
-    ----------
-    file_patterns : str or list of str
-        Glob pattern(s) for the Stan CSV files.  A single string is treated as
-        a list of one element.
-    output_file : str
-        Path to save the output PNG (default: ``'corner_plot.png'``).
-    truth_values : dict, optional
-        Mapping of parameter name → true value, drawn as reference lines.
-        Example: ``{"slope": -8.0, "intercept": -20.0}``.
-    names : list of str, optional
-        Legend labels, one per entry in *file_patterns*.  Any missing entries
-        default to the corresponding pattern with ``.csv`` stripped.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
+    If multiple chains are overlaid, only the *intersection* of parameters
+    available in all chains is plotted (so ChainConsumer always gets consistent
+    columns).
     """
-    # Normalise to a list
     if isinstance(file_patterns, str):
         file_patterns = [file_patterns]
 
@@ -154,7 +127,6 @@ def create_corner_plot(file_patterns, output_file='corner_plot.png',
     if names is None:
         names = [None] * len(file_patterns)
     else:
-        # Pad with None if fewer names than patterns were supplied
         names = list(names) + [None] * (len(file_patterns) - len(names))
 
     resolved_names = [
@@ -162,30 +134,53 @@ def create_corner_plot(file_patterns, output_file='corner_plot.png',
         for pat, n in zip(file_patterns, names)
     ]
 
-    c = ChainConsumer()
-
-    first_df = None
+    # Load all chains first (so we can take common columns)
+    dfs = []
     for i, (pat, name) in enumerate(zip(file_patterns, resolved_names), start=1):
         print(f"\n=== Chain {i}: {pat} ===")
         df = load_params(pat)
         _print_stats(df, name)
-        c.add_chain(Chain(samples=df, name=name))
-        if first_df is None:
-            first_df = df
+        dfs.append(df)
 
-    # --- truth lines ---
+    # Compute common columns across all chains (required for an overlay plot)
+    common = set(dfs[0].columns)
+    for df in dfs[1:]:
+        common &= set(df.columns)
+
+    if not common:
+        raise ValueError(
+            "No common parameters across the provided chains after checking for existence.\n"
+            "Tip: run each pattern alone to see what parameters it contains."
+        )
+
+    # Keep a nice, stable plotting order
+    preferred_order = ["slope", "intercept", "sigma_int_x", "sigma_int_y", "mu_{y_TF}", "tau"]
+    ordered = [p for p in preferred_order if p in common] + sorted(common - set(preferred_order))
+
+    # Reduce each df to the common ordered set
+    dfs = [df[ordered].copy() for df in dfs]
+
+    # Filter truth values to plotted params only
+    if truth_values is not None:
+        truth_values = {k: v for k, v in truth_values.items() if k in ordered}
+        if not truth_values:
+            truth_values = None
+
+    c = ChainConsumer()
+    for df, name in zip(dfs, resolved_names):
+        c.add_chain(Chain(samples=df, name=name))
+
     if truth_values is not None:
         c.add_truth(Truth(location=truth_values))
 
-    # --- plot ---
     fig = c.plotter.plot()
     fig.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"\nCorner plot saved to: {output_file}")
 
-    # --- summary (based on first chain's columns) ---
-    print("\nSummary statistics:")
+    # Summary (for the plotted params)
+    print("\nSummary statistics (plotted parameters):")
     summary = c.analysis.get_summary()
-    for param in first_df.columns:
+    for param in ordered:
         if param in summary:
             print(f"\n{param}:")
             for key, value in summary[param].items():
@@ -199,17 +194,7 @@ def create_corner_plot(file_patterns, output_file='corner_plot.png',
 # ---------------------------------------------------------------------------
 
 def _parse_truth(items):
-    """
-    Parse a list of ``key=value`` strings into a float-valued dict.
-
-    Parameters
-    ----------
-    items : list of str or None
-
-    Returns
-    -------
-    dict or None
-    """
+    """Parse a list of ``key=value`` strings into a float-valued dict."""
     if not items:
         return None
     result = {}
@@ -230,8 +215,7 @@ def _build_parser():
         nargs='+',
         metavar='PATTERN',
         help="One or more glob patterns for Stan CSV files "
-             "(quote each pattern to prevent shell expansion, "
-             "e.g. 'DESI_base_?.csv' 'MOCK_n10000_base_?.csv').",
+             "(quote each pattern to prevent shell expansion).",
     )
     p.add_argument(
         '--output', '-o',
@@ -245,8 +229,7 @@ def _build_parser():
         action='append',
         default=None,
         metavar='LABEL',
-        help="Legend label for a chain (repeat once per infile, in order). "
-             "Defaults to the pattern with .csv stripped.",
+        help="Legend label for a chain (repeat once per infile, in order).",
     )
     p.add_argument(
         '--truth',
@@ -266,10 +249,6 @@ def _build_parser():
 if __name__ == '__main__':
     import sys
 
-    # ------------------------------------------------------------------
-    # If arguments are passed on the command line, use the CLI.
-    # Otherwise fall through to the hard-coded __main__ configuration.
-    # ------------------------------------------------------------------
     if len(sys.argv) > 1:
         args = _build_parser().parse_args()
         create_corner_plot(
@@ -279,21 +258,12 @@ if __name__ == '__main__':
             names=args.names,
         )
     else:
-        # ------------------------------------------------------------------
-        # Hard-coded configuration — edit these variables as needed.
-        # ------------------------------------------------------------------
         infiles = [
-            # "MOCK_n10000_base_?.csv",
-            # "MOCK_n10000_max0.5_base_?.csv",
-            # "MOCK_n10000_min0.5_base_?.csv",
-            "MOCK_normal_?.csv",
+            # "MOCK_base_?.csv",
+            # "MOCK_normal_?.csv",
+            "DESI_normal_3cut_?.csv",
         ]
-        # infiles = [
-        #     "DESI_base_?.csv",
-        #     "DESI_normal_?.csv",
-        # ]
-        outfile = "MOCK_normal.png"
-        # outfile = "DESI_base_vs_normal.png"
+        outfile = "DESI_normal_3cut.png"
 
         truth = {
             "slope":       -8.0,

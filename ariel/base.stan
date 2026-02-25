@@ -1,5 +1,5 @@
-// ./base sample num_samples=500 num_chains=4 data file=MOCK_n10000_input.json init=MOCK_n10000_init.json output file=MOCK_n10000_base.csv
-// ./base sample num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_base.csv
+// ./base sample num_warmup=500 num_samples=500 num_chains=4 data file=MOCK_n10000_input.json init=MOCK_n10000_init.json output file=MOCK_base.csv
+// ./base sample num_warmup=500 num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_base.csv
 // ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../cmdstan/bin/diagnose output_base*.csv
@@ -466,10 +466,31 @@ functions {
     return out;
   }
 
-  real integrate_binormal_strip_sinh_gl_2(
+// Integrand for BOTH y-cuts:
+// I(y_TF) = [Phi2(-a1,beta_max;-rho)-Phi2(-a2,beta_max;-rho)]
+//         - [Phi2(-a1,beta_min;-rho)-Phi2(-a2,beta_min;-rho)]
+vector strip_integrand_two_ycuts(vector y_TF,
+                                 real s,
+                                 real c,
+                                 real bar_c1,
+                                 real bar_c2,
+                                 real yhat_min,
+                                 real yhat_max,
+                                 real sigma1_i,
+                                 real sigma2_i,
+                                 real bar_s) {
+  return strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_max, sigma1_i, sigma2_i, bar_s)
+       - strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_min, sigma1_i, sigma2_i, bar_s);
+}
+
+
+// ∫_{y_min}^{y_max} I(y_TF) dy_TF,
+// split into two pieces and use sinh transforms around y_TF = yhat_min and y_TF = yhat_max.
+real integrate_binormal_strip_sinh2_gl(
          real y_min,
          real y_max,
-         real haty_max, real haty_min,
+         real yhat_min,
+         real yhat_max,
          real s,
          real c,
          real s_plane,
@@ -480,149 +501,66 @@ functions {
          vector gl_x,
          vector gl_w
        ) {
-    int K = size(gl_x);
-    
-    // Basic checks (optional but helpful)
-    if (size(gl_w) != K) 
-      reject("integrate_binormal_strip_sinh_gl: gl_x and gl_w must have same length");
-    if (sigma2 <= 0) 
-      reject("integrate_binormal_strip_sinh_gl: sigma2 must be > 0");
-    if (y_max <= y_min) 
-      reject("integrate_binormal_strip_sinh_gl: require y_max > y_min");
-    
-    // Precompute constants for this i
-    real D = sqrt(square(sigma2) + square(s_plane * sigma1));
-    real rho = sigma2 / D;
-    
-    // Clamp rho away from +/-1 for numerical safety in the CDF implementation
-    rho = fmin(1 - 1e-12, fmax(-1 + 1e-12, rho));
-    
-    // sinh-transform bounds:
-    // u = asinh( (haty_max - y_TF)/sigma2 )
-    real u_min = asinh((haty_max - y_max) / sigma2);
-    real u_max = asinh((haty_max - y_min) / sigma2);
-    
-    // Map Gauss-Legendre nodes from [-1,1] -> [u_min,u_max]
-    real mid = 0.5 * (u_min + u_max);
-    real half = 0.5 * (u_max - u_min);
-    
-    real inv_s = 1.0 / s;
-    // real acc = 0;
-    
-    // for (k in 1 : K) {
-    //   real u = mid + half * gl_x[k];
-    
-    //   // t = beta = (haty_max - y_TF)/sigma2
-    //   real t = sinh(u);
-    
-    //   // Back-transform to y_TF
-    //   real y_tf = haty_max - sigma2 * t;
-    
-    //   // m(y_tf) = y_tf - s_plane * (y_tf - c)/s
-    //   real m = y_tf - s_plane * (y_tf - c) * inv_s;
-    
-    //   // z1 = -alpha_k = (m - c_k)/D
-    //   real z1_1 = (m - c1_plane) / D;
-    //   real z1_2 = (m - c2_plane) / D;
-    
-    //   // z2 = beta = t
-    //   real z2 = t;
-    
-    //   // integrand in u-space includes Jacobian sigma2*cosh(u)
-    //   real diff = binormal_strip_cdf((z1_1, z2) | -rho)
-    //               - binormal_strip_cdf((z1_2, z2) | -rho);
-    //   acc += gl_w[k] * diff * cosh(u);
-    // }
-    
-    // for (k in 1 : K) {
-    
-    vector[K] u = mid + half * gl_x;
-    
-    // t = beta = (haty_max - y_TF)/sigma2
-    vector[K] t = sinh(u);
-    
-    // Back-transform to y_TF
-    vector[K] y_tf = haty_max - sigma2 * t;
-    
-    // // m(y_tf) = y_tf - s_plane * (y_tf - c)/s
-    // vector[K] m = y_tf - s_plane * (y_tf - c) * inv_s;
-    
-    // // z1 = -alpha_k = (m - c_k)/D
-    // vector[K] z1_1 = (m - c1_plane) / D;
-    // vector[K] z1_2 = (m - c2_plane) / D;
-    
-    // // z2 = beta = t
-    // vector[K] z2 = t;
-    
-    // integrand in u-space includes Jacobian sigma2*cosh(u)
-    vector[K] diff = strip_integrand_2(y_tf, s, c, c1_plane, c2_plane,
-                                     haty_max, haty_min, sigma1, sigma2, s_plane);
-    // acc += gl_w[k] * diff * cosh(u);
-    real acc = sum(gl_w .* diff .* cosh(u));
-    // Integral over y_TF:
-    // ∫ f(y_TF) dy_TF = sigma2 * ∫ f(haty_max - sigma2*sinh u) cosh(u) du
-    return sigma2 * half * acc;
+  int K = size(gl_x);
+
+  if (size(gl_w) != K)
+    reject("integrate_binormal_strip_sinh2_gl: gl_x and gl_w must have same length");
+  if (sigma2 <= 0)
+    reject("integrate_binormal_strip_sinh2_gl: sigma2 must be > 0");
+  if (y_max <= y_min)
+    reject("integrate_binormal_strip_sinh2_gl: require y_max > y_min");
+  if (yhat_max <= yhat_min)
+    reject("integrate_binormal_strip_sinh2_gl: require yhat_max > yhat_min");
+
+  // Split point between the two transition regions (clipped into [y_min, y_max])
+  real y_star = fmin(y_max, fmax(y_min, 0.5 * (yhat_min + yhat_max)));
+
+  real I1 = 0.0;
+  real I2 = 0.0;
+
+  // ---- Piece 1: y_TF in [y_min, y_star], sinh-transform around yhat_min ----
+  // y_TF = yhat_min + sigma2*sinh(u)
+  // dy_TF = sigma2*cosh(u) du
+  if (y_star > y_min) {
+    real umin1 = asinh((y_min  - yhat_min) / sigma2);
+    real umax1 = asinh((y_star - yhat_min) / sigma2);
+
+    real mid1  = 0.5 * (umin1 + umax1);
+    real half1 = 0.5 * (umax1 - umin1);
+
+    vector[K] u1    = mid1 + half1 * gl_x;
+    vector[K] ytf1  = yhat_min + sigma2 * sinh(u1);
+
+    vector[K] f1 = strip_integrand_two_ycuts(ytf1, s, c, c1_plane, c2_plane,
+                                             yhat_min, yhat_max, sigma1, sigma2, s_plane);
+
+    I1 = sigma2 * half1 * sum(gl_w .* f1 .* cosh(u1));
   }
 
-  // Bracket term:
-  //   Phi2(-alpha1, beta; -rho) - Phi2(-alpha2, beta; -rho)
-  // for each y_TF in the input vector.
-  vector strip_integrand_2(vector y_TF,
-                         real s,
-                         real c,
-                         real bar_c1,
-                         real bar_c2,
-                         real yhat_max, real yhat_min,
-                         real sigma1_i,
-                         real sigma2_i,
-                         real bar_s) {
-    int N = num_elements(y_TF);
-    
-    real denom = sqrt(square(sigma2_i) + square(bar_s) * square(sigma1_i));
-    real rho = sigma2_i / denom;
-    real sqrt1mr2 = sqrt(1.0 - square(rho));
-    
-    // y_shift = y_TF - bar_s * (y_TF - c)/s = (1 - bar_s/s)*y_TF + (bar_s*c/s)
-    real k = 1.0 - bar_s / s;
-    real b = bar_s * c / s;
-    
-    vector[N] y_shift = k * y_TF + b;
-    vector[N] alpha1 = (bar_c1 - y_shift) / denom;
-    vector[N] alpha2 = (bar_c2 - y_shift) / denom;
-    
-    vector[N] z1a = -alpha1;
-    vector[N] z1b = -alpha2;
-    
-    array[2] real yhats = {yhat_max, yhat_min};
-    for (yhat in yhats) {
-    vector[N] beta = (yhat - y_TF) / sigma2_i;
+  // ---- Piece 2: y_TF in [y_star, y_max], sinh-transform around yhat_max ----
+  // y_TF = yhat_max - sigma2*sinh(u)
+  // dy_TF = -sigma2*cosh(u) du
+  // Using bounds u in [asinh((yhat_max-y_max)/sigma2), asinh((yhat_max-y_star)/sigma2)]
+  // gives the correct orientation after absorbing the minus sign.
+  if (y_max > y_star) {
+    real umin2 = asinh((yhat_max - y_max)  / sigma2);
+    real umax2 = asinh((yhat_max - y_star) / sigma2);
 
-    // delta(-alpha1,beta) - delta(-alpha2,beta), vectorized via step()
-    // step(x)=1 if x>0 else 0
-    vector[N] delta_diff;
-    for (n in 1 : N) {
-      delta_diff[n] = 0.0;
-      if (beta[n] > 0 && alpha1[n] <= 0 && alpha2[n] > 0) 
-        delta_diff[n] = -1.0;
-      else if (beta[n] < 0 && alpha1[n] < 0 && alpha2[n] >= 0) 
-        delta_diff[n] = 1.0;
-    }
-    
-    // Owen's-t arguments, vectorized
-    vector[N] a_z1a = (beta ./ z1a + rho) / sqrt1mr2;
-    vector[N] a_z1b = (beta ./ z1b + rho) / sqrt1mr2;
-    vector[N] a_b1 = (z1a ./ beta + rho) / sqrt1mr2;
-    vector[N] a_b2 = (z1b ./ beta + rho) / sqrt1mr2;
-    
-    // Assemble bracket
-    vector[N] out = 0.5 * (Phi_approx(z1a) - Phi_approx(z1b) - delta_diff)
-                    - (owens_t(z1a, a_z1a) - owens_t(z1b, a_z1b))
-                    - (owens_t(beta, a_b1) - owens_t(beta, a_b2));
-    
+    real mid2  = 0.5 * (umin2 + umax2);
+    real half2 = 0.5 * (umax2 - umin2);
+
+    vector[K] u2    = mid2 + half2 * gl_x;
+    vector[K] ytf2  = yhat_max - sigma2 * sinh(u2);
+
+    vector[K] f2 = strip_integrand_two_ycuts(ytf2, s, c, c1_plane, c2_plane,
+                                             yhat_min, yhat_max, sigma1, sigma2, s_plane);
+
+    I2 = sigma2 * half2 * sum(gl_w .* f2 .* cosh(u2));
   }
-  
-    return out;
-  }
+
+  return I1 + I2;
+}
+
 }
 data {
   // Number of redshift bins
@@ -644,6 +582,7 @@ data {
   vector<lower=0>[N_total] sigma_x;
   
   // Selection function parameter
+  real haty_min;
   real haty_max;
   real slope_plane;
   real intercept_plane;
@@ -811,7 +750,7 @@ model {
         //                    intercept_plane2_std, sqrt(sigmasq1_std[1]),
         //                    sqrt(sigmasq2[1]), 32));
         target += log(
-                      integrate_binormal_strip_sinh_gl(y_min, y_max,
+                      integrate_binormal_strip_sinh2_gl(y_min, y_max, haty_min,
                         haty_max, slope_std, intercept_std[bin_idx],
                         slope_plane_std, intercept_plane_std,
                         intercept_plane2_std, sqrt(sigmasq1_std[1]),
@@ -824,7 +763,7 @@ model {
       //            intercept_plane2_std, sqrt(sigmasq1_std[1]),
       //            sqrt(sigmasq2[1]), 128));
       //                 target += - N_total * log(
-      // target += - N_total *log( integrate_binormal_strip_sinh_gl(y_min, y_max,
+      // target += - N_total *log( integrate_binormal_strip_sinh2_gl(y_min, y_max, haty_min,
       //    haty_max, slope_std, intercept_std[bin_idx],
       //    slope_plane_std, intercept_plane_std,
       //    intercept_plane2_std, sqrt(sigmasq1_std[1]),

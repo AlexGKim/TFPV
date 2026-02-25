@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 
 
-def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max=-16,
+def process_desi_tf_data(fits_file, data_output_file, init_output_file,
+                         haty_max=-16, haty_min=-1.0e9,
                          plane_cut=False, slope_plane=None, intercept_plane=None, intercept_plane2=None,
                          n_objects=None, random_seed=None):
     """
@@ -28,6 +29,8 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
         Output JSON file for Stan initial conditions
     haty_max : float, optional
         Upper limit on absolute magnitude (default: -16)
+    haty_min : float, optional
+        Lower limit on absolute magnitude (default: very negative; effectively no lower cut)
     plane_cut : bool, optional
         Whether to apply half-plane cut(s) (default: False)
     slope_plane : float, optional
@@ -69,68 +72,66 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
     print(f"Reading FITS file: {fits_file}")
     with fits.open(fits_file) as hdul:
         data = hdul[1].data
-        
+
         # Extract velocity and magnitude data
         V_0p4R26 = data['V_0p4R26']
         V_0p4R26_ERR = data['V_0p4R26_ERR']
         R_ABSMAG_SB26 = data['R_ABSMAG_SB26']
         R_ABSMAG_SB26_ERR = data['R_ABSMAG_SB26_ERR']
-    
+
     # Convert velocities to log velocities
-    # Assuming V0 = 100 km/s as a reference (adjust if needed)
-    V0 = 100.0
-    
+    V0 = 100.0  # km/s reference
+
     # Filter out invalid data (NaN, inf, non-positive velocities)
     valid_mask = (
-        np.isfinite(V_0p4R26) & 
-        np.isfinite(V_0p4R26_ERR) & 
-        np.isfinite(R_ABSMAG_SB26) & 
+        np.isfinite(V_0p4R26) &
+        np.isfinite(V_0p4R26_ERR) &
+        np.isfinite(R_ABSMAG_SB26) &
         np.isfinite(R_ABSMAG_SB26_ERR) &
         (V_0p4R26 > 0) &
         (V_0p4R26_ERR > 0)
     )
-    
+
+    total_rows = len(data)
+
     V_0p4R26 = V_0p4R26[valid_mask]
     V_0p4R26_ERR = V_0p4R26_ERR[valid_mask]
     R_ABSMAG_SB26 = R_ABSMAG_SB26[valid_mask]
     R_ABSMAG_SB26_ERR = R_ABSMAG_SB26_ERR[valid_mask]
-    
-    total_rows = len(data)
+
     valid_rows = len(V_0p4R26)
-    
+
     # Convert to log velocities: x = log(V / V0)
     x_all = np.log10(V_0p4R26 / V0)
-    
+
     # Propagate uncertainties: sigma_x = sigma_V / (V * ln(10))
     sigma_x_all = V_0p4R26_ERR / (V_0p4R26 * np.log(10))
-    
+
     # Magnitude data
     y_all = R_ABSMAG_SB26
     sigma_y_all = R_ABSMAG_SB26_ERR
-    
+
     # ============================================================================
-    # SECTION 2: APPLY SELECTION CUTS
+    # SECTION 2: APPLY SELECTION CUTS (NOW INCLUDES haty_min)
     # ============================================================================
-    x_data = []
-    y_data = []
-    sigma_x_data = []
-    sigma_y_data = []
-    
+    x_data, y_data, sigma_x_data, sigma_y_data = [], [], [], []
+
     # Track filtering statistics
     y_filtered_rows = 0
     plane_pass_rows = 0
-    
+
     for i in range(len(x_all)):
         x_val = x_all[i]
         y_val = y_all[i]
-        
-        # Apply y upper limit (note: magnitudes: "brighter" is more negative)
-        if y_val < haty_max:
+
+        # Apply BOTH y limits (note: magnitudes: "brighter" is more negative)
+        if (y_val < haty_max) and (y_val > haty_min):
             y_filtered_rows += 1
-            
+
             if plane_cut:
-                lower_bound = slope_plane * x_val + intercept_plane
-                
+                lower_bound_oblique = slope_plane * x_val + intercept_plane
+                lower_bound = max(haty_min, lower_bound_oblique)
+
                 if not two_sided:
                     # One-sided: lower_bound <= y
                     if lower_bound <= y_val:
@@ -140,10 +141,10 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
                         sigma_y_data.append(sigma_y_all[i])
                         plane_pass_rows += 1
                 else:
-                    # Two-sided: lower_bound <= y <= min(haty_max, upper_bound)
+                    # Two-sided: lower_bound <= y <= min(haty_max, upper_bound_oblique)
                     upper_bound_oblique = slope_plane * x_val + intercept_plane2
                     upper_bound = min(haty_max, upper_bound_oblique)
-                    
+
                     if (lower_bound <= y_val) and (y_val <= upper_bound):
                         x_data.append(x_val)
                         y_data.append(y_val)
@@ -151,12 +152,12 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
                         sigma_y_data.append(sigma_y_all[i])
                         plane_pass_rows += 1
             else:
-                # No plane cut
+                # No plane cut (just the y-range cut)
                 x_data.append(x_val)
                 y_data.append(y_val)
                 sigma_x_data.append(sigma_x_all[i])
                 sigma_y_data.append(sigma_y_all[i])
-    
+
     # Convert to numpy arrays for calculations
     x = np.array(x_data)
     y = np.array(y_data)
@@ -174,19 +175,21 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
         y = y[idx]
         sigma_x = sigma_x[idx]
         sigma_y = sigma_y[idx]
-        x_data = x.tolist()
-        y_data = y.tolist()
-        sigma_x_data = sigma_x.tolist()
-        sigma_y_data = sigma_y.tolist()
         print(f"  Subsampled from {N_after_cuts} to {n_objects} objects (random_seed={random_seed})")
 
+    # Convert back to lists for JSON serialization
+    x_data = x.tolist()
+    y_data = y.tolist()
+    sigma_x_data = sigma_x.tolist()
+    sigma_y_data = sigma_y.tolist()
+
     N_total = len(x)
-    
+
     # ============================================================================
     # SECTION 3: CREATE STAN DATA DICTIONARY
     # ============================================================================
     N_bins = 1
-    
+
     # Calculate y_min and y_max based on selected sample
     if N_total > 0:
         y_min_data = float(np.min(y) - 0.5)
@@ -194,9 +197,9 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
     else:
         y_min_data = -23.0
         y_max_data = -15.0
-    
+
     mu_y_TF = float(np.mean(y)) if N_total > 0 else 0.0
-    tau = 1.5 *float(np.std(y, ddof=1)) if N_total > 1 else 1.0
+    tau = 1.5 * float(np.std(y, ddof=1)) if N_total > 1 else 1.0
 
     stan_data = {
         'N_bins': N_bins,
@@ -205,45 +208,48 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
         'sigma_x': sigma_x_data,
         'y': y_data,
         'sigma_y': sigma_y_data,
-        'haty_max': haty_max,
+        'haty_max': float(haty_max),
+        'haty_min': float(haty_min),
         'y_min': y_min_data,
         'y_max': y_max_data,
         'mu_y_TF': mu_y_TF,
         'tau': tau
     }
-    
+
     if plane_cut:
-        stan_data['slope_plane'] = slope_plane
-        stan_data['intercept_plane'] = intercept_plane  # keep original name (c1)
+        stan_data['slope_plane'] = float(slope_plane)
+        stan_data['intercept_plane'] = float(intercept_plane)  # keep original name (c1)
         if two_sided:
-            stan_data['intercept_plane2'] = intercept_plane2  # new (c2)
-    
+            stan_data['intercept_plane2'] = float(intercept_plane2)  # new (c2)
+
     with open(data_output_file, 'w') as f:
         json.dump(stan_data, f, indent=2)
-    
+
     # ============================================================================
     # SECTION 4: CALCULATE STANDARDIZATION AND LINEAR REGRESSION
     # ============================================================================
     if N_total > 0:
         mean_x = np.mean(x)
         sd_x = np.std(x, ddof=1)
-        
+
         x_std = (x - mean_x) / sd_x
-        
+
         slope_std, intercept_std = np.polyfit(x_std, y, deg=1)
-        
+
         slope_orig = slope_std / sd_x
         intercept_orig = intercept_std - slope_std * mean_x / sd_x
-        
+
         intercept_std_vec = [float(intercept_std)]
     else:
         slope_std = 0.0
+        intercept_std = 0.0
         intercept_std_vec = [0.0]
         slope_orig = 0.0
         intercept_orig = 0.0
         mean_x = 0.0
         sd_x = 1.0
-    
+        x_std = np.array([])
+
     # ============================================================================
     # SECTION 5: CREATE INITIAL CONDITIONS DICTIONARY
     # ============================================================================
@@ -258,134 +264,127 @@ def process_desi_tf_data(fits_file, data_output_file, init_output_file, haty_max
         'sd_x': float(sd_x)
         # 'theta_int': np.pi/4
     }
-    
+
     with open(init_output_file, 'w') as f:
         json.dump(init_data, f, indent=2)
-    
+
     # ============================================================================
     # SECTION 6: PRINT SUMMARY STATISTICS
     # ============================================================================
     print(f"\nData conversion complete!")
     print(f"Stan data output file: {data_output_file}")
     print(f"Initial conditions output file: {init_output_file}")
-    
+
     print(f"\nFiltering:")
     print(f"  Total rows in FITS: {total_rows}")
     print(f"  Valid rows (finite, positive velocities): {valid_rows}")
-    print(f"  Rows with y < {haty_max}: {y_filtered_rows}")
-    
+    print(f"  Rows with {haty_min} < y < {haty_max}: {y_filtered_rows}")
+
     if plane_cut:
         if not two_sided:
-            print(f"  Rows passing plane cut (bar_s * x + c1 <= y): {plane_pass_rows}")
+            print(f"  Rows passing plane cut (max(haty_min, bar_s*x+c1) <= y): {plane_pass_rows}")
             print(f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}")
             print(f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}")
         else:
-            print(f"  Rows passing two-sided plane cut (c1 <= y - bar_s*x <= c2): {plane_pass_rows}")
+            print(f"  Rows passing two-sided plane cut: {plane_pass_rows}")
             print(f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}")
             print(f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}, c2 = {intercept_plane2}")
-    
+
     print(f"  Rows filtered out (by y cut only): {valid_rows - y_filtered_rows}")
-    print(f"  haty_max (selection threshold): {haty_max}")
-    
+    print(f"  haty_max (selection upper threshold): {haty_max}")
+    print(f"  haty_min (selection lower threshold): {haty_min}")
+
     print(f"\nSummary:")
     print(f"  Number of redshift bins: {N_bins}")
     print(f"  Final sample size: {N_total}")
-    
+
     if N_total > 0:
         print(f"\nData ranges:")
         print(f"  x (log(V/V0)): [{np.min(x):.3f}, {np.max(x):.3f}]")
         print(f"  y (R_ABSMAG_SB26): [{np.min(y):.3f}, {np.max(y):.3f}]")
         print(f"  sigma_x: {np.mean(sigma_x):.4f} (mean), range [{np.min(sigma_x):.4f}, {np.max(sigma_x):.4f}]")
         print(f"  sigma_y: {np.mean(sigma_y):.4f} (mean), range [{np.min(sigma_y):.4f}, {np.max(sigma_y):.4f}]")
-        
+
         print(f"\nStandardization statistics:")
         print(f"  mean(x): {mean_x:.3f}")
         print(f"  sd(x): {sd_x:.3f}")
         print(f"  x_TF_std (= x_std) range: [{np.min(x_std):.3f}, {np.max(x_std):.3f}]")
-        
+
         print(f"\nLinear regression (y ~ x_TF_std):")
         print(f"  slope_std: {float(slope_std):.6f}")
         print(f"  intercept_std: {float(intercept_std):.6f}")
-        
+
         print(f"\nLinear regression (y ~ x_original):")
         print(f"  slope_orig: {slope_orig:.6f}")
         print(f"  intercept_orig: {intercept_orig:.6f}")
-        
+
         print(f"\nInitial scatter parameters:")
         print(f"  sigma_int_x: {init_data['sigma_int_x']}")
         print(f"  sigma_int_y: {init_data['sigma_int_y']}")
     else:
         print("\nWARNING: Final sample size is 0 after cuts.")
-    
+
     # Return data for plotting
     return x_all, y_all, sigma_x_all, sigma_y_all, x, y, sigma_x, sigma_y
 
 
-def plot_desi_tf_data(x_all, y_all, sigma_x_all, sigma_y_all, 
+def plot_desi_tf_data(x_all, y_all, sigma_x_all, sigma_y_all,
                       x_selected, y_selected, sigma_x_selected, sigma_y_selected,
-                      haty_max=None, slope_plane=None, intercept_plane=None, intercept_plane2=None,
+                      haty_max=None, haty_min=None,
+                      slope_plane=None, intercept_plane=None, intercept_plane2=None,
                       output_file='desi_tf_scatter_plot.png'):
     """
     Create scatter plot showing complete sample (low alpha) and selected sample (high alpha).
-    
-    Parameters
-    ----------
-    x_all, y_all, sigma_x_all, sigma_y_all : array-like
-        Complete sample data
-    x_selected, y_selected, sigma_x_selected, sigma_y_selected : array-like
-        Selected sample data after cuts
-    haty_max : float, optional
-        Upper magnitude limit
-    slope_plane, intercept_plane, intercept_plane2 : float, optional
-        Plane cut parameters
-    output_file : str
-        Output filename for plot
     """
     fig, ax = plt.subplots(figsize=(10, 8))
-    
+
     # Plot complete sample with low alpha
     ax.errorbar(x_all, y_all, xerr=sigma_x_all, yerr=sigma_y_all,
                 fmt='o', markersize=2, alpha=0.2, color='gray',
                 elinewidth=0.3, capsize=0,
                 label=f'Complete sample (N = {len(x_all)})')
-    
+
     # Plot selected sample with high alpha
     ax.errorbar(x_selected, y_selected, xerr=sigma_x_selected, yerr=sigma_y_selected,
                 fmt='o', markersize=3, alpha=0.8, color='blue',
                 elinewidth=0.5, capsize=0,
                 label=f'Selected sample (N = {len(x_selected)})')
-    
+
     if haty_max is not None:
         ax.axhline(y=haty_max, color='red', linestyle='--',
                    linewidth=2, alpha=0.8,
                    label=f'$\\hat{{y}}_{{\\rm max}}$ = {haty_max}')
-    
+    if haty_min is not None:
+        ax.axhline(y=haty_min, color='orange', linestyle='--',
+                   linewidth=2, alpha=0.8,
+                   label=f'$\\hat{{y}}_{{\\rm min}}$ = {haty_min}')
+
     # Plot one or two parallel plane-cut boundaries if present
     if slope_plane is not None and intercept_plane is not None and len(x_all) > 0:
         x_range = np.array([np.min(x_all) - 0.1, np.max(x_all) + 0.1])
-        
+
         y_plane1 = slope_plane * x_range + intercept_plane
         ax.plot(x_range, y_plane1, 'g--', linewidth=2, alpha=0.8,
                 label=f'Plane cut 1: y = {slope_plane:.1f}x + {intercept_plane:.1f}')
-        
+
         if intercept_plane2 is not None:
             y_plane2 = slope_plane * x_range + intercept_plane2
             ax.plot(x_range, y_plane2, 'g-.', linewidth=2, alpha=0.8,
                     label=f'Plane cut 2: y = {slope_plane:.1f}x + {intercept_plane2:.1f}')
-    
+
     ax.set_xlabel(r'$\hat{x}$ = log($V_{0.4R26}/V_0$)', fontsize=12)
     ax.set_ylabel(r'$\hat{y}$ = $R\_ABSMAG\_SB26$ (absolute magnitude)', fontsize=12)
     ax.set_title('DESI DR1 Tully-Fisher Data', fontsize=14, fontweight='bold')
-    
+
     ax.invert_yaxis()
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.legend(loc='best', fontsize=10)
-    
+
     plt.tight_layout()
     plt.savefig(output_file, dpi=150, bbox_inches='tight')
     plt.close(fig)
     print(f"\nPlot saved to: {output_file}")
-    
+
     print(f"\nPlot summary:")
     print(f"  Complete sample: {len(x_all)} galaxies")
     print(f"  Selected sample: {len(x_selected)} galaxies")
@@ -399,9 +398,10 @@ def plot_desi_tf_data(x_all, y_all, sigma_x_all, sigma_y_all,
 
 if __name__ == '__main__':
     input_fits = 'data/DESI-DR1_TF_pv_cat_v15.fits'
-    
-    haty_max = -18.
-    
+
+    haty_max = -18.0
+    haty_min = -30
+
     plane_cut = True
     slope_plane = -6.5
     intercept_plane = -20.5     # c1 (lower oblique bound)
@@ -409,14 +409,15 @@ if __name__ == '__main__':
 
     n_objects = None            # set to an int to subsample the selected objects, e.g. 500
     random_seed = None          # set to an int for reproducible subsampling, e.g. 42
-    
+
     output_json = 'DESI_input.json'
     init_json = 'DESI_init.json'
-    
+
     # Process data and get both complete and selected samples
     x_all, y_all, sigma_x_all, sigma_y_all, x_sel, y_sel, sigma_x_sel, sigma_y_sel = process_desi_tf_data(
         input_fits, output_json, init_json,
         haty_max=haty_max,
+        haty_min=haty_min,
         plane_cut=plane_cut,
         slope_plane=slope_plane,
         intercept_plane=intercept_plane,
@@ -424,13 +425,14 @@ if __name__ == '__main__':
         n_objects=n_objects,
         random_seed=random_seed
     )
-    
+
     # Create plot showing both complete and selected samples
     plot_output = output_json.replace('.json', '.png')
     plot_desi_tf_data(
         x_all, y_all, sigma_x_all, sigma_y_all,
         x_sel, y_sel, sigma_x_sel, sigma_y_sel,
         haty_max=haty_max,
+        haty_min=haty_min,
         slope_plane=slope_plane,
         intercept_plane=intercept_plane,
         intercept_plane2=intercept_plane2,

@@ -1,5 +1,5 @@
-// ./normal sample num_samples=500 num_chains=4 data file=MOCK_n10000_input.json init=MOCK_n10000_init.json output file=MOCK_n10000_normal.csv
-// ./normal sample num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_normal.csv
+// ./normal sample num_warmup=500 num_samples=500 num_chains=4 data file=MOCK_n10000_input.json init=MOCK_n10000_init.json output file=MOCK_normal.csv
+// ./normal sample num_warnup=500 num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_normal.csv
 // ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../cmdstan/bin/diagnose output_base*.csv
 
@@ -239,21 +239,21 @@ model {
       
       target += multi_normal_lpdf([x_std[n], y[n]]' | mu_prior, Sigma_i);
       
-      // target += -log(
-      //                P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
-      //                                 intercept_std[bin_idx],
-      //                                 slope_plane_std, intercept_plane_std,
-      //                                 intercept_plane2_std,
-      //                                 sqrt(sigmasq1_std[n]),
-      //                                 sqrt(sigmasq2[n])));
-    }
-          target += -N_total * log(
+      target += -log(
                      P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
                                       intercept_std[bin_idx],
                                       slope_plane_std, intercept_plane_std,
                                       intercept_plane2_std,
-                                      sqrt(sigmasq1_std[1]),
-                                      sqrt(sigmasq2[1])));
+                                      sqrt(sigmasq1_std[n]),
+                                      sqrt(sigmasq2[n])));
+    }
+          // target += -N_total * log(
+          //            P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
+          //                             intercept_std[bin_idx],
+          //                             slope_plane_std, intercept_plane_std,
+          //                             intercept_plane2_std,
+          //                             sqrt(sigmasq1_std[1]),
+          //                             sqrt(sigmasq2[1])));
   }
   
   // Priors
