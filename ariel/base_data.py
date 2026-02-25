@@ -15,7 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, sample_size=None,
+def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, haty_min=-23, sample_size=None,
                     plane_cut=False, slope_plane=None, intercept_plane=None, intercept_plane2=None):
     """
     Process TF mock data: convert to Stan JSON format and create initial conditions.
@@ -75,11 +75,13 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
 
             # Apply y upper limit (note: magnitudes: "brighter" is more negative)
             # Your original code uses y_val < haty_max; keep that behavior.
-            if y_val < haty_max:
+            if (y_val < haty_max) and (y_val > haty_min):
                 y_filtered_rows += 1
 
                 if plane_cut:
-                    lower_bound = slope_plane * x_val + intercept_plane
+                    lower_bound_oblique = slope_plane * x_val + intercept_plane
+                    # haty_min is also a lower bound; take the tighter (larger) of the two
+                    lower_bound = max(haty_min, lower_bound_oblique)
 
                     if not two_sided:
                         # One-sided: lower_bound <= y
@@ -90,7 +92,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
                             sigma_y_data.append(float(row['M_abs_unc']))
                             plane_pass_rows += 1
                     else:
-                        # Two-sided: lower_bound <= y <= min(haty_max, upper_bound)
+                        # Two-sided: lower_bound <= y <= min(haty_max, upper_bound_oblique)
                         upper_bound_oblique = slope_plane * x_val + intercept_plane2
                         upper_bound = min(haty_max, upper_bound_oblique)
 
@@ -151,7 +153,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     y_min =  -23.0
     y_max = -15.0
     mu_y_TF = 0.5 * (y_min + y_max)
-    tau = (y_max - y_min)/np.sqrt(12)*1.
+    tau = (y_max - y_min)/np.sqrt(12) * 10
 
     stan_data = {
         'N_bins': N_bins,
@@ -161,6 +163,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
         'y': y_data,
         'sigma_y': sigma_y_data,
         'haty_max': haty_max,
+        'haty_min': haty_min,
         'y_min': y_min,
         'y_max': y_max,
         'bin_idx': bin_idx,
@@ -229,7 +232,8 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
             print(f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}, c2 = {intercept_plane2}")
 
     print(f"  Rows filtered out (by y cut only): {total_rows - y_filtered_rows}")
-    print(f"  haty_max (selection threshold): {haty_max}")
+    print(f"  haty_max (selection upper threshold): {haty_max}")
+    print(f"  haty_min (selection lower threshold): {haty_min}")
 
     print(f"\nSummary:")
     print(f"  Number of redshift bins: {N_bins}")
@@ -276,6 +280,7 @@ def plot_tf_data(json_file, output_file='tf_scatter_plot.png'):
 
     N_total = data['N_total']
     haty_max = data.get('haty_max', None)
+    haty_min = data.get('haty_min', None)
     slope_plane = data.get('slope_plane', None)
     intercept_plane = data.get('intercept_plane', None)
     intercept_plane2 = data.get('intercept_plane2', None)
@@ -291,6 +296,10 @@ def plot_tf_data(json_file, output_file='tf_scatter_plot.png'):
         ax.axhline(y=haty_max, color='red', linestyle='--',
                    linewidth=2, alpha=0.8,
                    label=f'$\\hat{{y}}_{{\\rm max}}$ = {haty_max}')
+    if haty_min is not None:
+        ax.axhline(y=haty_min, color='orange', linestyle='--',
+                   linewidth=2, alpha=0.8,
+                   label=f'$\\hat{{y}}_{{\\rm min}}$ = {haty_min}')
 
     # Plot one or two parallel plane-cut boundaries if present
     if slope_plane is not None and intercept_plane is not None and len(x) > 0:
@@ -327,6 +336,8 @@ def plot_tf_data(json_file, output_file='tf_scatter_plot.png'):
         print(f"  sigma_y: mean = {np.mean(sigma_y):.4f}, range = [{np.min(sigma_y):.4f}, {np.max(sigma_y):.4f}]")
     if haty_max is not None:
         print(f"  haty_max: {haty_max}")
+    if haty_min is not None:
+        print(f"  haty_min: {haty_min}")
     if slope_plane is not None and intercept_plane is not None:
         print(f"  Plane cut 1: y = {slope_plane}x + {intercept_plane}")
         if intercept_plane2 is not None:
@@ -337,6 +348,7 @@ if __name__ == '__main__':
     input_csv = 'data/TF_mock_tophat-mag_input.csv'
 
     haty_max = -16
+    haty_min = -22.9
 
     plane_cut = True
     slope_plane = -8.5
@@ -356,7 +368,7 @@ if __name__ == '__main__':
     # init_json = 'MOXK_init.json'        
 
     process_tf_data(input_csv, output_json, init_json,
-                    haty_max=haty_max, sample_size=sample_size,
+                    haty_max=haty_max, haty_min=haty_min, sample_size=sample_size,
                     plane_cut=plane_cut, slope_plane=slope_plane,
                     intercept_plane=intercept_plane, intercept_plane2=intercept_plane2)
 
