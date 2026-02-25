@@ -466,10 +466,10 @@ functions {
     return out;
   }
 
-  real integrate_binormal_strip_sinh_gl(
+  real integrate_binormal_strip_sinh_gl_2(
          real y_min,
          real y_max,
-         real haty_max,
+         real haty_max, real haty_min,
          real s,
          real c,
          real s_plane,
@@ -555,8 +555,8 @@ functions {
     // vector[K] z2 = t;
     
     // integrand in u-space includes Jacobian sigma2*cosh(u)
-    vector[K] diff = strip_integrand(y_tf, s, c, c1_plane, c2_plane,
-                                     haty_max, sigma1, sigma2, s_plane);
+    vector[K] diff = strip_integrand_2(y_tf, s, c, c1_plane, c2_plane,
+                                     haty_max, haty_min, sigma1, sigma2, s_plane);
     // acc += gl_w[k] * diff * cosh(u);
     real acc = sum(gl_w .* diff .* cosh(u));
     // Integral over y_TF:
@@ -593,7 +593,8 @@ functions {
     vector[N] z1a = -alpha1;
     vector[N] z1b = -alpha2;
     
-    for (yhat in (yhat_max, yhat_min)) {
+    array[2] real yhats = {yhat_max, yhat_min};
+    for (yhat in yhats) {
     vector[N] beta = (yhat - y_TF) / sigma2_i;
 
     // delta(-alpha1,beta) - delta(-alpha2,beta), vectorized via step()
@@ -619,8 +620,8 @@ functions {
                     - (owens_t(beta, a_b1) - owens_t(beta, a_b2));
     
   }
-
-    // return out;
+  
+    return out;
   }
 }
 data {
