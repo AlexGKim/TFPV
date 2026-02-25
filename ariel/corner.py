@@ -59,7 +59,7 @@ def load_stan_csv(filename):
     return pd.read_csv(filename, comment='#')
 
 
-def load_params(file_pattern, include_theta_int=False):
+def load_params(file_pattern):
     """
     Load and combine Stan CSV files matching *file_pattern* and extract the
     standard TF parameters.
@@ -68,8 +68,6 @@ def load_params(file_pattern, include_theta_int=False):
     ----------
     file_pattern : str
         Glob pattern to match Stan output files.
-    include_theta_int : bool
-        Whether to include ``theta_int`` in the returned DataFrame.
 
     Returns
     -------
@@ -103,10 +101,10 @@ def load_params(file_pattern, include_theta_int=False):
         'intercept':   combined['intercept.1'].values,
         'sigma_int_x': combined['sigma_int_x'].values,
         'sigma_int_y': combined['sigma_int_y'].values,
+        'mu_{y_TF}': combined['mu_y_TF'].values,
+        'tau': combined['tau'].values,
     }
 
-    if include_theta_int:
-        params['theta_int'] = combined['theta_int'].values
 
     return pd.DataFrame(params)
 
@@ -125,7 +123,7 @@ def _print_stats(df, label):
 # ---------------------------------------------------------------------------
 
 def create_corner_plot(file_patterns, output_file='corner_plot.png',
-                       include_theta_int=False, truth_values=None,
+                       truth_values=None,
                        names=None):
     """
     Create a corner plot from one or more sets of Stan output files.
@@ -137,8 +135,6 @@ def create_corner_plot(file_patterns, output_file='corner_plot.png',
         a list of one element.
     output_file : str
         Path to save the output PNG (default: ``'corner_plot.png'``).
-    include_theta_int : bool
-        Include ``theta_int`` in the plot (default: ``False``).
     truth_values : dict, optional
         Mapping of parameter name → true value, drawn as reference lines.
         Example: ``{"slope": -8.0, "intercept": -20.0}``.
@@ -171,7 +167,7 @@ def create_corner_plot(file_patterns, output_file='corner_plot.png',
     first_df = None
     for i, (pat, name) in enumerate(zip(file_patterns, resolved_names), start=1):
         print(f"\n=== Chain {i}: {pat} ===")
-        df = load_params(pat, include_theta_int=include_theta_int)
+        df = load_params(pat)
         _print_stats(df, name)
         c.add_chain(Chain(samples=df, name=name))
         if first_df is None:
@@ -253,12 +249,6 @@ def _build_parser():
              "Defaults to the pattern with .csv stripped.",
     )
     p.add_argument(
-        '--theta-int',
-        action='store_true',
-        default=False,
-        help="Include theta_int in the corner plot.",
-    )
-    p.add_argument(
         '--truth',
         nargs='+',
         metavar='PARAM=VALUE',
@@ -285,7 +275,6 @@ if __name__ == '__main__':
         create_corner_plot(
             file_patterns=args.infiles,
             output_file=args.output,
-            include_theta_int=args.theta_int,
             truth_values=_parse_truth(args.truth),
             names=args.names,
         )
