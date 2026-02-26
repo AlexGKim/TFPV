@@ -734,13 +734,13 @@ def DESI_main():
         galaxy_fits, row=None, sort_by_zobs=False
     )
 
-    mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
+    # mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
 
-    # Your plot uses (predicted mean - observed yhat)
-    mean_y = mean_pred - yhat_star
-    sigma_y = sd_pred
+    # # Your plot uses (predicted mean - observed yhat)
+    # mean_y = mean_pred - yhat_star
+    # sigma_y = sd_pred
 
-    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1)
+    # # plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1)
 
     galaxy_json = "DESI_input.json"
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_stan_json(
@@ -748,19 +748,16 @@ def DESI_main():
     mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
-    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1)
+    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1,label="Normal")
 
     plt.xscale("log")
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
-    plt.show()
-
+    plt.legend()
+    plt.savefig("DESI_redshift_normal.png", dpi=300)
+    plt.clf()
 def DESI_tophat():
-    draws = read_cmdstan_posterior(
-        "DESI_base_?.csv",
-        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
-        drop_diagnostics=True,
-    )
+
 
     # galaxy_fits = "data/DESI-DR1_TF_pv_cat_v15.fits"
     # xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_desi(
@@ -778,16 +775,41 @@ def DESI_tophat():
     galaxy_json = "DESI_input.json"
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_stan_json(
         galaxy_json)
+    
+
+
+    draws = read_cmdstan_posterior(
+        "DESI_base_?.csv",
+        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+        drop_diagnostics=True,
+    )
+
     mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(draws, xhat_star, sigma_x_star, y_min=-22.5-0.1, y_max=-18.5+0.1)
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
-    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1)
-
+    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1,label="Top-Hat")
     plt.xscale("log")
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
-    plt.show()
+    plt.legend()
+    plt.savefig("DESI_redshift_tophat.png", dpi=300)
+    plt.clf()
+
+    draws = read_cmdstan_posterior(
+    "DESI_normal_?.csv",
+    keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+    drop_diagnostics=True,)
+    mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
+    mean_y2 = mean_pred - yhat_star
+    sigma_y2 = sd_pred
+    # plt.errorbar(zobs_star, mean_y2, yerr=sigma_y2, fmt="o", alpha=0.1,label="Normal")
+
+
+
+    plt.scatter(mean_y, mean_y2, alpha=0.1)
+    plt.savefig("DESI_tophat_vs_normal.png", dpi=300)
+    plt.clf()
 
 if __name__ == "__main__":
     DESI_tophat()
-    # MOCK_main()
+    DESI_main()
