@@ -206,32 +206,38 @@ def main():
     galaxy_csv = "data/TF_mock_tophat-mag_input.csv"
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_csv(galaxy_csv, row=None, sort_by_zobs=True)
 
+    N=10
+    mean_y = []
+    sigma_y =[]
+    for _xhat_star, _sigma_x_star, _yhat_star, _sigma_y_star, _zobs_star in zip(xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star ):
+        ans=[]
+        for _, draw in draws.iterrows():   # draw is a pandas Series
+            s = draw.slope
+            c = draw["intercept.1"]
+            sigma_int_x = draw.sigma_int_x
+            sigma_int_y = draw.sigma_int_y
+            mu_y_TF = draw.mu_y_TF
+            tau = draw.tau
+            ans.append(draw_ystar_posterior_predictive_normal(
+                N,
+                _xhat_star,
+                _sigma_x_star,
+                s,
+                c,
+                sigma_int_x,
+                mu_y_TF,
+                tau,
+                sigma_int_y,
+                rng=None,))
+        mean_y.append(np.mean(ans)- _yhat_star)
+        sigma_y.append(np.std(ans))
 
-
-    N=100
-    ans=[]
-    for _, draw in draws.iterrows():   # draw is a pandas Series
-        s = draw.slope
-        c = draw["intercept.1"]
-        sigma_int_x = draw.sigma_int_x
-        sigma_int_y = draw.sigma_int_y
-        mu_y_TF = draw.mu_y_TF
-        tau = draw.tau
-        ans.append(draw_ystar_posterior_predictive_normal(
-            N,
-            xhat_star[0],
-            sigma_x_star[0],
-            s,
-            c,
-            sigma_int_x,
-            mu_y_TF,
-            tau,
-            sigma_int_y,
-            rng=None,))
+    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt='o')
         
-    ans = np.concatenate(ans)
-    plt.hist(ans, bins=30, density=True)
-    plt.show()
+    # ans = np.concatenate(ans)
+    # plt.hist(ans, bins=30, density=True)
+    # plt.show()
+
 
 if __name__ == "__main__":
     main()
