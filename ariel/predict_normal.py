@@ -7,6 +7,8 @@ import pandas as pd
 import matplotlib.pyplot as plt 
 from astropy.io import fits
 import json
+from scipy.special import erf
+
 
 def draw_ystar_posterior_predictive_normal(
     N,
@@ -517,6 +519,188 @@ def ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star):
 
     return mean_y, sd_y
 
+
+
+###############################################################################
+import json
+from pathlib import Path
+
+import numpy as np
+
+_SQRT2 = np.sqrt(2.0)
+_SQRT2PI = np.sqrt(2.0 * np.pi)
+
+
+def _phi(z):
+    """Standard normal PDF, vectorized."""
+    return np.exp(-0.5 * z**2) / _SQRT2PI
+
+
+def _Phi(z):
+    """Standard normal CDF, vectorized (no SciPy)."""
+    return 0.5 * (1.0 + erf(z / _SQRT2))
+
+
+def ystar_pp_mean_sd_tophat_vectorized(
+    draws,
+    xhat_star,
+    sigma_x_star,
+    *,
+    bounds_json="DESI_input.json",
+    y_min_key="y_min",
+    y_max_key="y_max",
+    y_min=None,
+    y_max=None,
+    on_bad_Z="raise",   # "raise" or "floor"
+    Z_floor=1e-300,
+):
+    """
+    Compute posterior predictive mean and SD of latent y_* for all galaxies (Top-Hat y_TF prior),
+    marginalizing over posterior draws by Monte Carlo over draws only (no inner sampling).
+
+    Top-Hat model (single draw theta):
+        y_TF ~ Unif(y_min, y_max)      [SCALARS]
+        x    | y_TF ~ Normal((y_TF - c)/s, sigma_int_x^2)
+        xhat | x    ~ Normal(x,           sigma_x_star^2)
+        y_*  | y_TF ~ Normal(y_TF,        sigma_int_y^2)
+
+    This returns mixture moments over theta-draws:
+        mean_y[g] = E_theta[ E(y_* | theta) ]
+        sd_y[g]   = sqrt( E_theta[Var(y_*|theta)] + Var_theta(E(y_*|theta)) )
+
+    Bounds behavior
+    --------------
+    - If y_min/y_max are not provided, they are loaded as scalars from `bounds_json`
+      (e.g. DESI_input.json) using keys y_min_key/y_max_key.
+    - If y_min and y_max are provided explicitly, the JSON is not read.
+
+    Parameters
+    ----------
+    draws : pandas.DataFrame
+        Must contain columns: "slope", "intercept.1", "sigma_int_x", "sigma_int_y".
+    xhat_star, sigma_x_star : array-like, shape (G,)
+    bounds_json : str/path-like
+        JSON file containing scalar y_min and y_max.
+    y_min_key, y_max_key : str
+        Keys in JSON for the scalar bounds.
+    y_min, y_max : float or None
+        Optional scalar overrides.
+    on_bad_Z : {"raise","floor"}
+        Handling when Z = Phi(beta)-Phi(alpha) is non-positive/non-finite.
+    Z_floor : float
+        Floor used when on_bad_Z="floor".
+
+    Returns
+    -------
+    mean_y : (G,) np.ndarray
+    sd_y   : (G,) np.ndarray
+    """
+    xhat_star = np.asarray(xhat_star, dtype=float)          # (G,)
+    sigma_x_star = np.asarray(sigma_x_star, dtype=float)    # (G,)
+    G = xhat_star.size
+
+    # ---- Load scalar bounds if not provided
+    if y_min is None or y_max is None:
+        if bounds_json is None:
+            raise ValueError("Provide scalar y_min and y_max, or set bounds_json to a JSON file path.")
+        bounds_json = Path(bounds_json)
+        with bounds_json.open("r") as f:
+            stan_data = json.load(f)
+        if y_min_key not in stan_data or y_max_key not in stan_data:
+            raise KeyError(
+                f"Missing {y_min_key!r} or {y_max_key!r} in {bounds_json}. "
+                f"Available keys: {sorted(list(stan_data.keys()))}"
+            )
+        y_min = stan_data[y_min_key]
+        y_max = stan_data[y_max_key]
+
+    a = float(y_min)
+    b = float(y_max)
+    if not np.isfinite(a) or not np.isfinite(b):
+        raise ValueError("y_min and y_max must be finite scalars.")
+    if not (a < b):
+        raise ValueError(f"Require y_min < y_max; got y_min={a}, y_max={b}.")
+
+    # ---- Extract draws (M,)
+    s   = draws["slope"].to_numpy(float)          # (M,)
+    c   = draws["intercept.1"].to_numpy(float)    # (M,)
+    six = draws["sigma_int_x"].to_numpy(float)    # (M,)
+    siy = draws["sigma_int_y"].to_numpy(float)    # (M,)
+
+    if np.any(s == 0):
+        raise ValueError("Found slope == 0 in draws; model requires s != 0.")
+    if np.any(sigma_x_star < 0) or np.any(six < 0) or np.any(siy < 0):
+        raise ValueError("Negative SD encountered.")
+
+    # ---- Broadcast to (M,G)
+    sMG = s[:, None]
+    cMG = c[:, None]
+
+    sigma_x_tot2 = (six[:, None] ** 2) + (sigma_x_star[None, :] ** 2)   # (M,G)
+    mu_L = cMG + sMG * xhat_star[None, :]                               # (M,G)
+    sigma_L2 = (sMG ** 2) * sigma_x_tot2                                # (M,G)
+    sigma_L = np.sqrt(sigma_L2)                                         # (M,G)
+
+    # ---- Truncated normal moments for y_TF | xhat, theta
+    mean_yTF = np.empty_like(mu_L)
+    var_yTF  = np.empty_like(mu_L)
+
+    deg = (sigma_L == 0.0)
+    if np.any(deg):
+        mu_deg = mu_L[deg]  # flat
+        ok = (mu_deg >= a) & (mu_deg <= b)
+        if not np.all(ok):
+            raise ValueError(
+                "Encountered sigma_L == 0 with mu_L outside [y_min,y_max] for at least one (draw, galaxy). "
+                "This implies zero posterior mass under the Top-Hat prior."
+            )
+        mean_yTF[deg] = mu_deg
+        var_yTF[deg] = 0.0
+
+    nd = ~deg
+    if np.any(nd):
+        mu  = mu_L[nd]
+        sig = sigma_L[nd]
+
+        alpha = (a - mu) / sig
+        beta  = (b - mu) / sig
+
+        Z = _Phi(beta) - _Phi(alpha)
+
+        if on_bad_Z == "raise":
+            if np.any(~np.isfinite(Z)) or np.any(Z <= 0.0):
+                raise ValueError("Truncation normalizer Z is non-finite or non-positive for some (draw, galaxy).")
+        elif on_bad_Z == "floor":
+            Z = np.where(np.isfinite(Z), np.maximum(Z, Z_floor), Z_floor)
+        else:
+            raise ValueError("on_bad_Z must be 'raise' or 'floor'.")
+
+        phi_a = _phi(alpha)
+        phi_b = _phi(beta)
+
+        t = (phi_a - phi_b) / Z
+        m = mu + sig * t
+
+        u = (alpha * phi_a - beta * phi_b) / Z
+        v = (sig ** 2) * (1.0 + u - t**2)
+
+        mean_yTF[nd] = m
+        var_yTF[nd]  = v
+
+    # ---- y_* adds intrinsic y-scatter
+    mean_ystar = mean_yTF
+    var_ystar  = var_yTF + (siy[:, None] ** 2)
+
+    # ---- Mixture moments over draws
+    mean_y = mean_ystar.mean(axis=0)  # (G,)
+    var_y  = var_ystar.mean(axis=0) + (mean_ystar**2).mean(axis=0) - mean_y**2
+    sd_y   = np.sqrt(var_y)
+
+    return mean_y, sd_y
+
+#############################################################################
+
+
 def MOCK_main():
     draws = read_cmdstan_posterior(
         "MOCK_normal_?.csv",
@@ -571,6 +755,39 @@ def DESI_main():
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
     plt.show()
 
+def DESI_tophat():
+    draws = read_cmdstan_posterior(
+        "DESI_base_?.csv",
+        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+        drop_diagnostics=True,
+    )
+
+    # galaxy_fits = "data/DESI-DR1_TF_pv_cat_v15.fits"
+    # xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_desi(
+    #     galaxy_fits, row=None, sort_by_zobs=False
+    # )
+
+    # mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(draws, xhat_star, sigma_x_star, bounds_json="DESI_input.json")
+
+    # # Your plot uses (predicted mean - observed yhat)
+    # mean_y = mean_pred - yhat_star
+    # sigma_y = sd_pred
+
+    # plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1)
+
+    galaxy_json = "DESI_input.json"
+    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_stan_json(
+        galaxy_json)
+    mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(draws, xhat_star, sigma_x_star, y_min=-22.5-0.1, y_max=-18.5+0.1)
+    mean_y = mean_pred - yhat_star
+    sigma_y = sd_pred
+    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1)
+
+    plt.xscale("log")
+    plt.xlabel(r"$z_{\text{obs}}$")
+    plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
+    plt.show()
+
 if __name__ == "__main__":
-    DESI_main()
+    DESI_tophat()
     # MOCK_main()
