@@ -5,7 +5,7 @@ Assume we have already fit the TF model to a sample and obtained the posterior
 \begin{equation}
 p(\theta \mid \{\hat x_i,\hat y_i\}_{i=1}^N),
 \qquad
-\theta \equiv (s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}).
+\theta \equiv (s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}, \mu_{TF}, \tau).
 \end{equation}
 We now consider a \emph{new} galaxy, denoted by ``$\star$'', for which we measure a rotation-velocity proxy
 $\hat x_\star$ with uncertainty $\sigma_{x,\star}$, and we wish to infer its true absolute magnitude $y_\star$
@@ -99,15 +99,126 @@ so that the $\hat x_\star$ likelihood given $y_{\text{TF},\star}$ is
 \hat x_\star \mid y_{\text{TF},\star},\theta \sim
 \mathcal N\!\left(\frac{y_{\text{TF},\star}-c}{s},\ \sigma_{1,\star}\right).
 \end{equation}
-Equivalently, viewed as a likelihood in $y_{\text{TF},\star}$, this is
+
+
+
+
+
+
+\subsection{Posterior predictive distribution}
+The desired quantity is the posterior predictive distribution
 \begin{equation}
-p(\hat x_\star\mid y_{\text{TF},\star},\theta)
-\ \propto\
-\exp\!\left[-\frac{(y_{\text{TF},\star}-(c+s\hat x_\star))^2}{2\,s^2\sigma_{1,\star}^2}\right],
+p(y_\star \mid \hat x_\star, \sigma_{x,\star}, \{\hat x_i,\hat y_i\})
+=
+\int d\theta\;
+p\!\left(y_\star \mid \hat x_\star, \sigma_{x,\star}, \theta\right)\,
+p\!\left(\theta \mid \{\hat x_i,\hat y_i\}\right).
+\label{eq:posterior_predictive_y}
 \end{equation}
-i.e.
+In practice, if we have posterior draws $\{\theta^{(m)}\}_{m=1}^M$, the integral is approximated by a mixture
 \begin{equation}
-y_{\text{TF},\star}\ \text{``measured by''}\ \hat x_\star
-\quad\text{with}\quad
-y_{\text{TF},\star}\approx c+s\hat x_\star,\ \ \text{sd}=|s|\sigma_{1,\star}.
+p(y_\star \mid \hat x_\star, \cdots)\;\approx\; \frac{1}{M}\sum_{m=1}^M
+p\!\left(y_\star \mid \hat x_\star, \sigma_{x,\star}, \theta^{(m)}\right).
 \end{equation}
+
+\paragraph{Single-draw predictive $p(y_\star \mid \hat x_\star,\sigma_{x,\star},\theta)$.}
+Introduce the latent TF magnitude $y_{\mathrm{TF},\star}$ for the new galaxy. Then
+\begin{equation}
+p\!\left(y_\star \mid \hat x_\star,\sigma_{x,\star},\theta\right)
+=
+\int dy_{\mathrm{TF},\star}\;
+p\!\left(y_\star \mid y_{\mathrm{TF},\star},\theta\right)\,
+p\!\left(y_{\mathrm{TF},\star} \mid \hat x_\star,\sigma_{x,\star},\theta\right).
+\label{eq:pred_y_integral_yTF}
+\end{equation}
+The first factor is
+\begin{equation}
+p\!\left(y_\star \mid y_{\mathrm{TF},\star},\theta\right)
+=
+\mathcal N\!\left(y_\star \mid y_{\mathrm{TF},\star},\,\sigma_{\mathrm{int},y}^2\right).
+\label{eq:pred_y_given_yTF}
+\end{equation}
+
+To obtain $p(y_{\mathrm{TF},\star} \mid \hat x_\star,\sigma_{x,\star},\theta)$, first marginalize the latent
+true velocity proxy $x_\star$:
+\begin{equation}
+x_\star \mid y_{\mathrm{TF},\star},\theta
+\sim
+\mathcal N\!\left(\frac{y_{\mathrm{TF},\star}-c}{s},\,\sigma_{\mathrm{int},x}^2\right),
+\qquad
+\hat x_\star \mid x_\star \sim \mathcal N\!\left(x_\star,\,\sigma_{x,\star}^2\right),
+\end{equation}
+which implies
+\begin{equation}
+\hat x_\star \mid y_{\mathrm{TF},\star},\theta
+\sim
+\mathcal N\!\left(\frac{y_{\mathrm{TF},\star}-c}{s},\,\sigma_{x,\mathrm{tot}}^2\right),
+\qquad
+\sigma_{x,\mathrm{tot}}^2 \equiv \sigma_{\mathrm{int},x}^2+\sigma_{x,\star}^2.
+\label{eq:xhat_given_yTF}
+\end{equation}
+Equivalently, this defines a Gaussian likelihood in $y_{\mathrm{TF},\star}$ with
+\begin{equation}
+\mu_{\mathrm{TF}}(\theta) \equiv c+s\hat x_\star,
+\qquad
+\sigma_{\mathrm{TF}}^2(\theta) \equiv s^2\left(\sigma_{\mathrm{int},x}^2+\sigma_{x,\star}^2\right)
+= s^2\sigma_{x,\mathrm{tot}}^2.
+\label{eq:mu_sigma_TF}
+\end{equation}
+
+With the prior $y_{\mathrm{TF},\star}\sim \mathrm{Uniform}(y_{\min},y_{\max})$, we obtain
+\begin{equation}
+p\!\left(y_{\mathrm{TF},\star} \mid \hat x_\star,\sigma_{x,\star},\theta\right)
+=
+\mathrm{TruncNormal}\!\Big(
+y_{\mathrm{TF},\star} \,\big|\, \mu_{\mathrm{TF}}(\theta),\,\sigma_{\mathrm{TF}}^2(\theta);\,[y_{\min},y_{\max}]
+\Big).
+\label{eq:yTF_posterior_truncnorm}
+\end{equation}
+
+\paragraph{Closed form for $p(y_\star \mid \hat x_\star,\sigma_{x,\star},\theta)$.}
+Combining \eqref{eq:pred_y_integral_yTF}--\eqref{eq:yTF_posterior_truncnorm} yields an analytic expression.
+Define
+\begin{equation}
+Z(\theta)
+\equiv
+\Phi\!\left(\frac{y_{\max}-\mu_{\mathrm{TF}}(\theta)}{\sigma_{\mathrm{TF}}(\theta)}\right)
+-
+\Phi\!\left(\frac{y_{\min}-\mu_{\mathrm{TF}}(\theta)}{\sigma_{\mathrm{TF}}(\theta)}\right),
+\end{equation}
+\begin{equation}
+\sigma^2(\theta)
+\equiv
+\frac{\sigma_{\mathrm{TF}}^2(\theta)\,\sigma_{\mathrm{int},y}^2}
+{\sigma_{\mathrm{TF}}^2(\theta)+\sigma_{\mathrm{int},y}^2},
+\qquad
+m(y_\star;\theta)
+\equiv
+\frac{\sigma_{\mathrm{TF}}^2(\theta)\,y_\star+\sigma_{\mathrm{int},y}^2\,\mu_{\mathrm{TF}}(\theta)}
+{\sigma_{\mathrm{TF}}^2(\theta)+\sigma_{\mathrm{int},y}^2}.
+\end{equation}
+Then
+\begin{equation}
+p\!\left(y_\star \mid \hat x_\star,\sigma_{x,\star},\theta\right)
+=
+\frac{1}{Z(\theta)}\;
+\mathcal N\!\Big(y_\star \,\big|\, \mu_{\mathrm{TF}}(\theta),\,\sigma_{\mathrm{TF}}^2(\theta)+\sigma_{\mathrm{int},y}^2\Big)\;
+\left[
+\Phi\!\left(\frac{y_{\max}-m(y_\star;\theta)}{\sqrt{\sigma^2(\theta)}}\right)
+-
+\Phi\!\left(\frac{y_{\min}-m(y_\star;\theta)}{\sqrt{\sigma^2(\theta)}}\right)
+\right].
+\label{eq:pred_y_closed_form}
+\end{equation}
+
+\paragraph{Sampling-based posterior predictive.}
+Given posterior draws $\theta^{(m)}$, one can generate posterior predictive samples by
+\begin{equation}
+y_{\mathrm{TF},\star}^{(m)} \sim
+\mathrm{TruncNormal}\!\Big(
+\mu_{\mathrm{TF}}(\theta^{(m)}),\,\sigma_{\mathrm{TF}}^2(\theta^{(m)});\,[y_{\min},y_{\max}]
+\Big),
+\qquad
+y_\star^{(m)} \sim \mathcal N\!\left(y_{\mathrm{TF},\star}^{(m)},\,(\sigma_{\mathrm{int},y}^{(m)})^2\right),
+\end{equation}
+so that $\{y_\star^{(m)}\}_{m=1}^M$ approximates $p(y_\star \mid \hat x_\star,\sigma_{x,\star},\{\hat x_i,\hat y_i\})$.
