@@ -60,6 +60,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     y_data = []        # Absolute magnitude
     sigma_x_data = []  # Uncertainty in log(Vrot/V0)
     sigma_y_data = []  # Uncertainty in M_abs
+    z_obs = []         # Redshift (single bin)
 
     # Track filtering statistics
     total_rows = 0
@@ -90,6 +91,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
                             y_data.append(y_val)
                             sigma_x_data.append(float(row['log_V_V0_unc']))
                             sigma_y_data.append(float(row['M_abs_unc']))
+                            z_obs.append(float(row['zobs']))
                             plane_pass_rows += 1
                     else:
                         # Two-sided: lower_bound <= y <= min(haty_max, upper_bound_oblique)
@@ -101,6 +103,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
                             y_data.append(y_val)
                             sigma_x_data.append(float(row['log_V_V0_unc']))
                             sigma_y_data.append(float(row['M_abs_unc']))
+                            z_obs.append(float(row['zobs']))
                             plane_pass_rows += 1
                 else:
                     # No plane cut
@@ -108,12 +111,14 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
                     y_data.append(y_val)
                     sigma_x_data.append(float(row['log_V_V0_unc']))
                     sigma_y_data.append(float(row['M_abs_unc']))
+                    z_obs.append(float(row['zobs']))
 
     # Convert to numpy arrays for calculations
     x = np.array(x_data)
     y = np.array(y_data)
     sigma_x = np.array(sigma_x_data)
     sigma_y = np.array(sigma_y_data)
+    z_obs = np.array(z_obs)
 
     # ============================================================================
     # SECTION 1.5: RANDOM SAMPLING (if sample_size is specified)
@@ -128,6 +133,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
         y = y[sample_indices]
         sigma_x = sigma_x[sample_indices]
         sigma_y = sigma_y[sample_indices]
+        z_obs = z_obs[sample_indices]
 
         print(f"\nRandom sampling:")
         print(f"  Filtered data size: {N_filtered}")
@@ -144,6 +150,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     y_data = y.tolist()
     sigma_x_data = sigma_x.tolist()
     sigma_y_data = sigma_y.tolist()
+    z_obs = z_obs.tolist()
 
     # ============================================================================
     # SECTION 2: CREATE STAN DATA DICTIONARY
@@ -168,7 +175,8 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
         'y_max': y_max,
         'bin_idx': bin_idx,
         'mu_y_TF': mu_y_TF,
-        'tau': tau
+        'tau': tau,
+        'z_obs': z_obs,
     }
 
     if plane_cut:

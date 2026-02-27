@@ -701,26 +701,26 @@ def ystar_pp_mean_sd_tophat_vectorized(
 #############################################################################
 
 
-def MOCK_main():
-    draws = read_cmdstan_posterior(
-        "MOCK_normal_?.csv",
-        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
-        drop_diagnostics=True,
-    )
+# def MOCK_main():
+#     draws = read_cmdstan_posterior(
+#         "MOCK_normal_?.csv",
+#         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+#         drop_diagnostics=True,
+#     )
 
-    galaxy_csv = "data/TF_mock_tophat-mag_input.csv"
-    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_csv(
-        galaxy_csv, row=None, sort_by_zobs=True
-    )
+#     galaxy_csv = "data/TF_mock_tophat-mag_input.csv"
+#     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_csv(
+#         galaxy_csv, row=None, sort_by_zobs=True
+#     )
 
-    mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
+#     mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
 
-    # Your plot uses (predicted mean - observed yhat)
-    mean_y = mean_pred - yhat_star
-    sigma_y = sd_pred
+#     # Your plot uses (predicted mean - observed yhat)
+#     mean_y = mean_pred - yhat_star
+#     sigma_y = sd_pred
 
-    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.01)
-    plt.show()
+#     plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.01)
+#     plt.show()
 
 def DESI_main():
     draws = read_cmdstan_posterior(
@@ -810,6 +810,95 @@ def DESI_tophat():
     plt.savefig("DESI_tophat_vs_normal.png", dpi=300)
     plt.clf()
 
+def MOCK_main():
+    # Posterior draws from the Normal (Gaussian) TF model
+    draws = read_cmdstan_posterior(
+        "MOCK_normal_?.csv",
+        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+        drop_diagnostics=True,
+    )
+
+    # Load mock data (Stan JSON)
+    galaxy_json = "MOCK_n10000_input.json"
+    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = (
+        load_xy_and_uncertainties_from_stan_json(galaxy_json)
+    )
+
+    # Posterior predictive for y*
+    mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
+
+    # Plot (predicted mean - observed yhat)
+    mean_y = mean_pred - yhat_star
+    sigma_y = sd_pred
+
+    plt.errorbar(
+        zobs_star, mean_y, yerr=sigma_y,
+        fmt="o", alpha=0.1, label="Normal"
+    )
+    plt.xscale("log")
+    plt.xlabel(r"$z_{\text{obs}}$")
+    plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
+    plt.legend()
+    plt.savefig("MOCK_redshift_normal.png", dpi=300)
+    plt.clf()
+
+
+def MOCK_tophat():
+    # Load mock data (Stan JSON)
+    galaxy_json = "MOCK_n10000_input.json"
+    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = (
+        load_xy_and_uncertainties_from_stan_json(galaxy_json)
+    )
+
+    # Posterior draws from the Top-Hat (truncated/uniform) TF model
+    draws = read_cmdstan_posterior(
+        "MOCK_base_?.csv",
+        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+        drop_diagnostics=True,
+    )
+
+    # Posterior predictive for y* under top-hat bounds
+    # (Adjust y_min/y_max to match your mock selection function.)
+    mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
+        draws,
+        xhat_star,
+        sigma_x_star,
+        y_min=-22.5 - 0.1,
+        y_max=-18.5 + 0.1,
+        # alternatively (if your function supports it):
+        # bounds_json=galaxy_json,
+    )
+
+    mean_y = mean_pred - yhat_star
+    sigma_y = sd_pred
+
+    plt.errorbar(
+        zobs_star, mean_y, yerr=sigma_y,
+        fmt="o", alpha=0.1, label="Top-Hat"
+    )
+    plt.xscale("log")
+    plt.xlabel(r"$z_{\text{obs}}$")
+    plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
+    plt.legend()
+    plt.savefig("MOCK_redshift_tophat.png", dpi=300)
+    plt.clf()
+
+    # Compare Top-Hat vs Normal posterior predictive mean residuals
+    draws_normal = read_cmdstan_posterior(
+        "MOCK_normal_?.csv",
+        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+        drop_diagnostics=True,
+    )
+    mean_pred_n, sd_pred_n = ystar_pp_mean_sd_normal_vectorized(
+        draws_normal, xhat_star, sigma_x_star
+    )
+    mean_y_normal = mean_pred_n - yhat_star
+
+    plt.scatter(mean_y, mean_y_normal, alpha=0.1)
+    plt.xlabel("Top-Hat: mean_pred - y_obs (mag)")
+    plt.ylabel("Normal: mean_pred - y_obs (mag)")
+    plt.savefig("MOCK_tophat_vs_normal.png", dpi=300)
+    plt.clf()
 if __name__ == "__main__":
-    DESI_tophat()
-    DESI_main()
+    MOCK_tophat()
+    MOCK_main()
