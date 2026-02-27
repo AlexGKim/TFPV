@@ -356,7 +356,7 @@ if __name__ == '__main__':
     input_csv = 'data/TF_mock_tophat-mag_input.csv'
 
     haty_max = -16
-    haty_min = -22.9
+    haty_min = -22.5
 
     plane_cut = True
     slope_plane = -8.5
