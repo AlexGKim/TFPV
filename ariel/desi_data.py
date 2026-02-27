@@ -211,8 +211,8 @@ def process_desi_tf_data(
         "sigma_y": sigma_y_data,
         "haty_max": float(haty_max),
         "haty_min": float(haty_min),
-        "y_min": y_min_data,
-        "y_max": y_max_data,
+        "y_min": float(haty_min)-0.5,
+        "y_max": float(haty_max)+1,
         "mu_y_TF": mu_y_TF,
         "tau": tau,
         "z_obs": z_obs_data,   # <-- FIXED: now defined, aligned, and JSON-serializable
@@ -374,8 +374,8 @@ def plot_desi_tf_data(x_all, y_all, sigma_x_all, sigma_y_all,
 if __name__ == '__main__':
     input_fits = 'data/DESI-DR1_TF_pv_cat_v15.fits'
 
-    haty_max = -18.5
-    haty_min = -22.5
+    haty_max = -19.0    # there is an apparant outlier slightly fainter than -19.0
+    haty_min = -22.
 
     plane_cut = True
     slope_plane = -6.5

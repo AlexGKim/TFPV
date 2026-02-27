@@ -1,5 +1,5 @@
 // ./normal sample num_warmup=500 num_samples=500 num_chains=4 data file=MOCK_n10000_input.json init=MOCK_n10000_init.json output file=MOCK_normal.csv
-// ./normal sample num_warnup=500 num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_normal.csv
+// ./normal sample num_warmup=500 num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_normal.csv
 // ../cmdstan/bin/stansummary output_base_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../cmdstan/bin/diagnose output_base*.csv
 
@@ -181,7 +181,7 @@ transformed data {
 }
 parameters {
   // Common slope across all redshift bins
-  real<lower=-9 * sd_x, upper=-5* sd_x> slope_std;
+  real<lower=-14 * sd_x, upper=-2* sd_x> slope_std;
   
   // Intercept for each redshift bin
   
@@ -247,13 +247,13 @@ model {
                                       sqrt(sigmasq1_std[n]),
                                       sqrt(sigmasq2[n])));
     }
-          // target += -N_total * log(
-          //            P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
-          //                             intercept_std[bin_idx],
-          //                             slope_plane_std, intercept_plane_std,
-          //                             intercept_plane2_std,
-          //                             sqrt(sigmasq1_std[1]),
-          //                             sqrt(sigmasq2[1])));
+    // target += -N_total * log(
+    //             P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
+    //                             intercept_std[bin_idx],
+    //                             slope_plane_std, intercept_plane_std,
+    //                             intercept_plane2_std,
+    //                             sqrt(sigmasq1_std[1]),
+    //                             sqrt(sigmasq2[1])));
   }
   
   // Priors
