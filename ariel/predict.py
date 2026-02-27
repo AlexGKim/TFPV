@@ -8,7 +8,79 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 import json
 from scipy.special import erf
+import matplotlib.colors as mcolors
 
+
+def create_average_grid_image(x_coords, y_coords, values, grid_resolution_x, grid_resolution_y, v_lim=None):
+    x = np.array(x_coords)
+    y = np.array(y_coords)
+    z = np.array(values)
+
+    xmin, xmax = x.min(), x.max()
+    ymin, ymax = y.min(), y.max()
+
+    # 1. Compute Grid
+    sum_heatmap, xedges, yedges = np.histogram2d(x, y, bins=[grid_resolution_x, grid_resolution_y], weights=z)
+    count_heatmap, _, _ = np.histogram2d(x, y, bins=[grid_resolution_x, grid_resolution_y])
+
+    # Calculate average
+    average_heatmap = np.divide(sum_heatmap, count_heatmap, where=count_heatmap!=0, out=np.nan * np.ones_like(sum_heatmap))
+    
+    # 2. Handle Color Limits
+    if v_lim is None:
+        # Fallback to 95th percentile if no manual limit is provided
+        v_lim = np.nanpercentile(np.abs(average_heatmap), 95)
+    
+    # Use CenteredNorm to make 0 the neutral color
+    norm = mcolors.CenteredNorm(vcenter=0.0, halfrange=v_lim)
+
+    # 3. Create Figure
+    fig, ax = plt.subplots(figsize=(8, 6)) # Wide aspect ratio
+    
+    img = ax.imshow(
+        average_heatmap.T, 
+        extent=[xmin, xmax, ymin, ymax], 
+        origin='lower', 
+        cmap='seismic', 
+        interpolation='nearest', 
+        aspect='auto',
+        norm=norm
+    )
+    
+    ax.yaxis.set_inverted(True) # Your requested Y flip
+    
+    return fig, ax, img
+
+# def create_average_grid_image(x_coords, y_coords, values, grid_resolution_x, grid_resolution_y):
+#     # Ensure inputs are numpy arrays
+#     x = np.array(x_coords)
+#     y = np.array(y_coords)
+#     z = np.array(values)
+
+#     # Define the grid boundaries
+#     xmin, xmax = x.min(), x.max()
+#     ymin, ymax = y.min(), y.max()
+
+#     # Calculate the sum of values and the count of points in each bin
+#     # 'weights=z' makes the function sum the 'z' values instead of counting points
+#     sum_heatmap, xedges, yedges = np.histogram2d(x, y, bins=[grid_resolution_x, grid_resolution_y], weights=z)
+#     # Count the number of points in each bin
+#     count_heatmap, _, _ = np.histogram2d(x, y, bins=[grid_resolution_x, grid_resolution_y])
+
+#     # Calculate the average: sum / count. Handle empty bins (count=0) with np.nan or 0.
+#     # We use np.divide and a mask to avoid ZeroDivisionError
+#     average_heatmap = np.divide(sum_heatmap, count_heatmap, where=count_heatmap!=0, out=np.zeros_like(sum_heatmap))
+    
+#     # Plot the result using imshow
+#     fig = plt.figure(figsize=(8, 6))
+#     # Note: imshow handles origin differently than pcolormesh; 'origin="lower"' matches typical Cartesian coordinates
+#     plt.imshow(average_heatmap.T, extent=[xmin, xmax, ymin, ymax], origin='lower', cmap='seismic', interpolation='nearest', aspect='auto')
+#     plt.colorbar(label='Average Value')
+#     plt.xlabel(r'$\log{V/V_0}$')
+#     plt.ylabel(r'$M$')
+#     plt.title(r'$M_\text{predicted} - M$')
+#     plt.gca().yaxis.set_inverted(True)
+#     plt.show()
 
 def draw_ystar_posterior_predictive_normal(
     N,
@@ -722,17 +794,17 @@ def ystar_pp_mean_sd_tophat_vectorized(
 #     plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.01)
 #     plt.show()
 
-def DESI_main():
+def DESI_normal():
     draws = read_cmdstan_posterior(
         "DESI_normal_?.csv",
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
         drop_diagnostics=True,
     )
 
-    galaxy_fits = "data/DESI-DR1_TF_pv_cat_v15.fits"
-    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_desi(
-        galaxy_fits, row=None, sort_by_zobs=False
-    )
+    # galaxy_fits = "data/DESI-DR1_TF_pv_cat_v15.fits"
+    # xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_desi(
+    #     galaxy_fits, row=None, sort_by_zobs=False
+    # )
 
     # mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
 
@@ -748,6 +820,9 @@ def DESI_main():
     mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
+
+    create_average_grid_image(xhat_star, yhat_star, mean_y, grid_resolution_x=50, grid_resolution_y=50)
+
     plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1,label="Normal")
 
     plt.xscale("log")
@@ -756,20 +831,40 @@ def DESI_main():
     plt.legend()
     plt.savefig("DESI_redshift_normal.png", dpi=300)
     plt.clf()
+
 def DESI_tophat():
 
+    draws = read_cmdstan_posterior(
+        "DESI_base_?.csv",
+        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+        drop_diagnostics=True,
+    )
 
     # galaxy_fits = "data/DESI-DR1_TF_pv_cat_v15.fits"
     # xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_desi(
     #     galaxy_fits, row=None, sort_by_zobs=False
     # )
+    # y_threshold = -18  # Replace with your specific value
+
+    # # 2. Create a boolean mask
+    # # This creates an array of True/False values the same length as your data
+    # mask = yhat_star < y_threshold
+
+    # # 3. Apply the mask to all related arrays
+    # xhat_star = xhat_star[mask]
+    # yhat_star = yhat_star[mask]
+    # zobs_star = zobs_star[mask]
+
+    # # If you also need the uncertainties for the subset:
+    # sigma_x_star = sigma_x_star[mask]
+    # sigma_y_star = sigma_y_star[mask]
 
     # mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(draws, xhat_star, sigma_x_star, bounds_json="DESI_input.json")
 
     # # Your plot uses (predicted mean - observed yhat)
     # mean_y = mean_pred - yhat_star
     # sigma_y = sd_pred
-
+    # create_average_grid_image(xhat_star, yhat_star, mean_y, grid_resolution_x=50, grid_resolution_y=50)
     # plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1)
 
     galaxy_json = "DESI_input.json"
@@ -778,15 +873,44 @@ def DESI_tophat():
     
 
 
-    draws = read_cmdstan_posterior(
-        "DESI_base_?.csv",
-        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
-        drop_diagnostics=True,
-    )
+
 
     mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(draws, xhat_star, sigma_x_star, y_min=-22.5-0.1, y_max=-18.5+0.1)
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
+
+
+    fig, ax, img = create_average_grid_image(xhat_star, yhat_star, mean_y, grid_resolution_x=50, grid_resolution_y=50)
+    ax.set_xlabel(r'$\log{V/V_0}$')
+    ax.set_ylabel(r'$M$')
+    ax.set_title(r'$M_{\text{predicted}} - M$ (Filtered Subset)')
+
+    # 4. Add colorbar using the returned 'img' object
+    fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
+
+    plt.show()
+    fig, ax, img = create_average_grid_image(xhat_star, yhat_star, zobs_star, grid_resolution_x=50, grid_resolution_y=50)
+    ax.set_xlabel(r'$\log{V/V_0}$')
+    ax.set_ylabel(r'$M$')
+    ax.set_title(r'Redshift')
+
+    # 2. Add the colorbar
+    cbar = fig.colorbar(img, ax=ax, label='Average Redshift')
+
+    # 3. Get the symmetric limit (e.g., if data is ±0.5, this is 0.5)
+    # CenteredNorm stores this in 'halfrange'
+    current_vmax = img.norm.halfrange 
+
+    # 4. CRITICAL: Only change the VIEW of the colorbar, not the data mapping
+    # This crops the physical bar so it starts at White (0) and ends at Red (vmax)
+    cbar.ax.set_ylim(0, current_vmax)
+
+    # 5. Ensure the ticks match the new cropped view
+    import numpy as np
+    cbar.set_ticks(np.linspace(0, current_vmax, 5))
+    plt.show()
+
+    wef
     plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1,label="Top-Hat")
     plt.xscale("log")
     plt.xlabel(r"$z_{\text{obs}}$")
@@ -810,7 +934,8 @@ def DESI_tophat():
     plt.savefig("DESI_tophat_vs_normal.png", dpi=300)
     plt.clf()
 
-def MOCK_main():
+
+def MOCK_normal():
     # Posterior draws from the Normal (Gaussian) TF model
     draws = read_cmdstan_posterior(
         "MOCK_normal_?.csv",
@@ -900,5 +1025,5 @@ def MOCK_tophat():
     plt.savefig("MOCK_tophat_vs_normal.png", dpi=300)
     plt.clf()
 if __name__ == "__main__":
-    MOCK_tophat()
-    MOCK_main()
+    DESI_tophat()
+    # MOCK_main()
