@@ -821,10 +821,20 @@ def DESI_normal():
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
 
-    create_average_grid_image(xhat_star, yhat_star, mean_y, grid_resolution_x=50, grid_resolution_y=50)
+
+    fig, ax, img = create_average_grid_image(xhat_star, yhat_star, mean_y, grid_resolution_x=50, grid_resolution_y=50)
+    ax.set_xlabel(r'$\log{V/V_0}$')
+    ax.set_ylabel(r'$M$')
+    ax.set_title(r'$M_{\text{predicted}} - M$ (Filtered Subset)')
+
+    # 4. Add colorbar using the returned 'img' object
+    fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
+
+    plt.savefig('DESI_normal_grid.png', dpi=300)
+    plt.clf()
+
 
     plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1,label="Normal")
-
     plt.xscale("log")
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
@@ -872,13 +882,9 @@ def DESI_tophat():
         galaxy_json)
     
 
-
-
-
     mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(draws, xhat_star, sigma_x_star, y_min=-22.5-0.1, y_max=-18.5+0.1)
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
-
 
     fig, ax, img = create_average_grid_image(xhat_star, yhat_star, mean_y, grid_resolution_x=50, grid_resolution_y=50)
     ax.set_xlabel(r'$\log{V/V_0}$')
@@ -888,7 +894,10 @@ def DESI_tophat():
     # 4. Add colorbar using the returned 'img' object
     fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
 
-    plt.show()
+    plt.savefig('DESI_tophat_grid.png', dpi=300)
+    plt.clf()
+
+    # redshift plot
     fig, ax, img = create_average_grid_image(xhat_star, yhat_star, zobs_star, grid_resolution_x=50, grid_resolution_y=50)
     ax.set_xlabel(r'$\log{V/V_0}$')
     ax.set_ylabel(r'$M$')
@@ -904,13 +913,11 @@ def DESI_tophat():
     # 4. CRITICAL: Only change the VIEW of the colorbar, not the data mapping
     # This crops the physical bar so it starts at White (0) and ends at Red (vmax)
     cbar.ax.set_ylim(0, current_vmax)
-
-    # 5. Ensure the ticks match the new cropped view
-    import numpy as np
     cbar.set_ticks(np.linspace(0, current_vmax, 5))
-    plt.show()
+    plt.savefig('DESI_redshift_grid.png', dpi=300)
+    plt.clf()
 
-    wef
+
     plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1,label="Top-Hat")
     plt.xscale("log")
     plt.xlabel(r"$z_{\text{obs}}$")
@@ -1026,4 +1033,5 @@ def MOCK_tophat():
     plt.clf()
 if __name__ == "__main__":
     DESI_tophat()
+    DESI_normal()
     # MOCK_main()
