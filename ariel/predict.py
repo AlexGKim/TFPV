@@ -9,6 +9,7 @@ from astropy.io import fits
 import json
 from scipy.special import erf
 import matplotlib.colors as mcolors
+from scipy.stats import norm
 
 
 def create_average_grid_image(x_coords, y_coords, values, grid_resolution_x, grid_resolution_y, v_lim=None):
@@ -737,7 +738,8 @@ def ystar_pp_mean_sd_tophat_vectorized(
         alpha = (a - mu) / sig
         beta  = (b - mu) / sig
 
-        Z = _Phi(beta) - _Phi(alpha)
+        # Z = _Phi(beta) - _Phi(alpha)
+        Z = norm.cdf(beta) * (1 - np.exp((norm.logcdf(alpha) - norm.logcdf(beta))))  # alternative for better numerical stability in tails
 
         if on_bad_Z == "raise":
             if np.any(~np.isfinite(Z)) or np.any(Z <= 0.0):
@@ -1031,7 +1033,224 @@ def MOCK_tophat():
     plt.ylabel("Normal: mean_pred - y_obs (mag)")
     plt.savefig("MOCK_tophat_vs_normal.png", dpi=300)
     plt.clf()
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def DESI(kind="normal",
+         galaxy_json="DESI_input.json",
+         grid_resolution_x=50,
+         grid_resolution_y=50,
+         # tophat-only bounds:
+         y_min=-22.5 - 0.1,
+         y_max=-18.5 + 0.1,
+         # grids:
+         make_residual_grid=True,
+         make_redshift_grid=True,
+         # tophat-only comparison plot:
+         compare_tophat_vs_normal=True):
+    kind = kind.lower()
+    if kind not in {"normal", "tophat"}:
+        raise ValueError("kind must be 'normal' or 'tophat'")
+
+    # --- load data ---
+    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = (
+        load_xy_and_uncertainties_from_stan_json(galaxy_json)
+    )
+
+    # --- posterior + predictive ---
+    if kind == "normal":
+        draws = read_cmdstan_posterior(
+            "DESI_normal_?.csv",
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+            drop_diagnostics=True,
+        )
+        mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
+        label = "Normal"
+    else:
+        draws = read_cmdstan_posterior(
+            "DESI_base_?.csv",
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+            drop_diagnostics=True,
+        )
+        mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
+            draws, xhat_star, sigma_x_star, y_min=y_min, y_max=y_max
+        )
+        label = "Top-Hat"
+
+    mean_y = mean_pred - yhat_star
+    sigma_y = sd_pred
+
+    # --- GRID: residuals on (xhat, yhat) ---
+    if make_residual_grid:
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, mean_y,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r'$\log{V/V_0}$')
+        ax.set_ylabel(r'$M$')
+        ax.set_title(r'$M_{\text{predicted}} - M$ (Filtered Subset)')
+        fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
+        fig.savefig(f'DESI_{kind}_grid.png', dpi=300)
+        plt.close(fig)
+
+    # --- GRID: redshift on (xhat, yhat) ---
+    if make_redshift_grid:
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, zobs_star,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r'$\log{V/V_0}$')
+        ax.set_ylabel(r'$M$')
+        ax.set_title(r'Redshift')
+
+        cbar = fig.colorbar(img, ax=ax, label='Average Redshift')
+
+        # Keep your DESI_tophat behavior: crop the *visible* colorbar range if CenteredNorm-like
+        if kind == "tophat" and hasattr(img, "norm") and hasattr(img.norm, "halfrange"):
+            current_vmax = img.norm.halfrange
+            cbar.ax.set_ylim(0, current_vmax)
+            cbar.set_ticks(np.linspace(0, current_vmax, 5))
+
+        fig.savefig(f'DESI_redshift_grid_{kind}.png', dpi=300)
+        plt.close(fig)
+
+    # --- redshift residual errorbar plot ---
+    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1, label=label)
+    plt.xscale("log")
+    plt.xlabel(r"$z_{\text{obs}}$")
+    plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
+    plt.legend()
+    plt.savefig(f"DESI_redshift_{kind}.png", dpi=300)
+    plt.clf()
+
+    # --- optional: tophat vs normal scatter comparison ---
+    if kind == "tophat" and compare_tophat_vs_normal:
+        draws_n = read_cmdstan_posterior(
+            "DESI_normal_?.csv",
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+            drop_diagnostics=True,
+        )
+        mean_pred_n, sd_pred_n = ystar_pp_mean_sd_normal_vectorized(draws_n, xhat_star, sigma_x_star)
+        mean_y_normal = mean_pred_n - yhat_star
+
+        plt.scatter(mean_y, mean_y_normal, alpha=0.1)
+        plt.xlabel("Top-Hat: mean_pred - y_obs (mag)")
+        plt.ylabel("Normal: mean_pred - y_obs (mag)")
+        plt.savefig("DESI_tophat_vs_normal.png", dpi=300)
+        plt.clf()
+
+    return mean_y, sigma_y, zobs_star
+
+
+def MOCK(kind="normal",
+         galaxy_json="MOCK_n10000_input.json",
+         grid_resolution_x=50,
+         grid_resolution_y=50,
+         # tophat-only bounds:
+         y_min=-22.5 - 0.1,
+         y_max=-18.5 + 0.1,
+         # grids:
+         make_residual_grid=True,
+         make_redshift_grid=True,
+         # tophat-only comparison plot:
+         compare_tophat_vs_normal=True):
+    kind = kind.lower()
+    if kind not in {"normal", "tophat"}:
+        raise ValueError("kind must be 'normal' or 'tophat'")
+
+    # --- load mock data ---
+    # xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = (
+    #     load_xy_and_uncertainties_from_stan_json(galaxy_json)
+    # )
+
+    galaxy_csv = "data/TF_mock_tophat-mag_input.csv"
+    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_csv(
+        galaxy_csv, row=None, sort_by_zobs=True)
+
+    # --- posterior + predictive ---
+    if kind == "normal":
+        draws = read_cmdstan_posterior(
+            "MOCK_normal_?.csv",
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+            drop_diagnostics=True,
+        )
+        mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
+        label = "Normal"
+    else:
+        draws = read_cmdstan_posterior(
+            "MOCK_base_?.csv",
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+            drop_diagnostics=True,
+        )
+        mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
+            draws, xhat_star, sigma_x_star, y_min=y_min, y_max=y_max
+            # alternatively (if supported):
+            # , bounds_json=galaxy_json
+        )
+        label = "Top-Hat"
+
+    mean_y = mean_pred - yhat_star
+    sigma_y = sd_pred
+
+    # --- GRID: residuals on (xhat, yhat) ---
+    if make_residual_grid:
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, mean_y,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r'$\log{V/V_0}$')
+        ax.set_ylabel(r'$M$')
+        ax.set_title(r'$M_{\text{predicted}} - M$')
+        fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
+        fig.savefig(f'MOCK_{kind}_grid.png', dpi=300)
+        plt.close(fig)
+
+    # --- GRID: redshift on (xhat, yhat) ---
+    if make_redshift_grid:
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, zobs_star,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r'$\log{V/V_0}$')
+        ax.set_ylabel(r'$M$')
+        ax.set_title(r'Redshift')
+        fig.colorbar(img, ax=ax, label='Average Redshift')
+        fig.savefig(f'MOCK_redshift_grid_{kind}.png', dpi=300)
+        plt.close(fig)
+
+    # --- redshift residual errorbar plot ---
+    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1, label=label)
+    plt.xscale("log")
+    plt.xlabel(r"$z_{\text{obs}}$")
+    plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
+    plt.legend()
+    plt.savefig(f"MOCK_redshift_{kind}.png", dpi=300)
+    plt.clf()
+
+    # --- optional: tophat vs normal scatter comparison ---
+    if kind == "tophat" and compare_tophat_vs_normal:
+        draws_normal = read_cmdstan_posterior(
+            "MOCK_normal_?.csv",
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+            drop_diagnostics=True,
+        )
+        mean_pred_n, sd_pred_n = ystar_pp_mean_sd_normal_vectorized(
+            draws_normal, xhat_star, sigma_x_star
+        )
+        mean_y_normal = mean_pred_n - yhat_star
+
+        plt.scatter(mean_y, mean_y_normal, alpha=0.1)
+        plt.xlabel("Top-Hat: mean_pred - y_obs (mag)")
+        plt.ylabel("Normal: mean_pred - y_obs (mag)")
+        plt.savefig("MOCK_tophat_vs_normal.png", dpi=300)
+        plt.clf()
+
+    return mean_y, sigma_y, zobs_star
 if __name__ == "__main__":
-    DESI_tophat()
-    DESI_normal()
-    # MOCK_main()
+    # MOCK("normal")
+    MOCK("tophat")
