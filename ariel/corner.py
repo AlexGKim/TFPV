@@ -259,13 +259,12 @@ if __name__ == '__main__':
         )
     else:
         infiles = [
-            # "MOCK_base_?.csv",
-            # "MOCK_normal_?.csv",
-            "DESI_base_?.csv",
-
-            "DESI_normal_?.csv",
+            "MOCK_base_?.csv",
+            "MOCK_normal_?.csv",
+            # "DESI_base_?.csv",
+            # "DESI_normal_?.csv",
         ]
-        outfile = "DESI.png"
+        outfile = "temp.png"
 
         truth = {
             "slope":       -8.0,
