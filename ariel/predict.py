@@ -1149,9 +1149,6 @@ def MOCK(kind="normal",
          galaxy_json="MOCK_n10000_input.json",
          grid_resolution_x=50,
          grid_resolution_y=50,
-         # tophat-only bounds:
-         y_min=-22.5 - 0.1,
-         y_max=-18.5 + 0.1,
          # grids:
          make_residual_grid=True,
          make_redshift_grid=True,
@@ -1166,10 +1163,21 @@ def MOCK(kind="normal",
     #     load_xy_and_uncertainties_from_stan_json(galaxy_json)
     # )
 
+
+
     galaxy_csv = "data/TF_mock_tophat-mag_input.csv"
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_csv(
         galaxy_csv, row=None, sort_by_zobs=True)
-
+    n = zobs_star.shape[0]
+    N =10000
+    idx = np.random.choice(n, size=N, replace=False)
+    xhat_star = xhat_star[idx]
+    sigma_x_star = sigma_x_star[idx]
+    yhat_star = yhat_star[idx]
+    sigma_y_star = sigma_y_star[idx]
+    zobs_star = zobs_star[idx]
+    
+    
     # --- posterior + predictive ---
     if kind == "normal":
         draws = read_cmdstan_posterior(
@@ -1185,6 +1193,11 @@ def MOCK(kind="normal",
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
             drop_diagnostics=True,
         )
+        with open(galaxy_json, 'r') as f:
+            data = json.load(f)
+            y_min = data.get('y_min')
+            y_max = data.get('y_max')
+
         mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
             draws, xhat_star, sigma_x_star, y_min=y_min, y_max=y_max
             # alternatively (if supported):
@@ -1252,5 +1265,5 @@ def MOCK(kind="normal",
 
     return mean_y, sigma_y, zobs_star
 if __name__ == "__main__":
-    # MOCK("normal")
-    MOCK("tophat")
+    MOCK("normal")
+    # MOCK("tophat")
