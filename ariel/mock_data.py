@@ -126,7 +126,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     N_filtered = len(x)
 
     if sample_size is not None and sample_size < N_filtered:
-        np.random.seed(43)
+        np.random.seed(39)
         sample_indices = np.random.choice(N_filtered, size=sample_size, replace=False)
 
         x = x[sample_indices]
