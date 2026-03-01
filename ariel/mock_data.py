@@ -126,7 +126,7 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
     N_filtered = len(x)
 
     if sample_size is not None and sample_size < N_filtered:
-        np.random.seed(42)
+        np.random.seed(43)
         sample_indices = np.random.choice(N_filtered, size=sample_size, replace=False)
 
         x = x[sample_indices]
@@ -274,9 +274,19 @@ def process_tf_data(csv_file, data_output_file, init_output_file, haty_max=-16, 
         print("\nWARNING: Final sample size is 0 after cuts.")
 
 
-def plot_tf_data(json_file, output_file='tf_scatter_plot.png'):
+def plot_tf_data(json_file, output_file='tf_scatter_plot.png', all_rows_csv=None):
     """
     Create scatter plot with error bars from TF data JSON file.
+
+    Parameters
+    ----------
+    json_file : str
+        Path to the Stan JSON data file (filtered data).
+    output_file : str, optional
+        Output PNG filename.
+    all_rows_csv : str, optional
+        Path to the raw CSV file. If provided, all rows are plotted first
+        with alpha=0.01 as a background layer showing the full dataset.
     """
     with open(json_file, 'r') as f:
         data = json.load(f)
@@ -294,6 +304,25 @@ def plot_tf_data(json_file, output_file='tf_scatter_plot.png'):
     intercept_plane2 = data.get('intercept_plane2', None)
 
     fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Plot all rows from CSV as background with very low alpha
+    if all_rows_csv is not None:
+        x_all, y_all, sx_all, sy_all = [], [], [], []
+        with open(all_rows_csv, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                x_all.append(float(row['log_V_V0']))
+                y_all.append(float(row['M_abs']))
+                sx_all.append(float(row['log_V_V0_unc']))
+                sy_all.append(float(row['M_abs_unc']))
+        x_all = np.array(x_all)
+        y_all = np.array(y_all)
+        sx_all = np.array(sx_all)
+        sy_all = np.array(sy_all)
+        ax.errorbar(x_all, y_all, xerr=sx_all, yerr=sy_all,
+                    fmt='o', markersize=3, alpha=0.01,
+                    elinewidth=0.5, capsize=0, color='gray',
+                    label=f'All rows N = {len(x_all)}')
 
     ax.errorbar(x, y, xerr=sigma_x, yerr=sigma_y,
                 fmt='o', markersize=3, alpha=0.6,
@@ -381,4 +410,4 @@ if __name__ == '__main__':
                     intercept_plane=intercept_plane, intercept_plane2=intercept_plane2)
 
     plot_output = output_json.replace('.json', '.png')
-    plot_tf_data(output_json, plot_output)
+    plot_tf_data(output_json, plot_output, all_rows_csv=input_csv)

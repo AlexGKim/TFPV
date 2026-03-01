@@ -193,8 +193,8 @@ parameters {
   real<lower=0, upper=4> sigma_int_y; // in y-units
 
   // fails to converge if we try to fit mu_y_TF and tau
-  real<upper=0> mu_y_TF;
-  real<lower=0, upper=200> tau;
+  real mu_y_TF;
+  real<lower=0, upper= 100> tau;
 }
 transformed parameters {
   // real sigma_int_y;
