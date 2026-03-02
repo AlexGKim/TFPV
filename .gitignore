@@ -1,4 +1,8 @@
-fit*.json
-fit*.csv
+*json
+*csv
+*fits
 *.png
 output*/
+*.aux
+*.log
+!ariel/data
