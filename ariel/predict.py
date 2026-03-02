@@ -925,6 +925,7 @@ def DESI_tophat():
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
     plt.legend()
+    plt.ylim((-9,6))
     plt.savefig("DESI_redshift_tophat.png", dpi=300)
     plt.clf()
 
@@ -1038,7 +1039,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def DESI(kind="normal",
-         galaxy_json="DESI_input.json",
+         galaxy_fits="data/DESI-DR1_TF_pv_cat_v15.fits",
          grid_resolution_x=50,
          grid_resolution_y=50,
          # tophat-only bounds:
@@ -1054,8 +1055,9 @@ def DESI(kind="normal",
         raise ValueError("kind must be 'normal' or 'tophat'")
 
     # --- load data ---
-    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = (
-        load_xy_and_uncertainties_from_stan_json(galaxy_json)
+
+    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_desi(
+        galaxy_fits, row=None, sort_by_zobs=False
     )
 
     # --- posterior + predictive ---
@@ -1074,12 +1076,30 @@ def DESI(kind="normal",
             drop_diagnostics=True,
         )
         mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
-            draws, xhat_star, sigma_x_star, y_min=y_min, y_max=y_max
+            draws, xhat_star, sigma_x_star, y_min=y_min, y_max=y_max, on_bad_Z="floor", Z_floor=1e-300
         )
         label = "Top-Hat"
 
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
+
+    # --- load data ---
+
+    xhat_star2, sigma_x_star2, yhat_star2, sigma_y_star2, zobs_star2 = load_xy_and_uncertainties_from_stan_json(
+        "DESI_input.json")
+    
+
+    # --- posterior + predictive ---
+    if kind == "normal":
+        mean_pred2, sd_pred2 = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star2, sigma_x_star2)
+    else:
+        mean_pred2, sd_pred2 = ystar_pp_mean_sd_tophat_vectorized(
+            draws, xhat_star2, sigma_x_star2, y_min=y_min, y_max=y_max, on_bad_Z="floor", Z_floor=1e-300
+        )
+
+    mean_y2 = mean_pred2 - yhat_star2
+    sigma_y2= sd_pred2
+
 
     # --- GRID: residuals on (xhat, yhat) ---
     if make_residual_grid:
@@ -1090,7 +1110,7 @@ def DESI(kind="normal",
         )
         ax.set_xlabel(r'$\log{V/V_0}$')
         ax.set_ylabel(r'$M$')
-        ax.set_title(r'$M_{\text{predicted}} - M$ (Filtered Subset)')
+        ax.set_title(r'$M_{\text{predicted}} - M$')
         fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
         fig.savefig(f'DESI_{kind}_grid.png', dpi=300)
         plt.close(fig)
@@ -1118,11 +1138,17 @@ def DESI(kind="normal",
         plt.close(fig)
 
     # --- redshift residual errorbar plot ---
-    plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt="o", alpha=0.1, label=label)
+    # plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt=".", alpha=0.05, label=label)
+    plt.scatter(zobs_star, mean_y, marker=".", alpha=0.05, label="Full Sample")
+    plt.scatter(zobs_star2, mean_y2, marker=".", alpha=0.2, label=f"Training Susbset")
+
+    
     plt.xscale("log")
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
+    plt.axhline(y=0, color='gray', linestyle='dashed', linewidth=1.5, label='y=0 line')
     plt.legend()
+    plt.ylim((-8,4))
     plt.savefig(f"DESI_redshift_{kind}.png", dpi=300)
     plt.clf()
 
@@ -1144,6 +1170,192 @@ def DESI(kind="normal",
 
     return mean_y, sigma_y, zobs_star
 
+
+from matplotlib.colors import TwoSlopeNorm, SymLogNorm
+from matplotlib.ticker import FixedLocator, StrMethodFormatter, ScalarFormatter
+
+# ----------------------------------------------------------------------
+# Project‑specific helper imports (keep yours)
+# ----------------------------------------------------------------------
+# from your_module import (load_xy_and_uncertainties_from_desi,
+#                         read_cmdstan_posterior,
+#                         ystar_pp_mean_sd_normal_vectorized,
+#                         ystar_pp_mean_sd_tophat_vectorized,
+#                         create_average_grid_image)
+
+def _symmetric_log_ticks(vmin, vmax, linthresh=0.01, n_ticks=7):
+    if vmax <= linthresh:
+        return np.linspace(vmin, vmax, n_ticks)
+    n_pos = (n_ticks - 1) // 2
+    pos = np.logspace(np.log10(linthresh), np.log10(vmax), n_pos)
+    pos[0] = linthresh
+    pos[-1] = vmax
+    return np.concatenate((-pos[::-1], [0.0], pos))
+
+def DESI_compare(
+    galaxy_fits="data/DESI-DR1_TF_pv_cat_v15.fits",
+    grid_resolution_x=50,
+    grid_resolution_y=50,
+    y_min=-22.5 - 0.1,
+    y_max=-18.5 + 0.1,
+    make_residual_grid=True,
+    make_redshift_grid=True,
+    make_scatter=True,
+    output_prefix="DESI",
+    cmap_diff="RdBu_r",
+    fixed_range=1.0,
+    log_scale=False,
+    log_base=10.0,
+    linthresh=0.01,
+):
+    """
+    Plot the magnitude‑prediction difference (top‑hat – normal) and optionally
+    show the colour‑bars on a symmetric‑log scale.
+    """
+    # ------------------------------------------------------------------
+    # 1️⃣ Load data
+    # ------------------------------------------------------------------
+    (xhat_star, sigma_x_star, yhat_star, sigma_y_star,
+     zobs_star) = load_xy_and_uncertainties_from_desi(
+        galaxy_fits, row=None, sort_by_zobs=False)
+
+    # ------------------------------------------------------------------
+    # 2️⃣ Read posteriors
+    # ------------------------------------------------------------------
+    draws_normal = read_cmdstan_posterior(
+        "DESI_normal_?.csv",
+        keep=["slope", "intercept.1", "sigma_int_x",
+              "sigma_int_y", "mu_y_TF", "tau"],
+        drop_diagnostics=True,
+    )
+    draws_tophat = read_cmdstan_posterior(
+        "DESI_base_?.csv",
+        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+        drop_diagnostics=True,
+    )
+
+    # ------------------------------------------------------------------
+    # 3️⃣ Predict magnitudes
+    # ------------------------------------------------------------------
+    mean_pred_norm, sd_pred_norm = ystar_pp_mean_sd_normal_vectorized(
+        draws_normal, xhat_star, sigma_x_star)
+    mean_pred_top, sd_pred_top = ystar_pp_mean_sd_tophat_vectorized(
+        draws_tophat,
+        xhat_star,
+        sigma_x_star,
+        y_min=y_min,
+        y_max=y_max,
+        on_bad_Z="floor",
+        Z_floor=1e-300,
+    )
+
+    # ------------------------------------------------------------------
+    # 4️⃣ Residuals & difference
+    # ------------------------------------------------------------------
+    resid_norm = mean_pred_norm - yhat_star
+    resid_top  = mean_pred_top  - yhat_star
+    diff = resid_top - resid_norm
+    diff_sd = np.sqrt(sd_pred_top**2 + sd_pred_norm**2)
+
+    diff    = np.nan_to_num(diff,    nan=0.0)
+    diff_sd = np.nan_to_num(diff_sd, nan=0.0)
+
+    # ------------------------------------------------------------------
+    # 5️⃣ Normaliser + colour‑bar tick objects
+    # ------------------------------------------------------------------
+    vmin = -fixed_range
+    vmax =  fixed_range
+
+    if log_scale:
+        norm = SymLogNorm(linthresh=linthresh, linscale=1.0,
+                          vmin=vmin, vmax=vmax, base=log_base)
+
+        ticks = _symmetric_log_ticks(vmin, vmax,
+                                     linthresh=linthresh, n_ticks=7)
+        _cbar_locator   = FixedLocator(ticks)
+        _cbar_formatter = StrMethodFormatter("{x:.2f}")
+    else:
+        norm = TwoSlopeNorm(vcenter=0.0, vmin=vmin, vmax=vmax)
+
+        linear_ticks = np.linspace(vmin, vmax, 7)
+        _cbar_locator   = FixedLocator(linear_ticks)
+        _cbar_formatter = StrMethodFormatter("{x:.2f}")
+
+    # ------------------------------------------------------------------
+    # 6️⃣ Residual‑difference grid
+    # ------------------------------------------------------------------
+    if make_residual_grid:
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, diff,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r"$\log{V/V_0}$")
+        ax.set_ylabel(r"$M$")
+        ax.set_title(r"$(M_{\rm pred}^{\rm tophat} - M_{\rm pred}^{\rm normal})$")
+
+        img.set_cmap(cmap_diff)
+        img.set_norm(norm)
+
+        cbar = fig.colorbar(img, ax=ax, label="Magnitude Difference")
+        cbar.ax.yaxis.set_major_locator(_cbar_locator)
+        cbar.ax.yaxis.set_major_formatter(_cbar_formatter)
+        cbar.update_ticks()
+        cbar.ax.tick_params(labelsize=9)
+
+        fig.savefig(f"{output_prefix}_diff_grid.png",
+                    dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
+    # ------------------------------------------------------------------
+    # 7️⃣ Redshift‑averaged grid
+    # ------------------------------------------------------------------
+    if make_redshift_grid:
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, diff,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r"$\log{V/V_0}$")
+        ax.set_ylabel(r"$M$")
+        ax.set_title(
+            r"Redshift‑averaged $(M_{\rm pred}^{\rm tophat} - M_{\rm pred}^{\rm normal})$"
+        )
+
+        img.set_cmap(cmap_diff)
+        img.set_norm(norm)
+
+        cbar = fig.colorbar(img, ax=ax, label="Magnitude Difference")
+        cbar.ax.yaxis.set_major_locator(_cbar_locator)
+        cbar.ax.yaxis.set_major_formatter(_cbar_formatter)
+        cbar.update_ticks()
+        cbar.ax.tick_params(labelsize=9)
+
+        fig.savefig(f"{output_prefix}_redshift_grid_diff.png",
+                    dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
+    # ------------------------------------------------------------------
+    # 8️⃣ Scatter vs redshift (unchanged)
+    # ------------------------------------------------------------------
+    if make_scatter:
+        plt.figure(figsize=(6, 4))
+        plt.scatter(zobs_star, diff, s=3, alpha=0.05,
+                    label=r"Top‑Hat – Normal")
+        plt.axhline(0, color="k", ls="--", linewidth=0.8)
+
+        plt.xscale("log")
+        plt.xlabel(r"$z_{\rm obs}$")
+        plt.ylabel(r"$\Delta M_{\rm pred}$ (mag)")
+        plt.title(r"Prediction difference vs. redshift")
+        plt.ylim(vmin, vmax)            # respects the fixed range
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f"{output_prefix}_redshift_diff.png",
+                    dpi=300, bbox_inches="tight")
+        plt.close()
+
+    return diff, diff_sd, zobs_star
 
 def MOCK(kind="normal",
          galaxy_json="MOCK_n10000_input.json",
@@ -1265,5 +1477,8 @@ def MOCK(kind="normal",
 
     return mean_y, sigma_y, zobs_star
 if __name__ == "__main__":
-    MOCK("normal")
+    DESI("normal")
+    DESI("tophat")
+    # DESI_compare(log_scale=True, linthresh=0.02, log_base=10)
+    # MOCK("normal")
     # MOCK("tophat")

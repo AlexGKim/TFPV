@@ -13,22 +13,41 @@ from astropy.io import fits
 
 
 def process_desi_tf_data(
-    fits_file, data_output_file, init_output_file,
-    haty_max=-16, haty_min=-1.0e9,
-    plane_cut=False, slope_plane=None, intercept_plane=None, intercept_plane2=None,
-    n_objects=None, random_seed=None,
+    fits_file,
+    data_output_file,
+    init_output_file,
+    haty_max=-16,
+    haty_min=-1.0e9,
+    plane_cut=False,
+    slope_plane=None,
+    intercept_plane=None,
+    intercept_plane2=None,
+    n_objects=None,
+    random_seed=None,
     *,
     z_col="Z_DESI",
-    z_col_candidates=("zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE", "Z_DESI"),
+    z_col_candidates=(
+        "zobs",
+        "ZOBS",
+        "Z",
+        "ZHELIO",
+        "Z_CMB",
+        "ZDESI",
+        "ZTRUE",
+        "Z_DESI",
+    ),
+    z_obs_min=None,  # <<< NEW: Minimum redshift for inclusion
 ):
     """
     Process DESI TF data: convert to Stan JSON format and create initial conditions.
-    (Modified to correctly load/propagate z_obs.)
+    (Modified to correctly load/propagate z_obs and apply an optional redshift cut.)
     """
 
     # Validate plane cut parameters
     if plane_cut and (slope_plane is None or intercept_plane is None):
-        raise ValueError("slope_plane and intercept_plane must be provided when plane_cut=True")
+        raise ValueError(
+            "slope_plane and intercept_plane must be provided when plane_cut=True"
+        )
 
     # If two-sided, enforce ordering c1 < c2
     two_sided = plane_cut and (intercept_plane2 is not None)
@@ -73,16 +92,16 @@ def process_desi_tf_data(
     # Convert velocities to log velocities
     V0 = 100.0  # km/s reference
 
-    # Filter out invalid data (NaN, inf, non-positive velocities, etc.)
+    # Filter out invalid data (NaN, inf, non‑positive velocities, etc.)
     valid_mask = (
-        np.isfinite(V_0p4R26) &
-        np.isfinite(V_0p4R26_ERR) &
-        np.isfinite(R_ABSMAG_SB26) &
-        np.isfinite(R_ABSMAG_SB26_ERR) &
-        np.isfinite(z_all_raw) &
-        (V_0p4R26 > 0) &
-        (V_0p4R26_ERR > 0) &
-        (R_ABSMAG_SB26_ERR >= 0)
+        np.isfinite(V_0p4R26)
+        & np.isfinite(V_0p4R26_ERR)
+        & np.isfinite(R_ABSMAG_SB26)
+        & np.isfinite(R_ABSMAG_SB26_ERR)
+        & np.isfinite(z_all_raw)
+        & (V_0p4R26 > 0)
+        & (V_0p4R26_ERR > 0)
+        & (R_ABSMAG_SB26_ERR >= 0)
     )
 
     V_0p4R26 = V_0p4R26[valid_mask]
@@ -107,12 +126,13 @@ def process_desi_tf_data(
     zobs_all = z_all_raw
 
     # ============================================================================
-    # SECTION 2: APPLY SELECTION CUTS (NOW INCLUDES haty_min) + propagate zobs
+    # SECTION 2: APPLY SELECTION CUTS (NOW INCLUDES haty_min AND z_obs_min)
     # ============================================================================
     x_data, y_data, sigma_x_data, sigma_y_data, z_data = [], [], [], [], []
 
     # Track filtering statistics
     y_filtered_rows = 0
+    z_filtered_rows = 0
     plane_pass_rows = 0
 
     for i in range(len(x_all)):
@@ -123,12 +143,18 @@ def process_desi_tf_data(
         if (y_val < haty_max) and (y_val > haty_min):
             y_filtered_rows += 1
 
+            # ---- NEW REDSHIFT CUT ----
+            if (z_obs_min is not None) and (zobs_all[i] <= z_obs_min):
+                continue
+            z_filtered_rows += 1
+            # ---------------------------
+
             if plane_cut:
                 lower_bound_oblique = slope_plane * x_val + intercept_plane
                 lower_bound = max(haty_min, lower_bound_oblique)
 
                 if not two_sided:
-                    # One-sided: lower_bound <= y
+                    # One‑sided: lower_bound <= y
                     if lower_bound <= y_val:
                         x_data.append(x_val)
                         y_data.append(y_val)
@@ -137,7 +163,7 @@ def process_desi_tf_data(
                         z_data.append(zobs_all[i])
                         plane_pass_rows += 1
                 else:
-                    # Two-sided: lower_bound <= y <= min(haty_max, upper_bound_oblique)
+                    # Two‑sided: lower_bound <= y <= min(haty_max, upper_bound_oblique)
                     upper_bound_oblique = slope_plane * x_val + intercept_plane2
                     upper_bound = min(haty_max, upper_bound_oblique)
 
@@ -149,7 +175,7 @@ def process_desi_tf_data(
                         z_data.append(zobs_all[i])
                         plane_pass_rows += 1
             else:
-                # No plane cut (just the y-range cut)
+                # No plane cut (just the y‑range and optional redshift cut)
                 x_data.append(x_val)
                 y_data.append(y_val)
                 sigma_x_data.append(sigma_x_all[i])
@@ -175,7 +201,9 @@ def process_desi_tf_data(
         sigma_x = sigma_x[idx]
         sigma_y = sigma_y[idx]
         z_obs = z_obs[idx]
-        print(f"  Subsampled from {N_after_cuts} to {n_objects} objects (random_seed={random_seed})")
+        print(
+            f"  Subsampled from {N_after_cuts} to {n_objects} objects (random_seed={random_seed})"
+        )
 
     # Convert back to lists for JSON serialization
     x_data = x.tolist()
@@ -200,7 +228,9 @@ def process_desi_tf_data(
         y_max_data = -15.0
 
     mu_y_TF = float(np.mean(y)) if N_total > 0 else 0.0
-    tau = 1.5 * float(np.std(y, ddof=1)) if N_total > 1 else 1.0
+    tau = (
+        1.5 * float(np.std(y, ddof=1)) if N_total > 1 else 1.0
+    )
 
     stan_data = {
         "N_bins": N_bins,
@@ -211,11 +241,12 @@ def process_desi_tf_data(
         "sigma_y": sigma_y_data,
         "haty_max": float(haty_max),
         "haty_min": float(haty_min),
-        "y_min": float(haty_min)-0.5,
-        "y_max": float(haty_max)+1,
+        "y_min": float(haty_min) - 0.5,
+        "y_max": float(haty_max) + 1,
         "mu_y_TF": mu_y_TF,
         "tau": tau,
-        "z_obs": z_obs_data,   # <-- FIXED: now defined, aligned, and JSON-serializable
+        "z_obs": z_obs_data,  # now defined, aligned, and JSON‑serializable
+        "z_obs_min": float(z_obs_min) if z_obs_min is not None else None,
     }
 
     if plane_cut:
@@ -270,97 +301,175 @@ def process_desi_tf_data(
     # ============================================================================
     # SECTION 6: PRINT SUMMARY STATISTICS
     # ============================================================================
-    print(f"\nData conversion complete!")
+    print("\nData conversion complete!")
     print(f"Stan data output file: {data_output_file}")
     print(f"Initial conditions output file: {init_output_file}")
 
-    print(f"\nFiltering:")
+    print("\nFiltering:")
     print(f"  Total rows in FITS: {total_rows}")
     print(f"  Valid rows (finite, positive velocities, finite z): {valid_rows}")
     print(f"  Rows with {haty_min} < y < {haty_max}: {y_filtered_rows}")
 
+    if z_obs_min is not None:
+        print(f"  Rows with z_obs > {z_obs_min}: {z_filtered_rows}")
+
     if plane_cut:
         if not two_sided:
-            print(f"  Rows passing plane cut (max(haty_min, bar_s*x+c1) <= y): {plane_pass_rows}")
-            print(f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}")
-            print(f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}")
+            print(
+                f"  Rows passing plane cut (max({haty_min}, bar_s*x+c1) <= y): {plane_pass_rows}"
+            )
+            print(
+                f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}"
+            )
+            print(
+                f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}"
+            )
         else:
-            print(f"  Rows passing two-sided plane cut: {plane_pass_rows}")
-            print(f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}")
-            print(f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}, c2 = {intercept_plane2}")
+            print(f"  Rows passing two‑sided plane cut: {plane_pass_rows}")
+            print(
+                f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}"
+            )
+            print(
+                f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}, c2 = {intercept_plane2}"
+            )
 
     print(f"  Rows filtered out (by y cut only): {valid_rows - y_filtered_rows}")
     print(f"  haty_max (selection upper threshold): {haty_max}")
     print(f"  haty_min (selection lower threshold): {haty_min}")
 
-    print(f"\nSummary:")
+    print("\nSummary:")
     print(f"  Number of redshift bins: {N_bins}")
     print(f"  Final sample size: {N_total}")
     if N_total > 0:
         print(f"  z_obs range: [{np.min(z_obs):.6f}, {np.max(z_obs):.6f}]")
 
     # Return data for plotting (plot doesn't use z, but we return it for completeness)
-    return x_all, y_all, sigma_x_all, sigma_y_all, zobs_all, x, y, sigma_x, sigma_y, z_obs
+    return (
+        x_all,
+        y_all,
+        sigma_x_all,
+        sigma_y_all,
+        zobs_all,
+        x,
+        y,
+        sigma_x,
+        sigma_y,
+        z_obs,
+    )
 
 
-def plot_desi_tf_data(x_all, y_all, sigma_x_all, sigma_y_all,
-                      x_selected, y_selected, sigma_x_selected, sigma_y_selected,
-                      haty_max=None, haty_min=None,
-                      slope_plane=None, intercept_plane=None, intercept_plane2=None,
-                      output_file='desi_tf_scatter_plot.png'):
+def plot_desi_tf_data(
+    x_all,
+    y_all,
+    sigma_x_all,
+    sigma_y_all,
+    x_selected,
+    y_selected,
+    sigma_x_selected,
+    sigma_y_selected,
+    haty_max=None,
+    haty_min=None,
+    slope_plane=None,
+    intercept_plane=None,
+    intercept_plane2=None,
+    output_file="desi_tf_scatter_plot.png",
+):
     """
     Create scatter plot showing complete sample (low alpha) and selected sample (high alpha).
     """
     fig, ax = plt.subplots(figsize=(10, 8))
 
     # Plot complete sample with low alpha
-    ax.errorbar(x_all, y_all, xerr=sigma_x_all, yerr=sigma_y_all,
-                fmt='o', markersize=2, alpha=0.2, color='gray',
-                elinewidth=0.3, capsize=0,
-                label=f'Complete sample (N = {len(x_all)})')
+    ax.errorbar(
+        x_all,
+        y_all,
+        xerr=sigma_x_all,
+        yerr=sigma_y_all,
+        fmt="o",
+        markersize=2,
+        alpha=0.2,
+        color="gray",
+        elinewidth=0.3,
+        capsize=0,
+        label=f"Complete sample (N = {len(x_all)})",
+    )
 
     # Plot selected sample with high alpha
-    ax.errorbar(x_selected, y_selected, xerr=sigma_x_selected, yerr=sigma_y_selected,
-                fmt='o', markersize=3, alpha=0.8, color='blue',
-                elinewidth=0.5, capsize=0,
-                label=f'Selected sample (N = {len(x_selected)})')
+    ax.errorbar(
+        x_selected,
+        y_selected,
+        xerr=sigma_x_selected,
+        yerr=sigma_y_selected,
+        fmt="o",
+        markersize=3,
+        alpha=0.8,
+        color="blue",
+        elinewidth=0.5,
+        capsize=0,
+        label=f"Selected sample (N = {len(x_selected)})",
+    )
 
     if haty_max is not None:
-        ax.axhline(y=haty_max, color='red', linestyle='--',
-                   linewidth=2, alpha=0.8,
-                   label=f'$\\hat{{y}}_{{\\rm max}}$ = {haty_max}')
+        ax.axhline(
+            y=haty_max,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            alpha=0.8,
+            label=f"$\\hat{{y}}_{{\\rm max}}$ = {haty_max}",
+        )
     if haty_min is not None:
-        ax.axhline(y=haty_min, color='orange', linestyle='--',
-                   linewidth=2, alpha=0.8,
-                   label=f'$\\hat{{y}}_{{\\rm min}}$ = {haty_min}')
+        ax.axhline(
+            y=haty_min,
+            color="orange",
+            linestyle="--",
+            linewidth=2,
+            alpha=0.8,
+            label=f"$\\hat{{y}}_{{\\rm min}}$ = {haty_min}",
+        )
 
-    # Plot one or two parallel plane-cut boundaries if present
+    # Plot one or two parallel plane‑cut boundaries if present
     if slope_plane is not None and intercept_plane is not None and len(x_all) > 0:
         x_range = np.array([np.min(x_all) - 0.1, np.max(x_all) + 0.1])
 
         y_plane1 = slope_plane * x_range + intercept_plane
-        ax.plot(x_range, y_plane1, 'g--', linewidth=2, alpha=0.8,
-                label=f'Plane cut 1: y = {slope_plane:.1f}x + {intercept_plane:.1f}')
+        ax.plot(
+            x_range,
+            y_plane1,
+            "g--",
+            linewidth=2,
+            alpha=0.8,
+            label=f"Plane cut 1: y = {slope_plane:.1f}x + {intercept_plane:.1f}",
+        )
 
         if intercept_plane2 is not None:
             y_plane2 = slope_plane * x_range + intercept_plane2
-            ax.plot(x_range, y_plane2, 'g-.', linewidth=2, alpha=0.8,
-                    label=f'Plane cut 2: y = {slope_plane:.1f}x + {intercept_plane2:.1f}')
+            ax.plot(
+                x_range,
+                y_plane2,
+                "g-.",
+                linewidth=2,
+                alpha=0.8,
+                label=f"Plane cut 2: y = {slope_plane:.1f}x + {intercept_plane2:.1f}",
+            )
 
-    ax.set_xlabel(r'$\hat{x}$ = log($V_{0.4R26}/V_0$)', fontsize=12)
-    ax.set_ylabel(r'$\hat{y}$ = $R\_ABSMAG\_SB26$ (absolute magnitude)', fontsize=12)
-    ax.set_title('DESI DR1 Tully-Fisher Data', fontsize=14, fontweight='bold')
+    ax.set_xlabel(r"$\hat{x}$ = log($V_{0.4R26}/V_0$)", fontsize=12)
+    ax.set_ylabel(
+        r"$\hat{y}$ = $R\_ABSMAG\_SB26$ (absolute magnitude)",
+        fontsize=12,
+    )
+    ax.set_title("DESI DR1 Tully‑Fisher Data", fontsize=14, fontweight="bold")
 
     ax.invert_yaxis()
-    ax.grid(True, alpha=0.3, linestyle='--')
-    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3, linestyle="--")
+    ax.legend(loc="best", fontsize=10)
 
     plt.tight_layout()
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    plt.savefig(output_file, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"\nPlot saved to: {output_file}")
 
-    print(f"\nPlot summary:")
+    print("\nPlot summary:")
     print(f"  Complete sample: {len(x_all)} galaxies")
     print(f"  Selected sample: {len(x_selected)} galaxies")
     if len(x_all) > 0:
@@ -371,26 +480,42 @@ def plot_desi_tf_data(x_all, y_all, sigma_x_all, sigma_y_all,
         print(f"  Selected y range: [{np.min(y_selected):.3f}, {np.max(y_selected):.3f}]")
 
 
-if __name__ == '__main__':
-    input_fits = 'data/DESI-DR1_TF_pv_cat_v15.fits'
+if __name__ == "__main__":
+    input_fits = "data/DESI-DR1_TF_pv_cat_v15.fits"
 
-    haty_max = -19.0    # there is an apparant outlier slightly fainter than -19.0
-    haty_min = -22.
+    haty_max = -19.0  # there is an apparent outlier slightly fainter than -19.0
+    haty_min = -22.0
 
     plane_cut = True
     slope_plane = -6.5
-    intercept_plane = -20.5     # c1 (lower oblique bound)
-    intercept_plane2 = -18.5    # c2 (upper oblique bound); set to None for one-sided
+    intercept_plane = -20.5  # c1 (lower oblique bound)
+    intercept_plane2 = -18.5  # c2 (upper oblique bound); set to None for one‑sided
 
-    n_objects = None            # set to an int to subsample the selected objects, e.g. 500
-    random_seed = None          # set to an int for reproducible subsampling, e.g. 42
+    # <<< NEW: user‑specified minimum redshift >>>
+    z_obs_min = 0.01  # e.g. 0.1 to keep only galaxies with z > 0.1
 
-    output_json = 'DESI_input.json'
-    init_json = 'DESI_init.json'
+    n_objects = None  # set to an int to subsample the selected objects, e.g. 500
+    random_seed = None  # set to an int for reproducible subsampling, e.g. 42
+
+    output_json = "DESI_input.json"
+    init_json = "DESI_init.json"
 
     # Process data and get both complete and selected samples
-    x_all, y_all, sigma_x_all, sigma_y_all, z_all, x_sel, y_sel, sigma_x_sel, sigma_y_sel, z_sel = process_desi_tf_data(
-        input_fits, output_json, init_json,
+    (
+        x_all,
+        y_all,
+        sigma_x_all,
+        sigma_y_all,
+        z_all,
+        x_sel,
+        y_sel,
+        sigma_x_sel,
+        sigma_y_sel,
+        z_sel,
+    ) = process_desi_tf_data(
+        input_fits,
+        output_json,
+        init_json,
         haty_max=haty_max,
         haty_min=haty_min,
         plane_cut=plane_cut,
@@ -398,18 +523,25 @@ if __name__ == '__main__':
         intercept_plane=intercept_plane,
         intercept_plane2=intercept_plane2,
         n_objects=n_objects,
-        random_seed=random_seed
+        random_seed=random_seed,
+        z_obs_min=z_obs_min,
     )
 
     # Create plot showing both complete and selected samples
-    plot_output = output_json.replace('.json', '.png')
+    plot_output = output_json.replace(".json", ".png")
     plot_desi_tf_data(
-        x_all, y_all, sigma_x_all, sigma_y_all,
-        x_sel, y_sel, sigma_x_sel, sigma_y_sel,
+        x_all,
+        y_all,
+        sigma_x_all,
+        sigma_y_all,
+        x_sel,
+        y_sel,
+        sigma_x_sel,
+        sigma_y_sel,
         haty_max=haty_max,
         haty_min=haty_min,
         slope_plane=slope_plane,
         intercept_plane=intercept_plane,
         intercept_plane2=intercept_plane2,
-        output_file=plot_output
+        output_file=plot_output,
     )
