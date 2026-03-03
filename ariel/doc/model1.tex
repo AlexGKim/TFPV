@@ -339,33 +339,7 @@ P(\hat u\ge 0,\;\hat y\le \hat y_{\min}\mid \theta)
 P(\hat u\ge d,\;\hat y\le \hat y_{\min}\mid \theta).
 \end{aligned}
 \end{equation}
-Each term is obtained by marginalizing over $y_{\rm TF}$ and evaluating a
-bivariate normal CDF. For fixed $y_{\rm TF}$, the measured pair
-$(\hat U,\hat Y)$ in sheared coordinates is Gaussian with mean
-\begin{equation}
-\mu_i(y_{\rm TF})=
-\begin{bmatrix}
-\mu_{u,i}(y_{\rm TF})\\[3pt]
-\mu_{y,i}(y_{\rm TF})
-\end{bmatrix}
-=
-\begin{bmatrix}
-y_{\mathrm{TF}}-\bar s\,\dfrac{y_{\mathrm{TF}}-c}{s}-\bar c_1\\[8pt]
-y_{\mathrm{TF}}
-\end{bmatrix},
-\end{equation}
-and covariance
-\begin{equation}
-\Sigma_i=
-\begin{bmatrix}
-\sigma_{u,i}^2 & \sigma_{2,i}^2\\
-\sigma_{2,i}^2 & \sigma_{2,i}^2
-\end{bmatrix},
-\qquad
-\sigma_{u,i}^2 \equiv \sigma_{2,i}^2+\bar s^2\sigma_{1,i}^2,
-\qquad
-\rho_i \equiv \frac{\sigma_{2,i}}{\sigma_{u,i}}.
-\end{equation}
+
 Writing $\Phi_2(h,k;\varrho)$ for the standard bivariate normal CDF with
 correlation $\varrho$, i.e.\ $\Phi_2(h,k;\varrho)=P(Z_1\le h, Z_2\le k)$, define
 the standardized bounds
