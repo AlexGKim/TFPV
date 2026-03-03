@@ -232,8 +232,10 @@ previous section, we now have to calculate the denominator.
 
 We construct a sample by imposing four cuts: an upper limit on the measured value $\hat y$ to remove dwarf-galaxies that do not follow the Tully-Fisher relation and
 two-sided parallel half-plane cuts in the measured $(\hat x,\hat y)$-plane to remove extreme outliers that occur in the DESI data.
+
 We also impose a lower cut on the measured absolute magnitude $\hat y$ to reduce the dependence of the fit on the assumed form of the latent $y_{\rm TF}$ distribution.
-The top-hat and normal models differ primarily in their tail behavior, while they make similar predictions in the central (high-probability) region. Consequently, galaxies with very extreme $\hat y$ values—whose inferred $y_{\rm TF}$ would lie in the tails—can receive substantially different likelihood under the two choices of $p(y_{\rm TF})$.
+The top-hat and normal models differ primarily in their tail behavior, while they make similar predictions in the central (high-probability) region.
+Consequently, galaxies with very extreme $\hat y$ values—whose inferred $y_{\rm TF}$ would lie in the tails—can receive substantially different likelihood under the two choices of $p(y_{\rm TF})$.
 The $\hat y$ lower cut is therefore intended to remove these tail-dominated objects, so that the inferred TF parameters are driven mainly by the part of the sample where the likelihood is comparatively insensitive to the specific $y_{\rm TF}$ model.
 
 The four cuts are described by
@@ -295,6 +297,12 @@ and the standardized $\hat y$-bounds
 \qquad
 \beta_{\min} \;=\; \frac{\hat y_{\min}-y_{\mathrm{TF},i}}{\sigma_{2,i}}.
 \end{equation}
+
+Let $\Phi_2(h,k;\rho)$ denote the standard bivariate normal CDF,
+$\Phi_2(h,k;\rho)\equiv P(Z_1\le h,\ Z_2\le k)$ for
+$(Z_1,Z_2)\sim \mathcal N\!\left(\mathbf 0,\begin{bmatrix}1&\rho\\ \rho&1\end{bmatrix}\right)$.
+
+
 Then the selection probability is
 \begin{equation}
 \begin{aligned}
@@ -431,6 +439,55 @@ I\!\Big(\hat y_{\max}-\sigma_{2,i}\sinh u_+\Big)\,\cosh u_+\,du_+
 \end{equation}
 The solutions for the top-hat and normal distributions are as before, with
 the subtraction of the $\hat y_{\min}$-terms from the $\hat y_{\max}$-terms.  
+
+\subsubsection{Normal  Model for $y_{\mathrm{TF},i}$}
+Assume
+$$y_{\mathrm{TF}}\sim \mathcal N(\mu_{\mathrm{TF}},\tau^2).$$
+Then $(\hat x_i,\hat y_i)$ is bivariate normal, and therefore so is $(\hat u_i,\hat y_i)$.
+Recall
+$$\sigma_{1,i}^2=\sigma_{x,i}^2+\sigma_{\mathrm{int},x}^2,\qquad
+\sigma_{2,i}^2=\sigma_{y,i}^2+\sigma_{\mathrm{int},y}^2.$$
+Means
+\begin{align}
+\mu_{x,i} &= \frac{\mu_{\mathrm{TF}}-c}{s},&
+\mu_{y,i} &= \mu_{\mathrm{TF}},&
+\mu_{u,i} &= \mu_{y,i}-\bar s,\mu_{x,i}-\bar c_1
+= \mu_{\mathrm{TF}}-\bar s,\frac{\mu_{\mathrm{TF}}-c}{s}-\bar c_1.
+\end{align}
+Variances and covariance
+\begin{align}
+\sigma_{y,i}^2 &\equiv \mathrm{Var}(\hat y_i)=\tau^2+\sigma_{2,i}^2,\
+\sigma_{u,i}^2 &\equiv \mathrm{Var}(\hat u_i)=\mathrm{Var}(\hat y_i-\bar s,\hat x_i)
+= \sigma_{2,i}^2+\bar s^2\sigma_{1,i}^2+\tau^2\left(1-\frac{\bar s}{s}\right)^2,\
+\mathrm{Cov}(\hat u_i,\hat y_i)
+&=\mathrm{Cov}(\hat y_i-\bar s,\hat x_i,\hat y_i)
+=\sigma_{2,i}^2+\tau^2\left(1-\frac{\bar s}{s}\right),\
+\rho_i&=\frac{\mathrm{Cov}(\hat u_i,\hat y_i)}{\sigma_{u,i}\sigma_{y,i}}.
+\end{align}
+Define the standardized bounds
+$$a_{0,i}\equiv \frac{0-\mu_{u,i}}{\sigma_{u,i}},\qquad
+a_{d,i}\equiv \frac{d-\mu_{u,i}}{\sigma_{u,i}},$$
+$$b_{\min,i}\equiv \frac{\hat y_{\min}-\mu_{y,i}}{\sigma_{y,i}},\qquad
+b_{\max,i}\equiv \frac{\hat y_{\max}-\mu_{y,i}}{\sigma_{y,i}}.$$
+Then the selection probability is the rectangle probability
+\begin{equation}
+{
+P(S_i=1\mid\theta) =
+\Phi_2(a_{d,i},b_{\max,i};\rho_i)
+-\Phi_2(a_{0,i},b_{\max,i};\rho_i)
+-\Phi_2(a_{d,i},b_{\min,i};\rho_i)
++\Phi_2(a_{0,i},b_{\min,i};\rho_i).
+}
+\end{equation}
+
+
+\subsection{Priors}
+Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:
+\begin{align}
+\sigma_{\text{int},x} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right),\\
+\sigma_{\text{int},y} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right).
+\end{align}
+
 
 
 \subsubsection{Selection domain: upper limit in the measured quantity $\hat{y}$}
@@ -812,14 +869,3 @@ P\bigl(\hat y\le \hat y_{\max},\ 0\le \hat u\le \bar c_2-\bar c_1\bigr)\\
 \Phi_2(\beta,\gamma_1;\rho)-\Phi_2(\beta,\gamma_0;\rho),
 \end{align}
 where $\Phi_2(\cdot,\cdot;\rho)$ is the standard bivariate normal CDF with correlation $\rho$.
-
-
-
-\subsection{Priors}
-Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:
-\begin{align}
-\sigma_{\text{int},x} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right),\\
-\sigma_{\text{int},y} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right).
-\end{align}
-
-
