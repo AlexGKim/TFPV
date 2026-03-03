@@ -83,6 +83,7 @@ and therefore the per-galaxy likelihood can be written as
 \mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma^2_{1,i}\right)\,
 \mathcal N(\hat y_i;y_{\text{TF}},\sigma^2_{2,i})\,
 p(y_{\text{TF}}).
+\label{eqn:likelihood_pg}
 \end{align}
 
 \subsubsection{Top-Hat Model for $y_{\text{TF},i}$}
@@ -228,6 +229,374 @@ where $\mathcal{L}_i$ is the per-galaxy likelihood of the complete sample model.
 previous section, we now have to calculate the denominator.
 
 
+\subsubsection{Selection domain: lower and upper limits in $\hat y$ and a two-sided parallel half-plane cut}
+
+We construct the sample by imposing four cuts: lower and upper limits on the measured absolute magnitude $\hat y$, and two parallel (oblique) half-plane cuts in the measured $(\hat x,\hat y)$-plane. The upper $\hat y$ cut removes dwarf galaxies that do not follow the Tully--Fisher (TF) relation, while the oblique cuts remove extreme outliers observed in the DESI data.
+
+We also impose a lower cut on $\hat y$ to reduce the dependence of the fit on the assumed form of the latent $y_{\rm TF}$ distribution. The top-hat and normal models differ primarily in their tail behavior while making similar predictions in the central (high-probability) region. Consequently, galaxies with very extreme $\hat y$ values---whose inferred $y_{\rm TF}$ would lie in the tails---can receive substantially different likelihoods under different choices of $p(y_{\rm TF})$. The $\hat y$ lower cut is therefore intended to remove these tail-dominated objects so that the inferred TF parameters are driven mainly by the region where the likelihood is comparatively insensitive to the specific $y_{\rm TF}$ model.
+
+The four cuts can be written as
+\begin{equation}
+\mathcal S_i:\qquad
+\max\!\bigl\{\hat y_{\min},\;\bar{s}\,\hat x_i+\bar{c}_1\bigr\}
+\;\le\;
+\hat y_i
+\;\le\;
+\min\!\bigl\{\hat y_{\max},\;\bar{s}\,\hat x_i+\bar{c}_2\bigr\}.
+\end{equation}
+The parameters are chosen heuristically (by eye); fit results should be insensitive to small perturbations of their values.
+
+Define the sheared coordinate
+\begin{equation}
+\hat u_i \;\equiv\; \hat y_i-\bar{s}\,\hat x_i-\bar{c}_1,
+\qquad
+d \;\equiv\; \bar{c}_2-\bar{c}_1.
+\end{equation}
+In the sheared coordinates, it is convenient to collect the measured
+quantities into the vector
+\begin{equation}
+\hat{\boldsymbol z}_i \;\equiv\;
+\begin{bmatrix}\hat u_i\\ \hat y_i\end{bmatrix},
+\qquad
+\hat u_i \equiv \hat y_i-\bar s\,\hat x_i-\bar c_1.
+\end{equation}
+For fixed $y_{\rm TF}$, the measurement model implies that
+$\hat{\boldsymbol z}_i$ is bivariate normal. Writing its mean and covariance as
+\begin{equation}
+\hat{\boldsymbol z}_i \mid y_{\rm TF} \;\sim\;
+\mathcal N_2\!\bigl(\boldsymbol\mu_i(y_{\rm TF}),\,\boldsymbol\Sigma_i\bigr),
+\end{equation}
+we have
+\begin{equation}
+\boldsymbol\mu_i(y_{\rm TF})
+=
+\begin{bmatrix}
+\mu_{u,i}(y_{\rm TF})\\[3pt]
+\mu_{y,i}(y_{\rm TF})
+\end{bmatrix}
+=
+\begin{bmatrix}
+y_{\mathrm{TF}}-\bar s\,\dfrac{y_{\mathrm{TF}}-c}{s}-\bar c_1\\[8pt]
+y_{\mathrm{TF}}
+\end{bmatrix},
+\qquad
+\boldsymbol\Sigma_i
+=
+\begin{bmatrix}
+\sigma_{u,i}^2 & \sigma_{2,i}^2\\
+\sigma_{2,i}^2 & \sigma_{2,i}^2
+\end{bmatrix},
+\qquad
+\sigma_{u,i}^2 \equiv \sigma_{2,i}^2+\bar s^2\sigma_{1,i}^2.
+\end{equation}
+With these definitions, the product of the 1D Gaussians appearing in the
+integrand of Eq.~\ref{eqn:likelihood_pg} can be written compactly as
+\begin{equation}
+\mathcal N\!\left(\hat x_i;\frac{y_{\mathrm{TF}}-c}{s},\sigma^2_{1,i}\right)\,
+\mathcal N\!\left(\hat y_i;y_{\mathrm{TF}},\sigma^2_{2,i}\right)
+=
+|\bar s|\;
+\mathcal N_2\!\left(\hat{\boldsymbol z}_i;\boldsymbol\mu_i(y_{\rm TF}),\boldsymbol\Sigma_i\right),
+\end{equation}
+where the factor $|\bar s|$ is the absolute Jacobian determinant of the linear
+change of variables $(\hat x,\hat y)\mapsto(\hat u,\hat y)$.
+Therefore the per-galaxy marginal likelihood becomes
+\begin{equation}
+\mathcal L_i
+=
+|\bar s|\int dy_{\mathrm{TF}}\;
+\mathcal N_2\!\left(\hat{\boldsymbol z}_i;\boldsymbol\mu_i(y_{\rm TF}),\boldsymbol\Sigma_i\right)\,
+p(y_{\mathrm{TF}}).
+\end{equation}
+
+
+
+
+A feature of the sheared coordinates is that the lower oblique cut becomes
+$\hat u_i\ge 0$, and the upper oblique cut
+$\hat y_i\le \bar{s}\,\hat x_i+\bar{c}_2$ becomes the constant bound
+$\hat u_i\le d$. The $\hat y$ cuts remain axis-aligned, so in
+$(\hat u,\hat y)$ coordinates the selection region is
+\begin{equation}
+\mathcal S_i=\bigl\{(\hat u,\hat y):\;
+0\le\hat u\le d,\quad
+\hat y_{\min}\le \hat y \le \hat y_{\max}\bigr\}.
+\end{equation}
+Because both $\hat u$ and $\hat y$ are constrained to finite intervals, the
+selection probability can be expressed via inclusion--exclusion as a
+difference of four quadrant integrals:
+\begin{equation}
+\begin{aligned}
+P\bigl(S_i \mid \theta\bigr)
+&=
+P(\hat u\ge 0,\;\hat y\le \hat y_{\max}\mid \theta)
+-
+P(\hat u\ge d,\;\hat y\le \hat y_{\max}\mid \theta)\\
+&\quad
+-
+P(\hat u\ge 0,\;\hat y\le \hat y_{\min}\mid \theta)
++
+P(\hat u\ge d,\;\hat y\le \hat y_{\min}\mid \theta).
+\end{aligned}
+\end{equation}
+Each term is obtained by marginalizing over $y_{\rm TF}$ and evaluating a
+bivariate normal CDF. For fixed $y_{\rm TF}$, the measured pair
+$(\hat U,\hat Y)$ in sheared coordinates is Gaussian with mean
+\begin{equation}
+\mu_i(y_{\rm TF})=
+\begin{bmatrix}
+\mu_{u,i}(y_{\rm TF})\\[3pt]
+\mu_{y,i}(y_{\rm TF})
+\end{bmatrix}
+=
+\begin{bmatrix}
+y_{\mathrm{TF}}-\bar s\,\dfrac{y_{\mathrm{TF}}-c}{s}-\bar c_1\\[8pt]
+y_{\mathrm{TF}}
+\end{bmatrix},
+\end{equation}
+and covariance
+\begin{equation}
+\Sigma_i=
+\begin{bmatrix}
+\sigma_{u,i}^2 & \sigma_{2,i}^2\\
+\sigma_{2,i}^2 & \sigma_{2,i}^2
+\end{bmatrix},
+\qquad
+\sigma_{u,i}^2 \equiv \sigma_{2,i}^2+\bar s^2\sigma_{1,i}^2,
+\qquad
+\rho_i \equiv \frac{\sigma_{2,i}}{\sigma_{u,i}}.
+\end{equation}
+Writing $\Phi_2(h,k;\varrho)$ for the standard bivariate normal CDF with
+correlation $\varrho$, i.e.\ $\Phi_2(h,k;\varrho)=P(Z_1\le h, Z_2\le k)$, define
+the standardized bounds
+\begin{equation}
+a_i(t;y_{\rm TF}) \equiv \frac{\mu_{u,i}(y_{\rm TF})-t}{\sigma_{u,i}},
+\qquad
+b_i(y_\star;y_{\rm TF}) \equiv \frac{y_\star-y_{\rm TF}}{\sigma_{2,i}}.
+\end{equation}
+Then, for any $t\in\{0,d\}$ and $y_\star\in\{\hat y_{\min},\hat y_{\max}\}$,
+\begin{equation}
+P(\hat u\ge t,\;\hat y\le y_\star\mid \theta)
+=
+\int dy_{\rm TF}\;p(y_{\rm TF})\;
+\Phi_2\!\Bigl(a_i(t;y_{\rm TF}),\ b_i(y_\star;y_{\rm TF});\ -\rho_i\Bigr),
+\end{equation}
+where the sign flip in the correlation arises from rewriting
+$\hat u\ge t$ as $-\hat u\le -t$.
+Substituting these quadrant terms into the inclusion--exclusion identity gives
+\begin{equation}
+\begin{aligned}
+P\bigl(S_i \mid \theta\bigr)
+&=
+\int dy_{\rm TF}\;p(y_{\rm TF})\;\Big[
+\Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)
+-\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)\\
+&\hspace{62pt}
+-\Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
++\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
+\Big].
+\end{aligned}
+\end{equation}
+
+
+
+
+\subsubsection{Top-hat model for $y_{\mathrm{TF},i}$}
+
+For the uniform prior
+\[
+y_{\mathrm{TF}}\sim \mathrm{Uniform}(y_{\mathrm{TF},\min},y_{\mathrm{TF},\max}),
+\qquad
+p(y_{\mathrm{TF}})=\frac{1}{y_{\mathrm{TF},\max}-y_{\mathrm{TF},\min}},
+\]
+the selection probability is
+\begin{align}
+P(S_i=1\mid\theta)
+&=\frac{1}{y_{\mathrm{TF},\max}-y_{\mathrm{TF},\min}}
+\int_{y_{\mathrm{TF},\min}}^{y_{\mathrm{TF},\max}} dy_{\mathrm{TF}}\;
+I_i(y_{\mathrm{TF}}),
+\\[3pt]
+I_i(y_{\mathrm{TF}})
+&\equiv
+\Big(
+\big[\Phi_2\!\big(-\alpha_{1,i},\beta_{\max,i};-\rho_i\big)-\Phi_2\!\big(-\alpha_{2,i},\beta_{\max,i};-\rho_i\big)\big]
+-
+\big[\Phi_2\!\big(-\alpha_{1,i},\beta_{\min,i};-\rho_i\big)-\Phi_2\!\big(-\alpha_{2,i},\beta_{\min,i};-\rho_i\big)\big]
+\Big),
+\end{align}
+with $\alpha_{1,i}(y_{\mathrm{TF}}),\alpha_{2,i}(y_{\mathrm{TF}}),\rho_i$ as defined above and
+\[
+\beta_{\max,i}(y_{\mathrm{TF}})=\frac{\hat y_{\max}-y_{\mathrm{TF}}}{\sigma_{2,i}},
+\qquad
+\beta_{\min,i}(y_{\mathrm{TF}})=\frac{\hat y_{\min}-y_{\mathrm{TF}}}{\sigma_{2,i}}.
+\]
+
+As a function of $y_{\mathrm{TF}}$, the integrand $I_i(y_{\mathrm{TF}})$ is typically close to a top-hat: it rises from $\approx 0$ to $\approx 1$ across a narrow transition region near $y_{\mathrm{TF}}\approx \hat y_{\min}$ (where $\beta_{\min,i}\approx 0$), and falls back from $\approx 1$ to $\approx 0$ near $y_{\mathrm{TF}}\approx \hat y_{\max}$ (where $\beta_{\max,i}\approx 0$). For numerical integration it is therefore useful to concentrate quadrature points near \emph{both} edges.
+
+A convenient approach is to split the integral and apply a sinh--asinh (asinh--sinh) reparameterization around each transition. Choose a split point $y_\star$ between the edges, for example
+\[
+y_\star \;\equiv\;
+\min\!\left\{y_{\mathrm{TF},\max},\;
+\max\!\left\{y_{\mathrm{TF},\min},\;\frac{\hat y_{\min}+\hat y_{\max}}{2}\right\}\right\},
+\qquad
+\int_{y_{\mathrm{TF},\min}}^{y_{\mathrm{TF},\max}}
+=
+\int_{y_{\mathrm{TF},\min}}^{y_\star}
++
+\int_{y_\star}^{y_{\mathrm{TF},\max}}.
+\]
+
+\paragraph{Lower-edge reparameterization (near $\hat y_{\min}$).}
+Define
+\[
+t_- \equiv \frac{y_{\mathrm{TF}}-\hat y_{\min}}{\sigma_{2,i}},
+\qquad\Longleftrightarrow\qquad
+y_{\mathrm{TF}}=\hat y_{\min}+\sigma_{2,i}\,t_-,
+\qquad
+dy_{\mathrm{TF}}=\sigma_{2,i}\,dt_-,
+\]
+and then set $t_-=\sinh u_-$, so that
+\[
+y_{\mathrm{TF}}(u_-)=\hat y_{\min}+\sigma_{2,i}\sinh u_-,
+\qquad
+dy_{\mathrm{TF}}=\sigma_{2,i}\cosh u_-\,du_-.
+\]
+The corresponding bounds are
+\[
+u_-^{\min}=\operatorname{asinh}\!\left(\frac{y_{\mathrm{TF},\min}-\hat y_{\min}}{\sigma_{2,i}}\right),
+\qquad
+u_-^{\star}=\operatorname{asinh}\!\left(\frac{y_{\star}-\hat y_{\min}}{\sigma_{2,i}}\right),
+\]
+and therefore
+\[
+\int_{y_{\mathrm{TF},\min}}^{y_\star} I_i(y_{\mathrm{TF}})\,dy_{\mathrm{TF}}
+=
+\sigma_{2,i}\int_{u_-^{\min}}^{u_-^{\star}}
+I_i\!\Big(\hat y_{\min}+\sigma_{2,i}\sinh u_-\Big)\,\cosh u_-\,du_-.
+\]
+
+\paragraph{Upper-edge reparameterization (near $\hat y_{\max}$).}
+Define
+\[
+t_+ \equiv \frac{\hat y_{\max}-y_{\mathrm{TF}}}{\sigma_{2,i}},
+\qquad\Longleftrightarrow\qquad
+y_{\mathrm{TF}}=\hat y_{\max}-\sigma_{2,i}\,t_+,
+\qquad
+dy_{\mathrm{TF}}=-\sigma_{2,i}\,dt_+,
+\]
+and again set $t_+=\sinh u_+$, so that
+\[
+y_{\mathrm{TF}}(u_+)=\hat y_{\max}-\sigma_{2,i}\sinh u_+,
+\qquad
+dy_{\mathrm{TF}}=-\sigma_{2,i}\cosh u_+\,du_+.
+\]
+Flipping the limits to keep the integral in increasing order gives
+\[
+\int_{y_\star}^{y_{\mathrm{TF},\max}} I_i(y_{\mathrm{TF}})\,dy_{\mathrm{TF}}
+=
+\sigma_{2,i}\int_{u_+^{\max}}^{u_+^{\star}}
+I_i\!\Big(\hat y_{\max}-\sigma_{2,i}\sinh u_+\Big)\,\cosh u_+\,du_+,
+\]
+with
+\[
+u_+^{\star}=\operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{\star}}{\sigma_{2,i}}\right),
+\qquad
+u_+^{\max}=\operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{\mathrm{TF},\max}}{\sigma_{2,i}}\right).
+\]
+
+\paragraph{Quadrature-friendly expression.}
+Putting the two pieces together,
+\begin{equation}
+P(S_i=1\mid\theta)
+=
+\frac{\sigma_{2,i}}{y_{\mathrm{TF},\max}-y_{\mathrm{TF},\min}}
+\left[
+\int_{u_-^{\min}}^{u_-^{\star}}
+I_i\!\Big(\hat y_{\min}+\sigma_{2,i}\sinh u_-\Big)\,\cosh u_-\,du_-
++
+\int_{u_+^{\max}}^{u_+^{\star}}
+I_i\!\Big(\hat y_{\max}-\sigma_{2,i}\sinh u_+\Big)\,\cosh u_+\,du_+
+\right].
+\end{equation}
+
+\subsubsection{Normal model for $y_{\mathrm{TF},i}$}
+
+Assume
+\[
+y_{\mathrm{TF}}\sim \mathcal N(\mu_{\mathrm{TF}},\tau^2).
+\]
+Then $(\hat x_i,\hat y_i)$ is bivariate normal, and so is $(\hat u_i,\hat y_i)$, with
+\[
+\hat u_i \equiv \hat y_i-\bar s\,\hat x_i-\bar c_1,
+\qquad
+d \equiv \bar c_2-\bar c_1.
+\]
+Recall
+\[
+\sigma_{1,i}^2=\sigma_{x,i}^2+\sigma_{\mathrm{int},x}^2,\qquad
+\sigma_{2,i}^2=\sigma_{y,i}^2+\sigma_{\mathrm{int},y}^2.
+\]
+
+\paragraph{Means.}
+\begin{align}
+\mu_{x,i} &= \mathbb E[\hat x_i] = \frac{\mu_{\mathrm{TF}}-c}{s},&
+\mu_{y,i} &= \mathbb E[\hat y_i] = \mu_{\mathrm{TF}},&
+\mu_{u,i} &= \mathbb E[\hat u_i]
+= \mu_{y,i}-\bar s\,\mu_{x,i}-\bar c_1
+= \mu_{\mathrm{TF}}-\bar s\,\frac{\mu_{\mathrm{TF}}-c}{s}-\bar c_1.
+\end{align}
+
+\paragraph{Variances and covariance.}
+Let
+\[
+\Sigma_{x,i}^2 \equiv \mathrm{Var}(\hat x_i)=\frac{\tau^2}{s^2}+\sigma_{1,i}^2,
+\qquad
+\Sigma_{y,i}^2 \equiv \mathrm{Var}(\hat y_i)=\tau^2+\sigma_{2,i}^2,
+\qquad
+\mathrm{Cov}(\hat x_i,\hat y_i)=\frac{\tau^2}{s}.
+\]
+Then
+\begin{align}
+\Sigma_{u,i}^2
+&\equiv \mathrm{Var}(\hat u_i)
+=\mathrm{Var}(\hat y_i-\bar s\,\hat x_i)
+=\Sigma_{y,i}^2+\bar s^2\Sigma_{x,i}^2-2\bar s\,\mathrm{Cov}(\hat x_i,\hat y_i)
+\nonumber\\
+&=
+\sigma_{2,i}^2+\bar s^2\sigma_{1,i}^2+\tau^2\left(1-\frac{\bar s}{s}\right)^2,
+\\
+\mathrm{Cov}(\hat u_i,\hat y_i)
+&=\mathrm{Cov}(\hat y_i-\bar s\,\hat x_i,\hat y_i)
+=\Sigma_{y,i}^2-\bar s\,\mathrm{Cov}(\hat x_i,\hat y_i)
+=
+\sigma_{2,i}^2+\tau^2\left(1-\frac{\bar s}{s}\right),
+\\
+\rho_i
+&=\frac{\mathrm{Cov}(\hat u_i,\hat y_i)}{\Sigma_{u,i}\,\Sigma_{y,i}}.
+\end{align}
+
+\paragraph{Standardized bounds.}
+Define
+\[
+a_{0,i}\equiv \frac{0-\mu_{u,i}}{\Sigma_{u,i}},\qquad
+a_{d,i}\equiv \frac{d-\mu_{u,i}}{\Sigma_{u,i}},
+\qquad
+b_{\min,i}\equiv \frac{\hat y_{\min}-\mu_{y,i}}{\Sigma_{y,i}},\qquad
+b_{\max,i}\equiv \frac{\hat y_{\max}-\mu_{y,i}}{\Sigma_{y,i}}.
+\]
+
+\paragraph{Selection probability (rectangle probability).}
+\begin{equation}
+P(S_i=1\mid\theta)
+=
+\Phi_2(a_{d,i},b_{\max,i};\rho_i)
+-\Phi_2(a_{0,i},b_{\max,i};\rho_i)
+-\Phi_2(a_{d,i},b_{\min,i};\rho_i)
++\Phi_2(a_{0,i},b_{\min,i};\rho_i).
+\end{equation}
+
+
+
 \subsubsection{Selection domain: lower and upper limits in $\hat{y}$ and a two-sided parallel half-plane cut}
 
 We construct a sample by imposing four cuts: an upper limit on the measured value $\hat y$ to remove dwarf-galaxies that do not follow the Tully-Fisher relation and
@@ -253,6 +622,9 @@ In the sheared coordinates $\hat u\equiv\hat y-\bar{s}\,\hat x-\bar{c}_1$, the l
 \begin{equation}
 \hat u \;\le\; \bar{c}_2-\bar{c}_1.
 \end{equation}
+
+
+
 The $\hat y$-cuts remain axis-aligned, so the selection region can be written as
 \begin{equation}
 \mathcal S_i=\bigl\{(\hat u,\hat y):\;
@@ -274,7 +646,6 @@ P(\hat u\ge 0,\;\hat y\le \hat y_{\min})
 P(\hat u\ge \bar{c}_2-\bar{c}_1,\;\hat y\le \hat y_{\min}).
 \end{aligned}
 \end{equation}
-Each term is a bivariate normal CDF of the same form as in the one-sided $\hat y$-cut case.
 
 Define
 \begin{equation}
@@ -487,385 +858,3 @@ Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scat
 \sigma_{\text{int},x} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right),\\
 \sigma_{\text{int},y} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right).
 \end{align}
-
-
-
-\subsubsection{Selection domain: upper limit in the measured quantity $\hat{y}$}
-\label{subsec:selection_yhatmax}
-We can mitigate the effect of dwarf galaxies in the sample by imposing an absolute magnitude criterion.
-We consider a sample constructed by imposing an \emph{upper limit} on the measured value $\hat{y}$, so 
-$\mathcal S_i $ is defined by
-\begin{align}
-\hat y_i\le \hat y_{\max}.
-\end{align}
-The $y_{\max}$ is intended to eliminate dwarf galaxies from the sample, so think of
-sacrificing completeness for purity, which should be OK considering the large size of the DESI TF sample.
-
-Then
-\begin{align}
-P(S_i=1\mid \theta)
-&=
-\frac{1}{y_{\max}-y_{\min}}
-\int_{y_{\min}}^{y_{\max}}
-\Phi\!\left(\frac{\hat{y}_{\max}-y_{\text{TF}}}{\sigma_{2,i}}\right)\,dy_{\text{TF}} \\
-&=\frac{1}{y_{\max}-y_{\min}}
-\Bigg[
-(\hat y_{\max}-y_{\min})\,\Phi\!\left(\frac{\hat y_{\max}-y_{\min}}{\sigma_{2,i}}\right)
-+\sigma_{2,i}\,\phi\!\left(\frac{\hat y_{\max}-y_{\min}}{\sigma_{2,i}}\right) \notag\\
-&\qquad\qquad
-+(y_{\max}-\hat y_{\max})\,\Phi\!\left(\frac{\hat y_{\max}-y_{\max}}{\sigma_{2,i}}\right)
--\sigma_{2,i}\,\phi\!\left(\frac{\hat y_{\max}-y_{\max}}{\sigma_{2,i}}\right)
-\Bigg],
-\end{align}
-where $\phi$ is the standard normal PDF.
-The integral over $\hat{x}$ is equal to 1 since there is no selection on $\hat{x}$.
-The galaxy-dependence of this term enters only through $\sigma_{2,i}$, which depends on the measurement uncertainty $\sigma_{y,i}$.
-
-\subsubsection{Selection domain: upper limit in $\hat{y}$ and a fixed half-plane cut}
-\label{subsec:selection_yhatmax_halfplane}
-There is also a small population of luminous galaxies that have lower rotational velocities than given by the TF relation.
-We consider a sample constructed by imposing (i) an \emph{upper limit} on the measured value $\hat y$
-and (ii) a \emph{fixed half-plane cut} in the measured $(\hat x,\hat y)$-plane.
-The half-plane cut is selected by the scientist to maintain a pure sample of normal galaxies
-without overly sacrificing completeness, and for a good choice the fit results should be insensitive to perturbations of the half-plane cut parameters. 
-
-Given the domain
-\begin{align}
-\mathcal S_i:\qquad
-\hat y_i \le \hat y_{\max},
-\qquad
-\hat y_i-\bar{s}\,\hat x_i-\bar{c} \ge 0
-\ \ \Longleftrightarrow\ \
-\bar{s}\,\hat x_i+\bar{c} \le \hat y_i \le \hat y_{\max},
-\end{align}
-where $(\bar{s},\bar{c})$ are fixed constants defining the half-plane boundary, introduce the sheared coordinates $(\hat u,\hat y)$ by defining
-\begin{equation}
-\hat u \equiv \hat y - \bar{s}\,\hat x - \bar{c},
-\qquad\text{and}\qquad
-\hat y \equiv \hat y.
-\end{equation}
-In these coordinates, the oblique constraint becomes the constant bound
-\begin{equation}
-\hat y-\bar{s}\,\hat x-\bar{c} \ge 0 \quad\Longleftrightarrow\quad \hat u \ge 0,
-\end{equation}
-and the upper cut remains
-\begin{equation}
-\hat y \le \hat y_{\max}.
-\end{equation}
-Therefore the selection region is
-\begin{equation}
-\mathcal S_i=\{(\hat u,\hat y):\ \hat u\ge 0,\ \hat y\le \hat y_{\max}\}.
-\end{equation}
-The inverse transformation is
-\begin{equation}
-\hat x = \frac{\hat y-\bar{c}-\hat u}{\bar{s}},
-\qquad
-\hat y=\hat y,
-\end{equation}
-and the Jacobian determinant is constant:
-\begin{equation}
-\left|\frac{\partial(\hat x,\hat y)}{\partial(\hat u,\hat y)}\right|=\frac{1}{|\bar{s}|},
-\qquad\text{so}\qquad
-d\hat x\,d\hat y = \frac{1}{|\bar{s}|}\,d\hat u\,d\hat y.
-\end{equation}
-
-The selection probability can be written in the new coordinates as
-\begin{align}
-P(S_i=1\mid\theta)
-& =
-\int dy_{\mathrm{TF}}\; p(y_{\mathrm{TF}})
-\int_{-\infty}^{\hat y_{\max}} d\hat y
-\int_{0}^{\infty} d\hat u\;
-\frac{1}{|\bar{s}|}\,
-\mathcal N\!\left(\frac{\hat y-\bar{c}-\hat u}{\bar{s}};\frac{y_{\mathrm{TF}}-c}{s},\sigma_{1,i}\right)\,
-\mathcal N\!\left(\hat y;y_{\mathrm{TF}},\sigma_{2,i}\right)
-\end{align}
-
-Given the parameterization
-\begin{equation}
-\rho \;=\; \frac{\sigma_{2,i}}{\sqrt{\sigma_{2,i}^2 + \bar{s}^2\,\sigma_{1,i}^2}}
-\end{equation}
-\begin{equation}
-\alpha =
-\frac{\bar{c} - \left(y_{\mathrm{TF},i}-\bar{s}\,\frac{y_{\mathrm{TF},i}-c}{s}\right)}{\sqrt{\sigma_{2,i}^2 + \bar{s}^2\,\sigma_{1,i}^2}}
-\end{equation}
-\begin{equation}
-\beta = \frac{\hat y_{\max} - y_{\mathrm{TF},i}}{\sigma_{2,i}}
-\end{equation}
-\begin{align}
-P(S_i=1\mid\theta)
-& =
-\int dy_{\mathrm{TF}}\; p(y_{\mathrm{TF}})
-\Phi_2\left(-\alpha, \beta; -\rho \right)
-\end{align}
-by definition, where $\Phi_2$ is the bivariate standard normal cumulative distribution function.
-This integral has no analytic solution.
-
-\paragraph{Top-Hat Model for $y_{\text{TF},i}$}
-For the uniform prior $y_{\text{TF}}\sim\text{Uniform}(y_{\min},y_{\max})$, i.e., $p(y_{\text{TF}})=1/(y_{\max}-y_{\min})$, this becomes
-\begin{align}
-P(S_i=1\mid\theta)
-& = \frac{1}{y_{max}-y_{min}}
-\int_{y_{min}}^{y_{max}} dy_{\mathrm{TF}}
-\Phi_2\left(-\alpha, \beta; -\rho \right).
-\end{align}
-
-
-\subsubsection{Selection domain: upper limit in $\hat{y}$ and a two-sided parallel half-plane cut}
-To handle potential catastrophic outliers on both sides of the TF relation, we can consider a sample constructed by imposing (i) an \emph{upper limit} on the measured value $\hat y$ and (ii) a \emph{two-sided parallel half-plane cut} in the measured $(\hat x,\hat y)$-plane.
-The selection domain is
-\begin{equation}
-\mathcal S_i:\qquad
-\bar{s}\,\hat x_i+\bar{c}_1 \;\le\; \hat y_i \;\le\; \min\!\big\{\hat y_{\max},\;\bar{s}\,\hat x_i+\bar{c}_2\big\}.
-\end{equation}
-In the sheared coordinates $\hat u\equiv\hat y-\bar{s}\,\hat x-\bar{c}_1$, the lower
-oblique cut gives $\hat u\ge0$ as before, while the upper oblique cut
-$\hat y\le\bar{s}\,\hat x+\bar{c}_2$ becomes the constant bound
-\begin{equation}
-\hat u \;\le\; \bar{c}_2-\bar{c}_1,
-\end{equation}
-so the selection region is
-\begin{equation}
-\mathcal S_i=\bigl\{(\hat u,\hat y):\;
-0\le\hat u\le\bar{c}_2-\bar{c}_1,\quad
-\hat y\le\hat y_{\max}\bigr\}.
-\end{equation}
-The constraint on $\hat u$ is a finite interval, so the integral over the
-selection region can be decomposed as a difference of two quadrant
-integrals:
-\begin{equation}
-P(\hat u\ge0,\;\hat u\le\bar{c}_2-\bar{c}_1,\;\hat y\le\hat y_{\max})
-\;=\;
-P(\hat u\ge0,\;\hat y\le\hat y_{\max})
-\;-\;
-P(\hat u\ge\bar{c}_2-\bar{c}_1,\;\hat y\le\hat y_{\max}).
-\end{equation}
-Each term is a bivariate normal CDF of the same form as before. Defining
-\begin{equation}
-\rho \;=\; \frac{\sigma_{2,i}}{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
-\end{equation}
-\begin{equation}
-\alpha_1 \;=\;
-\frac{\bar{c}_1-\!\left(y_{\mathrm{TF},i}
-  -\bar{s}\,\dfrac{y_{\mathrm{TF},i}-c}{s}\right)}
-{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
-\qquad
-\alpha_2 \;=\;
-\frac{\bar{c}_2-\!\left(y_{\mathrm{TF},i}
-  -\bar{s}\,\dfrac{y_{\mathrm{TF},i}-c}{s}\right)}
-{\sqrt{\sigma_{2,i}^2+\bar{s}^2\,\sigma_{1,i}^2}},
-\end{equation}
-\begin{equation}
-\beta \;=\; \frac{\hat y_{\max}-y_{\mathrm{TF},i}}{\sigma_{2,i}},
-\end{equation}
-the selection probability is
-\begin{align}
-P(S_i=1\mid\theta)
-&=\int dy_{\mathrm{TF}}\;p(y_{\mathrm{TF}})\;
-\Big[\Phi_2\!\left(-\alpha_1,\;\beta;\;-\rho\right)
-     -\Phi_2\!\left(-\alpha_2,\;\beta;\;-\rho\right)\Big].
-\end{align}
-Note that $\alpha_1$ and $\alpha_2$ differ only by the replacement
-$\bar{c}_1\to\bar{c}_2$, and the correlation parameter $\rho$ is
-identical in both terms since it depends only on $\bar{s}$.
-
-When using the Owen’s-$t$ representation (for $z_1=-\alpha_j,\ z_2=\beta$ and correlation $-\rho$),
-$$\Phi_2(z_1,z_2;-\rho)
-=\tfrac12\!\left[\Phi(z_1)+\Phi(z_2)-\delta(z_1,z_2)\right]
-- T\!\left(z_1,\frac{z_2/z_1+\rho}{\sqrt{1-\rho^2}}\right)
-- T\!\left(z_2,\frac{z_1/z_2+\rho}{\sqrt{1-\rho^2}}\right),$$
-so the bracket in the integrand becomes
-$$\begin{aligned}
-\Phi_2(-\alpha_1,\beta;-\rho)-\Phi_2(-\alpha_2,\beta;-\rho)
-&=\tfrac12\Big(\Phi(-\alpha_1)-\Phi(-\alpha_2)\;-\;\big[\delta(-\alpha_1,\beta)-\delta(-\alpha_2,\beta)\big]\Big)\\
-&\quad-\Bigg[T\!\left(-\alpha_1,\frac{\beta/(-\alpha_1)+\rho}{\sqrt{1-\rho^2}}\right)
-          -T\!\left(-\alpha_2,\frac{\beta/(-\alpha_2)+\rho}{\sqrt{1-\rho^2}}\right)\Bigg]\\
-&\quad-\Bigg[T\!\left(\beta,\frac{(-\alpha_1)/\beta+\rho}{\sqrt{1-\rho^2}}\right)
-          -T\!\left(\beta,\frac{(-\alpha_2)/\beta+\rho}{\sqrt{1-\rho^2}}\right)\Bigg],
-\end{aligned}$$
-where the cancellation is the common $\tfrac12\Phi(\beta)$ term.
-\begin{equation}
-\delta(-\alpha_1,\beta)-\delta(-\alpha_2,\beta)
-=
-\begin{cases}
--1, & \beta>0 \ \text{and}\ \alpha_1 \le 0 < \alpha_2,\\[6pt]
-+1, & \beta<0 \ \text{and}\ \alpha_1 < 0 \le \alpha_2,\\[6pt]
-0,  & \text{otherwise,}
-\end{cases}
-\end{equation}
-
-\subsubsection{Top-Hat Model for $y_{\text{TF},i}$}
-For the uniform prior $y_{\text{TF}}\sim\text{Uniform}(y_{\min},y_{\max})$, i.e., $p(y_{\text{TF}})=1/(y_{\max}-y_{\min})$, this becomes
-\begin{align}
-P(S_i=1\mid\theta)
-&=\frac{1}{y_{\max}-y_{\min}}
-\int_{y_{\min}}^{y_{\max}} dy_{\mathrm{TF}}\;
-\Big[\Phi_2\!\left(-\alpha_1,\;\beta;\;-\rho\right)
-     -\Phi_2\!\left(-\alpha_2,\;\beta;\;-\rho\right)\Big].
-\end{align}
-
-% Transformation 2: concentrate quadrature near the transition at y_{\mathrm{TF}} \approx \hat y_{\max}
-While in principle the integrand can be rougly described as a top-hat function of $y_{\mathrm{TF}}$,
-the sloped selection region should be selected such that the range of $y_{\mathrm{TF}}$ covers
-only one edge of the selection region, so that the integrand is close to 1 for $y_{\mathrm{TF}}$ below the transition and close to 0 for $y_{\mathrm{TF}}$ above the transition.
-  For the purpose of numerical integration, it is helpful to concentrate quadrature points near the transition at $y_{\mathrm{TF}}\approx\hat y_{\max}$, where the integrand changes rapidly.
-\begin{equation}
-t \equiv \beta = \frac{\hat y_{\max}-y_{\mathrm{TF}}}{\sigma_{2,i}},
-\qquad\Longleftrightarrow\qquad
-y_{\mathrm{TF}} = \hat y_{\max}-\sigma_{2,i}\,t,
-\qquad
-dy_{\mathrm{TF}} = -\sigma_{2,i}\,dt.
-\end{equation}
-
-\begin{equation}
-t = \sinh u,
-\qquad\Longleftrightarrow\qquad
-u = \operatorname{asinh}(t),
-\qquad
-dt = \cosh u\,du.
-\end{equation}
-
-\begin{equation}
-y_{\mathrm{TF}}(u) = \hat y_{\max}-\sigma_{2,i}\,\sinh u,
-\qquad
-dy_{\mathrm{TF}} = -\sigma_{2,i}\cosh u\,du.
-\end{equation}
-
-\begin{equation}
-\int_{y_{\min}}^{y_{\max}} f(y_{\mathrm{TF}})\,dy_{\mathrm{TF}}
-=
-\sigma_{2,i}\int_{u_{\min}}^{u_{\max}}
-f\!\Big(\hat y_{\max}-\sigma_{2,i}\sinh u\Big)\,\cosh u\,du,
-\end{equation}
-
-\begin{equation}
-u_{\min} = \operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{\max}}{\sigma_{2,i}}\right),
-\qquad
-u_{\max} = \operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{\min}}{\sigma_{2,i}}\right).
-\end{equation}
-\subsubsection{Normal Model for $y_{\mathrm{TF},i}$ }
-
-We begin with
-\begin{align}
-P(S_i=1\mid\theta)
-&=
-\int_{-\infty}^{\hat{y}_{\max}} d\hat{y}
-\int_{0}^{\bar{c}_2-\bar{c}_1} d\hat{u}\;
-\frac{1}{|\bar{s}|}
-\int_{-\infty}^{\infty} dy_{\mathrm{TF}}\;
-\mathcal{N}(y_{\mathrm{TF}};\,\mu_{\mathrm{TF}},\tau)\,
-\mathcal{N}\!\left(\frac{\hat{y}-\bar{c}_1-\hat{u}}{\bar{s}};
-                   \frac{y_{\mathrm{TF}}-c}{s},\,\sigma_{1,i}\right)
-\mathcal{N}\!\left(\hat{y};\,y_{\mathrm{TF}},\,\sigma_{2,i}\right).
-\label{eq:start}
-\end{align}
-
-\paragraph{Step 1: Use the scaling identity to express the second factor as a density in $\hat u$.}
-
-Using the identity, valid for any $a$,
-\begin{equation}
-\frac{1}{|\bar s|}\,
-\mathcal{N}\!\left(\frac{a-\hat u}{\bar s};\,\mu,\,\sigma_{1,i}\right)
-=
-\mathcal{N}\!\left(\hat u;\,a-\bar s\,\mu,\,|\bar s|\,\sigma_{1,i}\right),
-\end{equation}
-with $a=\hat y-\bar c_1$ and $\mu=(y_{\mathrm{TF}}-c)/s$, we obtain
-\begin{equation}
-\frac{1}{|\bar{s}|}
-\mathcal{N}\!\left(\frac{\hat{y}-\bar{c}_1-\hat{u}}{\bar{s}};
-                   \frac{y_{\mathrm{TF}}-c}{s},\,\sigma_{1,i}\right)
-=
-\mathcal{N}\!\left(\hat{u};\,
-\hat{y}-\bar{c}_1-\frac{\bar s}{s}(y_{\mathrm{TF}}-c),\,
-|\bar s|\,\sigma_{1,i}\right).
-\label{eq:scale-u}
-\end{equation}
-
-Then the model implied by the integrand can be written as the linear--Gaussian system
-\begin{align}
-y_{\mathrm{TF}} &\sim \mathcal{N}(\mu_{\mathrm{TF}},\tau),\\
-\hat y \mid y_{\mathrm{TF}} &= y_{\mathrm{TF}} + \varepsilon_2,
-\qquad \varepsilon_2 \sim \mathcal{N}(0,\sigma_{2,i}),\\
-\hat u \mid (\hat y,y_{\mathrm{TF}})
-&= \hat y - \bar c_1 - \frac{\bar s}{s}(y_{\mathrm{TF}}-c) + \varepsilon_1,
-\qquad \varepsilon_1 \sim \mathcal{N}(0,|\bar s|\,\sigma_{1,i}),
-\end{align}
-with $\varepsilon_1,\varepsilon_2$ independent and independent of $y_{\mathrm{TF}}$.
-
-Equivalently, after substitution $\hat y = y_{\mathrm{TF}}+\varepsilon_2$,
-\begin{equation}
-\hat u
-=
-\Bigl(1-\frac{\bar s}{s}\Bigr)y_{\mathrm{TF}}
-+\Bigl(\frac{\bar s}{s}c-\bar c_1\Bigr)
-+\varepsilon_2+\varepsilon_1.
-\end{equation}
-
-\paragraph{Step 2: Identify the bivariate normal distribution of $(\hat y,\hat u)$.}
-
-From the linear--Gaussian representation above, $(\hat y,\hat u)$ is bivariate normal with
-
-\textit{Means:}
-\begin{equation}
-\mu_{\hat y} = \mathbb{E}[\hat y] = \mu_{\mathrm{TF}},
-\qquad
-\mu_{\hat u} = \mathbb{E}[\hat u]
-=
-\Bigl(1-\frac{\bar s}{s}\Bigr)\mu_{\mathrm{TF}}
-+\Bigl(\frac{\bar s}{s}c-\bar c_1\Bigr).
-\end{equation}
-
-\textit{Variances:}
-\begin{equation}
-\sigma_{\hat y}^2
-= \mathrm{Var}(\hat y)
-= \tau^2+\sigma_{2,i}^2,
-\end{equation}
-\begin{equation}
-\sigma_{\hat u}^2
-= \mathrm{Var}(\hat u)
-=
-\Bigl(1-\frac{\bar s}{s}\Bigr)^2\tau^2
-+\sigma_{2,i}^2
-+\bar s^2\sigma_{1,i}^2.
-\end{equation}
-
-\textit{Covariance:}
-\begin{equation}
-\mathrm{Cov}(\hat y,\hat u)
-=
-\Bigl(1-\frac{\bar s}{s}\Bigr)\tau^2+\sigma_{2,i}^2.
-\end{equation}
-
-Define the correlation
-\begin{equation}
-\rho
-=
-\frac{\mathrm{Cov}(\hat y,\hat u)}{\sigma_{\hat y}\,\sigma_{\hat u}}.
-\end{equation}
-
-\paragraph{Step 3: Express $P(S_i=1\mid\theta)$ as a difference of bivariate normal CDFs.}
-
-Let
-\begin{equation}
-\beta
-=
-\frac{\hat y_{\max}-\mu_{\hat y}}{\sigma_{\hat y}},
-\qquad
-\gamma_0
-=
-\frac{0-\mu_{\hat u}}{\sigma_{\hat u}},
-\qquad
-\gamma_1
-=
-\frac{(\bar c_2-\bar c_1)-\mu_{\hat u}}{\sigma_{\hat u}}.
-\end{equation}
-Then
-\begin{align}
-P(S_i=1\mid\theta)
-&=
-P\bigl(\hat y\le \hat y_{\max},\ 0\le \hat u\le \bar c_2-\bar c_1\bigr)\\
-&=
-\Phi_2(\beta,\gamma_1;\rho)-\Phi_2(\beta,\gamma_0;\rho),
-\end{align}
-where $\Phi_2(\cdot,\cdot;\rho)$ is the standard bivariate normal CDF with correlation $\rho$.
