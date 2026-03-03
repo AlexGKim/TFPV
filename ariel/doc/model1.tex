@@ -18,7 +18,7 @@ The benefit of this model is that the likelihood for each galaxy can be computed
     \item[$\sigma_{\text{int},x}$, $\sigma_{\text{int},y}$ :] Intrinsic scatter in the $x$-, $y$-directions.
     \item[$y_{\text{TF},i}$:] Latent ``on-relation'' absolute magnitude for galaxy $i$.
     \item[$x_i$, $y_i$:] Latent true $x$, $y$  for galaxy $i$.
-    \item[$\Xi$:] Distribution function of $y_{\text{TF}}$.
+    \item[$\Xi$:] Parameters that describe the distribution function of $y_{\text{TF}}$.
 \end{description}
 
 \subsection{Model}
@@ -41,7 +41,7 @@ or a Normal
 \begin{align}
 y_{\text{TF},i} & \sim \mathcal N (\mu_{y_\text{TF}}, \tau^2)
 \end{align}
-distribution.
+distribution.  So $\Xi \equiv \{y_{\min}, y_{\max}\}$ or $\{\mu_{y_\text{TF}}, \tau\}$.
 
 \subsection{Complete Sample}
 For a complete sample
@@ -230,11 +230,13 @@ previous section, we now have to calculate the denominator.
 
 \subsubsection{Selection domain: lower and upper limits in $\hat{y}$ and a two-sided parallel half-plane cut}
 
-We construct a sample by imposing an upper limit on the measured value $\hat y$ to remove dwarf-galaxies that do not follow the Tully-Fisher relation,
-and a two-sided parallel half-plane cut in the measured $(\hat x,\hat y)$-plane to remove extreme outliers that occur in the DESI data.
+We construct a sample by imposing four cuts: an upper limit on the measured value $\hat y$ to remove dwarf-galaxies that do not follow the Tully-Fisher relation and
+two-sided parallel half-plane cuts in the measured $(\hat x,\hat y)$-plane to remove extreme outliers that occur in the DESI data.
+We also impose a lower cut on the measured absolute magnitude $\hat y$ to reduce the dependence of the fit on the assumed form of the latent $y_{\rm TF}$ distribution.
+The top-hat and normal models differ primarily in their tail behavior, while they make similar predictions in the central (high-probability) region. Consequently, galaxies with very extreme $\hat y$ values—whose inferred $y_{\rm TF}$ would lie in the tails—can receive substantially different likelihood under the two choices of $p(y_{\rm TF})$.
+The $\hat y$ lower cut is therefore intended to remove these tail-dominated objects, so that the inferred TF parameters are driven mainly by the part of the sample where the likelihood is comparatively insensitive to the specific $y_{\rm TF}$ model.
 
-We also impose a lower limit on the measured value $\hat y$ in order to reduce sensitivity on the model choice of the distribution of $y_\text{TF}$. 
-
+The four cuts are described by
 \begin{equation}
 \mathcal S_i:\qquad
 \max\!\big\{\hat y_{\min},\;\bar{s}\,\hat x_i+\bar{c}_1\big\}
@@ -243,6 +245,7 @@ We also impose a lower limit on the measured value $\hat y$ in order to reduce s
 \;\le\;
 \min\!\big\{\hat y_{\max},\;\bar{s}\,\hat x_i+\bar{c}_2\big\}.
 \end{equation}
+The parameters are chosen by eye, and fit results should be insensitive to perturbations in their values.
 
 In the sheared coordinates $\hat u\equiv\hat y-\bar{s}\,\hat x-\bar{c}_1$, the lower oblique cut gives $\hat u\ge 0$ as before, while the upper oblique cut $\hat y\le\bar{s}\,\hat x+\bar{c}_2$ becomes the constant bound
 \begin{equation}
