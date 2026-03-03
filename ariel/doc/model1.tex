@@ -1,47 +1,46 @@
-\section{Fitting the Tully Fisher Relation}
+\section{Fitting the Tully-Fisher Relation}
 \label{sec:simple_noPV}
 Consider a simple model in which peculiar velocities are not included and the background cosmology is known.
-In this case observed redshifts can be
-converted to distances and observed magnitudes can be converted to absolute magnitudes.
+In this case observed redshifts can be converted to distances and observed magnitudes can be converted to absolute magnitudes.
 
 \subsection{Data}
 \begin{description}
     \item[$N$:] Total number of galaxies.
     \item[$\hat x_i$, $\sigma_{x,i}$:] Observed $\log\!\left(\frac{V_{\text{rot}}}{V_0}\right)$ and uncertainty for galaxy $i$.
-    \item[$\hat y_i$, $\sigma_{y,i}$:] Observed absolute magnitude and uncertainty for galaxy $i$.  
+    \item[$\hat y_i$, $\sigma_{y,i}$:] Observed absolute magnitude and uncertainty for galaxy $i$.
 \end{description}
 The velocity uncertainties are normal in log-space, which is probably not entirely accurate but may be sufficient for our purposes.
 The benefit of this model is that the likelihood for each galaxy can be computed in closed form, which makes inference tractable and efficient.
+
 \subsection{Parameters}
 \begin{description}
-    \item[$s$, $c$:] Slope and intercept of the Tully-Fisher relation.
-    \item[$\sigma_{\text{int},x}$, $\sigma_{\text{int},y}$ :] Intrinsic scatter in the $x$-, $y$-directions.
+    \item[$s$, $c$:] Slope and intercept of the Tully--Fisher relation.
+    \item[$\sigma_{\text{int},x}$, $\sigma_{\text{int},y}$:] Intrinsic scatter in the $x$-, $y$-directions.
     \item[$y_{\text{TF},i}$:] Latent ``on-relation'' absolute magnitude for galaxy $i$.
-    \item[$x_i$, $y_i$:] Latent true $x$, $y$  for galaxy $i$.
-    \item[$\Xi$:] Parameters that describe the distribution function of $y_{\text{TF}}$.
+    \item[$x_i$, $y_i$:] Latent true $x$, $y$ for galaxy $i$.
+    \item[$\Xi$:] Parameters that describe the distribution of $y_{\text{TF}}$.
 \end{description}
 
 \subsection{Model}
 \label{sec:model}
 
-Each galaxy has a latent parameter that determines its TF properties.  The galaxy absolute magnitude and
-rotation velocity are drawn independently and
-probabilistically based on this parameter using the TF relation.  Measurement errors are
-independent and normally distributed.  Specifically, for each galaxy $i$:
+Each galaxy has a latent parameter that determines its TF properties. The galaxy absolute magnitude and
+rotation velocity are drawn independently and probabilistically based on this parameter using the TF relation.
+Measurement errors are independent and normally distributed. Specifically, for each galaxy $i$:
 \begin{align}
-y_i \mid y_{\text{TF},i} &\sim \mathcal N(y_{\text{TF},i},\sigma^2_{\text{int},y})\\
+y_i \mid y_{\text{TF},i} &\sim \mathcal N(y_{\text{TF},i},\sigma^2_{\text{int},y}),\\
 x_i \mid y_{\text{TF},i}, s, c &\sim \mathcal N\!\left(\frac{y_{\text{TF},i}-c}{s},\sigma^2_{\text{int},x}\right).
 \end{align}
 
-The latent parameter $y_{\text{TF},i} $ has an underlying distribution; we consider either a top-hat
+The latent parameter $y_{\text{TF},i}$ has an underlying distribution; we consider either a top-hat
 \begin{align}
 y_{\text{TF},i} & \sim \text{Uniform}(y_{\min}, y_{\max})
 \end{align}
 or a Normal
 \begin{align}
-y_{\text{TF},i} & \sim \mathcal N (\mu_{y_\text{TF}}, \tau^2)
+y_{\text{TF},i} & \sim \mathcal N (\mu_{y_\mathrm{TF}}, \tau^2)
 \end{align}
-distribution.  So $\Xi \equiv \{y_{\min}, y_{\max}\}$ or $\{\mu_{y_\text{TF}}, \tau\}$.
+distribution. Thus $\Xi \equiv \{y_{\min}, y_{\max}\}$ or $\{\mu_{y_\mathrm{TF}}, \tau\}$.
 
 \subsection{Complete Sample}
 For a complete sample
@@ -50,17 +49,16 @@ For a complete sample
 \hat y_i \mid y_i &\sim \mathcal N(y_i,\sigma^2_{y,i}).
 \end{align}
 
-The total likelihood is
-Let $\theta \equiv \big(s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}, \Xi \big)$.
+Let $\theta \equiv \bigl(s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}, \Xi \bigr)$.
 The total likelihood is
 \begin{align}
-\mathcal L(\theta;\{\hat x_i\},\{\hat y_i\}) 
+\mathcal L(\theta;\{\hat x_i\},\{\hat y_i\})
 = \prod_{i=1}^{N} \mathcal L_i(\theta;\hat x_i,\hat y_i),
 \end{align}
 where the likelihood for an individual galaxy is
 \begin{align}
 \mathcal L_i
-&= p(\hat x_i,\hat y_i \mid \theta) \\
+&= p(\hat x_i,\hat y_i \mid \theta) \label{eqn:likelihood}\\
 &= \int dx_i\,dy_i\,dy_{\text{TF}}\;
 p(\hat x_i\mid x_i)\,p(\hat y_i\mid y_i)\,
 p(x_i\mid y_{\text{TF}},s,c)\,p(y_i\mid y_{\text{TF}})\,p(y_{\text{TF}}).
@@ -81,7 +79,7 @@ and therefore the per-galaxy likelihood can be written as
 \mathcal L_i
 &= \int dy_{\text{TF}}\;
 \mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma^2_{1,i}\right)\,
-\mathcal N(\hat y_i;y_{\text{TF}},\sigma^2_{2,i})\,
+\mathcal N\!\left(\hat y_i;y_{\text{TF}},\sigma^2_{2,i}\right)\,
 p(y_{\text{TF}}).
 \label{eqn:likelihood_pg}
 \end{align}
@@ -100,10 +98,10 @@ Then
 \mathcal L_i
 &= \frac{1}{y_{\max}-y_{\min}}
 \int_{y_{\min}}^{y_{\max}} dy_{\text{TF}}\;
-\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma_{1,i}\right)\,
-\mathcal N(\hat y_i;y_{\text{TF}},\sigma_{2,i})\\
+\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma^2_{1,i}\right)\,
+\mathcal N\!\left(\hat y_i;y_{\text{TF}},\sigma^2_{2,i}\right)\\
 &= \frac{|s|}{y_{\max}-y_{\min}}\;
-\mathcal N\!\left(\hat y_i; c+s\hat x_i,\ \sigma_{\text{tot},i}\right)
+\mathcal N\!\left(\hat y_i; c+s\hat x_i,\ \sigma^2_{\text{tot},i}\right)
 \left[
 \Phi\!\left(\frac{y_{\max}-\mu_{*,i}}{\sigma_{*,i}}\right)
 -
@@ -118,18 +116,19 @@ where $\Phi$ is the standard normal CDF and
 \end{align}
 
 \subsubsection{Normal Model for $y_{\text{TF},i}$}
-Let $y_{\text{TF},i}\sim\mathcal{N}(\mu_{\mathrm{TF}},\tau)$.
+Let $y_{\text{TF},i}\sim\mathcal{N}(\mu_{y_\mathrm{TF}},\tau^2)$.
 Then
 \begin{align}
 \mathcal L_i
-&= 
-\int_{-\infty}^{\infty} dy_{\text{TF}}\; \mathcal{N}(\mu_{\mathrm{TF}},\tau)
-\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma_{1,i}\right)\,
-\mathcal N(\hat y_i;y_{\text{TF}},\sigma_{2,i})\\
+&=
+\int_{-\infty}^{\infty} dy_{\text{TF}}\;
+\mathcal N\!\left(y_{\text{TF}};\mu_{y_\mathrm{TF}},\tau^2\right)\,
+\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma^2_{1,i}\right)\,
+\mathcal N\!\left(\hat y_i;y_{\text{TF}},\sigma^2_{2,i}\right)\\
 &=
 \mathcal N_2\!\left(
 \begin{bmatrix}\hat x_i\\ \hat y_i\end{bmatrix};
-\begin{bmatrix}\dfrac{\mu_{\mathrm{TF}}-c}{s}\\[4pt] \mu_{\mathrm{TF}}\end{bmatrix},
+\begin{bmatrix}\dfrac{\mu_{y_\mathrm{TF}}-c}{s}\\[4pt] \mu_{y_\mathrm{TF}}\end{bmatrix},
 \Sigma_i
 \right),
 \end{align}
@@ -144,9 +143,9 @@ where
 \qquad s\neq 0.
 \end{equation}
 
-
 \subsection{Sample Selection}
 \label{sec:selection}
+
 \subsubsection{DESI TF Sample Selection}
 In practice, sample selection can bias the analysis because the probability that an object enters the final
 sample need not be independent of its measured properties.
@@ -155,10 +154,9 @@ preferentially scattered into the sample if they are intrinsically brighter (or 
 
 In the DESI TF survey, the initial parent sample is defined by the SGA catalog.
 We assume that SGA inclusion is complete above its angular-size cutoff and that, conditional on the TF model,
-the SGA selection is independent of the TF observables.  In particular, there are no low surface-brightness galaxies that escape
+the SGA selection is independent of the TF observables. In particular, there are no low surface-brightness galaxies that escape
 inclusion in the SGA catalog conditional on the angular size selection.
-Concretely, letting $S_{\text{SGA}}\in\{0,1\}$ denote
-SGA inclusion, we assume
+Concretely, letting $S_{\text{SGA}}\in\{0,1\}$ denote SGA inclusion, we assume
 \begin{align}
 p(\hat x_i,\hat y_i \mid \theta, S_{\text{SGA},i}=1) = p(\hat x_i,\hat y_i \mid \theta).
 \end{align}
@@ -171,27 +169,24 @@ enter only through an overall completeness factor and do not need to be modeled 
 This assumption should be tested, since fiber allocation and redshift success can depend on quantities such as
 angular size, apparent magnitude and surface brightness.
 
-We apply additional quality cuts to mitigate catastrophic
-outliers and to restrict the sample to galaxies for which
+We apply additional quality cuts to mitigate catastrophic outliers and to restrict the sample to galaxies for which
 the TF model is expected to be valid (e.g.\ excluding dwarf galaxies whose dynamics are not well described by
 the normal-galaxy TF relation).
-These cuts are modeled as hard selection on the measured observables for each galaxy:
+These cuts are modeled as hard selection on the measured observables:
 $(\hat x_i,\hat y_i)\in\mathcal S$, where $\mathcal S$ is the selection region.
 This is the sample selection considered in this section.
 
-Finally, we apply a minimum redshift $z>z_{\text{min}}$, to dminish the effect of peculiar velocities.
+Finally, we apply a minimum redshift $z>z_{\text{min}}$ to diminish the effect of peculiar velocities.
 
 \subsubsection{Expanded Model and Likelihood}
-With sample selection, we need to speficy the model for the abundance of the parent galaxy population
-as a function of redshift (e.g., constant per comoving number density).
-The expected number of sample galaxies, $\bar N$ is then calculable from the model and is dependent
-on the TF parameters. The realized sample size could then inform the inference of the TF parameters.
+With sample selection, we need to specify the model for the abundance of the parent galaxy population
+as a function of redshift (e.g.\ constant comoving number density).
+The expected number of sample galaxies, $\bar N$, is then calculable from the model and depends on the TF parameters.
+The realized sample size could then inform the inference of the TF parameters.
 
-For simplicity and tractability, we do not introduce a model for the parent population abundance
-and instead treat the expected number of observed galaxies $\bar{N}$ as a free parameter in the likelihood:
-$\bar N$ does not depend on the TF parameters.
+For simplicity and tractability, we do not introduce a model for the parent population abundance and instead treat the expected
+number of observed galaxies $\bar N$ as a free parameter in the likelihood: $\bar N$ does not depend on the TF parameters.
 In this case, the TF parameters are constrained only by the observed distribution of $(\hat x,\hat y)$.
-
 
 Assuming a Poisson model for the observed sample size and conditional independence of galaxy measurements,
 the total likelihood is
@@ -203,74 +198,72 @@ the total likelihood is
 p(\hat x_i,\hat y_i \mid \theta, S_i=1),
 \end{align}
 where $S_i=1$ denotes that galaxy $i$ is included by the selection.
-For our choice of model, $\bar{N}$  is a dummy model parameter that we profile over so that relevant contribution to the likelihood is
+
+For our choice of model, $\bar N$ is a dummy parameter that we profile over, so the relevant contribution to the likelihood is
 \begin{align}
 \mathcal L(\theta; \{\hat x_i\},\{\hat y_i\})
 & \propto
 \prod_{i=1}^{N}
-p(\hat x_i,\hat y_i \mid \theta, S_i=1),
+p(\hat x_i,\hat y_i \mid \theta, S_i=1).
 \end{align}
 
 For hard cuts applied to the \emph{measured} observables, the selected-sample (truncated) per-galaxy density is
 \begin{align}
 p(\hat x_i,\hat y_i \mid \theta, S_i=1)
-&=
-\frac{\mathcal{L}_i
-}{
-P(S_i=1\mid \theta)
-},
+&
+=
+\frac{p(\hat x,\hat y\mid\theta)\,\mathbf 1\{(\hat x,\hat y)\in\mathcal S\}}
+{P(S=1\mid\theta)}
 \\
 P(S_i=1\mid \theta)
 &=
-\int\!\!\!\int_{(\hat x,\hat y)\in\mathcal S_i}
+\int\!\!\!\int_{(\hat x,\hat y)\in\mathcal S}
 p(\hat x,\hat y \mid \theta)\, d\hat x\, d\hat y,
 \end{align}
-where $\mathcal{L}_i$ is the per-galaxy likelihood of the complete sample model.  As those are already calculated in the
-previous section, we now have to calculate the denominator.
+where $\mathcal{L}_i$ is the per-galaxy likelihood of the complete-sample model computed above.
+Note that the $p(\hat x,\hat y\mid\theta) = \mathcal L_i$, the per-galaxy likelihood
+in the complete sample case (Eq.~\ref{eqn:likelihood}).
 
-\subsubsection{Selection domain: bounds in $\hat y$ and a two-sided parallel half-plane cut}
+\subsubsection{Selection domain: lower and upper limits in $\hat y$ and a two-sided parallel half-plane cut}
 
-We construct the sample by imposing four cuts: lower and upper limits on the
-measured absolute magnitude $\hat y$, and two parallel (oblique) half-plane cuts
-in the measured $(\hat x,\hat y)$ plane. The upper $\hat y$ cut removes dwarf
-galaxies that do not follow the Tully--Fisher (TF) relation, while the oblique
-cuts remove extreme outliers observed in the DESI data.
+We construct the sample by imposing four cuts: lower and upper limits on the measured absolute magnitude $\hat y$,
+and two parallel (oblique) half-plane cuts in the measured $(\hat x,\hat y)$ plane. The upper $\hat y$ cut removes dwarf galaxies
+that do not follow the TF relation, while the oblique cuts remove extreme outliers observed in the DESI data.
 
-We also impose a lower cut on $\hat y$ to reduce the sensitivity of the fit to
-the assumed form of the latent distribution $p(y_{\rm TF})$. The top-hat and
-normal models differ mainly in their tail behavior while making similar
-predictions in the central (high-probability) region. Consequently, galaxies
-with very extreme $\hat y$ values (whose inferred $y_{\rm TF}$ would lie in the
-tails) can receive substantially different likelihoods under different choices
-of $p(y_{\rm TF})$. The lower $\hat y$ cut is therefore intended to remove these
-tail-dominated objects so that the inferred TF parameters are driven primarily
-by the region where the likelihood is comparatively insensitive to the specific
-model for $p(y_{\rm TF})$.
+We also impose a lower cut on $\hat y$ to reduce the dependence of the fit on the assumed form of the latent $y_{\rm TF}$ distribution.
+The top-hat and normal models differ primarily in their tail behavior while making similar predictions in the central region.
+Consequently, galaxies with very extreme $\hat y$ values---whose inferred $y_{\rm TF}$ would lie in the tails---can receive substantially
+different likelihoods under different choices of $p(y_{\rm TF})$. The $\hat y$ lower cut is therefore intended to remove these tail-dominated
+objects so that the inferred TF parameters are driven mainly by the region where the likelihood is comparatively insensitive to the specific
+$y_{\rm TF}$ model.
 
-The four cuts can be written compactly as the selection event
+The four cuts can be written as the region $\mathcal S\subset\mathbb R^2$:
 \begin{equation}
-\mathcal S_i:\qquad
-\max\!\bigl\{\hat y_{\min},\;\bar{s}\,\hat x_i+\bar{c}_1\bigr\}
+(\hat x,\hat y)\in\mathcal S
+\quad \Longleftrightarrow \quad
+\max\!\bigl\{\hat y_{\min},\;\bar{s}\,\hat x+\bar{c}_1\bigr\}
 \;\le\;
-\hat y_i
+\hat y
 \;\le\;
-\min\!\bigl\{\hat y_{\max},\;\bar{s}\,\hat x_i+\bar{c}_2\bigr\},
+\min\!\bigl\{\hat y_{\max},\;\bar{s}\,\hat x+\bar{c}_2\bigr\}.
 \end{equation}
-with parameters chosen heuristically (by eye); fit results should be insensitive
-to small perturbations of their values.
+The parameters are chosen heuristically (by eye); fit results should be insensitive to small perturbations of their values.
 
-Define the sheared coordinate and the separation of the two oblique cuts,
+Define the sheared coordinate
 \begin{equation}
-\hat u_i \equiv \hat y_i-\bar{s}\,\hat x_i-\bar{c}_1,
+\hat u \equiv \hat y-\bar{s}\,\hat x-\bar{c}_1,
 \qquad
-d \equiv \bar{c}_2-\bar{c}_1,
+d \equiv \bar{c}_2-\bar{c}_1.
 \end{equation}
-and collect the measured quantities in
+In the sheared coordinates, collect the measured quantities into
 \begin{equation}
 \hat{\boldsymbol z}_i \equiv
-\begin{bmatrix}\hat u_i\\ \hat y_i\end{bmatrix}.
+\begin{bmatrix}\hat u_i\\ \hat y_i\end{bmatrix},
+\qquad
+\hat u_i \equiv \hat y_i-\bar s\,\hat x_i-\bar c_1.
 \end{equation}
-For fixed $y_{\rm TF}$, the measurement model implies
+
+For fixed $y_{\rm TF}$,
 \begin{equation}
 \hat{\boldsymbol z}_i \mid y_{\rm TF} \sim
 \mathcal N_2\!\bigl(\boldsymbol\mu_i(y_{\rm TF}),\,\boldsymbol\Sigma_i\bigr),
@@ -278,154 +271,6 @@ For fixed $y_{\rm TF}$, the measurement model implies
 with
 \begin{equation}
 \boldsymbol\mu_i(y_{\rm TF})
-=
-\begin{bmatrix}
-\mu_{u,i}(y_{\rm TF})\\[3pt]
-\mu_{y,i}(y_{\rm TF})
-\end{bmatrix}
-=
-\begin{bmatrix}
-y_{\rm TF}-\bar s\,\dfrac{y_{\rm TF}-c}{s}-\bar c_1\\[8pt]
-y_{\rm TF}
-\end{bmatrix},
-\qquad
-\boldsymbol\Sigma_i
-=
-\begin{bmatrix}
-\sigma_{u,i}^2 & \sigma_{2,i}^2\\
-\sigma_{2,i}^2 & \sigma_{2,i}^2
-\end{bmatrix},
-\qquad
-\sigma_{u,i}^2 \equiv \sigma_{2,i}^2+\bar s^2\sigma_{1,i}^2.
-\end{equation}
-Equivalently,
-\begin{equation}
-\mathcal N\!\left(\hat x_i;\frac{y_{\rm TF}-c}{s},\sigma^2_{1,i}\right)\,
-\mathcal N\!\left(\hat y_i;y_{\rm TF},\sigma^2_{2,i}\right)
-=
-|\bar s|\;
-\mathcal N_2\!\left(\hat{\boldsymbol z}_i;\boldsymbol\mu_i(y_{\rm TF}),\boldsymbol\Sigma_i\right),
-\end{equation}
-where $|\bar s|$ is the absolute Jacobian determinant of the linear change of
-variables $(\hat x,\hat y)\mapsto(\hat u,\hat y)$. Therefore the per-galaxy
-marginal likelihood becomes
-\begin{equation}
-\mathcal L_i
-=
-|\bar s|\int dy_{\rm TF}\;
-\mathcal N_2\!\left(\hat{\boldsymbol z}_i;\boldsymbol\mu_i(y_{\rm TF}),\boldsymbol\Sigma_i\right)\,
-p(y_{\rm TF}).
-\end{equation}
-
-In the sheared coordinates, the oblique cuts are simply $0\le \hat u_i \le d$,
-while the $\hat y$ cuts remain axis-aligned. Thus the selection region in
-$(\hat u,\hat y)$ is
-\begin{equation}
-\mathcal S_i=\bigl\{(\hat u,\hat y):\;
-0\le\hat u\le d,\quad
-\hat y_{\min}\le \hat y \le \hat y_{\max}\bigr\}.
-\end{equation}
-Because both $\hat u$ and $\hat y$ are constrained to finite intervals, the
-selection probability can be written (by inclusion--exclusion) as
-\begin{equation}
-\begin{aligned}
-P(\mathcal S_i \mid \theta)
-&=
-P(\hat u\ge 0,\;\hat y\le \hat y_{\max}\mid \theta)
--
-P(\hat u\ge d,\;\hat y\le \hat y_{\max}\mid \theta)\\
-&\quad
--
-P(\hat u\ge 0,\;\hat y\le \hat y_{\min}\mid \theta)
-+
-P(\hat u\ge d,\;\hat y\le \hat y_{\min}\mid \theta).
-\end{aligned}
-\end{equation}
-
-Let $\Phi_2(h,k;\varrho)$ denote the standard bivariate normal CDF with
-correlation $\varrho$, i.e.\ $\Phi_2(h,k;\varrho)=P(Z_1\le h, Z_2\le k)$, and
-define the standardized bounds
-\begin{equation}
-a_i(t;y_{\rm TF}) \equiv \frac{\mu_{u,i}(y_{\rm TF})-t}{\sigma_{u,i}},
-\qquad
-b_i(y_\star;y_{\rm TF}) \equiv \frac{y_\star-y_{\rm TF}}{\sigma_{2,i}}.
-\end{equation}
-Writing $\rho_i \equiv \mathrm{Corr}(\hat u_i,\hat y_i)
-= \sigma_{2,i}/\sigma_{u,i}$, we have for any
-$t\in\{0,d\}$ and $y_\star\in\{\hat y_{\min},\hat y_{\max}\}$,
-\begin{equation}
-P(\hat u\ge t,\;\hat y\le y_\star\mid \theta)
-=
-\int dy_{\rm TF}\;p(y_{\rm TF})\;
-\Phi_2\!\Bigl(a_i(t;y_{\rm TF}),\ b_i(y_\star;y_{\rm TF});\ -\rho_i\Bigr),
-\end{equation}
-where the sign flip in the correlation arises from rewriting
-$\hat u\ge t$ as $-\hat u\le -t$. The Jacobian
-going from $x-y$ to $u-y$ coordinates cancels out the $|\bar{s}|$.
-Substituting these quadrant terms into the
-inclusion--exclusion identity gives
-\begin{equation}
-\begin{aligned}
-P(\mathcal S_i \mid \theta)
-&=
-\int dy_{\rm TF}\;p(y_{\rm TF})\;\Big[
-\Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)
--\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)\\
-&\hspace{62pt}
--\Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
-+\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
-\Big].
-\end{aligned}
-\end{equation}
-
-
-
-
-\subsubsection{Selection domain: lower and upper limits in $\hat y$ and a two-sided parallel half-plane cut}
-
-We construct the sample by imposing four cuts: lower and upper limits on the measured absolute magnitude $\hat y$, and two parallel (oblique) half-plane cuts in the measured $(\hat x,\hat y)$-plane. The upper $\hat y$ cut removes dwarf galaxies that do not follow the Tully--Fisher (TF) relation, while the oblique cuts remove extreme outliers observed in the DESI data.
-
-We also impose a lower cut on $\hat y$ to reduce the dependence of the fit on the assumed form of the latent $y_{\rm TF}$ distribution. The top-hat and normal models differ primarily in their tail behavior while making similar predictions in the central (high-probability) region. Consequently, galaxies with very extreme $\hat y$ values---whose inferred $y_{\rm TF}$ would lie in the tails---can receive substantially different likelihoods under different choices of $p(y_{\rm TF})$. The $\hat y$ lower cut is therefore intended to remove these tail-dominated objects so that the inferred TF parameters are driven mainly by the region where the likelihood is comparatively insensitive to the specific $y_{\rm TF}$ model.
-
-The four cuts can be written as
-\begin{equation}
-\mathcal S_i:\qquad
-\max\!\bigl\{\hat y_{\min},\;\bar{s}\,\hat x_i+\bar{c}_1\bigr\}
-\;\le\;
-\hat y_i
-\;\le\;
-\min\!\bigl\{\hat y_{\max},\;\bar{s}\,\hat x_i+\bar{c}_2\bigr\}.
-\end{equation}
-The parameters are chosen heuristically (by eye); fit results should be insensitive to small perturbations of their values.
-
-Define the sheared coordinate
-\begin{equation}
-\hat u_i \;\equiv\; \hat y_i-\bar{s}\,\hat x_i-\bar{c}_1,
-\qquad
-d \;\equiv\; \bar{c}_2-\bar{c}_1.
-\end{equation}
-In the sheared coordinates, it is convenient to collect the measured
-quantities into the vector
-\begin{equation}
-\hat{\boldsymbol z}_i \;\equiv\;
-\begin{bmatrix}\hat u_i\\ \hat y_i\end{bmatrix},
-\qquad
-\hat u_i \equiv \hat y_i-\bar s\,\hat x_i-\bar c_1.
-\end{equation}
-For fixed $y_{\rm TF}$, the measurement model implies that
-$\hat{\boldsymbol z}_i$ is bivariate normal. Writing its mean and covariance as
-\begin{equation}
-\hat{\boldsymbol z}_i \mid y_{\rm TF} \;\sim\;
-\mathcal N_2\!\bigl(\boldsymbol\mu_i(y_{\rm TF}),\,\boldsymbol\Sigma_i\bigr),
-\end{equation}
-we have
-\begin{equation}
-\boldsymbol\mu_i(y_{\rm TF})
-=
-\begin{bmatrix}
-\mu_{u,i}(y_{\rm TF})\\[3pt]
-\mu_{y,i}(y_{\rm TF})
-\end{bmatrix}
 =
 \begin{bmatrix}
 y_{\mathrm{TF}}-\bar s\,\dfrac{y_{\mathrm{TF}}-c}{s}-\bar c_1\\[8pt]
@@ -441,6 +286,19 @@ y_{\mathrm{TF}}
 \qquad
 \sigma_{u,i}^2 \equiv \sigma_{2,i}^2+\bar s^2\sigma_{1,i}^2.
 \end{equation}
+Define (for later convenience) the components
+\begin{equation}
+\mu_{u,i}(y_{\rm TF}) \equiv y_{\mathrm{TF}}-\bar s\,\frac{y_{\mathrm{TF}}-c}{s}-\bar c_1,
+\qquad
+\mu_{y,i}(y_{\rm TF}) \equiv y_{\mathrm{TF}}.
+\end{equation}
+Define the (conditional) correlation
+\begin{equation}
+\rho_i \equiv \mathrm{Corr}(\hat u_i,\hat y_i \mid y_{\rm TF})
+=\frac{\sigma_{2,i}^2}{\sigma_{u,i}\sigma_{2,i}}
+=\frac{\sigma_{2,i}}{\sigma_{u,i}}.
+\end{equation}
+
 With these definitions, the product of the 1D Gaussians appearing in the
 integrand of Eq.~\ref{eqn:likelihood_pg} can be written compactly as
 \begin{equation}
@@ -461,34 +319,30 @@ Therefore the per-galaxy marginal likelihood becomes
 p(y_{\mathrm{TF}}).
 \end{equation}
 
-
-
-
-A feature of the sheared coordinates is that the lower oblique cut becomes
-$\hat u_i\ge 0$, and the upper oblique cut
-$\hat y_i\le \bar{s}\,\hat x_i+\bar{c}_2$ becomes the constant bound
-$\hat u_i\le d$. The $\hat y$ cuts remain axis-aligned, so in
-$(\hat u,\hat y)$ coordinates the selection region is
+A feature of the sheared coordinates is that the lower oblique cut becomes $\hat u\ge 0$ and the upper oblique cut becomes $\hat u\le d$.
+The $\hat y$ cuts remain axis-aligned, so in $(\hat u,\hat y)$ coordinates the selection region is the rectangle
 \begin{equation}
-\mathcal S_i=\bigl\{(\hat u,\hat y):\;
+(\hat u,\hat y)\in\mathcal S
+\quad \Longleftrightarrow \quad
 0\le\hat u\le d,\quad
-\hat y_{\min}\le \hat y \le \hat y_{\max}\bigr\}.
+\hat y_{\min}\le \hat y \le \hat y_{\max}.
 \end{equation}
+
 Because both $\hat u$ and $\hat y$ are constrained to finite intervals, the
 selection probability can be expressed via inclusion--exclusion as a
 difference of four quadrant integrals:
 \begin{equation}
 \begin{aligned}
-P\bigl(S_i \mid \theta\bigr)
+P(S_i=1 \mid \theta)
 &=
-P(\hat u\ge 0,\;\hat y\le \hat y_{\max}\mid \theta)
+P(\hat u_i\ge 0,\;\hat y_i\le \hat y_{\max}\mid \theta)
 -
-P(\hat u\ge d,\;\hat y\le \hat y_{\max}\mid \theta)\\
+P(\hat u_i\ge d,\;\hat y_i\le \hat y_{\max}\mid \theta)\\
 &\quad
 -
-P(\hat u\ge 0,\;\hat y\le \hat y_{\min}\mid \theta)
+P(\hat u_i\ge 0,\;\hat y_i\le \hat y_{\min}\mid \theta)
 +
-P(\hat u\ge d,\;\hat y\le \hat y_{\min}\mid \theta).
+P(\hat u_i\ge d,\;\hat y_i\le \hat y_{\min}\mid \theta).
 \end{aligned}
 \end{equation}
 
@@ -498,21 +352,22 @@ the standardized bounds
 \begin{equation}
 a_i(t;y_{\rm TF}) \equiv \frac{\mu_{u,i}(y_{\rm TF})-t}{\sigma_{u,i}},
 \qquad
-b_i(y_\star;y_{\rm TF}) \equiv \frac{y_\star-y_{\rm TF}}{\sigma_{2,i}}.
+b_i(y_\star;y_{\rm TF}) \equiv \frac{y_\star-\mu_{y,i}(y_{\rm TF})}{\sigma_{2,i}}
+= \frac{y_\star-y_{\rm TF}}{\sigma_{2,i}}.
 \end{equation}
 Then, for any $t\in\{0,d\}$ and $y_\star\in\{\hat y_{\min},\hat y_{\max}\}$,
 \begin{equation}
-P(\hat u\ge t,\;\hat y\le y_\star\mid \theta)
+P(\hat u_i\ge t,\;\hat y_i\le y_\star\mid \theta)
 =
 \int dy_{\rm TF}\;p(y_{\rm TF})\;
 \Phi_2\!\Bigl(a_i(t;y_{\rm TF}),\ b_i(y_\star;y_{\rm TF});\ -\rho_i\Bigr),
 \end{equation}
 where the sign flip in the correlation arises from rewriting
-$\hat u\ge t$ as $-\hat u\le -t$.
+$\hat u_i\ge t$ as $-\hat u_i\le -t$.
 Substituting these quadrant terms into the inclusion--exclusion identity gives
 \begin{equation}
 \begin{aligned}
-P\bigl(S_i \mid \theta\bigr)
+P(S_i=1 \mid \theta)
 &=
 \int dy_{\rm TF}\;p(y_{\rm TF})\;\Big[
 \Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)
@@ -524,28 +379,24 @@ P\bigl(S_i \mid \theta\bigr)
 \end{aligned}
 \end{equation}
 
-
-
-
 \subsubsection{Top-hat model for $y_{\mathrm{TF},i}$}
 For the uniform prior
 \[
-y_{\rm TF}\sim \mathrm{Uniform}(y_{{\rm TF},\min},y_{{\rm TF},\max}),
+y_{\rm TF}\sim \mathrm{Uniform}(y_{\min},y_{\max}),
 \qquad
 p(y_{\rm TF})=\frac{1}{\Delta y_{\rm TF}}\,
-\mathbf 1\!\left\{y_{{\rm TF},\min}\le y_{\rm TF}\le y_{{\rm TF},\max}\right\},
+\mathbf 1\!\left\{y_{\min}\le y_{\rm TF}\le y_{\max}\right\},
 \qquad
-\Delta y_{\rm TF}\equiv y_{{\rm TF},\max}-y_{{\rm TF},\min},
+\Delta y_{\rm TF}\equiv y_{\max}-y_{\min},
 \]
 the selection probability can be written as a 1D integral over the latent
 $y_{\rm TF}$:
 \begin{equation}
-P(\mathcal S_i\mid\theta)
-=\frac{1}{\Delta y_{\rm TF}}\int_{y_{{\rm TF},\min}}^{y_{{\rm TF},\max}}
+P(S_i=1\mid\theta)
+=\frac{1}{\Delta y_{\rm TF}}\int_{y_{\min}}^{y_{\max}}
 I_i(y_{\rm TF})\,dy_{\rm TF},
 \end{equation}
-where, using the definitions of $a_i(t;y_{\rm TF})$, $b_i(y_\star;y_{\rm TF})$,
-and $\rho_i$ from the previous section,
+where
 \begin{equation}
 \label{eq:Ii_def}
 \begin{aligned}
@@ -555,15 +406,9 @@ I_i(y_{\rm TF})
 -\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)\\
 &\quad
 -\Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
-+\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr),
++\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr).
 \end{aligned}
 \end{equation}
-with the explicit $b_i$-terms
-\[
-b_i(\hat y_{\max};y_{\rm TF})=\frac{\hat y_{\max}-y_{\rm TF}}{\sigma_{2,i}},
-\qquad
-b_i(\hat y_{\min};y_{\rm TF})=\frac{\hat y_{\min}-y_{\rm TF}}{\sigma_{2,i}}.
-\]
 
 As a function of $y_{\rm TF}$, the integrand $I_i(y_{\rm TF})$ is typically
 close to a top-hat: it transitions from $\approx 0$ to $\approx 1$ near
@@ -575,14 +420,14 @@ A convenient approach is to split the integral at a point $y_\star$ between the
 two transitions, e.g.
 \[
 y_\star \equiv
-\min\!\left\{y_{{\rm TF},\max},\;
-\max\!\left\{y_{{\rm TF},\min},\;\frac{\hat y_{\min}+\hat y_{\max}}{2}\right\}\right\},
+\min\!\left\{y_{\max},\;
+\max\!\left\{y_{\min},\;\frac{\hat y_{\min}+\hat y_{\max}}{2}\right\}\right\},
 \qquad
-\int_{y_{{\rm TF},\min}}^{y_{{\rm TF},\max}}
+\int_{y_{\min}}^{y_{\max}}
 =
-\int_{y_{{\rm TF},\min}}^{y_\star}
+\int_{y_{\min}}^{y_\star}
 +
-\int_{y_\star}^{y_{{\rm TF},\max}}.
+\int_{y_\star}^{y_{\max}}.
 \]
 
 \paragraph{Lower-edge reparameterization (near $\hat y_{\min}$).}
@@ -594,13 +439,13 @@ dy_{\rm TF}=\sigma_{2,i}\cosh u_-\,du_-,
 \]
 with bounds
 \[
-u_-^{\min}=\operatorname{asinh}\!\left(\frac{y_{{\rm TF},\min}-\hat y_{\min}}{\sigma_{2,i}}\right),
+u_-^{\min}=\operatorname{asinh}\!\left(\frac{y_{\min}-\hat y_{\min}}{\sigma_{2,i}}\right),
 \qquad
 u_-^{\star}=\operatorname{asinh}\!\left(\frac{y_\star-\hat y_{\min}}{\sigma_{2,i}}\right).
 \]
 Then
 \[
-\int_{y_{{\rm TF},\min}}^{y_\star} I_i(y_{\rm TF})\,dy_{\rm TF}
+\int_{y_{\min}}^{y_\star} I_i(y_{\rm TF})\,dy_{\rm TF}
 =
 \sigma_{2,i}\int_{u_-^{\min}}^{u_-^{\star}}
 I_i\!\Bigl(\hat y_{\min}+\sigma_{2,i}\sinh u_-\Bigr)\,\cosh u_-\,du_-.
@@ -617,11 +462,11 @@ and flip the limits to keep increasing order. The corresponding bounds are
 \[
 u_+^{\star}=\operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_\star}{\sigma_{2,i}}\right),
 \qquad
-u_+^{\max}=\operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{{\rm TF},\max}}{\sigma_{2,i}}\right),
+u_+^{\max}=\operatorname{asinh}\!\left(\frac{\hat y_{\max}-y_{\max}}{\sigma_{2,i}}\right),
 \]
 so that
 \[
-\int_{y_\star}^{y_{{\rm TF},\max}} I_i(y_{\rm TF})\,dy_{\rm TF}
+\int_{y_\star}^{y_{\max}} I_i(y_{\rm TF})\,dy_{\rm TF}
 =
 \sigma_{2,i}\int_{u_+^{\max}}^{u_+^{\star}}
 I_i\!\Bigl(\hat y_{\max}-\sigma_{2,i}\sinh u_+\Bigr)\,\cosh u_+\,du_+.
@@ -630,7 +475,7 @@ I_i\!\Bigl(\hat y_{\max}-\sigma_{2,i}\sinh u_+\Bigr)\,\cosh u_+\,du_+.
 \paragraph{Quadrature-friendly form.}
 Combining the two pieces,
 \begin{equation}
-P(\mathcal S_i\mid\theta)
+P(S_i=1\mid\theta)
 =
 \frac{\sigma_{2,i}}{\Delta y_{\rm TF}}
 \left[
@@ -642,12 +487,10 @@ I_i\!\Bigl(\hat y_{\max}-\sigma_{2,i}\sinh u_+\Bigr)\,\cosh u_+\,du_+
 \right].
 \end{equation}
 
-
-
 \subsubsection{Normal model for $y_{\mathrm{TF},i}$}
 Assume
 \[
-y_{\mathrm{TF}}\sim \mathcal N(\mu_{\mathrm{TF}},\tau^2).
+y_{\mathrm{TF}}\sim \mathcal N(\mu_{y_\mathrm{TF}},\tau^2).
 \]
 In this case, after marginalizing over $y_{\rm TF}$ the measured pair
 $\bigl(\hat x_i,\hat y_i\bigr)$ is jointly Gaussian (cf.\ the complete-sample
@@ -660,7 +503,7 @@ result),
 \boldsymbol\Sigma^{(xy)}_i
 \right),
 \qquad
-\mu_{x,i}=\frac{\mu_{\mathrm{TF}}-c}{s},\ \ \mu_{y,i}=\mu_{\mathrm{TF}},
+\mu_{x,i}=\frac{\mu_{y_\mathrm{TF}}-c}{s},\ \ \mu_{y,i}=\mu_{y_\mathrm{TF}},
 \end{equation}
 with
 \begin{equation}
@@ -695,31 +538,34 @@ where
 \begin{align}
 \mu_{u,i}
 &=\mu_{y,i}-\bar s\,\mu_{x,i}-\bar c_1
-=\mu_{\mathrm{TF}}-\bar s\,\frac{\mu_{\mathrm{TF}}-c}{s}-\bar c_1,\\[3pt]
-\Sigma^{(uy)}_{yy,i}
-&\equiv \sigma_{y,i}^2
+=\mu_{y_\mathrm{TF}}-\bar s\,\frac{\mu_{y_\mathrm{TF}}-c}{s}-\bar c_1,\\[3pt]
+\sigma_{y,\mathrm{tot},i}^2
+&\equiv \Sigma^{(uy)}_{yy,i}
 =\tau^2+\sigma_{2,i}^2,\\
 \Sigma^{(uy)}_{uy,i}
-&=(\tau^2+\sigma_{2,i}^2)-\bar s\,\frac{\tau^2}{s},\\
-\Sigma^{(uy)}_{uu,i}
-&\equiv \sigma_{u,i}^2
-=(\tau^2+\sigma_{2,i}^2)+\bar s^2\!\left(\frac{\tau^2}{s^2}+\sigma_{1,i}^2\right)
+&=\sigma_{y,\mathrm{tot},i}^2-\bar s\,\frac{\tau^2}{s},\\
+\sigma_{u,i}^2
+&\equiv \Sigma^{(uy)}_{uu,i}
+=\sigma_{y,\mathrm{tot},i}^2
++\bar s^2\!\left(\frac{\tau^2}{s^2}+\sigma_{1,i}^2\right)
 -2\bar s\,\frac{\tau^2}{s}.
 \end{align}
 Let
 \[
 \rho^{(uy)}_i \equiv \mathrm{Corr}(\hat u_i,\hat y_i)
-=\frac{\Sigma^{(uy)}_{uy,i}}{\sigma_{u,i}\sigma_{y,i}},
+=\frac{\Sigma^{(uy)}_{uy,i}}{\sigma_{u,i}\,\sigma_{y,\mathrm{tot},i}},
 \qquad
 A_i(t)\equiv \frac{t-\mu_{u,i}}{\sigma_{u,i}},
 \qquad
-B_i(y_\star)\equiv \frac{y_\star-\mu_{y,i}}{\sigma_{y,i}}.
+B_i(y_\star)\equiv \frac{y_\star-\mu_{y,i}}{\sigma_{y,\mathrm{tot},i}}.
 \]
 
 \paragraph{Selection probability.}
 In $(\hat u,\hat y)$ coordinates the selection region is the rectangle
 \[
-\mathcal S_i=\{(\hat u,\hat y): 0\le \hat u\le d,\ \hat y_{\min}\le \hat y\le \hat y_{\max}\}.
+(\hat u,\hat y)\in\mathcal S
+\quad \Longleftrightarrow \quad
+0\le \hat u\le d,\ \hat y_{\min}\le \hat y\le \hat y_{\max}.
 \]
 Therefore the selection probability is a bivariate-normal rectangle
 probability, which can be written by inclusion--exclusion in terms of the
@@ -727,8 +573,8 @@ standard bivariate normal CDF $\Phi_2$:
 \begin{equation}
 \label{eq:Psel_normal}
 \begin{aligned}
-P(\mathcal S_i\mid\theta)
-&=P(0\le \hat u\le d,\ \hat y_{\min}\le \hat y\le \hat y_{\max}\mid\theta)\\
+P(S_i=1\mid\theta)
+&=P(0\le \hat u_i\le d,\ \hat y_{\min}\le \hat y_i\le \hat y_{\max}\mid\theta)\\
 &=
 \Phi_2\!\Bigl(A_i(d),\,B_i(\hat y_{\max});\,\rho^{(uy)}_i\Bigr)
 -\Phi_2\!\Bigl(A_i(0),\,B_i(\hat y_{\max});\,\rho^{(uy)}_i\Bigr)\\
@@ -750,100 +596,13 @@ p(\hat x_i,\hat y_i\mid \theta, S_i=1)
 \boldsymbol\Sigma^{(xy)}_i
 \right)
 }{
-P(\mathcal S_i\mid\theta)
+P(S_i=1\mid\theta)
 },
-\qquad (\hat x_i,\hat y_i)\in\mathcal S_i,
+\qquad (\hat x_i,\hat y_i)\in\mathcal S,
 \end{equation}
-with $P(\mathcal S_i\mid\theta)$ given by Eq.~\eqref{eq:Psel_normal}.  (Equivalently,
+with $P(S_i=1\mid\theta)$ given by Eq.~\eqref{eq:Psel_normal}. (Equivalently,
 one may evaluate the numerator in $(\hat u,\hat y)$ coordinates using
 $\mathcal N_2(\hat{\boldsymbol z}_i;\,[\mu_{u,i},\mu_{y,i}]^T,\boldsymbol\Sigma^{(uy)}_i)$ and the corresponding Jacobian.)
-
-
-\subsubsection{Normal model for $y_{\mathrm{TF},i}$}
-
-
-
-Assume
-\[
-y_{\mathrm{TF}}\sim \mathcal N(\mu_{\mathrm{TF}},\tau^2).
-\]
-
-
-Then $(\hat x_i,\hat y_i)$ is bivariate normal, and so is $(\hat u_i,\hat y_i)$, with
-\[
-\hat u_i \equiv \hat y_i-\bar s\,\hat x_i-\bar c_1,
-\qquad
-d \equiv \bar c_2-\bar c_1.
-\]
-Recall
-\[
-\sigma_{1,i}^2=\sigma_{x,i}^2+\sigma_{\mathrm{int},x}^2,\qquad
-\sigma_{2,i}^2=\sigma_{y,i}^2+\sigma_{\mathrm{int},y}^2.
-\]
-
-\paragraph{Means.}
-\begin{align}
-\mu_{x,i} &= \mathbb E[\hat x_i] = \frac{\mu_{\mathrm{TF}}-c}{s},&
-\mu_{y,i} &= \mathbb E[\hat y_i] = \mu_{\mathrm{TF}},&
-\mu_{u,i} &= \mathbb E[\hat u_i]
-= \mu_{y,i}-\bar s\,\mu_{x,i}-\bar c_1
-= \mu_{\mathrm{TF}}-\bar s\,\frac{\mu_{\mathrm{TF}}-c}{s}-\bar c_1.
-\end{align}
-
-\paragraph{Variances and covariance.}
-Let
-\[
-\Sigma_{x,i}^2 \equiv \mathrm{Var}(\hat x_i)=\frac{\tau^2}{s^2}+\sigma_{1,i}^2,
-\qquad
-\Sigma_{y,i}^2 \equiv \mathrm{Var}(\hat y_i)=\tau^2+\sigma_{2,i}^2,
-\qquad
-\mathrm{Cov}(\hat x_i,\hat y_i)=\frac{\tau^2}{s}.
-\]
-Then
-\begin{align}
-\Sigma_{u,i}^2
-&\equiv \mathrm{Var}(\hat u_i)
-=\mathrm{Var}(\hat y_i-\bar s\,\hat x_i)
-=\Sigma_{y,i}^2+\bar s^2\Sigma_{x,i}^2-2\bar s\,\mathrm{Cov}(\hat x_i,\hat y_i)
-\nonumber\\
-&=
-\sigma_{2,i}^2+\bar s^2\sigma_{1,i}^2+\tau^2\left(1-\frac{\bar s}{s}\right)^2,
-\\
-\mathrm{Cov}(\hat u_i,\hat y_i)
-&=\mathrm{Cov}(\hat y_i-\bar s\,\hat x_i,\hat y_i)
-=\Sigma_{y,i}^2-\bar s\,\mathrm{Cov}(\hat x_i,\hat y_i)
-=
-\sigma_{2,i}^2+\tau^2\left(1-\frac{\bar s}{s}\right),
-\\
-\rho_i
-&=\frac{\mathrm{Cov}(\hat u_i,\hat y_i)}{\Sigma_{u,i}\,\Sigma_{y,i}}.
-\end{align}
-
-\paragraph{Standardized bounds.}
-Define
-\[
-a_{0,i}\equiv \frac{0-\mu_{u,i}}{\Sigma_{u,i}},\qquad
-a_{d,i}\equiv \frac{d-\mu_{u,i}}{\Sigma_{u,i}},
-\qquad
-b_{\min,i}\equiv \frac{\hat y_{\min}-\mu_{y,i}}{\Sigma_{y,i}},\qquad
-b_{\max,i}\equiv \frac{\hat y_{\max}-\mu_{y,i}}{\Sigma_{y,i}}.
-\]
-
-\paragraph{Selection probability (rectangle probability).}
-\begin{equation}
-P(S_i=1\mid\theta)
-=
-\Phi_2(a_{d,i},b_{\max,i};\rho_i)
--\Phi_2(a_{0,i},b_{\max,i};\rho_i)
--\Phi_2(a_{d,i},b_{\min,i};\rho_i)
-+\Phi_2(a_{0,i},b_{\min,i};\rho_i).
-\end{equation}
-
-
-
-
-
-
 
 \subsection{Priors}
 Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:
