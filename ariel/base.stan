@@ -756,13 +756,7 @@ model {
                         intercept_plane2_std, sqrt(sigmasq1_std[n]),
                         sqrt(sigmasq2[n]), gl_x, gl_w));
       }
-      // target += - N_total * log(
-      //          integrate_binormal_strip_trapez(y_min, y_max,
-      //            haty_max, slope_std, intercept_std[bin_idx],
-      //            slope_plane_std, intercept_plane_std,
-      //            intercept_plane2_std, sqrt(sigmasq1_std[1]),
-      //            sqrt(sigmasq2[1]), 128));
-      //                 target += - N_total * log(
+
       // target += - N_total *log( integrate_binormal_strip_sinh2_gl(y_min, y_max, haty_min,
       //    haty_max, slope_std, intercept_std[bin_idx],
       //    slope_plane_std, intercept_plane_std,

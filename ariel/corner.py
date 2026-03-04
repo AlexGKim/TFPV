@@ -258,13 +258,6 @@ if __name__ == '__main__':
             names=args.names,
         )
     else:
-        infiles = [
-            "MOCK_base_?.csv",
-            "MOCK_normal_?.csv",
-            # "DESI_base_?.csv",
-            # "DESI_normal_?.csv",
-        ]
-        outfile = "temp.png"
 
         truth = {
             "slope":       -8.0,
@@ -272,6 +265,15 @@ if __name__ == '__main__':
             "sigma_int_x":  0.03,
             "sigma_int_y":  0.03,
         }
+        infiles = [
+            # "MOCK_base_?.csv",
+            # "MOCK_normal_?.csv",
+            "DESI_base_?.csv",
+            "DESI_normal_?.csv",
+        ]
+        outfile = "temp.png"
+        truth = None
+
 
         create_corner_plot(
             file_patterns=infiles,

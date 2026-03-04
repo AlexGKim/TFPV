@@ -239,21 +239,21 @@ model {
       
       target += multi_normal_lpdf([x_std[n], y[n]]' | mu_prior, Sigma_i);
       
-      // target += -log(
-      //                P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
-      //                                 intercept_std[bin_idx],
-      //                                 slope_plane_std, intercept_plane_std,
-      //                                 intercept_plane2_std,
-      //                                 sqrt(sigmasq1_std[n]),
-      //                                 sqrt(sigmasq2[n])));
+      target += -log(
+                  P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
+                                  intercept_std[bin_idx],
+                                  slope_plane_std, intercept_plane_std,
+                                  intercept_plane2_std,
+                                  sqrt(sigmasq1_std[n]),
+                                  sqrt(sigmasq2[n])));
     }
-    target += -N_total * log(
-                P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
-                                intercept_std[bin_idx],
-                                slope_plane_std, intercept_plane_std,
-                                intercept_plane2_std,
-                                sqrt(sigmasq1_std[1]),
-                                sqrt(sigmasq2[1])));
+    // target += -N_total * log(
+    //             P_binormal_strip(mu_y_TF, tau, haty_max, haty_min, slope_std,
+    //                             intercept_std[bin_idx],
+    //                             slope_plane_std, intercept_plane_std,
+    //                             intercept_plane2_std,
+    //                             sqrt(sigmasq1_std[1]),
+    //                             sqrt(sigmasq2[1])));
   }
   
   // Priors

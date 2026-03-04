@@ -1139,7 +1139,7 @@ def DESI(kind="normal",
 
     # --- redshift residual errorbar plot ---
     # plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt=".", alpha=0.05, label=label)
-    plt.scatter(zobs_star, mean_y, marker=".", alpha=0.05, label="Full Sample")
+    plt.scatter(zobs_star, mean_y, marker=".", alpha=0.2, label="Full Sample")
     plt.scatter(zobs_star2, mean_y2, marker=".", alpha=0.2, label=f"Training Susbset")
 
     
@@ -1478,7 +1478,7 @@ def MOCK(kind="normal",
     return mean_y, sigma_y, zobs_star
 if __name__ == "__main__":
     DESI("normal")
-    DESI("tophat")
+    # DESI("tophat")
     # DESI_compare(log_scale=True, linthresh=0.02, log_base=10)
     # MOCK("normal")
     # MOCK("tophat")
