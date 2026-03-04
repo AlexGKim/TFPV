@@ -313,6 +313,79 @@ functions {
     
     return (h / 2.0) * dot_product(w, term) / (y_max - y_min);
   }
+
+// Bracket term:
+  //   Phi2(-alpha1, beta; -rho) - Phi2(-alpha2, beta; -rho)
+  // for each y_TF in the input vector.
+  vector strip_integrand(vector y_TF,
+                         real s,
+                         real c,
+                         real bar_c1,
+                         real bar_c2,
+                         real yhat_max,
+                         real sigma1_i,
+                         real sigma2_i,
+                         real bar_s) {
+    int N = num_elements(y_TF);
+    
+    real denom = sqrt(square(sigma2_i) + square(bar_s) * square(sigma1_i));
+    real rho = sigma2_i / denom;
+    real sqrt1mr2 = sqrt(1.0 - square(rho));
+    
+    // y_shift = y_TF - bar_s * (y_TF - c)/s = (1 - bar_s/s)*y_TF + (bar_s*c/s)
+    real k = 1.0 - bar_s / s;
+    real b = bar_s * c / s;
+    
+    vector[N] y_shift = k * y_TF + b;
+    vector[N] alpha1 = (bar_c1 - y_shift) / denom;
+    vector[N] alpha2 = (bar_c2 - y_shift) / denom;
+    vector[N] beta = (yhat_max - y_TF) / sigma2_i;
+    
+    vector[N] z1a = -alpha1;
+    vector[N] z1b = -alpha2;
+    
+    // delta(-alpha1,beta) - delta(-alpha2,beta), vectorized via step()
+    // step(x)=1 if x>0 else 0
+    vector[N] delta_diff;
+    for (n in 1 : N) {
+      delta_diff[n] = 0.0;
+      if (beta[n] > 0 && alpha1[n] <= 0 && alpha2[n] > 0) 
+        delta_diff[n] = -1.0;
+      else if (beta[n] < 0 && alpha1[n] < 0 && alpha2[n] >= 0) 
+        delta_diff[n] = 1.0;
+    }
+    
+    // Owen's-t arguments, vectorized
+    vector[N] a_z1a = (beta ./ z1a + rho) / sqrt1mr2;
+    vector[N] a_z1b = (beta ./ z1b + rho) / sqrt1mr2;
+    vector[N] a_b1 = (z1a ./ beta + rho) / sqrt1mr2;
+    vector[N] a_b2 = (z1b ./ beta + rho) / sqrt1mr2;
+    
+    // Assemble bracket
+    vector[N] out = 0.5 * (Phi_approx(z1a) - Phi_approx(z1b) - delta_diff)
+                    - (owens_t(z1a, a_z1a) - owens_t(z1b, a_z1b))
+                    - (owens_t(beta, a_b1) - owens_t(beta, a_b2));
+    
+    return out;
+  }
+
+// Integrand for BOTH y-cuts:
+// I(y_TF) = [Phi2(-a1,beta_max;-rho)-Phi2(-a2,beta_max;-rho)]
+//         - [Phi2(-a1,beta_min;-rho)-Phi2(-a2,beta_min;-rho)]
+vector strip_integrand_two_ycuts(vector y_TF,
+                                 real s,
+                                 real c,
+                                 real bar_c1,
+                                 real bar_c2,
+                                 real yhat_min,
+                                 real yhat_max,
+                                 real sigma1_i,
+                                 real sigma2_i,
+                                 real bar_s) {
+  return strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_max, sigma1_i, sigma2_i, bar_s)
+       - strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_min, sigma1_i, sigma2_i, bar_s);
+}
+
   real integrate_binormal_strip_sinh_gl(
          real y_min,
          real y_max,
@@ -410,78 +483,6 @@ functions {
     // ∫ f(y_TF) dy_TF = sigma2 * ∫ f(haty_max - sigma2*sinh u) cosh(u) du
     return sigma2 * half * acc;
   }
-  
-  // Bracket term:
-  //   Phi2(-alpha1, beta; -rho) - Phi2(-alpha2, beta; -rho)
-  // for each y_TF in the input vector.
-  vector strip_integrand(vector y_TF,
-                         real s,
-                         real c,
-                         real bar_c1,
-                         real bar_c2,
-                         real yhat_max,
-                         real sigma1_i,
-                         real sigma2_i,
-                         real bar_s) {
-    int N = num_elements(y_TF);
-    
-    real denom = sqrt(square(sigma2_i) + square(bar_s) * square(sigma1_i));
-    real rho = sigma2_i / denom;
-    real sqrt1mr2 = sqrt(1.0 - square(rho));
-    
-    // y_shift = y_TF - bar_s * (y_TF - c)/s = (1 - bar_s/s)*y_TF + (bar_s*c/s)
-    real k = 1.0 - bar_s / s;
-    real b = bar_s * c / s;
-    
-    vector[N] y_shift = k * y_TF + b;
-    vector[N] alpha1 = (bar_c1 - y_shift) / denom;
-    vector[N] alpha2 = (bar_c2 - y_shift) / denom;
-    vector[N] beta = (yhat_max - y_TF) / sigma2_i;
-    
-    vector[N] z1a = -alpha1;
-    vector[N] z1b = -alpha2;
-    
-    // delta(-alpha1,beta) - delta(-alpha2,beta), vectorized via step()
-    // step(x)=1 if x>0 else 0
-    vector[N] delta_diff;
-    for (n in 1 : N) {
-      delta_diff[n] = 0.0;
-      if (beta[n] > 0 && alpha1[n] <= 0 && alpha2[n] > 0) 
-        delta_diff[n] = -1.0;
-      else if (beta[n] < 0 && alpha1[n] < 0 && alpha2[n] >= 0) 
-        delta_diff[n] = 1.0;
-    }
-    
-    // Owen's-t arguments, vectorized
-    vector[N] a_z1a = (beta ./ z1a + rho) / sqrt1mr2;
-    vector[N] a_z1b = (beta ./ z1b + rho) / sqrt1mr2;
-    vector[N] a_b1 = (z1a ./ beta + rho) / sqrt1mr2;
-    vector[N] a_b2 = (z1b ./ beta + rho) / sqrt1mr2;
-    
-    // Assemble bracket
-    vector[N] out = 0.5 * (Phi_approx(z1a) - Phi_approx(z1b) - delta_diff)
-                    - (owens_t(z1a, a_z1a) - owens_t(z1b, a_z1b))
-                    - (owens_t(beta, a_b1) - owens_t(beta, a_b2));
-    
-    return out;
-  }
-
-// Integrand for BOTH y-cuts:
-// I(y_TF) = [Phi2(-a1,beta_max;-rho)-Phi2(-a2,beta_max;-rho)]
-//         - [Phi2(-a1,beta_min;-rho)-Phi2(-a2,beta_min;-rho)]
-vector strip_integrand_two_ycuts(vector y_TF,
-                                 real s,
-                                 real c,
-                                 real bar_c1,
-                                 real bar_c2,
-                                 real yhat_min,
-                                 real yhat_max,
-                                 real sigma1_i,
-                                 real sigma2_i,
-                                 real bar_s) {
-  return strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_max, sigma1_i, sigma2_i, bar_s)
-       - strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_min, sigma1_i, sigma2_i, bar_s);
-}
 
 
 // ∫_{y_min}^{y_max} I(y_TF) dy_TF,
