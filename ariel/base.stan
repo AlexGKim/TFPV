@@ -19,15 +19,7 @@
 // - intercept[i]: TFR intercept for the i-th redshift bin
 
 functions {
-  // Forward declaration (needed for g++ 13 strict two-phase template name lookup on NERSC)
-  real integrate_binormal_strip_sinh2_gl(real y_min, real y_max,
-    real yhat_min, real yhat_max, real s, real c, real s_plane,
-    real c1_plane, real c2_plane, real sigma1, real sigma2,
-    vector gl_x, vector gl_w);
-
-  real binormal_cdf(tuple(real, real) z, real rho) {
-    real z1 = z.1;
-    real z2 = z.2;
+  real binormal_cdf(real z1, real z2, real rho) {
     if (z1 == 0 && z2 == 0) {
       return 0.25 + asin(rho) / (2 * pi());
     }
@@ -61,29 +53,27 @@ functions {
     // Evaluate integrand at left endpoint
     alpha_n = (c_plane - (y_min - s_plane * (y_min - c) / s)) / sigma_tot;
     beta_n = (haty_max - y_min) / sigma2;
-    sum = binormal_cdf((-alpha_n, beta_n) | -rho);
+    sum = binormal_cdf(-alpha_n | beta_n, -rho);
     
     // Evaluate integrand at interior points
     for (n in 1 : (N - 1)) {
       real y_TF = y_min + n * h;
       alpha_n = (c_plane - (y_TF - s_plane * (y_TF - c) / s)) / sigma_tot;
       beta_n = (haty_max - y_TF) / sigma2;
-      sum += 2.0 * binormal_cdf((-alpha_n, beta_n) | -rho);
+      sum += 2.0 * binormal_cdf(-alpha_n | beta_n, -rho);
     }
     
     // Evaluate integrand at right endpoint
     alpha_n = (c_plane - (y_max - s_plane * (y_max - c) / s)) / sigma_tot;
     beta_n = (haty_max - y_max) / sigma2;
-    sum += binormal_cdf((-alpha_n, beta_n) | -rho);
+    sum += binormal_cdf(-alpha_n | beta_n, -rho);
     
     // Trapezoidal rule with top-hat normalization
     return (h / 2.0) * sum / (y_max - y_min);
   }
   
   // skips one Phi that cancels out in the difference, so more accurate for large arguments
-  real binormal_strip_cdf(tuple(real, real) z, real rho) {
-    real z1 = z.1;
-    real z2 = z.2;
+  real binormal_strip_cdf(real z1, real z2, real rho) {
     if (z1 == 0 && z2 == 0) {
       return 0.25 + asin(rho) / (2 * pi());
     }
@@ -98,10 +88,7 @@ functions {
   }
   
   // skips one Phi that cancels out in the difference, so more accurate for large arguments
-  real integrand(tuple(real, real, real) z, real rho) {
-    real z1 = z.1;
-    real z2 = z.2;
-    real z3 = z.3;
+  real integrand(real z1, real z2, real z3, real rho) {
     // if (z1 == 0 && z2 == 0) {
     //   return 0.25 + asin(rho) / (2 * pi());
     // }
@@ -144,8 +131,8 @@ functions {
       real alpha2 = (c2_plane - mu) / sigma_tot;
       real beta = (haty_max - y_TF) / sigma2;
       
-      real term = binormal_strip_cdf((-alpha1, beta) | -rho)
-                  - binormal_strip_cdf((-alpha2, beta) | -rho);
+      real term = binormal_strip_cdf(-alpha1 | beta, -rho)
+                  - binormal_strip_cdf(-alpha2 | beta, -rho);
       
       sum += term;
     }
@@ -157,8 +144,8 @@ functions {
       real alpha2 = (c2_plane - mu) / sigma_tot;
       real beta = (haty_max - y_TF) / sigma2;
       
-      real term = binormal_strip_cdf((-alpha1, beta) | -rho)
-                  - binormal_strip_cdf((-alpha2, beta) | -rho);
+      real term = binormal_strip_cdf(-alpha1 | beta, -rho)
+                  - binormal_strip_cdf(-alpha2 | beta, -rho);
       
       sum += 2 * term;
     }
@@ -171,8 +158,8 @@ functions {
       real alpha2 = (c2_plane - mu) / sigma_tot;
       real beta = (haty_max - y_TF) / sigma2;
       
-      real term = binormal_strip_cdf((-alpha1, beta) | -rho)
-                  - binormal_strip_cdf((-alpha2, beta) | -rho);
+      real term = binormal_strip_cdf(-alpha1 | beta, -rho)
+                  - binormal_strip_cdf(-alpha2 | beta, -rho);
       
       sum += term;
     }
