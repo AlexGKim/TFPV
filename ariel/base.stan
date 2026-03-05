@@ -19,6 +19,12 @@
 // - intercept[i]: TFR intercept for the i-th redshift bin
 
 functions {
+  // Forward declaration (needed for g++ 13 strict two-phase template name lookup on NERSC)
+  real integrate_binormal_strip_sinh2_gl(real y_min, real y_max,
+    real yhat_min, real yhat_max, real s, real c, real s_plane,
+    real c1_plane, real c2_plane, real sigma1, real sigma2,
+    vector gl_x, vector gl_w);
+
   real binormal_cdf(tuple(real, real) z, real rho) {
     real z1 = z.1;
     real z2 = z.2;
