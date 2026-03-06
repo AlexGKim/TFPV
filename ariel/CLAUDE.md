@@ -45,7 +45,7 @@ done
 
 ```bash
 # Mock data from CSV
-python base_data.py
+python ariel_data.py
 
 # DESI real data from FITS
 python desi_data.py
@@ -57,14 +57,9 @@ python desi_data.py
 # Corner plot of posterior chains
 python corner.py 'DESI_base_?.csv' --output DESI_base.png
 
-# Normal model corner plot
-python normal_corner.py 'DESI_normal_?.csv'
-
 # Posterior predictions
 python predict.py
 
-# Validate mathematical integrals
-python integral_test.py
 ```
 
 ## Architecture
