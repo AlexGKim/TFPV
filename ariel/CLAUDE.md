@@ -14,10 +14,10 @@ Stan models must be compiled with CmdStan before running. From the repo root (or
 
 ```bash
 # Compile base model (truncated bivariate normal with selection effects)
-../cmdstan/bin/stanc base.stan && make -C ../cmdstan ariel/base
+make ../TFPV/ariel/base
 
 # Compile normal model (simplified, unbounded)
-../cmdstan/bin/stanc normal.stan && make -C ../cmdstan ariel/normal
+make ../TFPV/ariel/normal
 ```
 
 ### Run MCMC Sampling
@@ -25,13 +25,13 @@ Stan models must be compiled with CmdStan before running. From the repo root (or
 ```bash
 # Mock data
 ./base sample data file=MOCK_n10000_input.json init=MOCK_n10000_init.json \
-  output file=MOCK_n10000_base_1.csv
+  output file=MOCK_n10000_base.csv
 
 # DESI data (4 chains)
-for i in 1 2 3 4; do
-  ./base sample data file=DESI_input.json init=DESI_init.json \
-    output file=DESI_base_$i.csv &
-done
+
+./base sample data file=DESI_input.json init=DESI_init.json \
+  output file=DESI_base.csv &
+
 ```
 
 ### Diagnose and Summarize Chains
@@ -70,7 +70,7 @@ python predict.py
 Raw Data → Python prep scripts → JSON (Stan input) → Stan MCMC → CSV chains → Analysis scripts
 ```
 
-1. **Data preparation** (`base_data.py`, `desi_data.py`, `mock_data.py`): Reads CSV or FITS data, applies coordinate transforms, encodes selection cuts, outputs JSON for Stan and JSON initial conditions.
+1. **Data preparation** (`ariel_data.py`, `desi_data.py`): Reads CSV or FITS data, applies coordinate transforms, encodes selection cuts, outputs JSON for Stan initial conditions.
 
 2. **Stan models** (`base.stan`, `normal.stan`): Compiled to executables `./base` and `./normal`. Take JSON input/init, output CSV chains.
 
@@ -78,13 +78,14 @@ Raw Data → Python prep scripts → JSON (Stan input) → Stan MCMC → CSV cha
 
 ### Stan Model Design
 
-**`base.stan`** is the primary model. Key design decisions:
-- Latent true magnitudes (y_TF) are marginalized over with trapezoidal or Gauss-Legendre quadrature
+**`base.stan`** is the tophat model for the latent parameters. Key design decisions:
+- Latent true magnitudes (y_TF) are marginalized over with Gauss-Legendre quadrature
 - Selection probability is computed as `P_binormal_strip`: the bivariate normal probability mass in the strip between two oblique parallel planes in (x, y) space
 - Owen's T function is used for bivariate normal CDF evaluation
-- Parameters: `slope`, `intercept[N_bins]`, `sigma_int_x`, `sigma_int_y`, `mu_y_TF`, `tau`, `theta_int`
+- Parameters: `slope`, `intercept[N_bins]`, `sigma_int_x`, `sigma_int_y`
 
-**`normal.stan`** is a simplified model without truncation, used for comparison.
+**`normal.stan`** is a normal model for the latent parameter distribution.
+- Parameters: `slope`, `intercept[N_bins]`, `sigma_int_x`, `sigma_int_y`, `mu_y_TF`, `tau`
 
 ### JSON Data Format
 
