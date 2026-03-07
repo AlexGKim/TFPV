@@ -483,7 +483,7 @@ def read_cmdstan_posterior(
     Parameters
     ----------
     pattern
-        Filename or glob pattern, e.g. "MOCK_normal_*.csv" or "MOCK_normal_?.csv".
+        Filename or glob pattern, e.g. "ariel_normal_*.csv" or "ariel_normal_?.csv".
     keep
         Optional iterable of column names to keep (must match header names exactly),
         e.g. ["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"].
@@ -775,9 +775,9 @@ def ystar_pp_mean_sd_tophat_vectorized(
 #############################################################################
 
 
-# def MOCK_main():
+# def ariel_main():
 #     draws = read_cmdstan_posterior(
-#         "MOCK_normal_?.csv",
+#         "ariel_normal_?.csv",
 #         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
 #         drop_diagnostics=True,
 #     )
@@ -847,7 +847,7 @@ def DESI_normal():
 def DESI_tophat():
 
     draws = read_cmdstan_posterior(
-        "DESI_base_?.csv",
+        "DESI_tophat_?.csv",
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
         drop_diagnostics=True,
     )
@@ -945,16 +945,16 @@ def DESI_tophat():
     plt.clf()
 
 
-def MOCK_normal():
+def ariel_normal():
     # Posterior draws from the Normal (Gaussian) TF model
     draws = read_cmdstan_posterior(
-        "MOCK_normal_?.csv",
+        "ariel_normal_?.csv",
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
         drop_diagnostics=True,
     )
 
     # Load mock data (Stan JSON)
-    galaxy_json = "MOCK_n10000_input.json"
+    galaxy_json = "ariel_n10000_input.json"
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = (
         load_xy_and_uncertainties_from_stan_json(galaxy_json)
     )
@@ -974,20 +974,20 @@ def MOCK_normal():
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
     plt.legend()
-    plt.savefig("MOCK_redshift_normal.png", dpi=300)
+    plt.savefig("ariel_redshift_normal.png", dpi=300)
     plt.clf()
 
 
-def MOCK_tophat():
+def ariel_tophat():
     # Load mock data (Stan JSON)
-    galaxy_json = "MOCK_n10000_input.json"
+    galaxy_json = "ariel_n10000_input.json"
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = (
         load_xy_and_uncertainties_from_stan_json(galaxy_json)
     )
 
     # Posterior draws from the Top-Hat (truncated/uniform) TF model
     draws = read_cmdstan_posterior(
-        "MOCK_base_?.csv",
+        "ariel_tophat_?.csv",
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
         drop_diagnostics=True,
     )
@@ -1015,12 +1015,12 @@ def MOCK_tophat():
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
     plt.legend()
-    plt.savefig("MOCK_redshift_tophat.png", dpi=300)
+    plt.savefig("ariel_redshift_tophat.png", dpi=300)
     plt.clf()
 
     # Compare Top-Hat vs Normal posterior predictive mean residuals
     draws_normal = read_cmdstan_posterior(
-        "MOCK_normal_?.csv",
+        "ariel_normal_?.csv",
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
         drop_diagnostics=True,
     )
@@ -1032,7 +1032,7 @@ def MOCK_tophat():
     plt.scatter(mean_y, mean_y_normal, alpha=0.1)
     plt.xlabel("Top-Hat: mean_pred - y_obs (mag)")
     plt.ylabel("Normal: mean_pred - y_obs (mag)")
-    plt.savefig("MOCK_tophat_vs_normal.png", dpi=300)
+    plt.savefig("ariel_tophat_vs_normal.png", dpi=300)
     plt.clf()
 
 import numpy as np
@@ -1071,7 +1071,7 @@ def DESI(kind="normal",
         label = "Normal"
     else:
         draws = read_cmdstan_posterior(
-            "DESI_base_?.csv",
+            "DESI_tophat_?.csv",
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
             drop_diagnostics=True,
         )
@@ -1229,7 +1229,7 @@ def DESI_compare(
         drop_diagnostics=True,
     )
     draws_tophat = read_cmdstan_posterior(
-        "DESI_base_?.csv",
+        "DESI_tophat_?.csv",
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
         drop_diagnostics=True,
     )
@@ -1357,8 +1357,8 @@ def DESI_compare(
 
     return diff, diff_sd, zobs_star
 
-def MOCK(kind="normal",
-         galaxy_json="MOCK_n10000_input.json",
+def ariel(kind="normal",
+         galaxy_json="ariel_n10000_input.json",
          grid_resolution_x=50,
          grid_resolution_y=50,
          # grids:
@@ -1393,7 +1393,7 @@ def MOCK(kind="normal",
     # --- posterior + predictive ---
     if kind == "normal":
         draws = read_cmdstan_posterior(
-            "MOCK_normal_?.csv",
+            "ariel_normal_?.csv",
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
             drop_diagnostics=True,
         )
@@ -1401,7 +1401,7 @@ def MOCK(kind="normal",
         label = "Normal"
     else:
         draws = read_cmdstan_posterior(
-            "MOCK_base_?.csv",
+            "ariel_tophat_?.csv",
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
             drop_diagnostics=True,
         )
@@ -1431,7 +1431,7 @@ def MOCK(kind="normal",
         ax.set_ylabel(r'$M$')
         ax.set_title(r'$M_{\text{predicted}} - M$')
         fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
-        fig.savefig(f'MOCK_{kind}_grid.png', dpi=300)
+        fig.savefig(f'ariel_{kind}_grid.png', dpi=300)
         plt.close(fig)
 
     # --- GRID: redshift on (xhat, yhat) ---
@@ -1445,7 +1445,7 @@ def MOCK(kind="normal",
         ax.set_ylabel(r'$M$')
         ax.set_title(r'Redshift')
         fig.colorbar(img, ax=ax, label='Average Redshift')
-        fig.savefig(f'MOCK_redshift_grid_{kind}.png', dpi=300)
+        fig.savefig(f'ariel_redshift_grid_{kind}.png', dpi=300)
         plt.close(fig)
 
     # --- redshift residual errorbar plot ---
@@ -1454,13 +1454,13 @@ def MOCK(kind="normal",
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
     plt.legend()
-    plt.savefig(f"MOCK_redshift_{kind}.png", dpi=300)
+    plt.savefig(f"ariel_redshift_{kind}.png", dpi=300)
     plt.clf()
 
     # --- optional: tophat vs normal scatter comparison ---
     if kind == "tophat" and compare_tophat_vs_normal:
         draws_normal = read_cmdstan_posterior(
-            "MOCK_normal_?.csv",
+            "ariel_normal_?.csv",
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
             drop_diagnostics=True,
         )
@@ -1472,7 +1472,7 @@ def MOCK(kind="normal",
         plt.scatter(mean_y, mean_y_normal, alpha=0.1)
         plt.xlabel("Top-Hat: mean_pred - y_obs (mag)")
         plt.ylabel("Normal: mean_pred - y_obs (mag)")
-        plt.savefig("MOCK_tophat_vs_normal.png", dpi=300)
+        plt.savefig("ariel_tophat_vs_normal.png", dpi=300)
         plt.clf()
 
     return mean_y, sigma_y, zobs_star
@@ -1480,5 +1480,5 @@ if __name__ == "__main__":
     DESI("normal")
     # DESI("tophat")
     # DESI_compare(log_scale=True, linthresh=0.02, log_base=10)
-    # MOCK("normal")
-    # MOCK("tophat")
+    # ariel("normal")
+    # ariel("tophat")

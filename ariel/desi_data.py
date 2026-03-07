@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Convert DESI-DR1_TF_pv_cat_v15.fits to JSON format for base.stan
+Convert DESI-DR1_TF_pv_cat_v15.fits to JSON format for tophat.stan
 
 This script reads the DESI Tully-Fisher data and converts it to the format
-expected by base.stan.
+expected by tophat.stan.
 """
 
+import argparse
 import json
 import numpy as np
 import matplotlib.pyplot as plt
@@ -481,24 +482,32 @@ def plot_desi_tf_data(
 
 
 if __name__ == "__main__":
-    input_fits = "data/DESI-DR1_TF_pv_cat_v15.fits"
-
-    haty_max = -19.0  # there is an apparent outlier slightly fainter than -19.0
-    haty_min = -22.0
-
-    plane_cut = True
-    slope_plane = -6.5
-    intercept_plane = -20.5  # c1 (lower oblique bound)
-    intercept_plane2 = -18.5  # c2 (upper oblique bound); set to None for one‑sided
-
-    # <<< NEW: user‑specified minimum redshift >>>
-    z_obs_min = 0.01  # e.g. 0.1 to keep only galaxies with z > 0.1
-
-    n_objects = None  # set to an int to subsample the selected objects, e.g. 500
-    random_seed = None  # set to an int for reproducible subsampling, e.g. 42
-
-    output_json = "DESI_input.json"
-    init_json = "DESI_init.json"
+    parser = argparse.ArgumentParser(description='Prepare DESI TF data for Stan.')
+    parser.add_argument('--input', default='data/DESI-DR1_TF_pv_cat_v15.fits',
+                        help='Input FITS file')
+    parser.add_argument('--output', default='DESI_input.json',
+                        help='Output data JSON file')
+    parser.add_argument('--init', default='DESI_init.json',
+                        help='Output init JSON file')
+    parser.add_argument('--plot', default='DESI_input.png',
+                        help='Output plot PNG file')
+    parser.add_argument('--haty_max', type=float, default=-19.0,
+                        help='Upper apparent magnitude selection limit')
+    parser.add_argument('--haty_min', type=float, default=-22.0,
+                        help='Lower apparent magnitude selection limit')
+    parser.add_argument('--n_objects', type=int, default=None,
+                        help='Subsample size (None for all)')
+    parser.add_argument('--random_seed', type=int, default=None,
+                        help='Random seed for reproducible subsampling')
+    parser.add_argument('--z_obs_min', type=float, default=0.01,
+                        help='Minimum redshift')
+    parser.add_argument('--slope_plane', type=float, default=-6.5,
+                        help='Slope of oblique selection cut')
+    parser.add_argument('--intercept_plane', type=float, default=-20.5,
+                        help='Intercept of lower oblique cut (c1)')
+    parser.add_argument('--intercept_plane2', type=float, default=-18.5,
+                        help='Intercept of upper oblique cut (c2)')
+    args = parser.parse_args()
 
     # Process data and get both complete and selected samples
     (
@@ -513,22 +522,22 @@ if __name__ == "__main__":
         sigma_y_sel,
         z_sel,
     ) = process_desi_tf_data(
-        input_fits,
-        output_json,
-        init_json,
-        haty_max=haty_max,
-        haty_min=haty_min,
-        plane_cut=plane_cut,
-        slope_plane=slope_plane,
-        intercept_plane=intercept_plane,
-        intercept_plane2=intercept_plane2,
-        n_objects=n_objects,
-        random_seed=random_seed,
-        z_obs_min=z_obs_min,
+        args.input,
+        args.output,
+        args.init,
+        haty_max=args.haty_max,
+        haty_min=args.haty_min,
+        plane_cut=True,
+        slope_plane=args.slope_plane,
+        intercept_plane=args.intercept_plane,
+        intercept_plane2=args.intercept_plane2,
+        n_objects=args.n_objects,
+        random_seed=args.random_seed,
+        z_obs_min=args.z_obs_min,
     )
 
     # Create plot showing both complete and selected samples
-    plot_output = output_json.replace(".json", ".png")
+    plot_output = args.plot
     plot_desi_tf_data(
         x_all,
         y_all,
@@ -538,10 +547,10 @@ if __name__ == "__main__":
         y_sel,
         sigma_x_sel,
         sigma_y_sel,
-        haty_max=haty_max,
-        haty_min=haty_min,
-        slope_plane=slope_plane,
-        intercept_plane=intercept_plane,
-        intercept_plane2=intercept_plane2,
+        haty_max=args.haty_max,
+        haty_min=args.haty_min,
+        slope_plane=args.slope_plane,
+        intercept_plane=args.intercept_plane,
+        intercept_plane2=args.intercept_plane2,
         output_file=plot_output,
     )

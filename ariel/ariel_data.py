@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Convert TF_mock_input.csv to JSON format for base.stan
+Convert TF_mock_input.csv to JSON format for tophat.stan
 
 This script reads the Tully-Fisher mock data and converts it to the format
-expected by base.stan with:
+expected by tophat.stan with:
 - N_bins = 1 (single redshift bin)
 - sigma_x = 0 (no x uncertainties)
 - sigma_y = 0 (no y uncertainties)
 """
 
+import argparse
 import csv
 import json
 import numpy as np
@@ -382,32 +383,34 @@ def plot_tf_data(json_file, output_file='tf_scatter_plot.png', all_rows_csv=None
 
 
 if __name__ == '__main__':
-    input_csv = 'data/TF_mock_tophat-mag_input.csv'
+    parser = argparse.ArgumentParser(description='Prepare mock TF data for Stan.')
+    parser.add_argument('--input', default='data/TF_mock_tophat-mag_input.csv',
+                        help='Input CSV file')
+    parser.add_argument('--output', default='ariel_input.json',
+                        help='Output data JSON file')
+    parser.add_argument('--init', default='ariel_init.json',
+                        help='Output init JSON file')
+    parser.add_argument('--plot', default='ariel_input.png',
+                        help='Output plot PNG file')
+    parser.add_argument('--haty_max', type=float, default=-16,
+                        help='Upper apparent magnitude selection limit')
+    parser.add_argument('--haty_min', type=float, default=-22.5,
+                        help='Lower apparent magnitude selection limit')
+    parser.add_argument('--sample_size', type=int, default=10000,
+                        help='Number of objects to sample (None for all)')
+    parser.add_argument('--slope_plane', type=float, default=-8.5,
+                        help='Slope of oblique selection cut')
+    parser.add_argument('--intercept_plane', type=float, default=-20.5,
+                        help='Intercept of lower oblique cut (c1)')
+    parser.add_argument('--intercept_plane2', type=float, default=-19.1,
+                        help='Intercept of upper oblique cut (c2)')
+    args = parser.parse_args()
 
-    haty_max = -16
-    haty_min = -22.5
+    process_tf_data(args.input, args.output, args.init,
+                    haty_max=args.haty_max, haty_min=args.haty_min,
+                    sample_size=args.sample_size, plane_cut=True,
+                    slope_plane=args.slope_plane,
+                    intercept_plane=args.intercept_plane,
+                    intercept_plane2=args.intercept_plane2)
 
-    plane_cut = True
-    slope_plane = -8.5
-    intercept_plane = -20.5     # c1 (lower oblique bound)
-    intercept_plane2 = -19.1    # c2 (upper oblique bound); set to None for one-sided
-
-    sample_size = 10000  # or None
-
-    if sample_size is not None:
-        output_json = f'MOCK_n{sample_size}_input.json'
-        init_json = f'MOCK_n{sample_size}_init.json'
-    else:
-        output_json = 'MOCK_input.json'
-        init_json = 'MOCK_init.json'
-
-    # output_json = 'MOXK_input.json'
-    # init_json = 'MOXK_init.json'        
-
-    process_tf_data(input_csv, output_json, init_json,
-                    haty_max=haty_max, haty_min=haty_min, sample_size=sample_size,
-                    plane_cut=plane_cut, slope_plane=slope_plane,
-                    intercept_plane=intercept_plane, intercept_plane2=intercept_plane2)
-
-    plot_output = output_json.replace('.json', '.png')
-    plot_tf_data(output_json, plot_output, all_rows_csv=input_csv)
+    plot_tf_data(args.output, args.plot, all_rows_csv=args.input)

@@ -10,8 +10,8 @@ Usage
 -----
 As a script (command line)::
 
-    python corner.py 'DESI_base_?.csv' --output DESI_base.png
-    python corner.py 'DESI_base_?.csv' 'MOCK_n10000_base_?.csv' --output compare.png
+    python corner.py 'DESI_tophat_?.csv' --output DESI_tophat.png
+    python corner.py 'DESI_tophat_?.csv' 'ariel_n10000_tophat_?.csv' --output compare.png
 
 As a module (edit the __main__ block at the bottom)::
 
@@ -266,9 +266,9 @@ if __name__ == '__main__':
             "sigma_int_y":  0.03,
         }
         infiles = [
-            # "MOCK_base_?.csv",
-            # "MOCK_normal_?.csv",
-            "DESI_base_?.csv",
+            # "ariel_tophat_?.csv",
+            # "ariel_normal_?.csv",
+            "DESI_tophat_?.csv",
             "DESI_normal_?.csv",
         ]
         outfile = "temp.png"
