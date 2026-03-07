@@ -74,16 +74,12 @@ Chains go into `output/<run>/` using standard filenames:
 
 ```bash
 # Ariel mock data, 4 chains
-for i in 1 2 3 4; do
-  ./tophat sample data file=output/ariel/input.json init=output/ariel/init.json \
-    output file=output/ariel/tophat_$i.csv &
-done
+  ./tophat sample num_warmup=500 num_samples=500  data file=output/ariel/input.json init=output/ariel/init.json \
+    output file=output/ariel/tophat.csv
 
 # DESI data, 4 chains
-for i in 1 2 3 4; do
-  ./tophat sample data file=output/DESI/input.json init=output/DESI/init.json \
-    output file=output/DESI/tophat_$i.csv &
-done
+  ./tophat sample num_warmup=500 num_samples=500 data file=output/DESI/input.json init=output/DESI/init.json \
+    output file=output/DESI/tophat.csv
 ```
 
 #### NERSC Batch Jobs
