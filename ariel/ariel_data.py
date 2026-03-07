@@ -12,6 +12,7 @@ expected by tophat.stan with:
 import argparse
 import csv
 import json
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -384,14 +385,16 @@ def plot_tf_data(json_file, output_file='tf_scatter_plot.png', all_rows_csv=None
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Prepare mock TF data for Stan.')
+    parser.add_argument('--run', default=None,
+                        help='Run name; outputs go to output/<run>/ with standard filenames')
     parser.add_argument('--input', default='data/TF_mock_tophat-mag_input.csv',
                         help='Input CSV file')
-    parser.add_argument('--output', default='ariel_input.json',
-                        help='Output data JSON file')
-    parser.add_argument('--init', default='ariel_init.json',
-                        help='Output init JSON file')
-    parser.add_argument('--plot', default='ariel_input.png',
-                        help='Output plot PNG file')
+    parser.add_argument('--output', default=None,
+                        help='Output data JSON file (default: ariel_input.json or output/<run>/input.json)')
+    parser.add_argument('--init', default=None,
+                        help='Output init JSON file (default: ariel_init.json or output/<run>/init.json)')
+    parser.add_argument('--plot', default=None,
+                        help='Output plot PNG file (default: ariel_input.png or output/<run>/data.png)')
     parser.add_argument('--haty_max', type=float, default=-16,
                         help='Upper apparent magnitude selection limit')
     parser.add_argument('--haty_min', type=float, default=-22.5,
@@ -406,11 +409,34 @@ if __name__ == '__main__':
                         help='Intercept of upper oblique cut (c2)')
     args = parser.parse_args()
 
-    process_tf_data(args.input, args.output, args.init,
+    if args.run is not None:
+        run_dir = os.path.join('output', args.run)
+        os.makedirs(run_dir, exist_ok=True)
+        output_json = args.output or os.path.join(run_dir, 'input.json')
+        init_json   = args.init   or os.path.join(run_dir, 'init.json')
+        plot_file   = args.plot   or os.path.join(run_dir, 'data.png')
+        config = {
+            'source': args.input,
+            'haty_max': args.haty_max,
+            'haty_min': args.haty_min,
+            'sample_size': args.sample_size,
+            'slope_plane': args.slope_plane,
+            'intercept_plane': args.intercept_plane,
+            'intercept_plane2': args.intercept_plane2,
+        }
+        with open(os.path.join(run_dir, 'config.json'), 'w') as f:
+            json.dump(config, f, indent=2)
+        print(f"Config written to {os.path.join(run_dir, 'config.json')}")
+    else:
+        output_json = args.output or 'ariel_input.json'
+        init_json   = args.init   or 'ariel_init.json'
+        plot_file   = args.plot   or 'ariel_input.png'
+
+    process_tf_data(args.input, output_json, init_json,
                     haty_max=args.haty_max, haty_min=args.haty_min,
                     sample_size=args.sample_size, plane_cut=True,
                     slope_plane=args.slope_plane,
                     intercept_plane=args.intercept_plane,
                     intercept_plane2=args.intercept_plane2)
 
-    plot_tf_data(args.output, args.plot, all_rows_csv=args.input)
+    plot_tf_data(output_json, plot_file, all_rows_csv=args.input)

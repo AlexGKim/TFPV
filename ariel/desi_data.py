@@ -8,6 +8,7 @@ expected by tophat.stan.
 
 import argparse
 import json
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
@@ -483,14 +484,16 @@ def plot_desi_tf_data(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Prepare DESI TF data for Stan.')
+    parser.add_argument('--run', default=None,
+                        help='Run name; outputs go to output/<run>/ with standard filenames')
     parser.add_argument('--input', default='data/DESI-DR1_TF_pv_cat_v15.fits',
                         help='Input FITS file')
-    parser.add_argument('--output', default='DESI_input.json',
-                        help='Output data JSON file')
-    parser.add_argument('--init', default='DESI_init.json',
-                        help='Output init JSON file')
-    parser.add_argument('--plot', default='DESI_input.png',
-                        help='Output plot PNG file')
+    parser.add_argument('--output', default=None,
+                        help='Output data JSON file (default: DESI_input.json or output/<run>/input.json)')
+    parser.add_argument('--init', default=None,
+                        help='Output init JSON file (default: DESI_init.json or output/<run>/init.json)')
+    parser.add_argument('--plot', default=None,
+                        help='Output plot PNG file (default: DESI_input.png or output/<run>/data.png)')
     parser.add_argument('--haty_max', type=float, default=-19.0,
                         help='Upper apparent magnitude selection limit')
     parser.add_argument('--haty_min', type=float, default=-22.0,
@@ -509,6 +512,31 @@ if __name__ == "__main__":
                         help='Intercept of upper oblique cut (c2)')
     args = parser.parse_args()
 
+    if args.run is not None:
+        run_dir = os.path.join('output', args.run)
+        os.makedirs(run_dir, exist_ok=True)
+        output_json = args.output or os.path.join(run_dir, 'input.json')
+        init_json   = args.init   or os.path.join(run_dir, 'init.json')
+        plot_file   = args.plot   or os.path.join(run_dir, 'data.png')
+        config = {
+            'source': args.input,
+            'haty_max': args.haty_max,
+            'haty_min': args.haty_min,
+            'n_objects': args.n_objects,
+            'random_seed': args.random_seed,
+            'z_obs_min': args.z_obs_min,
+            'slope_plane': args.slope_plane,
+            'intercept_plane': args.intercept_plane,
+            'intercept_plane2': args.intercept_plane2,
+        }
+        with open(os.path.join(run_dir, 'config.json'), 'w') as f:
+            json.dump(config, f, indent=2)
+        print(f"Config written to {os.path.join(run_dir, 'config.json')}")
+    else:
+        output_json = args.output or 'DESI_input.json'
+        init_json   = args.init   or 'DESI_init.json'
+        plot_file   = args.plot   or 'DESI_input.png'
+
     # Process data and get both complete and selected samples
     (
         x_all,
@@ -523,8 +551,8 @@ if __name__ == "__main__":
         z_sel,
     ) = process_desi_tf_data(
         args.input,
-        args.output,
-        args.init,
+        output_json,
+        init_json,
         haty_max=args.haty_max,
         haty_min=args.haty_min,
         plane_cut=True,
@@ -537,7 +565,6 @@ if __name__ == "__main__":
     )
 
     # Create plot showing both complete and selected samples
-    plot_output = args.plot
     plot_desi_tf_data(
         x_all,
         y_all,
@@ -552,5 +579,5 @@ if __name__ == "__main__":
         slope_plane=args.slope_plane,
         intercept_plane=args.intercept_plane,
         intercept_plane2=args.intercept_plane2,
-        output_file=plot_output,
+        output_file=plot_file,
     )

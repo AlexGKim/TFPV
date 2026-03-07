@@ -1,3 +1,5 @@
+import argparse
+import os
 import numpy as np
 import glob
 from pathlib import Path
@@ -1049,10 +1051,12 @@ def DESI(kind="normal",
          make_residual_grid=True,
          make_redshift_grid=True,
          # tophat-only comparison plot:
-         compare_tophat_vs_normal=True):
+         compare_tophat_vs_normal=True,
+         run_dir=None):
     kind = kind.lower()
     if kind not in {"normal", "tophat"}:
         raise ValueError("kind must be 'normal' or 'tophat'")
+    _p = lambda name: os.path.join(run_dir, name) if run_dir else f"DESI_{name}"
 
     # --- load data ---
 
@@ -1063,7 +1067,7 @@ def DESI(kind="normal",
     # --- posterior + predictive ---
     if kind == "normal":
         draws = read_cmdstan_posterior(
-            "DESI_normal_?.csv",
+            _p("normal_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
             drop_diagnostics=True,
         )
@@ -1071,7 +1075,7 @@ def DESI(kind="normal",
         label = "Normal"
     else:
         draws = read_cmdstan_posterior(
-            "DESI_tophat_?.csv",
+            _p("tophat_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
             drop_diagnostics=True,
         )
@@ -1086,7 +1090,7 @@ def DESI(kind="normal",
     # --- load data ---
 
     xhat_star2, sigma_x_star2, yhat_star2, sigma_y_star2, zobs_star2 = load_xy_and_uncertainties_from_stan_json(
-        "DESI_input.json")
+        _p("input.json"))
     
 
     # --- posterior + predictive ---
@@ -1112,7 +1116,7 @@ def DESI(kind="normal",
         ax.set_ylabel(r'$M$')
         ax.set_title(r'$M_{\text{predicted}} - M$')
         fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
-        fig.savefig(f'DESI_{kind}_grid.png', dpi=300)
+        fig.savefig(_p(f'{kind}_grid.png'), dpi=300)
         plt.close(fig)
 
     # --- GRID: redshift on (xhat, yhat) ---
@@ -1134,7 +1138,7 @@ def DESI(kind="normal",
             cbar.ax.set_ylim(0, current_vmax)
             cbar.set_ticks(np.linspace(0, current_vmax, 5))
 
-        fig.savefig(f'DESI_redshift_grid_{kind}.png', dpi=300)
+        fig.savefig(_p(f'redshift_grid_{kind}.png'), dpi=300)
         plt.close(fig)
 
     # --- redshift residual errorbar plot ---
@@ -1149,13 +1153,13 @@ def DESI(kind="normal",
     plt.axhline(y=0, color='gray', linestyle='dashed', linewidth=1.5, label='y=0 line')
     plt.legend()
     plt.ylim((-8,4))
-    plt.savefig(f"DESI_redshift_{kind}.png", dpi=300)
+    plt.savefig(_p(f"redshift_{kind}.png"), dpi=300)
     plt.clf()
 
     # --- optional: tophat vs normal scatter comparison ---
     if kind == "tophat" and compare_tophat_vs_normal:
         draws_n = read_cmdstan_posterior(
-            "DESI_normal_?.csv",
+            _p("normal_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
             drop_diagnostics=True,
         )
@@ -1165,7 +1169,7 @@ def DESI(kind="normal",
         plt.scatter(mean_y, mean_y_normal, alpha=0.1)
         plt.xlabel("Top-Hat: mean_pred - y_obs (mag)")
         plt.ylabel("Normal: mean_pred - y_obs (mag)")
-        plt.savefig("DESI_tophat_vs_normal.png", dpi=300)
+        plt.savefig(_p("tophat_vs_normal.png"), dpi=300)
         plt.clf()
 
     return mean_y, sigma_y, zobs_star
@@ -1358,17 +1362,21 @@ def DESI_compare(
     return diff, diff_sd, zobs_star
 
 def ariel(kind="normal",
-         galaxy_json="ariel_n10000_input.json",
+         galaxy_json=None,
          grid_resolution_x=50,
          grid_resolution_y=50,
          # grids:
          make_residual_grid=True,
          make_redshift_grid=True,
          # tophat-only comparison plot:
-         compare_tophat_vs_normal=True):
+         compare_tophat_vs_normal=True,
+         run_dir=None):
     kind = kind.lower()
     if kind not in {"normal", "tophat"}:
         raise ValueError("kind must be 'normal' or 'tophat'")
+    _p = lambda name: os.path.join(run_dir, name) if run_dir else f"ariel_{name}"
+    if galaxy_json is None:
+        galaxy_json = _p("input.json") if run_dir else "ariel_n10000_input.json"
 
     # --- load mock data ---
     # xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = (
@@ -1388,12 +1396,12 @@ def ariel(kind="normal",
     yhat_star = yhat_star[idx]
     sigma_y_star = sigma_y_star[idx]
     zobs_star = zobs_star[idx]
-    
-    
+
+
     # --- posterior + predictive ---
     if kind == "normal":
         draws = read_cmdstan_posterior(
-            "ariel_normal_?.csv",
+            _p("normal_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
             drop_diagnostics=True,
         )
@@ -1401,7 +1409,7 @@ def ariel(kind="normal",
         label = "Normal"
     else:
         draws = read_cmdstan_posterior(
-            "ariel_tophat_?.csv",
+            _p("tophat_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
             drop_diagnostics=True,
         )
@@ -1431,7 +1439,7 @@ def ariel(kind="normal",
         ax.set_ylabel(r'$M$')
         ax.set_title(r'$M_{\text{predicted}} - M$')
         fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
-        fig.savefig(f'ariel_{kind}_grid.png', dpi=300)
+        fig.savefig(_p(f'{kind}_grid.png'), dpi=300)
         plt.close(fig)
 
     # --- GRID: redshift on (xhat, yhat) ---
@@ -1445,7 +1453,7 @@ def ariel(kind="normal",
         ax.set_ylabel(r'$M$')
         ax.set_title(r'Redshift')
         fig.colorbar(img, ax=ax, label='Average Redshift')
-        fig.savefig(f'ariel_redshift_grid_{kind}.png', dpi=300)
+        fig.savefig(_p(f'redshift_grid_{kind}.png'), dpi=300)
         plt.close(fig)
 
     # --- redshift residual errorbar plot ---
@@ -1454,13 +1462,13 @@ def ariel(kind="normal",
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
     plt.legend()
-    plt.savefig(f"ariel_redshift_{kind}.png", dpi=300)
+    plt.savefig(_p(f"redshift_{kind}.png"), dpi=300)
     plt.clf()
 
     # --- optional: tophat vs normal scatter comparison ---
     if kind == "tophat" and compare_tophat_vs_normal:
         draws_normal = read_cmdstan_posterior(
-            "ariel_normal_?.csv",
+            _p("normal_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
             drop_diagnostics=True,
         )
@@ -1472,13 +1480,24 @@ def ariel(kind="normal",
         plt.scatter(mean_y, mean_y_normal, alpha=0.1)
         plt.xlabel("Top-Hat: mean_pred - y_obs (mag)")
         plt.ylabel("Normal: mean_pred - y_obs (mag)")
-        plt.savefig("ariel_tophat_vs_normal.png", dpi=300)
+        plt.savefig(_p("tophat_vs_normal.png"), dpi=300)
         plt.clf()
 
     return mean_y, sigma_y, zobs_star
+
 if __name__ == "__main__":
-    DESI("normal")
-    # DESI("tophat")
-    # DESI_compare(log_scale=True, linthresh=0.02, log_base=10)
-    # ariel("normal")
-    # ariel("tophat")
+    parser = argparse.ArgumentParser(description='Posterior predictions and diagnostics.')
+    parser.add_argument('--run', default=None,
+                        help='Run name; reads/writes output/<run>/ with standard filenames')
+    parser.add_argument('--model', default='tophat', choices=['tophat', 'normal'],
+                        help='Model to use (default: tophat)')
+    parser.add_argument('--source', default='DESI', choices=['DESI', 'ariel'],
+                        help='Data source (default: DESI)')
+    args = parser.parse_args()
+
+    run_dir = os.path.join('output', args.run) if args.run else None
+
+    if args.source == 'DESI':
+        DESI(args.model, run_dir=run_dir)
+    else:
+        ariel(args.model, run_dir=run_dir)

@@ -18,22 +18,43 @@ The statistical models are described in the `doc/` directory:
 - `doc/model2.tex`: The model to infer absolute magnitude from observed rotation velocity and fit the Tully-Fisher relationship
 - `doc/model3.tex`: The general model extended with peculiar velocities
 
+## Output Directory Structure
+
+All data products live under `output/<run>/` where `<run>` is a short name for the
+dataset and selection-cut combination (e.g. `ariel`, `DESI`, `ariel_tight`).
+Every run directory uses the same standard filenames:
+
+```
+output/<run>/
+  config.json          ← selection parameters used (for reproducibility)
+  input.json           ← Stan data
+  init.json            ← Stan initial conditions
+  data.png             ← galaxy scatter plot with selection cuts
+  tophat_1.csv … tophat_4.csv   ← MCMC chains (tophat model)
+  normal_1.csv  … normal_4.csv  ← MCMC chains (normal model)
+  tophat.png           ← corner plot (tophat posterior)
+  normal.png           ← corner plot (normal posterior)
+```
+
 ## Workflow
 
 ### 1. Prepare Data
 
-Each data source has a dedicated prep script following the `{source}_data.py` convention. The script reads source-specific CSV or FITS files, applies selection cuts, and produces a Stan input JSON and a plot of the galaxy data in (x, y) space with selection cut boundaries overlaid.
+Each data source has a dedicated prep script following the `{source}_data.py` convention.
+Use `--run <name>` to write all outputs to `output/<name>/` and save `config.json`
+recording the exact selection parameters used.
 
-This step is iterative: inspect the plot, adjust selection cut parameters (`haty_max`, `haty_min`, `slope_plane`, `intercept_plane`, `intercept_plane2`), and rerun until satisfied.
+This step is iterative: inspect `output/<run>/data.png`, adjust selection parameters,
+and rerun until satisfied.
 
 ```bash
-python ariel_data.py
-python desi_data.py
+python ariel_data.py --run ariel
+python desi_data.py  --run DESI
 
-# Selection parameters can be passed as command-line arguments
-python ariel_data.py --haty_max -18.0 --haty_min -24.0 --slope_plane -8.5 \
-  --intercept_plane -20.5 --intercept_plane2 -19.1
-python desi_data.py --haty_max -19.0 --haty_min -22.0 --z_obs_min 0.01
+# Override selection parameters
+python ariel_data.py --run ariel_tight --haty_max -18.0 --haty_min -24.0 \
+  --slope_plane -8.5 --intercept_plane -20.5 --intercept_plane2 -19.1
+python desi_data.py --run DESI_z01 --haty_max -19.0 --haty_min -22.0 --z_obs_min 0.01
 ```
 
 ### 2. Compile Stan Models
@@ -49,14 +70,20 @@ make ../TFPV/ariel/normal
 
 #### Local Execution
 
-```bash
-# Mock data
-./tophat sample data file=ariel_input.json init=ariel_init.json \
-  output file=ariel_tophat.csv
+Chains go into `output/<run>/` using standard filenames:
 
-# DESI data
-./tophat sample data file=DESI_input.json init=DESI_init.json \
-  output file=DESI_tophat.csv
+```bash
+# Ariel mock data, 4 chains
+for i in 1 2 3 4; do
+  ./tophat sample data file=output/ariel/input.json init=output/ariel/init.json \
+    output file=output/ariel/tophat_$i.csv &
+done
+
+# DESI data, 4 chains
+for i in 1 2 3 4; do
+  ./tophat sample data file=output/DESI/input.json init=output/DESI/init.json \
+    output file=output/DESI/tophat_$i.csv &
+done
 ```
 
 #### NERSC Batch Jobs
@@ -73,19 +100,19 @@ After fitting, check chain quality and inspect the posterior:
 
 ```bash
 # Convergence diagnostics
-../../cmdstan/bin/stansummary DESI_tophat_?.csv
-../../cmdstan/bin/diagnose DESI_tophat_?.csv
+../../cmdstan/bin/stansummary output/DESI/tophat_?.csv
+../../cmdstan/bin/diagnose output/DESI/tophat_?.csv
 
-# Corner plot of posterior
-python corner.py 'DESI_tophat_?.csv' --output DESI_tophat.png
+# Corner plot — writes output/<run>/tophat.png
+python corner.py --run DESI --model tophat
+python corner.py --run ariel --model tophat
 ```
 
 ### 5. Predict Absolute Magnitudes
 
-The second stage of processing infers absolute magnitudes from measured rotation velocities given the fitted TFR model parameters. Details of inputs, outputs, and usage are to be determined.
-
 ```bash
-python predict.py
+python predict.py --run DESI --model tophat --source DESI
+python predict.py --run ariel --model tophat --source ariel
 ```
 
 ## Architecture

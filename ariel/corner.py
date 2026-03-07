@@ -212,16 +212,28 @@ def _build_parser():
     )
     p.add_argument(
         'infiles',
-        nargs='+',
+        nargs='*',
         metavar='PATTERN',
-        help="One or more glob patterns for Stan CSV files "
-             "(quote each pattern to prevent shell expansion).",
+        help="Glob patterns for Stan CSV files (quote each to prevent shell expansion). "
+             "Not needed when --run is used.",
+    )
+    p.add_argument(
+        '--run',
+        default=None,
+        metavar='NAME',
+        help="Run name; reads output/<NAME>/<model>_?.csv and writes output/<NAME>/<model>.png.",
+    )
+    p.add_argument(
+        '--model',
+        default='tophat',
+        choices=['tophat', 'normal'],
+        help="Model to plot when using --run (default: tophat).",
     )
     p.add_argument(
         '--output', '-o',
-        default='corner_plot.png',
+        default=None,
         metavar='FILE',
-        help="Output PNG filename (default: corner_plot.png).",
+        help="Output PNG filename (default: corner_plot.png, or output/<run>/<model>.png with --run).",
     )
     p.add_argument(
         '--name',
@@ -247,13 +259,23 @@ def _build_parser():
 # ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
+    import os
     import sys
 
     if len(sys.argv) > 1:
         args = _build_parser().parse_args()
+        if args.run is not None:
+            run_dir = os.path.join('output', args.run)
+            infiles = [os.path.join(run_dir, f'{args.model}_?.csv')]
+            output_file = args.output or os.path.join(run_dir, f'{args.model}.png')
+        else:
+            if not args.infiles:
+                _build_parser().error("provide glob patterns or --run NAME")
+            infiles = args.infiles
+            output_file = args.output or 'corner_plot.png'
         create_corner_plot(
-            file_patterns=args.infiles,
-            output_file=args.output,
+            file_patterns=infiles,
+            output_file=output_file,
             truth_values=_parse_truth(args.truth),
             names=args.names,
         )
@@ -273,7 +295,6 @@ if __name__ == '__main__':
         ]
         outfile = "temp.png"
         truth = None
-
 
         create_corner_plot(
             file_patterns=infiles,
