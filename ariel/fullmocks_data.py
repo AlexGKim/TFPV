@@ -350,7 +350,7 @@ if __name__ == "__main__":
     parser.add_argument("--z_obs_min", type=float, default=0.01)
     parser.add_argument("--slope_plane",      type=float, default=-6.5)
     parser.add_argument("--intercept_plane",  type=float, default=-20.)
-    parser.add_argument("--intercept_plane2", type=float, default=-18.)
+    parser.add_argument("--intercept_plane2", type=float, default=-19.)
     parser.add_argument("--n_objects",   type=int, default=10000,
                         help="Number of objects saved to input.json for Stan (None = all selected)")
     parser.add_argument("--random_seed", type=int, default=None)
