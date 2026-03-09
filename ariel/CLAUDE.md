@@ -66,6 +66,12 @@ make ../TFPV/ariel/tophat
 make ../TFPV/ariel/normal
 ```
 
+To compile on GPU on NERSC requires
+```bash
+export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
+make STAN_OPENCL=TRUE ../TFPV/ariel/tophat
+```
+
 ### 3. Run MCMC Sampling
 
 #### Local Execution

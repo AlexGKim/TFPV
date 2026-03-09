@@ -338,7 +338,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--dir",
-        default="/global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4",
+        # default="/global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4",
+        default="/Users/akim/Projects/TFPV/ariel/data",
         help="Directory containing TF_extended_AbacusSummit_*.fits files",
     )
     parser.add_argument(
@@ -351,7 +352,7 @@ if __name__ == "__main__":
     parser.add_argument("--slope_plane",      type=float, default=-6.5)
     parser.add_argument("--intercept_plane",  type=float, default=-20.)
     parser.add_argument("--intercept_plane2", type=float, default=-19.)
-    parser.add_argument("--n_objects",   type=int, default=10000,
+    parser.add_argument("--n_objects",   type=int, default=5000,
                         help="Number of objects saved to input.json for Stan (None = all selected)")
     parser.add_argument("--random_seed", type=int, default=None)
     args = parser.parse_args()
