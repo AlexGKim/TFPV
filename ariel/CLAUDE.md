@@ -57,6 +57,21 @@ python ariel_data.py --run ariel_tight --haty_max -18.0 --haty_min -24.0 \
 python desi_data.py --run DESI_z01 --haty_max -19.0 --haty_min -22.0 --z_obs_min 0.01
 ```
 
+For **fullmocks** (AbacusSummit simulations), use `fullmocks_data.py`. Each FITS file
+`TF_extended_AbacusSummit_base_c???_ph???_r???_z0.11.fits` produces its own run directory
+named after the simulation ID (e.g. `c000_ph000_r000`):
+
+```bash
+# Process all matching FITS files in --dir
+python fullmocks_data.py --dir /path/to/mocks
+
+# Process only the first file (debugging)
+python fullmocks_data.py --dir /path/to/mocks --one
+
+# Override selection parameters or subsample size
+python fullmocks_data.py --dir /path/to/mocks --n_objects 5000 --random_seed 42
+```
+
 ### 2. Compile Stan Models
 
 Stan models must be compiled with CmdStan before running. Run from inside the `../../cmdstan/` directory:
@@ -115,7 +130,18 @@ python corner.py --run ariel --model tophat
 ```bash
 python predict.py --run DESI --model tophat --source DESI
 python predict.py --run ariel --model tophat --source ariel
+
+# fullmocks: reads FITS from --dir, compares predictions to R_ABSMAG_SB26_TRUE
+python predict.py --run c000_ph000_r000 --model normal --source fullmocks
+python predict.py --run c000_ph000_r000 --model normal --source fullmocks \
+  --n_objects 5000 --dir /path/to/mocks
 ```
+
+`--source fullmocks` produces two grid plots in `output/<run>/`:
+- `{model}_grid.png` — mean_pred − yhat_obs (observed residual)
+- `{model}_truth_diff_grid.png` — mean_pred − R_ABSMAG_SB26_TRUE (prediction vs simulation truth)
+
+Use `--n_objects` (any source) to limit the number of galaxies used for prediction.
 
 ## Architecture
 

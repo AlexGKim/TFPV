@@ -472,6 +472,69 @@ def load_xy_and_uncertainties_from_csv(csv_path, row=None, sort_by_zobs=False):
 
     return xhat, sigx, yhat, sigy, zobs
 
+def load_xy_and_uncertainties_from_fullmocks(
+    fits_path,
+    n_objects=None,
+    random_seed=None,
+    apply_valid_mask=True,
+):
+    """
+    Load data from a fullmocks FITS file (TF_extended_AbacusSummit_*.fits).
+
+    Applies MAIN=True filter and validity mask, then optionally subsamples.
+
+    Returns
+    -------
+    xhat, sigma_x, yhat, sigma_y, zobs, y_true : np.ndarray
+        xhat    = LOGVROT - 2.0  (log10(V_rot / 100 km/s))
+        sigma_x = LOGVROT_ERR
+        yhat    = R_ABSMAG_SB26  (observed magnitude)
+        sigma_y = R_ABSMAG_SB26_ERR
+        zobs    = ZOBS
+        y_true  = R_ABSMAG_SB26_TRUE  (true magnitude from simulation)
+    """
+    with fits.open(fits_path) as hdul:
+        data = hdul[1].data
+        main_mask = np.asarray(data["MAIN"], dtype=bool)
+        data = data[main_mask]
+
+        logvrot   = np.asarray(data["LOGVROT"],             dtype=float)
+        logvrot_e = np.asarray(data["LOGVROT_ERR"],         dtype=float)
+        absmag    = np.asarray(data["R_ABSMAG_SB26"],       dtype=float)
+        absmag_e  = np.asarray(data["R_ABSMAG_SB26_ERR"],   dtype=float)
+        zobs      = np.asarray(data["ZOBS"],                dtype=float)
+        y_true    = np.asarray(data["R_ABSMAG_SB26_TRUE"],  dtype=float)
+
+    xhat    = logvrot - 2.0
+    sigma_x = logvrot_e
+
+    if apply_valid_mask:
+        mask = (
+            np.isfinite(xhat) & np.isfinite(sigma_x) &
+            np.isfinite(absmag) & np.isfinite(absmag_e) &
+            np.isfinite(zobs) & np.isfinite(y_true) &
+            (logvrot > 0) & (sigma_x > 0) & (absmag_e >= 0)
+        )
+        xhat    = xhat[mask]
+        sigma_x = sigma_x[mask]
+        absmag  = absmag[mask]
+        absmag_e = absmag_e[mask]
+        zobs    = zobs[mask]
+        y_true  = y_true[mask]
+
+    if n_objects is not None and n_objects < len(xhat):
+        rng = np.random.default_rng(random_seed)
+        idx = rng.choice(len(xhat), size=n_objects, replace=False)
+        xhat     = xhat[idx]
+        sigma_x  = sigma_x[idx]
+        absmag   = absmag[idx]
+        absmag_e = absmag_e[idx]
+        zobs     = zobs[idx]
+        y_true   = y_true[idx]
+
+    return xhat, sigma_x, absmag, absmag_e, zobs, y_true
+
+
 def read_cmdstan_posterior(
     pattern: Union[str, Path],
     *,
@@ -1485,19 +1548,128 @@ def ariel(kind="normal",
 
     return mean_y, sigma_y, zobs_star
 
+def fullmocks(kind="normal",
+              galaxy_fits=None,
+              grid_resolution_x=50,
+              grid_resolution_y=50,
+              y_min=None,
+              y_max=None,
+              make_residual_grid=True,
+              make_truth_diff_grid=True,
+              n_objects=None,
+              random_seed=None,
+              run_dir=None):
+    """
+    Posterior predictions for a fullmocks AbacusSummit FITS source.
+
+    In addition to the standard residual grid (mean_pred - yhat_obs), produces a
+    truth-diff grid comparing the model prediction to the simulation truth:
+        mean_pred - R_ABSMAG_SB26_TRUE
+
+    Parameters
+    ----------
+    kind : 'normal' or 'tophat'
+    galaxy_fits : path to TF_extended_AbacusSummit_*.fits file
+    n_objects : optional int to subsample objects for prediction
+    random_seed : optional int for reproducible subsampling
+    run_dir : output/<run>/ directory containing MCMC chains
+    """
+    kind = kind.lower()
+    if kind not in {"normal", "tophat"}:
+        raise ValueError("kind must be 'normal' or 'tophat'")
+    _p = lambda name: os.path.join(run_dir, name) if run_dir else f"fullmocks_{name}"
+
+    # --- load data ---
+    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star, y_true = (
+        load_xy_and_uncertainties_from_fullmocks(
+            galaxy_fits, n_objects=n_objects, random_seed=random_seed
+        )
+    )
+
+    # --- posterior + predictive ---
+    if kind == "normal":
+        draws = read_cmdstan_posterior(
+            _p("normal_?.csv"),
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+            drop_diagnostics=True,
+        )
+        mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat_star, sigma_x_star)
+        label = "Normal"
+    else:
+        draws = read_cmdstan_posterior(
+            _p("tophat_?.csv"),
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+            drop_diagnostics=True,
+        )
+        if y_min is None or y_max is None:
+            with open(_p("input.json"), "r") as f:
+                _d = json.load(f)
+                y_min = _d.get("y_min", y_min)
+                y_max = _d.get("y_max", y_max)
+        mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
+            draws, xhat_star, sigma_x_star, y_min=y_min, y_max=y_max,
+            on_bad_Z="floor", Z_floor=1e-300,
+        )
+        label = "Top-Hat"
+
+    mean_y = mean_pred - yhat_star
+
+    # --- GRID: residuals on (xhat, yhat) ---
+    if make_residual_grid:
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, mean_y,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r'$\log{V/V_0}$')
+        ax.set_ylabel(r'$M$')
+        ax.set_title(r'$M_{\text{predicted}} - M_{\text{obs}}$')
+        fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
+        fig.savefig(_p(f'{kind}_grid.png'), dpi=300)
+        plt.close(fig)
+
+    # --- GRID: prediction vs simulation truth ---
+    if make_truth_diff_grid:
+        truth_diff = mean_pred - y_true
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, truth_diff,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r'$\log{V/V_0}$')
+        ax.set_ylabel(r'$M$')
+        ax.set_title(r'$M_{\text{predicted}} - M_{\text{true}}$')
+        fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
+        fig.savefig(_p(f'{kind}_truth_diff_grid.png'), dpi=300)
+        plt.close(fig)
+
+    return mean_y, sd_pred, zobs_star
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Posterior predictions and diagnostics.')
     parser.add_argument('--run', default=None,
                         help='Run name; reads/writes output/<run>/ with standard filenames')
     parser.add_argument('--model', default='tophat', choices=['tophat', 'normal'],
                         help='Model to use (default: tophat)')
-    parser.add_argument('--source', default='DESI', choices=['DESI', 'ariel'],
+    parser.add_argument('--source', default='DESI', choices=['DESI', 'ariel', 'fullmocks'],
                         help='Data source (default: DESI)')
+    parser.add_argument('--n_objects', type=int, default=None,
+                        help='Number of objects to use for prediction (default: all)')
+    parser.add_argument('--dir', default='data',
+                        help='Directory containing FITS files (used with --source fullmocks)')
     args = parser.parse_args()
 
     run_dir = os.path.join('output', args.run) if args.run else None
 
     if args.source == 'DESI':
         DESI(args.model, run_dir=run_dir)
+    elif args.source == 'fullmocks':
+        pattern = os.path.join(args.dir, f'TF_extended_AbacusSummit_base_{args.run}_*.fits')
+        matches = glob.glob(pattern)
+        if not matches:
+            raise FileNotFoundError(f"No FITS file found matching: {pattern}")
+        galaxy_fits = sorted(matches)[0]
+        fullmocks(args.model, galaxy_fits=galaxy_fits, n_objects=args.n_objects, run_dir=run_dir)
     else:
         ariel(args.model, run_dir=run_dir)
