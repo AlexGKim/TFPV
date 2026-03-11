@@ -95,11 +95,11 @@ Chains go into `output/<run>/` using standard filenames:
 
 ```bash
 # Ariel mock data, 4 chains
-  ./tophat sample num_warmup=500 num_samples=500  data file=output/ariel/input.json init=output/ariel/init.json \
+  ./tophat sample num_warmup=500 num_samples=500  num_chains=4 adapt save_metric=1 data file=output/ariel/input.json init=output/ariel/init.json \
     output file=output/ariel/tophat.csv
 
 # DESI data, 4 chains
-  ./tophat sample num_warmup=500 num_samples=500 data file=output/DESI/input.json init=output/DESI/init.json \
+  ./tophat sample num_warmup=500 num_samples=500 num_chains=4 adapt save_metric=1 data file=output/DESI/input.json init=output/DESI/init.json \
     output file=output/DESI/tophat.csv
 ```
 
