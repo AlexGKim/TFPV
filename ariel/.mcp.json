@@ -11,8 +11,20 @@
         "src/nasa_ads_mcp/server.py"
       ],
       "env": {
-        "ADS_API_TOKEN": "OcbFxzcqRBdpWj2sSzwCX3AiQvtrGZ42Q6Q49Gpx"
+        "ADS_API_TOKEN": "${ADS_API_TOKEN}"
+      }
+    }
+  },
+  
+  "servers": {
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "requestInit": {
+        "headers": {
+          "Authorization": "Bearer ${GITHUB_PAT}"
+        }
       }
     }
   }
+
 }
