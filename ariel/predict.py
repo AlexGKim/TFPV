@@ -503,7 +503,7 @@ def load_xy_and_uncertainties_from_fullmocks(
         absmag    = np.asarray(data["R_ABSMAG_SB26"],       dtype=float)
         absmag_e  = np.asarray(data["R_ABSMAG_SB26_ERR"],   dtype=float)
         zobs      = np.asarray(data["ZOBS"],                dtype=float)
-        y_true    = np.asarray(data["R_ABSMAG_SB26_TRUE"],  dtype=float)
+        y_true    = np.asarray(data["R_ABSMAG_SB26"],        dtype=float)
 
     xhat    = logvrot - 2.0
     sigma_x = logvrot_e
@@ -1556,6 +1556,7 @@ def fullmocks(kind="normal",
               y_max=None,
               make_residual_grid=True,
               make_truth_diff_grid=True,
+              make_redshift_grid=True,
               n_objects=None,
               random_seed=None,
               run_dir=None):
@@ -1642,6 +1643,51 @@ def fullmocks(kind="normal",
         fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
         fig.savefig(_p(f'{kind}_truth_diff_grid.png'), dpi=300)
         plt.close(fig)
+
+    # --- GRID: redshift on (xhat, yhat) ---
+    if make_redshift_grid:
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, zobs_star,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r'$\log{V/V_0}$')
+        ax.set_ylabel(r'$M$')
+        ax.set_title(r'Redshift')
+        fig.colorbar(img, ax=ax, label='Average Redshift')
+        fig.savefig(_p(f'redshift_grid_{kind}.png'), dpi=300)
+        plt.close(fig)
+
+    # --- redshift residual errorbar plot ---
+    plt.errorbar(zobs_star, mean_y, yerr=sigma_y_star, fmt="o", alpha=0.1, label=label)
+
+    # weighted mean in log-spaced redshift bins (weights = 1/sigma^2)
+    y_lo, y_hi = np.percentile(mean_y, [1, 99])
+    inlier = (mean_y >= y_lo) & (mean_y <= y_hi)
+    z_edges = np.logspace(np.log10(zobs_star.min()), np.log10(zobs_star.max()), 21)
+    w = 1.0 / sigma_y_star**2
+    bin_idx = np.digitize(zobs_star, z_edges) - 1
+    bin_idx = np.clip(bin_idx, 0, len(z_edges) - 2)
+    bin_centers = np.sqrt(z_edges[:-1] * z_edges[1:])
+    bin_wmean = np.full(len(z_edges) - 1, np.nan)
+    bin_werr  = np.full(len(z_edges) - 1, np.nan)
+    for b in range(len(z_edges) - 1):
+        mask_b = (bin_idx == b) & inlier
+        if mask_b.sum() > 0:
+            w_b = w[mask_b]
+            bin_wmean[b] = np.sum(w_b * mean_y[mask_b]) / np.sum(w_b)
+            bin_werr[b]  = 1.0 / np.sqrt(np.sum(w_b))
+    ok = np.isfinite(bin_wmean)
+    plt.errorbar(bin_centers[ok], bin_wmean[ok], yerr=bin_werr[ok],
+                 fmt="s-", color="red", linewidth=1.5, markersize=5, capsize=3, label="Weighted mean")
+
+    plt.xscale("log")
+    plt.xlabel(r"$z_{\text{obs}}$")
+    plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
+    plt.ylim(np.percentile(mean_y, 0.1), np.percentile(mean_y, 99.9))
+    plt.legend()
+    plt.savefig(_p(f"redshift_{kind}.png"), dpi=300)
+    plt.clf()
 
     return mean_y, sd_pred, zobs_star
 
