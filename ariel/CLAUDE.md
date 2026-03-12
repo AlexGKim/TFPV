@@ -18,6 +18,32 @@ The statistical models are described in the `doc/` directory:
 - `doc/model2.tex`: The model to infer absolute magnitude from observed rotation velocity and fit the Tully-Fisher relationship
 - `doc/model3.tex`: The general model extended with peculiar velocities
 
+## MCP Tools
+
+Four MCP servers are available. Use them as described below.
+
+### NASA ADS (`nasa-ads`)
+Search and manage astronomy papers from NASA Astrophysics Data System.
+- Look up TFR, peculiar velocity, selection effect, or survey methodology papers
+- Find AbacusSummit / DESI reference papers for mock validation
+- Export BibTeX for citations in `doc/` LaTeX models
+- Example searches: `"Tully-Fisher relation peculiar velocity"`, `"AbacusSummit simulation"`, `author:Courtois`
+
+### GitHub (`github`)
+- Search codebase for prior usage patterns
+- Create/manage issues and pull requests
+- Request Copilot code review on PRs
+
+### Context7 (`context7`)
+Query up-to-date API docs for libraries used in this project. Reach for this before guessing an API.
+- **cmdstanpy** — sampling options, data format, initialization
+- **astropy** — FITS I/O, units, coordinates (used in `fullmocks_data.py`)
+- **chainconsumer** — corner plot and diagnostics API (used in `corner.py`)
+- **numpy / scipy / pandas** — array ops, stats functions, DataFrame methods
+
+### Python LSP (`pyright-lsp`)
+Already active via the LSP tool. Use for go-to-definition, find-references, hover docs, and call hierarchy when navigating Python scripts.
+
 ## Output Directory Structure
 
 All data products live under `output/<run>/` where `<run>` is a short name for the
