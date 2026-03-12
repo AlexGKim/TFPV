@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "nasa-ads": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/akim/Projects/nasa-ads-mcp",
+        "run",
+        "python",
+        "src/nasa_ads_mcp/server.py"
+      ],
+      "env": {
+        "ADS_API_TOKEN": "OcbFxzcqRBdpWj2sSzwCX3AiQvtrGZ42Q6Q49Gpx"
+      }
+    }
+  }
+}
