@@ -14,10 +14,15 @@ import matplotlib.colors as mcolors
 from scipy.stats import norm
 
 
-def create_average_grid_image(x_coords, y_coords, values, grid_resolution_x, grid_resolution_y, v_lim=None):
+def create_average_grid_image(x_coords, y_coords, values, grid_resolution_x, grid_resolution_y, v_lim=None, clip_percentile=(1, 99)):
     x = np.array(x_coords)
     y = np.array(y_coords)
     z = np.array(values)
+
+    if clip_percentile is not None:
+        lo, hi = np.nanpercentile(z, clip_percentile)
+        keep = (z >= lo) & (z <= hi)
+        x, y, z = x[keep], y[keep], z[keep]
 
     xmin, xmax = x.min(), x.max()
     ymin, ymax = y.min(), y.max()
@@ -1629,9 +1634,9 @@ def fullmocks(kind="normal",
         fig.savefig(_p(f'{kind}_grid.png'), dpi=300)
         plt.close(fig)
 
-    # --- GRID: prediction vs simulation truth ---
+    # --- GRID: pull (prediction vs simulation truth) / prediction uncertainty ---
     if make_truth_diff_grid:
-        truth_diff = mean_pred - y_true
+        truth_diff = (mean_pred - y_true) / sd_pred
         fig, ax, img = create_average_grid_image(
             xhat_star, yhat_star, truth_diff,
             grid_resolution_x=grid_resolution_x,
@@ -1639,8 +1644,8 @@ def fullmocks(kind="normal",
         )
         ax.set_xlabel(r'$\log{V/V_0}$')
         ax.set_ylabel(r'$M$')
-        ax.set_title(r'$M_{\text{predicted}} - M_{\text{true}}$')
-        fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
+        ax.set_title(r'$(M_{\text{predicted}} - M_{\text{true}}) / \sigma_{\text{pred}}$')
+        fig.colorbar(img, ax=ax, label='Average Pull')
         fig.savefig(_p(f'{kind}_truth_diff_grid.png'), dpi=300)
         plt.close(fig)
 
@@ -1658,14 +1663,17 @@ def fullmocks(kind="normal",
         fig.savefig(_p(f'redshift_grid_{kind}.png'), dpi=300)
         plt.close(fig)
 
-    # --- redshift residual errorbar plot ---
-    plt.errorbar(zobs_star, mean_y, yerr=sigma_y_star, fmt="o", alpha=0.1, label=label)
+    # --- redshift pull errorbar plot ---
+    pull_y     = mean_y / sd_pred
+    pull_yerr  = sigma_y_star / sd_pred
+    plt.errorbar(zobs_star, pull_y, yerr=pull_yerr, fmt="o", alpha=0.1, label=label)
 
-    # weighted mean in log-spaced redshift bins (weights = 1/sigma^2)
-    y_lo, y_hi = np.percentile(mean_y, [1, 99])
-    inlier = (mean_y >= y_lo) & (mean_y <= y_hi)
+    # weighted mean in log-spaced redshift bins (weights = 1/pull_yerr^2)
+    finite = np.isfinite(pull_y) & np.isfinite(pull_yerr)
+    p_lo, p_hi = np.percentile(pull_y[finite], [1, 99])
+    inlier = finite & (pull_y >= p_lo) & (pull_y <= p_hi)
     z_edges = np.logspace(np.log10(zobs_star.min()), np.log10(zobs_star.max()), 21)
-    w = 1.0 / sigma_y_star**2
+    w = 1.0 / pull_yerr**2
     bin_idx = np.digitize(zobs_star, z_edges) - 1
     bin_idx = np.clip(bin_idx, 0, len(z_edges) - 2)
     bin_centers = np.sqrt(z_edges[:-1] * z_edges[1:])
@@ -1675,7 +1683,7 @@ def fullmocks(kind="normal",
         mask_b = (bin_idx == b) & inlier
         if mask_b.sum() > 0:
             w_b = w[mask_b]
-            bin_wmean[b] = np.sum(w_b * mean_y[mask_b]) / np.sum(w_b)
+            bin_wmean[b] = np.sum(w_b * pull_y[mask_b]) / np.sum(w_b)
             bin_werr[b]  = 1.0 / np.sqrt(np.sum(w_b))
     ok = np.isfinite(bin_wmean)
     plt.errorbar(bin_centers[ok], bin_wmean[ok], yerr=bin_werr[ok],
@@ -1683,8 +1691,8 @@ def fullmocks(kind="normal",
 
     plt.xscale("log")
     plt.xlabel(r"$z_{\text{obs}}$")
-    plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\text{obs}}$ (mag)")
-    plt.ylim(np.percentile(mean_y, 0.1), np.percentile(mean_y, 99.9))
+    plt.ylabel("Pull of difference")
+    plt.ylim(np.percentile(pull_y[finite], 0.1), np.percentile(pull_y[finite], 99.9))
     plt.legend()
     plt.savefig(_p(f"redshift_{kind}.png"), dpi=300)
     plt.clf()
@@ -1704,6 +1712,8 @@ if __name__ == "__main__":
                         help='Number of objects to use for prediction (default: all)')
     parser.add_argument('--dir', default='data',
                         help='Directory containing FITS files (used with --source fullmocks)')
+    parser.add_argument('--predict_run', default=None,
+                        help='Simulation ID for the FITS file to predict on (default: same as --run)')
     args = parser.parse_args()
 
     run_dir = os.path.join('output', args.run) if args.run else None
@@ -1711,7 +1721,8 @@ if __name__ == "__main__":
     if args.source == 'DESI':
         DESI(args.model, run_dir=run_dir)
     elif args.source == 'fullmocks':
-        pattern = os.path.join(args.dir, f'TF_extended_AbacusSummit_base_{args.run}_*.fits')
+        fits_id = args.predict_run if args.predict_run else args.run
+        pattern = os.path.join(args.dir, f'TF_extended_AbacusSummit_base_{fits_id}_*.fits')
         matches = glob.glob(pattern)
         if not matches:
             raise FileNotFoundError(f"No FITS file found matching: {pattern}")
