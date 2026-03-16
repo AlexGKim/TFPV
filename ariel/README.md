@@ -77,7 +77,35 @@ python desi_data.py --run DESI_z01 --haty_max -19.0 --haty_min -22.0 --z_obs_min
 
 Inspect `output/<run>/data.png` after each run and adjust selection parameters until satisfied.
 
-For **AbacusSummit fullmocks**, each FITS file `TF_extended_AbacusSummit_base_c???_ph???_r???_z0.11.fits` produces its own run directory named after the simulation ID:
+For **AbacusSummit fullmocks**, each FITS file named
+`TF_extended_AbacusSummit_base_c???_ph???_r???_z0.11.fits`
+produces its own run directory named after the simulation ID extracted from the filename
+(e.g. `c000_ph000_r000`). On NERSC, these files live under
+`/global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4/`.
+
+**FITS columns used:**
+
+| Column | Description | Stan field |
+|---|---|---|
+| `LOGVROT` | log10(V_rot / km/s) | `x = LOGVROT − 2` |
+| `LOGVROT_ERR` | uncertainty on LOGVROT | `sigma_x` |
+| `R_ABSMAG_SB26` | R-band absolute magnitude (SB26) | `y` |
+| `R_ABSMAG_SB26_ERR` | uncertainty on R_ABSMAG_SB26 | `sigma_y` |
+| `ZOBS` | observed redshift | `z_obs` |
+| `MAIN` | boolean — only `MAIN=True` rows are used | — |
+
+**Default selection parameters** (override any with the corresponding flag):
+
+| Parameter | Default | Flag |
+|---|---|---|
+| `haty_max` | −20.0 | `--haty_max` |
+| `haty_min` | −21.8 | `--haty_min` |
+| `z_obs_min` | 0.03 | `--z_obs_min` |
+| `z_obs_max` | 0.10 | `--z_obs_max` |
+| `slope_plane` | −6.5 | `--slope_plane` |
+| `intercept_plane` | −20.0 | `--intercept_plane` |
+| `intercept_plane2` | −19.0 | `--intercept_plane2` |
+| `n_objects` | 5000 | `--n_objects` |
 
 ```bash
 # Process all matching FITS files in --dir
@@ -88,6 +116,10 @@ python fullmocks_data.py --dir /path/to/mocks --one
 
 # Override selection parameters or subsample size
 python fullmocks_data.py --dir /path/to/mocks --n_objects 5000 --random_seed 42
+
+# NERSC
+python fullmocks_data.py \
+  --dir /global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4
 ```
 
 ---
