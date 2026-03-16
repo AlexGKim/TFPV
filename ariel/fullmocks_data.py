@@ -33,6 +33,7 @@ def process_fullmocks_tf_data(
     n_objects=None,
     random_seed=None,
     z_obs_min=None,
+    z_obs_max=None,
 ):
     """
     Process a TF_extended AbacusSummit mock FITS file into Stan JSON + init JSON.
@@ -129,6 +130,8 @@ def process_fullmocks_tf_data(
 
         if z_obs_min is not None and zobs_all[i] <= z_obs_min:
             continue
+        if z_obs_max is not None and zobs_all[i] > z_obs_max:
+            continue
         z_filtered_rows += 1
 
         if plane_cut:
@@ -206,6 +209,7 @@ def process_fullmocks_tf_data(
         "tau":      tau,
         "z_obs":    z_obs.tolist(),
         "z_obs_min": float(z_obs_min) if z_obs_min is not None else None,
+        "z_obs_max": float(z_obs_max) if z_obs_max is not None else None,
     }
     if plane_cut:
         stan_data["slope_plane"]     = float(slope_plane)
@@ -253,8 +257,11 @@ def process_fullmocks_tf_data(
     print(f"\nFiltering:")
     print(f"  MAIN rows (valid):                 {valid_rows}")
     print(f"  After magnitude cut [{haty_min}, {haty_max}]: {y_filtered_rows}")
-    if z_obs_min is not None:
-        print(f"  After redshift cut z > {z_obs_min}:        {z_filtered_rows}")
+    if z_obs_min is not None or z_obs_max is not None:
+        lo = f"z > {z_obs_min}" if z_obs_min is not None else ""
+        hi = f"z <= {z_obs_max}" if z_obs_max is not None else ""
+        label = " & ".join(filter(None, [lo, hi]))
+        print(f"  After redshift cut {label}:  {z_filtered_rows}")
     if plane_cut:
         label = "two-sided" if two_sided else "one-sided"
         print(f"  After {label} plane cut:               {plane_pass_rows}")
@@ -343,12 +350,18 @@ if __name__ == "__main__":
         help="Directory containing TF_extended_AbacusSummit_*.fits files",
     )
     parser.add_argument(
+        "--file",
+        default=None,
+        help="Path to a single FITS file to process (overrides --dir and --one)",
+    )
+    parser.add_argument(
         "--one", action="store_true",
         help="Process only the first matching file (for debugging)",
     )
     parser.add_argument("--haty_max",  type=float, default=-20.0)
     parser.add_argument("--haty_min",  type=float, default=-21.8)
-    parser.add_argument("--z_obs_min", type=float, default=0.01)
+    parser.add_argument("--z_obs_min", type=float, default=0.03)
+    parser.add_argument("--z_obs_max", type=float, default=0.1)
     parser.add_argument("--slope_plane",      type=float, default=-6.5)
     parser.add_argument("--intercept_plane",  type=float, default=-20.)
     parser.add_argument("--intercept_plane2", type=float, default=-19.)
@@ -357,14 +370,15 @@ if __name__ == "__main__":
     parser.add_argument("--random_seed", type=int, default=None)
     args = parser.parse_args()
 
-    pattern = os.path.join(args.dir, "TF_extended_AbacusSummit_*.fits")
-    fits_files = sorted(glob.glob(pattern))
-
-    if not fits_files:
-        raise FileNotFoundError(f"No files matched: {pattern}")
-
-    if args.one:
-        fits_files = fits_files[:1]
+    if args.file is not None:
+        fits_files = [args.file]
+    else:
+        pattern = os.path.join(args.dir, "TF_extended_AbacusSummit_*.fits")
+        fits_files = sorted(glob.glob(pattern))
+        if not fits_files:
+            raise FileNotFoundError(f"No files matched: {pattern}")
+        if args.one:
+            fits_files = fits_files[:1]
 
     print(f"Found {len(fits_files)} file(s) to process.\n")
 
@@ -382,6 +396,7 @@ if __name__ == "__main__":
             "haty_max":         args.haty_max,
             "haty_min":         args.haty_min,
             "z_obs_min":        args.z_obs_min,
+            "z_obs_max":        args.z_obs_max,
             "slope_plane":      args.slope_plane,
             "intercept_plane":  args.intercept_plane,
             "intercept_plane2": args.intercept_plane2,
@@ -406,6 +421,7 @@ if __name__ == "__main__":
                 n_objects=args.n_objects,
                 random_seed=args.random_seed,
                 z_obs_min=args.z_obs_min,
+                z_obs_max=args.z_obs_max,
             )
         )
 

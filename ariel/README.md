@@ -111,15 +111,22 @@ produces its own run directory named after the simulation ID extracted from the 
 # Process all matching FITS files in --dir
 python fullmocks_data.py --dir /path/to/mocks
 
-# Process only the first file (debugging)
+# Process a single specific FITS file
+python fullmocks_data.py --file /path/to/mocks/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
+
+# Process only the first matching file in --dir (for debugging)
 python fullmocks_data.py --dir /path/to/mocks --one
 
 # Override selection parameters or subsample size
 python fullmocks_data.py --dir /path/to/mocks --n_objects 5000 --random_seed 42
 
-# NERSC
+# NERSC — all files
 python fullmocks_data.py \
   --dir /global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4
+
+# NERSC — single file
+python fullmocks_data.py \
+  --file /global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
 ```
 
 ---
