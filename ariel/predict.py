@@ -1225,7 +1225,7 @@ def DESI(kind="normal",
     plt.clf()
 
     # --- optional: tophat vs normal scatter comparison ---
-    if kind == "tophat" and compare_tophat_vs_normal:
+    if kind == "tophat" and compare_tophat_vs_normal and glob.glob(_p("normal_?.csv")):
         draws_n = read_cmdstan_posterior(
             _p("normal_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
@@ -1534,7 +1534,7 @@ def ariel(kind="normal",
     plt.clf()
 
     # --- optional: tophat vs normal scatter comparison ---
-    if kind == "tophat" and compare_tophat_vs_normal:
+    if kind == "tophat" and compare_tophat_vs_normal and glob.glob(_p("normal_?.csv")):
         draws_normal = read_cmdstan_posterior(
             _p("normal_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],

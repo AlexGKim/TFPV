@@ -1,4 +1,4 @@
-// ./tophat sample num_warmup=500 num_samples=500 num_chains=4 data file=ariel_input.json init=ariel_init.json output file=ariel_tophat.csv
+// ./tophat sample num_warmup=500 num_samples=500 num_chains=4 data file=output/c000_ph000_r001/input.json init=output/c000_ph000_r001/init.json output file=output/c000_ph000_r001/tophat.csv
 // ./tophat sample num_warmup=500 num_samples=500 num_chains=4 data file=DESI_input.json init=DESI_init.json output file=DESI_tophat.csv
 // ../../cmdstan/bin/stansummary output_tophat_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
 // ../../cmdstan/bin/stansummary output_tophat_?.csv -i slope -i intercept.1 -i sigma_int_x -i sigma_int_y
@@ -306,8 +306,8 @@ functions {
     
     return (h / 2.0) * dot_product(w, term) / (y_max - y_min);
   }
-
-// Bracket term:
+  
+  // Bracket term:
   //   Phi2(-alpha1, beta; -rho) - Phi2(-alpha2, beta; -rho)
   // for each y_TF in the input vector.
   vector strip_integrand(vector y_TF,
@@ -361,24 +361,26 @@ functions {
     
     return out;
   }
-
-// Integrand for BOTH y-cuts:
-// I(y_TF) = [Phi2(-a1,beta_max;-rho)-Phi2(-a2,beta_max;-rho)]
-//         - [Phi2(-a1,beta_min;-rho)-Phi2(-a2,beta_min;-rho)]
-vector strip_integrand_two_ycuts(vector y_TF,
-                                 real s,
-                                 real c,
-                                 real bar_c1,
-                                 real bar_c2,
-                                 real yhat_min,
-                                 real yhat_max,
-                                 real sigma1_i,
-                                 real sigma2_i,
-                                 real bar_s) {
-  return strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_max, sigma1_i, sigma2_i, bar_s)
-       - strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_min, sigma1_i, sigma2_i, bar_s);
-}
-
+  
+  // Integrand for BOTH y-cuts:
+  // I(y_TF) = [Phi2(-a1,beta_max;-rho)-Phi2(-a2,beta_max;-rho)]
+  //         - [Phi2(-a1,beta_min;-rho)-Phi2(-a2,beta_min;-rho)]
+  vector strip_integrand_two_ycuts(vector y_TF,
+                                   real s,
+                                   real c,
+                                   real bar_c1,
+                                   real bar_c2,
+                                   real yhat_min,
+                                   real yhat_max,
+                                   real sigma1_i,
+                                   real sigma2_i,
+                                   real bar_s) {
+    return strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_max, sigma1_i,
+                           sigma2_i, bar_s)
+           - strip_integrand(y_TF, s, c, bar_c1, bar_c2, yhat_min, sigma1_i,
+                             sigma2_i, bar_s);
+  }
+  
   real integrate_binormal_strip_sinh_gl(
          real y_min,
          real y_max,
@@ -476,11 +478,10 @@ vector strip_integrand_two_ycuts(vector y_TF,
     // ∫ f(y_TF) dy_TF = sigma2 * ∫ f(haty_max - sigma2*sinh u) cosh(u) du
     return sigma2 * half * acc;
   }
-
-
-// ∫_{y_min}^{y_max} I(y_TF) dy_TF,
-// split into two pieces and use sinh transforms around y_TF = yhat_min and y_TF = yhat_max.
-real integrate_binormal_strip_sinh2_gl(
+  
+  // ∫_{y_min}^{y_max} I(y_TF) dy_TF,
+  // split into two pieces and use sinh transforms around y_TF = yhat_min and y_TF = yhat_max.
+  real integrate_binormal_strip_sinh2_gl(
          real y_min,
          real y_max,
          real yhat_min,
@@ -495,66 +496,65 @@ real integrate_binormal_strip_sinh2_gl(
          vector gl_x,
          vector gl_w
        ) {
-  int K = size(gl_x);
-
-  if (size(gl_w) != K)
-    reject("integrate_binormal_strip_sinh2_gl: gl_x and gl_w must have same length");
-  if (sigma2 <= 0)
-    reject("integrate_binormal_strip_sinh2_gl: sigma2 must be > 0");
-  if (y_max <= y_min)
-    reject("integrate_binormal_strip_sinh2_gl: require y_max > y_min");
-  if (yhat_max <= yhat_min)
-    reject("integrate_binormal_strip_sinh2_gl: require yhat_max > yhat_min");
-
-  // Split point between the two transition regions (clipped into [y_min, y_max])
-  real y_star = fmin(y_max, fmax(y_min, 0.5 * (yhat_min + yhat_max)));
-
-  real I1 = 0.0;
-  real I2 = 0.0;
-
-  // ---- Piece 1: y_TF in [y_min, y_star], sinh-transform around yhat_min ----
-  // y_TF = yhat_min + sigma2*sinh(u)
-  // dy_TF = sigma2*cosh(u) du
-  if (y_star > y_min) {
-    real umin1 = asinh((y_min  - yhat_min) / sigma2);
-    real umax1 = asinh((y_star - yhat_min) / sigma2);
-
-    real mid1  = 0.5 * (umin1 + umax1);
-    real half1 = 0.5 * (umax1 - umin1);
-
-    vector[K] u1    = mid1 + half1 * gl_x;
-    vector[K] ytf1  = yhat_min + sigma2 * sinh(u1);
-
-    vector[K] f1 = strip_integrand_two_ycuts(ytf1, s, c, c1_plane, c2_plane,
-                                             yhat_min, yhat_max, sigma1, sigma2, s_plane);
-
-    I1 = sigma2 * half1 * sum(gl_w .* f1 .* cosh(u1));
+    int K = size(gl_x);
+    
+    if (size(gl_w) != K) 
+      reject("integrate_binormal_strip_sinh2_gl: gl_x and gl_w must have same length");
+    if (sigma2 <= 0) 
+      reject("integrate_binormal_strip_sinh2_gl: sigma2 must be > 0");
+    if (y_max <= y_min) 
+      reject("integrate_binormal_strip_sinh2_gl: require y_max > y_min");
+    if (yhat_max <= yhat_min) 
+      reject("integrate_binormal_strip_sinh2_gl: require yhat_max > yhat_min");
+    
+    // Split point between the two transition regions (clipped into [y_min, y_max])
+    real y_star = fmin(y_max, fmax(y_min, 0.5 * (yhat_min + yhat_max)));
+    
+    real I1 = 0.0;
+    real I2 = 0.0;
+    
+    // ---- Piece 1: y_TF in [y_min, y_star], sinh-transform around yhat_min ----
+    // y_TF = yhat_min + sigma2*sinh(u)
+    // dy_TF = sigma2*cosh(u) du
+    if (y_star > y_min) {
+      real umin1 = asinh((y_min - yhat_min) / sigma2);
+      real umax1 = asinh((y_star - yhat_min) / sigma2);
+      
+      real mid1 = 0.5 * (umin1 + umax1);
+      real half1 = 0.5 * (umax1 - umin1);
+      
+      vector[K] u1 = mid1 + half1 * gl_x;
+      vector[K] ytf1 = yhat_min + sigma2 * sinh(u1);
+      
+      vector[K] f1 = strip_integrand_two_ycuts(ytf1, s, c, c1_plane,
+                       c2_plane, yhat_min, yhat_max, sigma1, sigma2, s_plane);
+      
+      I1 = sigma2 * half1 * sum(gl_w .* f1 .* cosh(u1));
+    }
+    
+    // ---- Piece 2: y_TF in [y_star, y_max], sinh-transform around yhat_max ----
+    // y_TF = yhat_max - sigma2*sinh(u)
+    // dy_TF = -sigma2*cosh(u) du
+    // Using bounds u in [asinh((yhat_max-y_max)/sigma2), asinh((yhat_max-y_star)/sigma2)]
+    // gives the correct orientation after absorbing the minus sign.
+    if (y_max > y_star) {
+      real umin2 = asinh((yhat_max - y_max) / sigma2);
+      real umax2 = asinh((yhat_max - y_star) / sigma2);
+      
+      real mid2 = 0.5 * (umin2 + umax2);
+      real half2 = 0.5 * (umax2 - umin2);
+      
+      vector[K] u2 = mid2 + half2 * gl_x;
+      vector[K] ytf2 = yhat_max - sigma2 * sinh(u2);
+      
+      vector[K] f2 = strip_integrand_two_ycuts(ytf2, s, c, c1_plane,
+                       c2_plane, yhat_min, yhat_max, sigma1, sigma2, s_plane);
+      
+      I2 = sigma2 * half2 * sum(gl_w .* f2 .* cosh(u2));
+    }
+    
+    return I1 + I2;
   }
-
-  // ---- Piece 2: y_TF in [y_star, y_max], sinh-transform around yhat_max ----
-  // y_TF = yhat_max - sigma2*sinh(u)
-  // dy_TF = -sigma2*cosh(u) du
-  // Using bounds u in [asinh((yhat_max-y_max)/sigma2), asinh((yhat_max-y_star)/sigma2)]
-  // gives the correct orientation after absorbing the minus sign.
-  if (y_max > y_star) {
-    real umin2 = asinh((yhat_max - y_max)  / sigma2);
-    real umax2 = asinh((yhat_max - y_star) / sigma2);
-
-    real mid2  = 0.5 * (umin2 + umax2);
-    real half2 = 0.5 * (umax2 - umin2);
-
-    vector[K] u2    = mid2 + half2 * gl_x;
-    vector[K] ytf2  = yhat_max - sigma2 * sinh(u2);
-
-    vector[K] f2 = strip_integrand_two_ycuts(ytf2, s, c, c1_plane, c2_plane,
-                                             yhat_min, yhat_max, sigma1, sigma2, s_plane);
-
-    I2 = sigma2 * half2 * sum(gl_w .* f2 .* cosh(u2));
-  }
-
-  return I1 + I2;
-}
-
 }
 data {
   // Number of redshift bins
@@ -654,26 +654,42 @@ transformed data {
                              0.0342738629130214331, 0.0253920653092620595,
                              0.0162743947309056706, 0.0070186100094700966};
   vector[32] gl_w = to_vector(gl_w_arr);
-
-  array[16] real gl_x_arr_16 = {-0.9894009349916499325, -0.9445750230732325761,
-                              -0.8656312023341810203, -0.7554044083550030338,
-                              -0.6178762444026437484, -0.4580167776572273864,
-                              -0.2816035507792589132, -0.0950125098360222962,
-                              0.0950125098360222962,  0.2816035507792589132,
-                              0.4580167776572273864,  0.6178762444026437484,
-                              0.7554044083550030338,  0.8656312023341810203,
-                              0.9445750230732325761,  0.9894009349916499325};
+  
+  array[16] real gl_x_arr_16 = {-0.9894009349916499325,
+                                -0.9445750230732325761,
+                                -0.8656312023341810203,
+                                -0.7554044083550030338,
+                                -0.6178762444026437484,
+                                -0.4580167776572273864,
+                                -0.2816035507792589132,
+                                -0.0950125098360222962,
+                                0.0950125098360222962, 0.2816035507792589132,
+                                0.4580167776572273864, 0.6178762444026437484,
+                                0.7554044083550030338, 0.8656312023341810203,
+                                0.9445750230732325761, 0.9894009349916499325};
   vector[16] gl_x_16 = to_vector(gl_x_arr_16);
-
+  
   array[16] real gl_w_arr_16 = {0.0271524594117540949, 0.0622535239386478929,
-                              0.0951585116824927848, 0.1246289512509462112,
-                              0.1495959888165767320, 0.1691565193950025381,
-                              0.1826034150449235888, 0.1894506104550684835,
-                              0.1894506104550684835, 0.1826034150449235888,
-                              0.1691565193950025381, 0.1495959888165767320,
-                              0.1246289512509462112, 0.0951585116824927848,
-                              0.0622535239386478929, 0.0271524594117540949};
+                                0.0951585116824927848, 0.1246289512509462112,
+                                0.1495959888165767320, 0.1691565193950025381,
+                                0.1826034150449235888, 0.1894506104550684835,
+                                0.1894506104550684835, 0.1826034150449235888,
+                                0.1691565193950025381, 0.1495959888165767320,
+                                0.1246289512509462112, 0.0951585116824927848,
+                                0.0622535239386478929, 0.0271524594117540949};
   vector[16] gl_w_16 = to_vector(gl_w_arr_16);
+  
+  array[8] real gl_x_arr_8 = {-0.9602898564975362317, -0.7966664774136267396,
+                              -0.5255324099163289858, -0.1834346424956498049,
+                              0.1834346424956498049, 0.5255324099163289858,
+                              0.7966664774136267396, 0.9602898564975362317};
+  vector[8] gl_x_8 = to_vector(gl_x_arr_8);
+  
+  array[8] real gl_w_arr_8 = {0.1012285362903762591, 0.2223810344533744861,
+                              0.3137066458778872873, 0.3626837833783619830,
+                              0.3626837833783619830, 0.3137066458778872873,
+                              0.2223810344533744861, 0.1012285362903762591};
+  vector[8] gl_w_8 = to_vector(gl_w_arr_8);
 }
 parameters {
   // Common slope across all redshift bins
@@ -763,14 +779,15 @@ model {
         //                    slope_plane_std, intercept_plane_std,
         //                    intercept_plane2_std, sqrt(sigmasq1_std[1]),
         //                    sqrt(sigmasq2[1]), 32));
-        target += - log(
-                      integrate_binormal_strip_sinh2_gl(y_min, y_max, haty_min,
-                        haty_max, slope_std, intercept_std[bin_idx],
-                        slope_plane_std, intercept_plane_std,
-                        intercept_plane2_std, sqrt(sigmasq1_std[n]),
-                        sqrt(sigmasq2[n]), gl_x_16, gl_w_16));
+        target += -log(
+                       integrate_binormal_strip_sinh2_gl(y_min, y_max,
+                         haty_min, haty_max, slope_std,
+                         intercept_std[bin_idx], slope_plane_std,
+                         intercept_plane_std, intercept_plane2_std,
+                         sqrt(sigmasq1_std[n]), sqrt(sigmasq2[n]), gl_x_8,
+                         gl_w_8));
       }
-
+      
       // target += - N_total *log( integrate_binormal_strip_sinh2_gl(y_min, y_max, haty_min,
       //    haty_max, slope_std, intercept_std[bin_idx],
       //    slope_plane_std, intercept_plane_std,
