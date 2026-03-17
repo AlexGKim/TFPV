@@ -176,7 +176,7 @@ Once a metric and step size have been saved, subsequent runs can skip most of th
 
 ```bash
 ./tophat sample algorithm=hmc metric=diag_e \
-  metric_file=output/ariel/tophat_metric.json \
+  metric_file=output/c000_ph000_r001/tophat_metric.json \
   stepsize=0.11871086 \
   num_warmup=50 num_samples=500 num_chains=4 \
   data file=output/c000_ph000_r001/input.json \
