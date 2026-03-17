@@ -508,7 +508,7 @@ def load_xy_and_uncertainties_from_fullmocks(
         absmag    = np.asarray(data["R_ABSMAG_SB26"],       dtype=float)
         absmag_e  = np.asarray(data["R_ABSMAG_SB26_ERR"],   dtype=float)
         zobs      = np.asarray(data["ZOBS"],                dtype=float)
-        y_true    = np.asarray(data["R_ABSMAG_SB26"],        dtype=float)
+        y_true    = np.asarray(data["R_ABSMAG_SB26_TRUE"],    dtype=float)
 
     xhat    = logvrot - 2.0
     sigma_x = logvrot_e
@@ -1564,7 +1564,14 @@ def fullmocks(kind="normal",
               make_redshift_grid=True,
               n_objects=None,
               random_seed=None,
-              run_dir=None):
+              run_dir=None,
+              delta_haty_min=0.0,
+              delta_haty_max=0.0,
+              delta_z_obs_min=0.0,
+              delta_z_obs_max=0.0,
+              plane_cut=False,
+              delta_intercept_plane=0.0,
+              delta_intercept_plane2=0.0):
     """
     Posterior predictions for a fullmocks AbacusSummit FITS source.
 
@@ -1592,6 +1599,36 @@ def fullmocks(kind="normal",
         )
     )
 
+    # Read input.json once: provides y_min/y_max (tophat) and training selection cuts
+    with open(_p("input.json"), "r") as f:
+        _cfg = json.load(f)
+    if y_min is None:
+        y_min = _cfg.get("y_min", y_min)
+    if y_max is None:
+        y_max = _cfg.get("y_max", y_max)
+
+    # Apply selection cuts relative to training values from input.json
+    sel = np.ones(len(xhat_star), dtype=bool)
+    if _cfg.get("haty_min") is not None:
+        sel &= (yhat_star >= _cfg["haty_min"] + delta_haty_min)
+    if _cfg.get("haty_max") is not None:
+        sel &= (yhat_star <= _cfg["haty_max"] + delta_haty_max)
+    if _cfg.get("z_obs_min") is not None:
+        sel &= (zobs_star > _cfg["z_obs_min"] + delta_z_obs_min)
+    if _cfg.get("z_obs_max") is not None:
+        sel &= (zobs_star <= _cfg["z_obs_max"] + delta_z_obs_max)
+    if plane_cut and _cfg.get("slope_plane") is not None \
+                 and _cfg.get("intercept_plane") is not None:
+        s = _cfg["slope_plane"]
+        sel &= (yhat_star >= s * xhat_star + _cfg["intercept_plane"] + delta_intercept_plane)
+        if _cfg.get("intercept_plane2") is not None:
+            sel &= (yhat_star <= s * xhat_star + _cfg["intercept_plane2"] + delta_intercept_plane2)
+    if sel.sum() < len(sel):
+        xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star, y_true = (
+            arr[sel] for arr in
+            (xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star, y_true)
+        )
+
     # --- posterior + predictive ---
     if kind == "normal":
         draws = read_cmdstan_posterior(
@@ -1607,11 +1644,6 @@ def fullmocks(kind="normal",
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
             drop_diagnostics=True,
         )
-        if y_min is None or y_max is None:
-            with open(_p("input.json"), "r") as f:
-                _d = json.load(f)
-                y_min = _d.get("y_min", y_min)
-                y_max = _d.get("y_max", y_max)
         mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
             draws, xhat_star, sigma_x_star, y_min=y_min, y_max=y_max,
             on_bad_Z="floor", Z_floor=1e-300,
@@ -1697,6 +1729,27 @@ def fullmocks(kind="normal",
     plt.savefig(_p(f"redshift_{kind}.png"), dpi=300)
     plt.clf()
 
+    # --- 3x3 pull histogram grid in log-spaced redshift bins ---
+    z_hist_edges = np.logspace(np.log10(zobs_star[finite].min()),
+                               np.log10(zobs_star[finite].max()), 10)  # 9 bins
+    fig, axes = plt.subplots(3, 3, figsize=(12, 10))
+    axes = axes.flatten()
+    for b, ax in enumerate(axes):
+        mask_b = (np.digitize(zobs_star, z_hist_edges) - 1 == b) & finite
+        z_lo, z_hi = z_hist_edges[b], z_hist_edges[b + 1]
+        vals = pull_y[mask_b]
+        counts, _, _ = ax.hist(vals, bins=50, density=True, alpha=0.7)
+        ax.set_ylim(0, counts.max() * 1.3)
+        ax.axvline(0, color="gray", linestyle="--", linewidth=1)
+        mu, sig = (np.mean(vals), np.std(vals)) if mask_b.sum() > 0 else (np.nan, np.nan)
+        ax.set_title(f"z ∈ [{z_lo:.3f}, {z_hi:.3f}]  N={mask_b.sum()}\n"
+                     f"mean={mu:.3f}  std={sig:.3f}", fontsize=8)
+        ax.set_xlabel("Pull")
+    fig.suptitle(f"{label} pull distribution by redshift bin")
+    fig.tight_layout()
+    fig.savefig(_p(f"redshift_hist_{kind}.png"), dpi=150)
+    plt.close(fig)
+
     return mean_y, sd_pred, zobs_star
 
 
@@ -1714,6 +1767,20 @@ if __name__ == "__main__":
                         help='Directory containing FITS files (used with --source fullmocks)')
     parser.add_argument('--predict_run', default=None,
                         help='Simulation ID for the FITS file to predict on (default: same as --run)')
+    parser.add_argument('--delta_haty_min',         type=float, default=0.0,
+                        help='Offset added to input.json haty_min for prediction selection (default: 0)')
+    parser.add_argument('--delta_haty_max',         type=float, default=0.0,
+                        help='Offset added to input.json haty_max for prediction selection (default: 0)')
+    parser.add_argument('--delta_z_obs_min',        type=float, default=0.0,
+                        help='Offset added to input.json z_obs_min for prediction selection (default: 0)')
+    parser.add_argument('--delta_z_obs_max',        type=float, default=0.0,
+                        help='Offset added to input.json z_obs_max for prediction selection (default: 0)')
+    parser.add_argument('--plane_cut',              action='store_true', default=False,
+                        help='Apply oblique plane cut from input.json during prediction (default: off)')
+    parser.add_argument('--delta_intercept_plane',  type=float, default=0.0,
+                        help='Offset added to input.json intercept_plane (default: 0)')
+    parser.add_argument('--delta_intercept_plane2', type=float, default=0.0,
+                        help='Offset added to input.json intercept_plane2 (default: 0)')
     args = parser.parse_args()
 
     run_dir = os.path.join('output', args.run) if args.run else None
@@ -1727,6 +1794,13 @@ if __name__ == "__main__":
         if not matches:
             raise FileNotFoundError(f"No FITS file found matching: {pattern}")
         galaxy_fits = sorted(matches)[0]
-        fullmocks(args.model, galaxy_fits=galaxy_fits, n_objects=args.n_objects, run_dir=run_dir)
+        fullmocks(args.model, galaxy_fits=galaxy_fits, n_objects=args.n_objects, run_dir=run_dir,
+                  delta_haty_min=args.delta_haty_min,
+                  delta_haty_max=args.delta_haty_max,
+                  delta_z_obs_min=args.delta_z_obs_min,
+                  delta_z_obs_max=args.delta_z_obs_max,
+                  plane_cut=args.plane_cut,
+                  delta_intercept_plane=args.delta_intercept_plane,
+                  delta_intercept_plane2=args.delta_intercept_plane2)
     else:
         ariel(args.model, run_dir=run_dir)
