@@ -59,6 +59,7 @@ output/<run>/
   tophat_truth_diff_grid.png        — (mean_pred − y_true) / sd_pred on (x, y) grid
   redshift_tophat.png               — pull vs. redshift scatter
   redshift_hist_tophat.png          — pull histograms in 9 log-spaced redshift bins
+  tophat_highpull.png               — scatter in (x̂, ŷ) with pull > 4 galaxies highlighted
 ```
 
 ---
@@ -231,17 +232,18 @@ python predict.py --run c000_ph000_r000 --model tophat --source fullmocks \
 python predict.py --run c000_ph000_r000 --model tophat --source fullmocks \
   --dir /path/to/mocks --n_objects 100000 \
   --delta_haty_min -0.5 --delta_haty_max 0.5 \
-  --plane_cut --delta_intercept_plane -0.05 --delta_intercept_plane2 0.05 \
+  --delta_intercept_plane -0.05 --delta_intercept_plane2 0.05 \
   --delta_z_obs_min -0.03
 ```
 
 The `--source fullmocks` flag produces output plots in `output/<run>/`:
 - `{model}_grid.png` — `mean_pred − yhat_obs` (observed residual on x–y grid)
 - `{model}_truth_diff_grid.png` — `mean_pred − R_ABSMAG_SB26_TRUE` (prediction vs. simulation truth)
+- `{model}_highpull.png` — scatter in (x̂, ŷ) with pull > 4 galaxies highlighted in red
 - `redshift_{model}.png` — pull vs. redshift scatter with weighted mean
 - `redshift_hist_{model}.png` — pull histograms in 9 log-spaced redshift bins
 
-**Selection flags for `--source fullmocks`** (all default to 0, i.e. training selection):
+**Selection flags for `--source fullmocks`** (offsets default to 0, i.e. match training selection):
 
 | Flag | Effect |
 |---|---|
@@ -249,9 +251,10 @@ The `--source fullmocks` flag produces output plots in `output/<run>/`:
 | `--delta_haty_max FLOAT` | shift `haty_max` cut (positive = looser) |
 | `--delta_z_obs_min FLOAT` | shift `z_obs_min` cut (negative = looser) |
 | `--delta_z_obs_max FLOAT` | shift `z_obs_max` cut (positive = looser) |
-| `--plane_cut` | apply oblique plane cut from `input.json` (default: off) |
 | `--delta_intercept_plane FLOAT` | shift lower plane intercept (negative = looser) |
 | `--delta_intercept_plane2 FLOAT` | shift upper plane intercept (positive = looser) |
+
+The oblique plane cut is applied by default (matching training selection).
 
 Use `--n_objects` (any source) to limit the number of galaxies used for prediction.
 

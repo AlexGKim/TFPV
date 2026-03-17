@@ -1569,7 +1569,7 @@ def fullmocks(kind="normal",
               delta_haty_max=0.0,
               delta_z_obs_min=0.0,
               delta_z_obs_max=0.0,
-              plane_cut=False,
+              plane_cut=True,
               delta_intercept_plane=0.0,
               delta_intercept_plane2=0.0):
     """
@@ -1698,6 +1698,38 @@ def fullmocks(kind="normal",
     # --- redshift pull errorbar plot ---
     pull_y     = mean_y / sd_pred
     pull_yerr  = sigma_y_star / sd_pred
+
+    # --- scatter plot with high-pull galaxies overplotted ---
+    high_pull = pull_y > 4
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.scatter(xhat_star[~high_pull], yhat_star[~high_pull],
+               s=2, alpha=0.2, color="gray", label=f"N = {(~high_pull).sum()}")
+    ax.scatter(xhat_star[high_pull], yhat_star[high_pull],
+               s=8, alpha=0.8, color="red", label=f"pull > 4  (N = {high_pull.sum()})")
+    if _cfg.get("haty_max") is not None:
+        ax.axhline(_cfg["haty_max"] + delta_haty_max, color="red", linestyle="--",
+                   linewidth=1.5, label=f"haty_max = {_cfg['haty_max'] + delta_haty_max:.2f}")
+    if _cfg.get("haty_min") is not None:
+        ax.axhline(_cfg["haty_min"] + delta_haty_min, color="orange", linestyle="--",
+                   linewidth=1.5, label=f"haty_min = {_cfg['haty_min'] + delta_haty_min:.2f}")
+    if plane_cut and _cfg.get("slope_plane") is not None \
+                 and _cfg.get("intercept_plane") is not None:
+        s_p = _cfg["slope_plane"]
+        x_range = np.array([xhat_star.min() - 0.1, xhat_star.max() + 0.1])
+        ax.plot(x_range, s_p * x_range + _cfg["intercept_plane"] + delta_intercept_plane,
+                "g--", linewidth=1.5)
+        if _cfg.get("intercept_plane2") is not None:
+            ax.plot(x_range, s_p * x_range + _cfg["intercept_plane2"] + delta_intercept_plane2,
+                    "g-.", linewidth=1.5)
+    ax.invert_yaxis()
+    ax.set_xlabel(r"$\hat{x}$ = log($V_{\rm rot}$/100 km/s)")
+    ax.set_ylabel(r"$\hat{y}$ = M")
+    ax.set_title(f"{label}: pull > 4 highlighted")
+    ax.legend(fontsize=9)
+    fig.tight_layout()
+    fig.savefig(_p(f"{kind}_highpull.png"), dpi=150)
+    plt.close(fig)
+
     plt.errorbar(zobs_star, pull_y, yerr=pull_yerr, fmt="o", alpha=0.1, label=label)
 
     # weighted mean in log-spaced redshift bins (weights = 1/pull_yerr^2)
@@ -1775,8 +1807,8 @@ if __name__ == "__main__":
                         help='Offset added to input.json z_obs_min for prediction selection (default: 0)')
     parser.add_argument('--delta_z_obs_max',        type=float, default=0.0,
                         help='Offset added to input.json z_obs_max for prediction selection (default: 0)')
-    parser.add_argument('--plane_cut',              action='store_true', default=False,
-                        help='Apply oblique plane cut from input.json during prediction (default: off)')
+    parser.add_argument('--plane_cut',              action='store_true', default=True,
+                        help='Apply oblique plane cut from input.json during prediction (default: on)')
     parser.add_argument('--delta_intercept_plane',  type=float, default=0.0,
                         help='Offset added to input.json intercept_plane (default: 0)')
     parser.add_argument('--delta_intercept_plane2', type=float, default=0.0,
