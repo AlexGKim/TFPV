@@ -34,6 +34,7 @@ ariel/
   normal.stan            — Stan model (normal prior)
   corner.py              — posterior corner plots (uses chainconsumer)
   predict.py             — infer absolute magnitudes from fitted TFR
+  cut_sweep.py           — quantitative selection cut optimisation (grid sweep)
   doc/                   — LaTeX descriptions of the statistical models
   output/                — all data products (gitignored)
 ```
@@ -60,6 +61,10 @@ output/<run>/
   redshift_tophat.png               — pull vs. redshift scatter
   redshift_hist_tophat.png          — pull histograms in 9 log-spaced redshift bins
   tophat_highpull.png               — scatter in (x̂, ŷ) with pull > 4 galaxies highlighted
+  cut_sweep.csv                     — grid sweep results (cut_sweep.py)
+  cut_sweep_1d.png                  — 1-D slope profiles per selection parameter
+  cut_sweep_2d_<p1>_<p2>.png       — 2-D slices: slope / volatility / log-likelihood
+  cut_sweep_best_config.json        — optimal cut parameters from the sweep
 ```
 
 ---
@@ -132,6 +137,72 @@ python fullmocks_data.py \
 # NERSC — single file
 python fullmocks_data.py \
   --file /global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
+```
+
+---
+
+### Step 1b: Optimise Selection Cuts (optional)
+
+The five selection-cut parameters (`haty_max`, `haty_min`, `slope_plane`, `intercept_plane`, `intercept_plane2`) can be determined quantitatively instead of by hand using `cut_sweep.py`.
+
+The script sweeps a grid of cut values, fits the tophat model likelihood at each point via fast Python MLE, and reports two complementary optimality criteria:
+
+- **Volatility** — mean `|Δslope / sqrt(σ² + σ'²)|` over adjacent neighbors. Minimum = flattest slope plateau.
+- **Profile log-likelihood** — direct MLE output. Maximum = cuts most consistent with the data.
+
+The combined score `loglike − N_sel × volatility` is used to select the best grid point.
+
+```bash
+# fullmocks — sweep with default 5-point grid on each of the 5 parameters (3125 evaluations)
+python cut_sweep.py --source fullmocks \
+  --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \
+  --run c000_ph000_r001 --write_best
+
+# Cap galaxies per grid point for speed (default 10000; also makes log-likelihood comparable)
+python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
+  --n_surrogate 10000 --write_best
+
+# If the true slope is known (fullmocks), report bias at each grid point too
+python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
+  --true_slope -8.3 --write_best
+
+# DESI
+python cut_sweep.py --source DESI --run DESI --write_best
+
+# Narrow the grid around a region of interest
+python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
+  --haty_max_range -21.0 -19.0 --haty_max_n 7 \
+  --intercept_plane_range -21.0 -19.5 --intercept_plane_n 7 \
+  --write_best
+
+# Regenerate plots from a saved cut_sweep.csv without re-running the sweep
+python cut_sweep.py --run c000_ph000_r001 --plots_only
+```
+
+**Default grid ranges** (5 points each, override with `--<param>_range LO HI` and `--<param>_n N`):
+
+| Parameter | Default range |
+|---|---|
+| `haty_max` | −22.0 to −17.0 |
+| `haty_min` | −25.0 to −21.5 |
+| `slope_plane` | −10.0 to −3.0 |
+| `intercept_plane` | −23.0 to −18.5 |
+| `intercept_plane2` | −21.0 to −16.0 |
+
+The ranges are intentionally wide (biased toward loose cuts) so the sweep explores clearly into the contaminated regime on one side and well into the clean regime on the other, making the stability plateau visible.
+
+**`--n_surrogate N`** (default 10000): cap the number of galaxies used per grid point by random subsampling. This keeps evaluation time roughly constant regardless of how many galaxies pass the cuts, and — because every grid point sums over exactly `N` terms — makes the profile log-likelihood directly comparable across grid points.
+
+After the sweep a **sweet spot summary** is printed: each parameter is classified as SENSITIVE (slope varies significantly across the grid) or INSENSITIVE, with the recommended loosest stable cut value for sensitive parameters.
+
+The redshift window (`z_obs_min`, `z_obs_max`) is treated as a fixed hyperparameter during the sweep (override with `--z_obs_min` and `--z_obs_max`).
+
+After the sweep, use the optimal cuts from `output/<run>/cut_sweep_best_config.json` to re-run the data prep script:
+
+```bash
+python fullmocks_data.py --file ... --run c000_ph000_r001_opt \
+  --haty_max -19.8 --haty_min -22.1 \
+  --slope_plane -7.0 --intercept_plane -20.3 --intercept_plane2 -18.9
 ```
 
 ---
