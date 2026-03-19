@@ -358,6 +358,11 @@ if __name__ == "__main__":
         "--one", action="store_true",
         help="Process only the first matching file (for debugging)",
     )
+    parser.add_argument(
+        "--run",
+        default=None,
+        help="Run name override; outputs go to output/<run>/ (default: derived from filename)",
+    )
 
     parser.add_argument("--z_obs_min", type=float, default=0.03)
     parser.add_argument("--z_obs_max", type=float, default=0.1)
@@ -391,7 +396,7 @@ if __name__ == "__main__":
     print(f"Found {len(fits_files)} file(s) to process.\n")
 
     for fits_file in fits_files:
-        run = run_name_from_path(fits_file)
+        run = args.run if args.run is not None else run_name_from_path(fits_file)
         run_dir = os.path.join("output", run)
         os.makedirs(run_dir, exist_ok=True)
 
