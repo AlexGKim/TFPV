@@ -145,12 +145,10 @@ python fullmocks_data.py \
 
 The five selection-cut parameters (`haty_max`, `haty_min`, `slope_plane`, `intercept_plane`, `intercept_plane2`) can be determined quantitatively instead of by hand using `cut_sweep.py`.
 
-The script sweeps a grid of cut values, fits the tophat model likelihood at each point via fast Python MLE, and reports two complementary optimality criteria:
+The script sweeps a grid of cut values, fits the tophat model likelihood at each point via fast Python MLE, and selects the best grid point using the **max-N-in-plateau** criterion:
 
-- **Volatility** — mean `|Δslope / sqrt(σ² + σ'²)|` over adjacent neighbors. Minimum = flattest slope plateau.
-- **Profile log-likelihood** — direct MLE output. Maximum = cuts most consistent with the data.
-
-The combined score `loglike − N_sel × volatility` is used to select the best grid point.
+1. **Volatility** — mean `|Δslope / sqrt(σ² + σ'²)|` over adjacent neighbors. Defines the stability plateau: all points with `volatility ≤ vol_min × --vol_threshold_factor` (default 3×).
+2. **Within the plateau, maximize N** — the loosest stable cuts use the most galaxies and minimize statistical uncertainty on the slope.
 
 ```bash
 # fullmocks — sweep with default 5-point grid on each of the 5 parameters (3125 evaluations)
@@ -158,9 +156,8 @@ python cut_sweep.py --source fullmocks \
   --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \
   --run c000_ph000_r001 --write_best
 
-# Cap galaxies per grid point for speed (default 10000; also makes log-likelihood comparable)
-python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
-  --n_surrogate 10000 --write_best
+# Fast debug run: 1/4 of data, 3-point grid (243 evaluations, ~50× faster)
+python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 --debug
 
 # If the true slope is known (fullmocks), report bias at each grid point too
 python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
@@ -175,6 +172,10 @@ python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
   --intercept_plane_range -21.0 -19.5 --intercept_plane_n 7 \
   --write_best
 
+# Widen or tighten the plateau threshold (default 3.0)
+python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
+  --vol_threshold_factor 5.0 --write_best
+
 # Regenerate plots from a saved cut_sweep.csv without re-running the sweep
 python cut_sweep.py --run c000_ph000_r001 --plots_only
 ```
@@ -183,17 +184,13 @@ python cut_sweep.py --run c000_ph000_r001 --plots_only
 
 | Parameter | Default range |
 |---|---|
-| `haty_max` | −22.0 to −17.0 |
-| `haty_min` | −25.0 to −21.5 |
-| `slope_plane` | −10.0 to −3.0 |
-| `intercept_plane` | −23.0 to −18.5 |
-| `intercept_plane2` | −21.0 to −16.0 |
+| `haty_max` | −20.0 to −19.0 |
+| `haty_min` | −22.2 to −21.3 |
+| `slope_plane` | −7.5 to −5.5 |
+| `intercept_plane` | −21.0 to −19.8 |
+| `intercept_plane2` | −19.2 to −18.0 |
 
-The ranges are intentionally wide (biased toward loose cuts) so the sweep explores clearly into the contaminated regime on one side and well into the clean regime on the other, making the stability plateau visible.
-
-**`--n_surrogate N`** (default 10000): cap the number of galaxies used per grid point by random subsampling. This keeps evaluation time roughly constant regardless of how many galaxies pass the cuts, and — because every grid point sums over exactly `N` terms — makes the profile log-likelihood directly comparable across grid points.
-
-After the sweep a **sweet spot summary** is printed: each parameter is classified as SENSITIVE (slope varies significantly across the grid) or INSENSITIVE, with the recommended loosest stable cut value for sensitive parameters.
+After the sweep a **sweet spot summary** is printed: each parameter is classified as SENSITIVE (slope varies significantly across the grid) or INSENSITIVE, with the recommended loosest stable cut value.
 
 The redshift window (`z_obs_min`, `z_obs_max`) is treated as a fixed hyperparameter during the sweep (override with `--z_obs_min` and `--z_obs_max`).
 

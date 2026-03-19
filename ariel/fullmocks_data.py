@@ -358,13 +358,21 @@ if __name__ == "__main__":
         "--one", action="store_true",
         help="Process only the first matching file (for debugging)",
     )
-    parser.add_argument("--haty_max",  type=float, default=-20.0)
-    parser.add_argument("--haty_min",  type=float, default=-21.8)
+
     parser.add_argument("--z_obs_min", type=float, default=0.03)
     parser.add_argument("--z_obs_max", type=float, default=0.1)
-    parser.add_argument("--slope_plane",      type=float, default=-6.5)
-    parser.add_argument("--intercept_plane",  type=float, default=-20.)
-    parser.add_argument("--intercept_plane2", type=float, default=-19.)
+    parser.add_argument("--haty_max",  type=float, default=-20.)
+    parser.add_argument("--haty_min",  type=float, default=-22.2)
+    parser.add_argument("--slope_plane",      type=float, default=-7.5)
+    parser.add_argument("--intercept_plane",  type=float, default=-21)
+    parser.add_argument("--intercept_plane2", type=float, default=-19.2)
+
+    # parser.add_argument("--haty_max",  type=float, default=-20.0)
+    # parser.add_argument("--haty_min",  type=float, default=-21.8)
+    # parser.add_argument("--slope_plane",      type=float, default=-6.5)
+    # parser.add_argument("--intercept_plane",  type=float, default=-20.)
+    # parser.add_argument("--intercept_plane2", type=float, default=-19.)
+
     parser.add_argument("--n_objects",   type=int, default=5000,
                         help="Number of objects saved to input.json for Stan (None = all selected)")
     parser.add_argument("--random_seed", type=int, default=None)

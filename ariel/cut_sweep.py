@@ -254,16 +254,8 @@ def tophat_loglik(x_std, sigma_x_std, y, sigma_y,
 _N_MIN = 30   # minimum galaxies to attempt a fit
 
 
-def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max, n_surrogate=None,
-            rng=None):
+def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max):
     """Fit tophat model parameters by MLE for the given (already cut) sample.
-
-    Parameters
-    ----------
-    n_surrogate : int or None
-        If given, subsample the selected galaxies to at most this many before
-        fitting.  Speeds up evaluation on loose cuts with large N_sel.
-    rng : numpy.random.Generator or None
 
     Returns a dict:
       slope, sigma_slope, intercept, sigma_int_x, sigma_int_y, loglike, N
@@ -274,14 +266,6 @@ def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max, n_surrogate=None,
     N = len(x)
     if N < _N_MIN:
         return None
-
-    # Subsample for speed if requested
-    if n_surrogate is not None and N > n_surrogate:
-        if rng is None:
-            rng = np.random.default_rng()
-        idx = rng.choice(N, size=n_surrogate, replace=False)
-        x, sigma_x, y, sigma_y = x[idx], sigma_x[idx], y[idx], sigma_y[idx]
-        N = n_surrogate
 
     mean_x = float(np.mean(x))
     sd_x   = float(np.std(x, ddof=1))
@@ -304,7 +288,7 @@ def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max, n_surrogate=None,
 
     # Bounds matching Stan priors (in standardised units)
     bounds = [
-        (-9.0 * sd_x, -2.0 * sd_x),   # slope_std
+        (-9.0 * sd_x, -4.0 * sd_x),   # slope_std  (matches Stan prior)
         (-26.0, -10.0),                 # intercept_std
         (1e-4, 2.0),                    # sigma_int_x
         (1e-4, 2.0),                    # sigma_int_y
@@ -361,18 +345,15 @@ def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max, n_surrogate=None,
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Worker-process global (avoids pickling raw_data for every task)
-_WORKER_RAW_DATA  = None
-_WORKER_N_SURROGATE = None
+_WORKER_RAW_DATA = None
 
-def _worker_init(raw_data, n_surrogate):
-    global _WORKER_RAW_DATA, _WORKER_N_SURROGATE
-    _WORKER_RAW_DATA    = raw_data
-    _WORKER_N_SURROGATE = n_surrogate
+def _worker_init(raw_data):
+    global _WORKER_RAW_DATA
+    _WORKER_RAW_DATA = raw_data
 
 def _worker_evaluate(cuts):
     x, sx, y, sy = apply_cuts(_WORKER_RAW_DATA, cuts)
-    result = fit_mle(x, sx, y, sy, cuts["haty_min"], cuts["haty_max"],
-                     n_surrogate=_WORKER_N_SURROGATE)
+    result = fit_mle(x, sx, y, sy, cuts["haty_min"], cuts["haty_max"])
     if result is None:
         result = dict(slope=np.nan, sigma_slope=np.nan, intercept=np.nan,
                       sigma_int_x=np.nan, sigma_int_y=np.nan,
@@ -397,7 +378,7 @@ def build_grid(grid_params, fixed_cuts):
     return valid
 
 
-def run_sweep(raw_data, grid_params, fixed_cuts, n_workers=None, n_surrogate=None):
+def run_sweep(raw_data, grid_params, fixed_cuts, n_workers=None):
     """Sweep the grid and return a DataFrame of results."""
     combos  = build_grid(grid_params, fixed_cuts)
     n_total = len(combos)
@@ -413,7 +394,7 @@ def run_sweep(raw_data, grid_params, fixed_cuts, n_workers=None, n_surrogate=Non
 
     with mp.Pool(n_workers,
                  initializer=_worker_init,
-                 initargs=(raw_data, n_surrogate)) as pool:
+                 initargs=(raw_data,)) as pool:
         for i, res in enumerate(pool.imap(_worker_evaluate, combos, chunksize=1)):
             results[i] = res
             done = i + 1
@@ -599,7 +580,6 @@ def plot_2d(df, p1, p2, param_cols, best_cuts, out_file):
         im = ax.imshow(grid, aspect="auto", origin="lower", cmap=cmap,
                        extent=[min(v1), max(v1), min(v2), max(v2)])
         plt.colorbar(im, ax=ax, shrink=0.85)
-        # Mark the best point
         ax.axvline(best_cuts[p1], color="white", linewidth=1.2, linestyle="--")
         ax.axhline(best_cuts[p2], color="white", linewidth=1.2, linestyle="--")
         ax.set_xlabel(_label(p1), fontsize=10)
@@ -613,7 +593,7 @@ def plot_2d(df, p1, p2, param_cols, best_cuts, out_file):
     print(f"Saved: {out_file}")
 
 
-def make_plots(df, param_cols, grid_params, best_cuts, run_dir, true_slope=None):
+def make_plots(df, param_cols, best_cuts, run_dir, true_slope=None):
     """Generate all 1-D and 2-D plots."""
     out_1d = os.path.join(run_dir, "cut_sweep_1d.png")
     plot_1d(df, param_cols, best_cuts, true_slope, out_1d)
@@ -637,9 +617,26 @@ def find_best(df, criterion="score"):
     return sub.loc[sub[criterion].idxmax()]
 
 
+def find_best_stable_max_N(df, vol_threshold_factor=3.0):
+    """Return the plateau point with the most galaxies.
+
+    'Plateau' = volatility <= vol_min * vol_threshold_factor.
+    Falls back to the score-best point if no plateau is found.
+    """
+    sub = df.dropna(subset=["volatility", "N", "score"])
+    if sub.empty:
+        return None
+    vol_min = float(sub["volatility"].min())
+    vol_threshold = max(vol_min * vol_threshold_factor, vol_min + 1e-6)
+    stable = sub[sub["volatility"] <= vol_threshold]
+    if stable.empty:
+        return sub.loc[sub["score"].idxmax()]   # fallback
+    return stable.loc[stable["N"].idxmax()]
+
+
 def report_best(best_row, param_cols, true_slope=None):
     print("\n" + "=" * 60)
-    print("BEST CUT PARAMETERS")
+    print("BEST CUT PARAMETERS  (max-N in plateau)")
     print("=" * 60)
     for p in param_cols:
         print(f"  {p:25s} = {best_row[p]:.4f}")
@@ -655,8 +652,7 @@ def report_best(best_row, param_cols, true_slope=None):
     print("=" * 60)
 
 
-def sweetspot_summary(df, param_cols, grid_params, best_cuts, n_surrogate,
-                      true_slope=None):
+def sweetspot_summary(df, param_cols, best_cuts, true_slope=None):
     """Print a human-readable sweet-spot summary after the sweep.
 
     For each cut parameter:
@@ -684,18 +680,17 @@ def sweetspot_summary(df, param_cols, grid_params, best_cuts, n_surrogate,
     print("\n" + "=" * W)
     print("SWEET SPOT SUMMARY")
     print("=" * W)
+    print()
+    print("  Criterion: within the stable (plateau) region, the loosest cut")
+    print("  is always preferred — it maximises the number of galaxies and")
+    print("  thereby minimises statistical uncertainty on the slope.")
 
-    # ── log-likelihood reliability ─────────────────────────────────────────
-    n_below = int((df["N"] < n_surrogate).sum())
-    print(f"\n  Log-likelihood reliability:")
-    if n_below == 0:
-        print(f"    RELIABLE — every grid point used exactly {n_surrogate} galaxies.")
-        print(f"    Log-like is directly comparable across all cuts.")
-        print(f"    Higher → the selection model is more consistent with the data.")
-    else:
-        print(f"    PARTIALLY RELIABLE — {n_below}/{len(df)} grid points had")
-        print(f"    N_sel < {n_surrogate} (tight cuts) and used fewer galaxies.")
-        print(f"    Compare log-like only among points with N = {n_surrogate}.")
+    # ── log-likelihood note ────────────────────────────────────────────────
+    print(f"\n  Log-likelihood note:")
+    print(f"    Log-like is NOT directly comparable across cuts — looser cuts")
+    print(f"    include more galaxies and therefore contribute more terms to the")
+    print(f"    sum. Use log-like for qualitative guidance only; the volatility")
+    print(f"    (slope stability) is the primary criterion.")
 
     print(f"\n  Reference slope at best cuts: {ref_slope:.4f} ± {ref_sigma:.4f}")
     if true_slope is not None:
@@ -739,9 +734,11 @@ def sweetspot_summary(df, param_cols, grid_params, best_cuts, n_surrogate,
         if not sensitive:
             print(f"    INSENSITIVE — slope varies by only {slope_range:.4f} "
                   f"({slope_range/median_sigma:.1f}σ) across the full range.")
-            print(f"    Any value in the tested range is equally valid.")
-            rec_val  = best_cuts[p]
-            rec_note = "current best-score value (parameter does not matter)"
+            print(f"    All tested values are in the stable region.")
+            # prefer the loosest cut (most galaxies) even when insensitive
+            best_idx = int(np.argmax(ns))
+            rec_val  = float(vals[best_idx])
+            rec_note = (f"loosest value — maximises N_sel = {int(ns[best_idx])}")
         else:
             stable_vals = vals[stable]
             stable_ns   = ns[stable]
@@ -754,11 +751,11 @@ def sweetspot_summary(df, param_cols, grid_params, best_cuts, n_surrogate,
                 print(f"    Stable region: [{stable_vals.min():.2f}, "
                       f"{stable_vals.max():.2f}]  "
                       f"(slope ≈ {slopes[stable].mean():.4f})")
-                # recommend the stable value with the most galaxies (loosest)
+                # prefer the loosest stable cut (most galaxies)
                 best_idx = int(np.argmax(stable_ns))
                 rec_val  = float(stable_vals[best_idx])
-                rec_note = (f"loosest stable value "
-                            f"(N_sel = {int(stable_ns[best_idx])})")
+                rec_note = (f"loosest stable value — maximises N_sel = "
+                            f"{int(stable_ns[best_idx])}")
             else:
                 rec_val  = best_cuts[p]
                 rec_note = "no clearly stable value found — widen the grid"
@@ -817,11 +814,16 @@ if __name__ == "__main__":
                         help="Run name; outputs go to output/<run>/")
 
     # --- grid parameters ---
-    _grid_arg(parser, "haty_max",          -22.0, -17.0, 5, "haty_max")
-    _grid_arg(parser, "haty_min",          -25.0, -21.5, 5, "haty_min")
-    _grid_arg(parser, "slope_plane",       -10.0,  -3.0, 5, "slope_plane")
-    _grid_arg(parser, "intercept_plane",   -23.0, -18.5, 5, "intercept_plane")
-    _grid_arg(parser, "intercept_plane2",  -21.0, -16.0, 5, "intercept_plane2")
+    # parser.add_argument("--haty_max",  type=float, default=-20.0)
+    # parser.add_argument("--haty_min",  type=float, default=-21.8)
+    # parser.add_argument("--slope_plane",      type=float, default=-6.5)
+    # parser.add_argument("--intercept_plane",  type=float, default=-20.)
+    # parser.add_argument("--intercept_plane2", type=float, default=-19.)
+    _grid_arg(parser, "haty_max",          -20.0, -19.0, 5, "haty_max")
+    _grid_arg(parser, "haty_min",          -22.2, -21.3, 5, "haty_min")
+    _grid_arg(parser, "slope_plane",       -7.5,  -5.5, 5, "slope_plane")
+    _grid_arg(parser, "intercept_plane",   -21, -19.8, 5, "intercept_plane")
+    _grid_arg(parser, "intercept_plane2",  -19.2, -18.0, 5, "intercept_plane2")
 
     # --- fixed cuts (redshift window) ---
     parser.add_argument("--z_obs_min", type=float, default=0.03)
@@ -830,14 +832,17 @@ if __name__ == "__main__":
     # --- other options ---
     parser.add_argument("--true_slope", type=float, default=None,
                         help="True TFR slope (fullmocks only) for bias reporting")
-    parser.add_argument("--n_surrogate", type=int, default=10000,
-                        help="Max galaxies used per grid-point MLE fit (default: 10000)")
     parser.add_argument("--n_workers", type=int, default=None,
                         help="Number of parallel workers (default: all CPUs)")
     parser.add_argument("--plots_only", action="store_true",
                         help="Skip the sweep; reload cut_sweep.csv and regenerate plots")
     parser.add_argument("--write_best", action="store_true",
                         help="Write cut_sweep_best_config.json at the best grid point")
+    parser.add_argument("--vol_threshold_factor", type=float, default=3.0,
+                        help="Plateau threshold: volatility <= vol_min * factor "
+                             "(default 3.0)")
+    parser.add_argument("--debug", action="store_true",
+                        help="Debug mode: subsample raw data to 1/4 and use 3-point grid")
 
     args = parser.parse_args()
 
@@ -858,6 +863,10 @@ if __name__ == "__main__":
         "intercept_plane":  _lin(args.intercept_plane_range,  args.intercept_plane_n),
         "intercept_plane2": _lin(args.intercept_plane2_range, args.intercept_plane2_n),
     }
+    if args.debug:
+        grid_params = {k: np.linspace(v[0], v[-1], 3) for k, v in grid_params.items()}
+        print(f"DEBUG: grid reduced to 3 points per parameter "
+              f"({3**len(grid_params)} evaluations)")
     fixed_cuts = {
         "z_obs_min": args.z_obs_min,
         "z_obs_max": args.z_obs_max,
@@ -888,9 +897,16 @@ if __name__ == "__main__":
         else:
             raise NotImplementedError("--source ariel: provide --fits_file for raw data")
 
+        if args.debug:
+            rng = np.random.default_rng(0)
+            n_debug = max(100, len(raw_data["x"]) // 4)
+            idx = rng.choice(len(raw_data["x"]), size=n_debug, replace=False)
+            raw_data = {k: (v[idx] if isinstance(v, np.ndarray) else v)
+                        for k, v in raw_data.items()}
+            print(f"DEBUG: subsampled raw data to {n_debug} objects")
+
         df, param_cols = run_sweep(raw_data, grid_params, fixed_cuts,
-                                   n_workers=args.n_workers,
-                                   n_surrogate=args.n_surrogate)
+                                   n_workers=args.n_workers)
         df["volatility"] = compute_volatility(df, grid_params, param_cols)
         df = compute_scores(df)
 
@@ -901,7 +917,7 @@ if __name__ == "__main__":
         print(f"Results saved to {csv_path}")
 
     # ── best cuts ──────────────────────────────────────────────────────────────
-    best_row = find_best(df, criterion="score")
+    best_row = find_best_stable_max_N(df, args.vol_threshold_factor)
     if best_row is None:
         print("WARNING: no valid grid points found — check cut ranges and data.")
     else:
@@ -913,9 +929,7 @@ if __name__ == "__main__":
             write_best_config(best_row, param_cols, fixed_cuts, cfg_path)
 
         # ── plots ──────────────────────────────────────────────────────────────
-        make_plots(df, param_cols, grid_params, best_cuts,
-                   run_dir, args.true_slope)
+        make_plots(df, param_cols, best_cuts, run_dir, args.true_slope)
 
         # ── sweet spot summary ─────────────────────────────────────────────
-        sweetspot_summary(df, param_cols, grid_params, best_cuts,
-                          args.n_surrogate, args.true_slope)
+        sweetspot_summary(df, param_cols, best_cuts, args.true_slope)
