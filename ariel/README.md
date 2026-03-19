@@ -92,6 +92,12 @@ RUN=c000_ph000_r000
 python fullmocks_data.py --file $FITS
 
 # 2. Sweep cuts and write best config
+#    (optional) narrow each grid with --<param>_range LO HI and --<param>_n N:
+#      --haty_max_range LO HI        --haty_max_n N
+#      --haty_min_range LO HI        --haty_min_n N
+#      --slope_plane_range LO HI     --slope_plane_n N
+#      --intercept_plane_range LO HI --intercept_plane_n N
+#      --intercept_plane2_range LO HI --intercept_plane2_n N
 python cut_sweep.py sweep --source fullmocks --fits_file $FITS --run $RUN
 python cut_sweep.py recommend --run $RUN --write_best
 
