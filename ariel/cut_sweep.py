@@ -1046,6 +1046,19 @@ if __name__ == "__main__":
             best_cuts = {p: float(best_row[p]) for p in param_cols}
             report_best(best_row, param_cols, args.true_slope)
 
+            tol = 0.01
+            slope_at_boundary = (
+                float(best_row["slope"]) <= _SLOPE_LO + tol
+                or float(best_row["slope"]) >= _SLOPE_HI - tol
+            )
+            if slope_at_boundary:
+                print(
+                    f"\nWARNING: best slope={float(best_row['slope']):.3f} is at the "
+                    f"edge of the allowed range [{_SLOPE_LO}, {_SLOPE_HI}]. "
+                    f"The MLE optimizer hit its bound — the cut selection is unreliable. "
+                    f"fullmocks_data.py will skip this run."
+                )
+
             if args.write_best:
                 cfg_path = os.path.join(run_dir, "cut_sweep_best_config.json")
                 write_best_config(best_row, param_cols, fixed_cuts, cfg_path)
