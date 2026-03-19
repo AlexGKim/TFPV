@@ -66,6 +66,7 @@ import pandas as pd
 from astropy.io import fits
 from scipy.optimize import minimize
 from scipy.stats import norm
+from scipy.stats import multivariate_normal as _mvn
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 1: DATA LOADING
@@ -200,9 +201,74 @@ def _log_diff_exp(log_a, log_b):
     return np.where(np.isfinite(result), result, -700.0)
 
 
+# 8-point GL nodes/weights matching Stan's gl_x_arr_8 / gl_w_arr_8
+_GL_X8 = np.array([-0.9602898564975362317, -0.7966664774136267396,
+                   -0.5255324099163289858, -0.1834346424956498049,
+                    0.1834346424956498049,  0.5255324099163289858,
+                    0.7966664774136267396,  0.9602898564975362317])
+_GL_W8 = np.array([ 0.1012285362903762591,  0.2223810344533744861,
+                    0.3137066458778872873,  0.3626837833783619830,
+                    0.3626837833783619830,  0.3137066458778872873,
+                    0.2223810344533744861,  0.1012285362903762591])
+
+
+def _log_psel_bvn(y_min, y_max, haty_min, haty_max,
+                  slope_std, intercept_std,
+                  slope_plane_std, c1_std, c2_std,
+                  sigma1, sigma2):
+    """Log selection probability via bivariate normal strip integral.
+
+    Computes log[(1/(y_max-y_min)) * integral_{y_min}^{y_max} P_sel(y_TF) dy_TF]
+
+    where P_sel(y_TF) = P(haty_min <= haty <= haty_max,
+                          c1_std <= haty - slope_plane_std*hatx_std <= c2_std | y_TF)
+
+    Uses 8-point GL quadrature split at the midpoint of [haty_min, haty_max].
+    Parameters are in standardised x units; sigma1 and sigma2 are total
+    (intrinsic + observational) uncertainties in x_std and y respectively.
+    """
+    sigma_strip = np.sqrt(sigma2**2 + slope_plane_std**2 * sigma1**2)
+    rho = float(np.clip(sigma2 / sigma_strip, -1 + 1e-9, 1 - 1e-9))
+    cov = [[1.0, rho], [rho, 1.0]]
+
+    y_range = y_max - y_min
+    y_star = float(np.clip(0.5 * (haty_min + haty_max), y_min, y_max))
+
+    def _integrate_piece(lo, hi):
+        if hi <= lo:
+            return 0.0
+        mid  = 0.5 * (lo + hi)
+        half = 0.5 * (hi - lo)
+        ytf  = mid + half * _GL_X8                          # shape (8,)
+
+        x_tf      = (ytf - intercept_std) / slope_std
+        mu_strip  = ytf - slope_plane_std * x_tf
+
+        z1_lo = (haty_min - ytf)    / sigma2
+        z1_hi = (haty_max - ytf)    / sigma2
+        z2_lo = (c1_std - mu_strip) / sigma_strip
+        z2_hi = (c2_std - mu_strip) / sigma_strip
+
+        # Batch all 4x8 = 32 bivariate normal CDF calls in one scipy call
+        pts = np.column_stack([
+            np.concatenate([z1_hi, z1_lo, z1_hi, z1_lo]),
+            np.concatenate([z2_hi, z2_hi, z2_lo, z2_lo]),
+        ])                                                   # shape (32, 2)
+        cdfs = _mvn.cdf(pts, mean=[0.0, 0.0], cov=cov)
+        p_rect = np.clip(cdfs[:8] - cdfs[8:16] - cdfs[16:24] + cdfs[24:32],
+                         0.0, 1.0)
+        return half * float(np.dot(_GL_W8, p_rect))
+
+    p_sel = (_integrate_piece(y_min, y_star) +
+             _integrate_piece(y_star, y_max)) / y_range
+    return float(np.log(max(p_sel, 1e-300)))
+
+
 def tophat_loglik(x_std, sigma_x_std, y, sigma_y,
                   slope_std, intercept_std, sigma_int_x, sigma_int_y,
-                  y_min, y_max, haty_min, haty_max):
+                  y_min, y_max, haty_min, haty_max,
+                  slope_plane=None, intercept_plane=None, intercept_plane2=None,
+                  mean_x=0.0, sd_x=1.0):
     """Total tophat model log-likelihood, vectorised over N galaxies.
 
     Implements the Stan tophat.stan likelihood in Python/numpy:
@@ -213,8 +279,8 @@ def tophat_loglik(x_std, sigma_x_std, y, sigma_y,
       (3) + log[Φ((y_max−μ*)/σ*) − Φ((y_min−μ*)/σ*)]  [y_TF limits]
       (4) − log P_sel_i                              [selection correction]
 
-    where P_sel ≈ Φ((haty_max−yfromx)/√sigmasq_tot) − Φ((haty_min−yfromx)/√sigmasq_tot)
-    (magnitude-limits-only approximation; sufficient for locating the plateau).
+    If slope_plane/intercept_plane/intercept_plane2 are provided, the selection
+    bounds are tightened per-galaxy to account for the oblique cuts.
     """
     sigmasq1   = sigma_int_x**2 + sigma_x_std**2    # variance in x_std
     sigmasq2   = sigma_int_y**2 + sigma_y**2         # variance in y
@@ -227,7 +293,7 @@ def tophat_loglik(x_std, sigma_x_std, y, sigma_y,
     # (1) marginal likelihood in y
     ll = norm.logpdf(y, yfromx, sqrt_tot)
 
-    # (2) Jacobian (scalar, broadcast)
+    # (2) Jacobian for change-of-variables from y_TF to x (matches Stan)
     ll = ll + np.log(np.abs(slope_std))
 
     # (3) y_TF limits correction
@@ -238,11 +304,24 @@ def tophat_loglik(x_std, sigma_x_std, y, sigma_y,
     log_Phi_min    = norm.logcdf((y_min - mu_star) / sqrt_star)
     ll            += _log_diff_exp(log_Phi_max, log_Phi_min)
 
-    # (4) Selection correction: magnitude-limits-only approximation
-    log_Psel_max   = norm.logcdf((haty_max - yfromx) / sqrt_tot)
-    log_Psel_min   = norm.logcdf((haty_min - yfromx) / sqrt_tot)
-    log_Psel       = _log_diff_exp(log_Psel_max, log_Psel_min)
-    ll            -= log_Psel
+    # (4) Selection correction via bivariate normal strip integral
+    if slope_plane is not None and intercept_plane is not None:
+        # Convert to standardised plane parameters (matches Stan transformed data)
+        sp_std = slope_plane * sd_x
+        c1_std = intercept_plane  + sp_std * mean_x / sd_x
+        c2_std = (intercept_plane2 + sp_std * mean_x / sd_x
+                  if intercept_plane2 is not None else haty_max + 10.0)
+        mean_sig1 = float(np.sqrt(np.mean(sigmasq1)))
+        mean_sig2 = float(np.sqrt(np.mean(sigmasq2)))
+        log_psel = _log_psel_bvn(y_min, y_max, haty_min, haty_max,
+                                  slope_std, intercept_std,
+                                  sp_std, c1_std, c2_std,
+                                  mean_sig1, mean_sig2)
+        ll -= log_psel          # same scalar subtracted from every galaxy
+    else:
+        log_Psel_max = norm.logcdf((haty_max - yfromx) / sqrt_tot)
+        log_Psel_min = norm.logcdf((haty_min - yfromx) / sqrt_tot)
+        ll -= _log_diff_exp(log_Psel_max, log_Psel_min)
 
     return float(np.sum(ll))
 
@@ -254,7 +333,8 @@ def tophat_loglik(x_std, sigma_x_std, y, sigma_y,
 _N_MIN = 30   # minimum galaxies to attempt a fit
 
 
-def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max):
+def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max,
+            slope_plane=None, intercept_plane=None, intercept_plane2=None):
     """Fit tophat model parameters by MLE for the given (already cut) sample.
 
     Returns a dict:
@@ -301,7 +381,11 @@ def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             val = -tophat_loglik(x_std, sx_std, y, sigma_y, s, b, six, siy,
-                                 y_min, y_max, float(haty_min), float(haty_max))
+                                 y_min, y_max, float(haty_min), float(haty_max),
+                                 slope_plane=slope_plane,
+                                 intercept_plane=intercept_plane,
+                                 intercept_plane2=intercept_plane2,
+                                 mean_x=mean_x, sd_x=sd_x)
         return val if np.isfinite(val) else 1e10
 
     res = minimize(neg_ll, theta0, method="L-BFGS-B", bounds=bounds,
@@ -353,7 +437,10 @@ def _worker_init(raw_data):
 
 def _worker_evaluate(cuts):
     x, sx, y, sy = apply_cuts(_WORKER_RAW_DATA, cuts)
-    result = fit_mle(x, sx, y, sy, cuts["haty_min"], cuts["haty_max"])
+    result = fit_mle(x, sx, y, sy, cuts["haty_min"], cuts["haty_max"],
+                     slope_plane=cuts.get("slope_plane"),
+                     intercept_plane=cuts.get("intercept_plane"),
+                     intercept_plane2=cuts.get("intercept_plane2"))
     if result is None:
         result = dict(slope=np.nan, sigma_slope=np.nan, intercept=np.nan,
                       sigma_int_x=np.nan, sigma_int_y=np.nan,

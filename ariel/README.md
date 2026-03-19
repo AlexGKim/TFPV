@@ -150,6 +150,8 @@ The script sweeps a grid of cut values, fits the tophat model likelihood at each
 1. **Volatility** — mean `|Δslope / sqrt(σ² + σ'²)|` over adjacent neighbors. Defines the stability plateau: all points with `volatility ≤ vol_min × --vol_threshold_factor` (default 3×).
 2. **Within the plateau, maximize N** — the loosest stable cuts use the most galaxies and minimize statistical uncertainty on the slope.
 
+The MLE implements the same tophat log-likelihood as Stan, including the Jacobian for the change-of-variables from `y_TF` to `x`, the `y_TF` tophat-prior truncation correction, and a **bivariate normal strip integral** for the selection correction. The strip integral is computed via 8-point Gauss-Legendre quadrature (matching Stan's `integrate_binormal_strip_sinh2_gl`) using `scipy.stats.multivariate_normal.cdf`, giving slopes consistent with the Stan posterior near the true latent-variable slope.
+
 ```bash
 # fullmocks — sweep with default 5-point grid on each of the 5 parameters (3125 evaluations)
 python cut_sweep.py --source fullmocks \
