@@ -85,24 +85,23 @@ End-to-end for a single AbacusSummit simulation file. Replace the path and run n
 throughout.
 
 ```bash
-FITS=/path/to/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
-RUN=c000_ph000_r000
+export FITS=/path/to/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
+export RUN=c000_ph000_r000
 
 # 1. Visualise with default cuts
-python fullmocks_data.py --file $FITS
+python fullmocks_data.py --file $FITS --run $RUN
 
 # 2. Sweep cuts and write best config
-#    (optional) narrow each grid with --<param>_range LO HI and --<param>_n N:
-#      --haty_max_range LO HI        --haty_max_n N
-#      --haty_min_range LO HI        --haty_min_n N
-#      --slope_plane_range LO HI     --slope_plane_n N
-#      --intercept_plane_range LO HI --intercept_plane_n N
-#      --intercept_plane2_range LO HI --intercept_plane2_n N
-python cut_sweep.py sweep --source fullmocks --fits_file $FITS --run $RUN
+python cut_sweep.py sweep --source fullmocks --fits_file $FITS --run $RUN \
+  --haty_max_range LO HI        --haty_max_n N \
+  --haty_min_range LO HI        --haty_min_n N \
+  --slope_plane_range LO HI     --slope_plane_n N \
+  --intercept_plane_range LO HI --intercept_plane_n N \
+  --intercept_plane2_range LO HI --intercept_plane2_n N
 python cut_sweep.py recommend --run $RUN --write_best
 
 # 3. Re-prepare data with optimal cuts (auto-loads cut_sweep_best_config.json)
-python fullmocks_data.py --file $FITS
+python fullmocks_data.py --file $FITS --run $RUN
 
 # 4. Compile Stan (once, from ../../cmdstan/)
 make ../TFPV/ariel/tophat ../TFPV/ariel/normal
