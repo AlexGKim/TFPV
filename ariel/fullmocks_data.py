@@ -399,15 +399,37 @@ if __name__ == "__main__":
         init_json   = os.path.join(run_dir, "init.json")
         plot_file   = os.path.join(run_dir, "data.png")
 
+        best_cfg_path = os.path.join(run_dir, "cut_sweep_best_config.json")
+        if os.path.exists(best_cfg_path):
+            with open(best_cfg_path) as f:
+                best_cfg = json.load(f)
+            cut_params = {k: v for k, v in best_cfg.items() if not k.startswith("_")}
+            haty_max         = cut_params.get("haty_max",         args.haty_max)
+            haty_min         = cut_params.get("haty_min",         args.haty_min)
+            slope_plane      = cut_params.get("slope_plane",      args.slope_plane)
+            intercept_plane  = cut_params.get("intercept_plane",  args.intercept_plane)
+            intercept_plane2 = cut_params.get("intercept_plane2", args.intercept_plane2)
+            z_obs_min        = cut_params.get("z_obs_min",        args.z_obs_min)
+            z_obs_max        = cut_params.get("z_obs_max",        args.z_obs_max)
+            print(f"  Loaded cut parameters from: {best_cfg_path}")
+        else:
+            haty_max         = args.haty_max
+            haty_min         = args.haty_min
+            slope_plane      = args.slope_plane
+            intercept_plane  = args.intercept_plane
+            intercept_plane2 = args.intercept_plane2
+            z_obs_min        = args.z_obs_min
+            z_obs_max        = args.z_obs_max
+
         config = {
             "source":           fits_file,
-            "haty_max":         args.haty_max,
-            "haty_min":         args.haty_min,
-            "z_obs_min":        args.z_obs_min,
-            "z_obs_max":        args.z_obs_max,
-            "slope_plane":      args.slope_plane,
-            "intercept_plane":  args.intercept_plane,
-            "intercept_plane2": args.intercept_plane2,
+            "haty_max":         haty_max,
+            "haty_min":         haty_min,
+            "z_obs_min":        z_obs_min,
+            "z_obs_max":        z_obs_max,
+            "slope_plane":      slope_plane,
+            "intercept_plane":  intercept_plane,
+            "intercept_plane2": intercept_plane2,
             "n_objects":        args.n_objects,
             "random_seed":      args.random_seed,
         }
@@ -420,27 +442,27 @@ if __name__ == "__main__":
                 fits_file,
                 output_json,
                 init_json,
-                haty_max=args.haty_max,
-                haty_min=args.haty_min,
+                haty_max=haty_max,
+                haty_min=haty_min,
                 plane_cut=True,
-                slope_plane=args.slope_plane,
-                intercept_plane=args.intercept_plane,
-                intercept_plane2=args.intercept_plane2,
+                slope_plane=slope_plane,
+                intercept_plane=intercept_plane,
+                intercept_plane2=intercept_plane2,
                 n_objects=args.n_objects,
                 random_seed=args.random_seed,
-                z_obs_min=args.z_obs_min,
-                z_obs_max=args.z_obs_max,
+                z_obs_min=z_obs_min,
+                z_obs_max=z_obs_max,
             )
         )
 
         plot_fullmocks_tf_data(
             x_all, y_all, sx_all, sy_all,
             x_sel, y_sel, sx_sel, sy_sel,
-            haty_max=args.haty_max,
-            haty_min=args.haty_min,
-            slope_plane=args.slope_plane,
-            intercept_plane=args.intercept_plane,
-            intercept_plane2=args.intercept_plane2,
+            haty_max=haty_max,
+            haty_min=haty_min,
+            slope_plane=slope_plane,
+            intercept_plane=intercept_plane,
+            intercept_plane2=intercept_plane2,
             output_file=plot_file,
             title=f"AbacusSummit TF Mock — {run}",
         )
