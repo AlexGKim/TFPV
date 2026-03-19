@@ -772,7 +772,7 @@ def sweetspot_summary(df, param_cols, best_cuts, true_slope=None):
     ref_rows = df[ref_mask].dropna(subset=["slope", "sigma_slope"])
     if ref_rows.empty:
         print("WARNING: no data at best_cuts for reference slope.")
-        return
+        return {}
     ref_slope = float(ref_rows["slope"].iloc[0])
     ref_sigma = float(ref_rows["sigma_slope"].iloc[0])
 
@@ -870,18 +870,19 @@ def sweetspot_summary(df, param_cols, best_cuts, true_slope=None):
         flag = "--" + p.replace("_", "_")
         print(f"    {flag:<28s} {recommendations.get(p, best_cuts[p]):.4f}")
     print("=" * W)
+    return recommendations
 
 
-def write_best_config(best_row, param_cols, fixed_cuts, out_file):
-    config = {p: float(best_row[p]) for p in param_cols}
+def write_best_config(rec_cuts, meta_row, fixed_cuts, out_file):
+    config = {p: float(rec_cuts[p]) for p in rec_cuts}
     config.update({k: v for k, v in fixed_cuts.items() if v is not None})
-    config["_slope_mle"]  = float(best_row["slope"])
-    config["_slope_lo"]   = _SLOPE_LO
-    config["_slope_hi"]   = _SLOPE_HI
-    config["_sigma_slope"] = float(best_row["sigma_slope"])
-    config["_N_sel"]      = int(best_row["N"])
-    config["_loglike"]    = float(best_row["loglike"])
-    config["_volatility"] = float(best_row["volatility"])
+    config["_slope_mle"]   = float(meta_row["slope"])
+    config["_slope_lo"]    = _SLOPE_LO
+    config["_slope_hi"]    = _SLOPE_HI
+    config["_sigma_slope"] = float(meta_row["sigma_slope"])
+    config["_N_sel"]       = int(meta_row["N"])
+    config["_loglike"]     = float(meta_row["loglike"])
+    config["_volatility"]  = float(meta_row["volatility"])
     with open(out_file, "w") as f:
         json.dump(config, f, indent=2)
     print(f"Best config written to: {out_file}")
@@ -1044,24 +1045,11 @@ if __name__ == "__main__":
             print("WARNING: no valid grid points found — check cut ranges and data.")
         else:
             best_cuts = {p: float(best_row[p]) for p in param_cols}
-            report_best(best_row, param_cols, args.true_slope)
-
-            tol = 0.01
-            slope_at_boundary = (
-                float(best_row["slope"]) <= _SLOPE_LO + tol
-                or float(best_row["slope"]) >= _SLOPE_HI - tol
-            )
-            if slope_at_boundary:
-                print(
-                    f"\nWARNING: best slope={float(best_row['slope']):.3f} is at the "
-                    f"edge of the allowed range [{_SLOPE_LO}, {_SLOPE_HI}]. "
-                    f"The MLE optimizer hit its bound — the cut selection is unreliable. "
-                    f"fullmocks_data.py will skip this run."
-                )
+            recs = sweetspot_summary(df, param_cols, best_cuts, args.true_slope)
+            rec_cuts = {p: recs.get(p, best_cuts[p]) for p in param_cols}
 
             if args.write_best:
                 cfg_path = os.path.join(run_dir, "cut_sweep_best_config.json")
-                write_best_config(best_row, param_cols, fixed_cuts, cfg_path)
+                write_best_config(rec_cuts, best_row, fixed_cuts, cfg_path)
 
-            make_plots(df, param_cols, best_cuts, run_dir, args.true_slope)
-            sweetspot_summary(df, param_cols, best_cuts, args.true_slope)
+            make_plots(df, param_cols, rec_cuts, run_dir, args.true_slope)
