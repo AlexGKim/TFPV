@@ -27,16 +27,26 @@ The statistical models are described in detail in `doc/model1.tex`, `doc/model2.
 
 ```
 ariel/
-  ariel_data.py          — data prep for Ariel mock catalog
-  desi_data.py           — data prep for DESI survey data
-  fullmocks_data.py      — data prep for AbacusSummit FITS mocks
-  tophat.stan            — Stan model (tophat prior)
-  normal.stan            — Stan model (normal prior)
-  corner.py              — posterior corner plots (uses chainconsumer)
-  predict.py             — infer absolute magnitudes from fitted TFR
-  cut_sweep.py           — quantitative selection cut optimisation (grid sweep)
-  doc/                   — LaTeX descriptions of the statistical models
-  output/                — all data products (gitignored)
+  ariel_data.py                      — data prep for Ariel mock catalog
+  desi_data.py                       — data prep for DESI survey data
+  fullmocks_data.py                  — data prep for AbacusSummit FITS mocks
+  tophat.stan                        — Stan model (tophat prior)
+  normal.stan                        — Stan model (normal prior)
+  corner.py                          — posterior corner plots (uses chainconsumer)
+  predict.py                         — infer absolute magnitudes from fitted TFR
+  cut_sweep.py                       — quantitative selection cut optimisation (grid sweep)
+  plot_magnitude_predictions.py      — publication-quality magnitude prediction plots (fullmocks)
+  plot_desi_magnitude_predictions.py — magnitude prediction plots for DESI
+  figs/distributions.py              — figures of latent variable distributions (paper figures)
+  doc/                               — LaTeX descriptions of the statistical models
+  output/                            — all data products (gitignored)
+```
+
+**Possibly deprecated** (may no longer be needed; retained for reference):
+
+```
+  plot_dwarf.py     — diagnostic scatter for dwarf-galaxy outliers
+  integral_test.py  — unit tests for bivariate-normal strip integral
 ```
 
 ---
@@ -71,23 +81,18 @@ output/<run>/
 
 ## Workflow
 
-### Step 1: Prepare Data
+Each step produces plots and diagnostic statistics to `output/<run>/` for validation and paper inclusion. The checks in Step 7 should be applied after every step where outputs are produced, not only after MCMC.
 
-Each data source has a dedicated prep script. Use `--run <name>` to write all outputs to `output/<name>/` and save `config.json` recording the exact selection parameters used.
+### Step 1: Visualize Dataset
+
+Each data source has a dedicated prep script. Use `--run <name>` to write all outputs to `output/<name>/` and save `config.json` recording the exact selection parameters used. Run with default cuts first, then inspect `output/<run>/data.png` to understand the data and the cut geometry before optimising.
 
 ```bash
 python ariel_data.py --run ariel
 python desi_data.py  --run DESI
-
-# Override selection parameters
-python ariel_data.py --run ariel_tight --haty_max -18.0 --haty_min -24.0 \
-  --slope_plane -8.5 --intercept_plane -20.5 --intercept_plane2 -19.1
-python desi_data.py --run DESI_z01 --haty_max -19.0 --haty_min -22.0 --z_obs_min 0.01
 ```
 
-Inspect `output/<run>/data.png` after each run and adjust selection parameters until satisfied.
-
-For **AbacusSummit fullmocks**, each FITS file named
+For **AbacusSummit fullmocks** the same initial visualisation applies. Each FITS file named
 `TF_extended_AbacusSummit_base_c???_ph???_r???_z0.11.fits`
 produces its own run directory named after the simulation ID extracted from the filename
 (e.g. `c000_ph000_r000`). On NERSC, these files live under
@@ -141,7 +146,7 @@ python fullmocks_data.py \
 
 ---
 
-### Step 1b: Optimise Selection Cuts (optional)
+### Step 2: Optimise Selection Cuts
 
 The five selection-cut parameters (`haty_max`, `haty_min`, `slope_plane`, `intercept_plane`, `intercept_plane2`) can be determined quantitatively instead of by hand using `cut_sweep.py`.
 
@@ -195,17 +200,31 @@ After the sweep a **sweet spot summary** is printed: each parameter is classifie
 
 The redshift window (`z_obs_min`, `z_obs_max`) is treated as a fixed hyperparameter during the sweep (override with `--z_obs_min` and `--z_obs_max`).
 
-After the sweep, use the optimal cuts from `output/<run>/cut_sweep_best_config.json` to re-run the data prep script:
+---
+
+### Step 3: Prepare Data with Optimal Cuts
+
+Re-run the data prep script using the optimal parameters identified in Step 2.
+
+For **fullmocks**, `fullmocks_data.py` automatically loads `cut_sweep_best_config.json` from the run directory when present — no flags needed:
 
 ```bash
-python fullmocks_data.py --file ... --run c000_ph000_r001_opt \
-  --haty_max -19.8 --haty_min -22.1 \
-  --slope_plane -7.0 --intercept_plane -20.3 --intercept_plane2 -18.9
+python fullmocks_data.py --dir /path/to/mocks
 ```
+
+For `ariel_data.py` / `desi_data.py`, pass the optimal parameter values explicitly:
+
+```bash
+python ariel_data.py --run ariel_tight --haty_max -18.0 --haty_min -24.0 \
+  --slope_plane -8.5 --intercept_plane -20.5 --intercept_plane2 -19.1
+python desi_data.py --run DESI_z01 --haty_max -19.0 --haty_min -22.0 --z_obs_min 0.01
+```
+
+Inspect `output/<run>/data.png` to confirm the cuts look correct before proceeding.
 
 ---
 
-### Step 2: Compile Stan Models
+### Step 4: Compile Stan Models
 
 Run from inside the `../../cmdstan/` directory:
 
@@ -224,7 +243,7 @@ cp ../TFPV/ariel/tophat ../TFPV/ariel/tophat_g
 
 ---
 
-### Step 3: Run MCMC Sampling
+### Step 5: Run MCMC Sampling
 
 #### First run — adapt and save metric
 
@@ -271,23 +290,7 @@ Notes:
 
 ---
 
-### Step 4: Diagnose and Visualize
-
-Check chain quality and inspect the posterior:
-
-```bash
-# Convergence diagnostics
-../../cmdstan/bin/stansummary output/DESI/tophat_?.csv
-../../cmdstan/bin/diagnose   output/DESI/tophat_?.csv
-
-# Corner plots — writes output/<run>/tophat.png or normal.png
-python corner.py --run DESI  --model tophat
-python corner.py --run ariel --model tophat
-```
-
----
-
-### Step 5: Predict Absolute Magnitudes
+### Step 6: Predict Absolute Magnitudes
 
 ```bash
 python predict.py --run DESI           --model tophat --source DESI
@@ -326,6 +329,22 @@ The `--source fullmocks` flag produces output plots in `output/<run>/`:
 The oblique plane cut is applied by default (matching training selection).
 
 Use `--n_objects` (any source) to limit the number of galaxies used for prediction.
+
+---
+
+### Step 7: Diagnose and Visualize
+
+These checks should be applied after every step that produces outputs (data prep, cut sweep, MCMC, predictions), not only at the end. At minimum, run them after MCMC and after prediction.
+
+```bash
+# Convergence diagnostics
+../../cmdstan/bin/stansummary output/DESI/tophat_?.csv
+../../cmdstan/bin/diagnose   output/DESI/tophat_?.csv
+
+# Corner plots — writes output/<run>/tophat.png or normal.png
+python corner.py --run DESI  --model tophat
+python corner.py --run ariel --model tophat
+```
 
 ---
 
