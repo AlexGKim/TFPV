@@ -935,7 +935,11 @@ if __name__ == "__main__":
     sp_sweep.add_argument("--n_workers", type=int, default=None,
                           help="Number of parallel workers (default: all CPUs)")
     sp_sweep.add_argument("--debug", action="store_true",
-                          help="Subsample raw data to 1/4 and use 3-point grid")
+                          help="Use a 3-point grid (~243 evaluations, ~50× faster)")
+    sp_sweep.add_argument("--n_sweep_objects", type=int, default=10000,
+                          help="Maximum number of objects passed to MLE fits; "
+                               "raw data is randomly subsampled to this size when "
+                               "larger (default: 10000; 0 = use all)")
 
     # ── recommend subcommand ───────────────────────────────────────────────────
     sp_rec = subparsers.add_parser(
@@ -974,7 +978,6 @@ if __name__ == "__main__":
                            for k, v in grid_params.items()}
             print(f"DEBUG: grid reduced to 3 points per parameter "
                   f"({3**len(grid_params)} evaluations)")
-
         fixed_cuts = {
             "z_obs_min": args.z_obs_min,
             "z_obs_max": args.z_obs_max,
@@ -997,13 +1000,13 @@ if __name__ == "__main__":
         else:
             raise NotImplementedError("--source ariel: provide --fits_file for raw data")
 
-        if args.debug:
+        n_cap = args.n_sweep_objects
+        if n_cap and len(raw_data["x"]) > n_cap:
             rng = np.random.default_rng(0)
-            n_debug = max(100, len(raw_data["x"]) // 4)
-            idx = rng.choice(len(raw_data["x"]), size=n_debug, replace=False)
+            idx = rng.choice(len(raw_data["x"]), size=n_cap, replace=False)
             raw_data = {k: (v[idx] if isinstance(v, np.ndarray) else v)
                         for k, v in raw_data.items()}
-            print(f"DEBUG: subsampled raw data to {n_debug} objects")
+            print(f"Subsampled raw data to {n_cap} objects")
 
         df, param_cols = run_sweep(raw_data, grid_params, fixed_cuts,
                                    n_workers=args.n_workers)
