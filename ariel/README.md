@@ -152,34 +152,33 @@ The script sweeps a grid of cut values, fits the tophat model likelihood at each
 
 The MLE implements the same tophat log-likelihood as Stan, including the Jacobian for the change-of-variables from `y_TF` to `x`, the `y_TF` tophat-prior truncation correction, and a **bivariate normal strip integral** for the selection correction. The strip integral is computed via 8-point Gauss-Legendre quadrature (matching Stan's `integrate_binormal_strip_sinh2_gl`) using `scipy.stats.multivariate_normal.cdf`, giving slopes consistent with the Stan posterior near the true latent-variable slope.
 
+The workflow is split into two subcommands: `sweep` (runs the grid, writes `cut_sweep.csv`, no plots) and `recommend` (reads the CSV, generates plots and the sweet-spot summary).
+
 ```bash
-# fullmocks — sweep with default 5-point grid on each of the 5 parameters (3125 evaluations)
-python cut_sweep.py --source fullmocks \
+# Step 1 — run the sweep (writes cut_sweep.csv only)
+python cut_sweep.py sweep --source fullmocks \
   --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \
-  --run c000_ph000_r001 --write_best
+  --run c000_ph000_r001
 
 # Fast debug run: 1/4 of data, 3-point grid (243 evaluations, ~50× faster)
-python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 --debug
-
-# If the true slope is known (fullmocks), report bias at each grid point too
-python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
-  --true_slope -8.3 --write_best
+python cut_sweep.py sweep --source fullmocks --fits_file ... --run c000_ph000_r001 --debug
 
 # DESI
-python cut_sweep.py --source DESI --run DESI --write_best
+python cut_sweep.py sweep --source DESI --run DESI
 
 # Narrow the grid around a region of interest
-python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
+python cut_sweep.py sweep --source fullmocks --fits_file ... --run c000_ph000_r001 \
   --haty_max_range -21.0 -19.0 --haty_max_n 7 \
-  --intercept_plane_range -21.0 -19.5 --intercept_plane_n 7 \
-  --write_best
+  --intercept_plane_range -21.0 -19.5 --intercept_plane_n 7
+
+# Step 2 — generate plots and recommendations from the saved CSV
+python cut_sweep.py recommend --run c000_ph000_r001
+
+# Write the best config JSON and report bias (if true slope is known)
+python cut_sweep.py recommend --run c000_ph000_r001 --write_best --true_slope -8.3
 
 # Widen or tighten the plateau threshold (default 3.0)
-python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \
-  --vol_threshold_factor 5.0 --write_best
-
-# Regenerate plots from a saved cut_sweep.csv without re-running the sweep
-python cut_sweep.py --run c000_ph000_r001 --plots_only
+python cut_sweep.py recommend --run c000_ph000_r001 --vol_threshold_factor 5.0 --write_best
 ```
 
 **Default grid ranges** (5 points each, override with `--<param>_range LO HI` and `--<param>_n N`):

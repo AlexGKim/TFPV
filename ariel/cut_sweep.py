@@ -22,25 +22,23 @@ supplied:
                     |bias| → 0 at the optimal cuts.
 
 Usage:
-  # fullmocks (reads raw FITS):
-  python cut_sweep.py --source fullmocks \\
+  # Step 1 — run the sweep (writes cut_sweep.csv, no plots):
+  python cut_sweep.py sweep --source fullmocks \\
       --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \\
       --run c000_ph000_r001
 
-  # DESI (reads raw FITS):
-  python cut_sweep.py --source DESI --run DESI
+  python cut_sweep.py sweep --source DESI --run DESI
 
-  # Restrict the grid (override range and resolution for any parameter):
-  python cut_sweep.py --source fullmocks --fits_file ... --run test \\
+  # Override grid range/resolution for any parameter:
+  python cut_sweep.py sweep --source fullmocks --fits_file ... --run test \\
       --haty_max_range -21.5 -19.0 --haty_max_n 4 \\
       --slope_plane_range -8.0 -5.0 --slope_plane_n 4
 
-  # Use a pre-saved sweep CSV to regenerate plots only:
-  python cut_sweep.py --run c000_ph000_r001 --plots_only
+  # Step 2 — generate plots and recommendations from the saved CSV:
+  python cut_sweep.py recommend --run c000_ph000_r001
 
-  # After identifying the best point, write config.json:
-  python cut_sweep.py --source fullmocks --fits_file ... --run c000_ph000_r001 \\
-      --write_best
+  # Write the best config JSON:
+  python cut_sweep.py recommend --run c000_ph000_r001 --write_best
 
 Output (all in output/<run>/):
   cut_sweep.csv                   — full grid results
@@ -331,6 +329,8 @@ def tophat_loglik(x_std, sigma_x_std, y, sigma_y,
 # ─────────────────────────────────────────────────────────────────────────────
 
 _N_MIN = 30   # minimum galaxies to attempt a fit
+_SLOPE_LO = -9.0   # MLE slope lower bound (original units)
+_SLOPE_HI = -4.0   # MLE slope upper bound (original units)
 
 
 def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max,
@@ -709,15 +709,27 @@ def find_best_stable_max_N(df, vol_threshold_factor=3.0):
 
     'Plateau' = volatility <= vol_min * vol_threshold_factor.
     Falls back to the score-best point if no plateau is found.
+
+    Boundary-hitting fits (slope at the MLE bounds _SLOPE_LO / _SLOPE_HI) are
+    excluded before computing vol_min.  Those fits have a degenerate likelihood
+    for the given cut combination; their near-zero volatility (all neighbours
+    are also degenerate) would otherwise drive vol_min ≈ 0 and make the
+    threshold insensitive to vol_threshold_factor.
     """
     sub = df.dropna(subset=["volatility", "N", "score"])
     if sub.empty:
         return None
-    vol_min = float(sub["volatility"].min())
+    tol = 0.01
+    interior = sub[
+        (sub["slope"] > _SLOPE_LO + tol) & (sub["slope"] < _SLOPE_HI - tol)
+    ]
+    if interior.empty:
+        interior = sub   # nothing to exclude — use everything
+    vol_min = float(interior["volatility"].min())
     vol_threshold = max(vol_min * vol_threshold_factor, vol_min + 1e-6)
-    stable = sub[sub["volatility"] <= vol_threshold]
+    stable = interior[interior["volatility"] <= vol_threshold]
     if stable.empty:
-        return sub.loc[sub["score"].idxmax()]   # fallback
+        return interior.loc[interior["score"].idxmax()]   # fallback
     return stable.loc[stable["N"].idxmax()]
 
 
@@ -877,96 +889,97 @@ def write_best_config(best_row, param_cols, fixed_cuts, out_file):
 # SECTION 9: CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _grid_arg(parser, name, lo, hi, n, label):
-    parser.add_argument(f"--{name}_range", type=float, nargs=2,
-                        default=[lo, hi], metavar=("LO", "HI"),
-                        help=f"{label} grid range (default: [{lo}, {hi}])")
-    parser.add_argument(f"--{name}_n", type=int, default=n,
-                        help=f"Number of {label} grid points (default: {n})")
+# Grid parameter names — used by `recommend` to identify grid columns in CSV.
+_GRID_PARAM_NAMES = [
+    "haty_max", "haty_min", "slope_plane", "intercept_plane", "intercept_plane2"
+]
+
+
+def _add_grid_args(parser):
+    """Add --<param>_range / --<param>_n arguments to a (sub)parser."""
+    def _grid_arg(name, lo, hi, n):
+        parser.add_argument(f"--{name}_range", type=float, nargs=2,
+                            default=[lo, hi], metavar=("LO", "HI"),
+                            help=f"{name} grid range (default: [{lo}, {hi}])")
+        parser.add_argument(f"--{name}_n", type=int, default=n,
+                            help=f"Number of {name} grid points (default: {n})")
+
+    _grid_arg("haty_max",         -20.0, -19.0, 5)
+    _grid_arg("haty_min",         -22.2, -21.3, 5)
+    _grid_arg("slope_plane",       -7.5,  -5.5, 5)
+    _grid_arg("intercept_plane",  -21.0, -19.8, 5)
+    _grid_arg("intercept_plane2", -19.2, -18.0, 5)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Sweep selection cuts and find the stability plateau.")
+    subparsers = parser.add_subparsers(dest="subcommand", required=True)
 
-    # --- source / input ---
-    parser.add_argument("--source", choices=["fullmocks", "DESI", "ariel"],
-                        default="fullmocks")
-    parser.add_argument("--fits_file", default=None,
-                        help="Path to a single FITS file (fullmocks or DESI)")
-    parser.add_argument("--dir",
-                        default="/Users/akim/Projects/TFPV/ariel/data",
-                        help="Directory of FITS files (fullmocks, picks first match)")
-    parser.add_argument("--run", default=None,
-                        help="Run name; outputs go to output/<run>/")
+    # ── sweep subcommand ───────────────────────────────────────────────────────
+    sp_sweep = subparsers.add_parser(
+        "sweep",
+        help="Run MLE at every grid point and save cut_sweep.csv (no plots).")
+    sp_sweep.add_argument("--source", choices=["fullmocks", "DESI", "ariel"],
+                          default="fullmocks")
+    sp_sweep.add_argument("--fits_file", default=None,
+                          help="Path to a single FITS file (fullmocks or DESI)")
+    sp_sweep.add_argument("--dir",
+                          default="/Users/akim/Projects/TFPV/ariel/data",
+                          help="Directory of FITS files (fullmocks, picks first match)")
+    sp_sweep.add_argument("--run", required=True,
+                          help="Run name; outputs go to output/<run>/")
+    _add_grid_args(sp_sweep)
+    sp_sweep.add_argument("--z_obs_min", type=float, default=0.03)
+    sp_sweep.add_argument("--z_obs_max", type=float, default=0.10)
+    sp_sweep.add_argument("--n_workers", type=int, default=None,
+                          help="Number of parallel workers (default: all CPUs)")
+    sp_sweep.add_argument("--debug", action="store_true",
+                          help="Subsample raw data to 1/4 and use 3-point grid")
 
-    # --- grid parameters ---
-    # parser.add_argument("--haty_max",  type=float, default=-20.0)
-    # parser.add_argument("--haty_min",  type=float, default=-21.8)
-    # parser.add_argument("--slope_plane",      type=float, default=-6.5)
-    # parser.add_argument("--intercept_plane",  type=float, default=-20.)
-    # parser.add_argument("--intercept_plane2", type=float, default=-19.)
-    _grid_arg(parser, "haty_max",          -20.0, -19.0, 5, "haty_max")
-    _grid_arg(parser, "haty_min",          -22.2, -21.3, 5, "haty_min")
-    _grid_arg(parser, "slope_plane",       -7.5,  -5.5, 5, "slope_plane")
-    _grid_arg(parser, "intercept_plane",   -21, -19.8, 5, "intercept_plane")
-    _grid_arg(parser, "intercept_plane2",  -19.2, -18.0, 5, "intercept_plane2")
-
-    # --- fixed cuts (redshift window) ---
-    parser.add_argument("--z_obs_min", type=float, default=0.03)
-    parser.add_argument("--z_obs_max", type=float, default=0.10)
-
-    # --- other options ---
-    parser.add_argument("--true_slope", type=float, default=None,
-                        help="True TFR slope (fullmocks only) for bias reporting")
-    parser.add_argument("--n_workers", type=int, default=None,
-                        help="Number of parallel workers (default: all CPUs)")
-    parser.add_argument("--plots_only", action="store_true",
-                        help="Skip the sweep; reload cut_sweep.csv and regenerate plots")
-    parser.add_argument("--write_best", action="store_true",
-                        help="Write cut_sweep_best_config.json at the best grid point")
-    parser.add_argument("--vol_threshold_factor", type=float, default=3.0,
+    # ── recommend subcommand ───────────────────────────────────────────────────
+    sp_rec = subparsers.add_parser(
+        "recommend",
+        help="Load cut_sweep.csv and generate plots/recommendations.")
+    sp_rec.add_argument("--run", required=True,
+                        help="Run name; reads output/<run>/cut_sweep.csv")
+    sp_rec.add_argument("--true_slope", type=float, default=None,
+                        help="True TFR slope (fullmocks) for bias reporting")
+    sp_rec.add_argument("--vol_threshold_factor", type=float, default=3.0,
                         help="Plateau threshold: volatility <= vol_min * factor "
                              "(default 3.0)")
-    parser.add_argument("--debug", action="store_true",
-                        help="Debug mode: subsample raw data to 1/4 and use 3-point grid")
+    sp_rec.add_argument("--write_best", action="store_true",
+                        help="Write cut_sweep_best_config.json at the best grid point")
 
     args = parser.parse_args()
 
-    # ── run directory ──────────────────────────────────────────────────────────
-    run_dir = os.path.join("output", args.run) if args.run else "output/cut_sweep"
+    run_dir  = os.path.join("output", args.run)
     os.makedirs(run_dir, exist_ok=True)
-
     csv_path = os.path.join(run_dir, "cut_sweep.csv")
 
-    # ── grid definition ────────────────────────────────────────────────────────
-    def _lin(rng, n):
-        return np.linspace(rng[0], rng[1], n)
+    # ── sweep ──────────────────────────────────────────────────────────────────
+    if args.subcommand == "sweep":
+        def _lin(rng, n):
+            return np.linspace(rng[0], rng[1], n)
 
-    grid_params = {
-        "haty_max":         _lin(args.haty_max_range,         args.haty_max_n),
-        "haty_min":         _lin(args.haty_min_range,         args.haty_min_n),
-        "slope_plane":      _lin(args.slope_plane_range,      args.slope_plane_n),
-        "intercept_plane":  _lin(args.intercept_plane_range,  args.intercept_plane_n),
-        "intercept_plane2": _lin(args.intercept_plane2_range, args.intercept_plane2_n),
-    }
-    if args.debug:
-        grid_params = {k: np.linspace(v[0], v[-1], 3) for k, v in grid_params.items()}
-        print(f"DEBUG: grid reduced to 3 points per parameter "
-              f"({3**len(grid_params)} evaluations)")
-    fixed_cuts = {
-        "z_obs_min": args.z_obs_min,
-        "z_obs_max": args.z_obs_max,
-    }
+        grid_params = {
+            "haty_max":         _lin(args.haty_max_range,         args.haty_max_n),
+            "haty_min":         _lin(args.haty_min_range,         args.haty_min_n),
+            "slope_plane":      _lin(args.slope_plane_range,      args.slope_plane_n),
+            "intercept_plane":  _lin(args.intercept_plane_range,  args.intercept_plane_n),
+            "intercept_plane2": _lin(args.intercept_plane2_range, args.intercept_plane2_n),
+        }
+        if args.debug:
+            grid_params = {k: np.linspace(v[0], v[-1], 3)
+                           for k, v in grid_params.items()}
+            print(f"DEBUG: grid reduced to 3 points per parameter "
+                  f"({3**len(grid_params)} evaluations)")
 
-    # ── sweep or reload ────────────────────────────────────────────────────────
-    if args.plots_only and os.path.exists(csv_path):
-        print(f"Loading existing sweep results from {csv_path}")
-        df = pd.read_csv(csv_path)
-        param_cols = [p for p in grid_params if p in df.columns]
-        # Reconstruct grid_params from CSV (values actually present)
-        grid_params = {p: sorted(df[p].dropna().unique()) for p in param_cols}
-    else:
+        fixed_cuts = {
+            "z_obs_min": args.z_obs_min,
+            "z_obs_max": args.z_obs_max,
+        }
+
         # Load raw data
         if args.source == "fullmocks":
             fits_file = args.fits_file
@@ -997,26 +1010,40 @@ if __name__ == "__main__":
         df["volatility"] = compute_volatility(df, grid_params, param_cols)
         df = compute_scores(df)
 
-        if args.true_slope is not None:
-            df["bias"] = (df["slope"] - args.true_slope) / df["sigma_slope"]
-
         df.to_csv(csv_path, index=False)
         print(f"Results saved to {csv_path}")
 
-    # ── best cuts ──────────────────────────────────────────────────────────────
-    best_row = find_best_stable_max_N(df, args.vol_threshold_factor)
-    if best_row is None:
-        print("WARNING: no valid grid points found — check cut ranges and data.")
-    else:
-        best_cuts = {p: float(best_row[p]) for p in param_cols}
-        report_best(best_row, param_cols, args.true_slope)
+    # ── recommend ──────────────────────────────────────────────────────────────
+    elif args.subcommand == "recommend":
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(
+                f"{csv_path} not found — run 'sweep' first.")
 
-        if args.write_best:
-            cfg_path = os.path.join(run_dir, "cut_sweep_best_config.json")
-            write_best_config(best_row, param_cols, fixed_cuts, cfg_path)
+        print(f"Loading sweep results from {csv_path}")
+        df = pd.read_csv(csv_path)
 
-        # ── plots ──────────────────────────────────────────────────────────────
-        make_plots(df, param_cols, best_cuts, run_dir, args.true_slope)
+        # Infer param_cols and grid_params from CSV columns
+        param_cols  = [p for p in _GRID_PARAM_NAMES if p in df.columns]
+        grid_params = {p: sorted(df[p].dropna().unique()) for p in param_cols}
 
-        # ── sweet spot summary ─────────────────────────────────────────────
-        sweetspot_summary(df, param_cols, best_cuts, args.true_slope)
+        # Reconstruct fixed_cuts from the first data row
+        fixed_cuts = {}
+        for key in ("z_obs_min", "z_obs_max"):
+            if key in df.columns:
+                val = df[key].dropna().iloc[0] if not df[key].dropna().empty else None
+                if val is not None:
+                    fixed_cuts[key] = float(val)
+
+        best_row = find_best_stable_max_N(df, args.vol_threshold_factor)
+        if best_row is None:
+            print("WARNING: no valid grid points found — check cut ranges and data.")
+        else:
+            best_cuts = {p: float(best_row[p]) for p in param_cols}
+            report_best(best_row, param_cols, args.true_slope)
+
+            if args.write_best:
+                cfg_path = os.path.join(run_dir, "cut_sweep_best_config.json")
+                write_best_config(best_row, param_cols, fixed_cuts, cfg_path)
+
+            make_plots(df, param_cols, best_cuts, run_dir, args.true_slope)
+            sweetspot_summary(df, param_cols, best_cuts, args.true_slope)
