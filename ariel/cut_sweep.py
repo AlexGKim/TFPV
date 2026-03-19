@@ -876,6 +876,8 @@ def write_best_config(best_row, param_cols, fixed_cuts, out_file):
     config = {p: float(best_row[p]) for p in param_cols}
     config.update({k: v for k, v in fixed_cuts.items() if v is not None})
     config["_slope_mle"]  = float(best_row["slope"])
+    config["_slope_lo"]   = _SLOPE_LO
+    config["_slope_hi"]   = _SLOPE_HI
     config["_sigma_slope"] = float(best_row["sigma_slope"])
     config["_N_sel"]      = int(best_row["N"])
     config["_loglike"]    = float(best_row["loglike"])

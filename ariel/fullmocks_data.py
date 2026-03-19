@@ -417,6 +417,15 @@ if __name__ == "__main__":
             z_obs_min        = cut_params.get("z_obs_min",        args.z_obs_min)
             z_obs_max        = cut_params.get("z_obs_max",        args.z_obs_max)
             print(f"  Loaded cut parameters from: {best_cfg_path}")
+            slope_mle = best_cfg.get("_slope_mle")
+            if slope_mle is not None:
+                slope_lo = best_cfg.get("_slope_lo", -9.0)
+                slope_hi = best_cfg.get("_slope_hi", -4.0)
+                tol = 0.01
+                if slope_mle <= slope_lo + tol or slope_mle >= slope_hi - tol:
+                    print(f"  WARNING: _slope_mle={slope_mle:.3f} is at the edge of the "
+                          f"allowed range [{slope_lo}, {slope_hi}]; skipping {fits_file}")
+                    continue
         else:
             haty_max         = args.haty_max
             haty_min         = args.haty_min
