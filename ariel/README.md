@@ -79,6 +79,43 @@ output/<run>/
 
 ---
 
+## Fullmocks Quick-Start
+
+End-to-end for a single AbacusSummit simulation file. Replace the path and run name
+throughout.
+
+```bash
+FITS=/path/to/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
+RUN=c000_ph000_r000
+
+# 1. Visualise with default cuts
+python fullmocks_data.py --file $FITS
+
+# 2. Sweep cuts and write best config
+python cut_sweep.py sweep --source fullmocks --fits_file $FITS --run $RUN
+python cut_sweep.py recommend --run $RUN --write_best
+
+# 3. Re-prepare data with optimal cuts (auto-loads cut_sweep_best_config.json)
+python fullmocks_data.py --file $FITS
+
+# 4. Compile Stan (once, from ../../cmdstan/)
+make ../TFPV/ariel/tophat ../TFPV/ariel/normal
+
+# 5. Run MCMC
+./tophat sample num_warmup=500 num_samples=500 num_chains=4 adapt save_metric=1 \
+  data file=output/$RUN/input.json init=output/$RUN/init.json \
+  output file=output/$RUN/tophat.csv
+
+# 6. Diagnose + corner plot
+../../cmdstan/bin/stansummary output/$RUN/tophat_?.csv
+python corner.py --run $RUN --model tophat
+
+# 7. Predict
+python predict.py --run $RUN --model tophat --source fullmocks --dir $(dirname $FITS)
+```
+
+---
+
 ## Workflow
 
 Each step produces plots and diagnostic statistics to `output/<run>/` for validation and paper inclusion. The checks in Step 7 should be applied after every step where outputs are produced, not only after MCMC.
@@ -114,12 +151,12 @@ produces its own run directory named after the simulation ID extracted from the 
 | Parameter | Default | Flag |
 |---|---|---|
 | `haty_max` | −20.0 | `--haty_max` |
-| `haty_min` | −21.8 | `--haty_min` |
+| `haty_min` | −22.2 | `--haty_min` |
 | `z_obs_min` | 0.03 | `--z_obs_min` |
 | `z_obs_max` | 0.10 | `--z_obs_max` |
-| `slope_plane` | −6.5 | `--slope_plane` |
-| `intercept_plane` | −20.0 | `--intercept_plane` |
-| `intercept_plane2` | −19.0 | `--intercept_plane2` |
+| `slope_plane` | −7.5 | `--slope_plane` |
+| `intercept_plane` | −21.0 | `--intercept_plane` |
+| `intercept_plane2` | −19.2 | `--intercept_plane2` |
 | `n_objects` | 5000 | `--n_objects` |
 
 ```bash
@@ -165,8 +202,11 @@ python cut_sweep.py sweep --source fullmocks \
   --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \
   --run c000_ph000_r001
 
-# Fast debug run: 1/4 of data, 3-point grid (243 evaluations, ~50× faster)
+# Fast debug run: 3-point grid (~243 evaluations, ~50× faster); data capped at 10 000 by default
 python cut_sweep.py sweep --source fullmocks --fits_file ... --run c000_ph000_r001 --debug
+
+# Use all data (no subsampling cap)
+python cut_sweep.py sweep --source fullmocks --fits_file ... --run c000_ph000_r001 --n_sweep_objects 0
 
 # DESI
 python cut_sweep.py sweep --source DESI --run DESI
