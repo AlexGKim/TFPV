@@ -238,6 +238,24 @@ non-TFR population, reversing the bias direction).
 
 ### 6. Output
 
+**`output/<run>/ellipse_sweep.json`** — sweep data for downstream use:
+
+```json
+{
+  "<param>": {
+    "n_sigma":          [float, ...],
+    "cut_values":       [float, ...],
+    "slopes":           [float or null, ...],
+    "d_slope_d_nsigma": [float or null, ...]
+  },
+  ...
+}
+```
+
+One entry per cut parameter (`haty_min`, `haty_max`, `intercept_plane`,
+`intercept_plane2`).  Grid points where Stan returned no valid result are
+stored as `null`.
+
 **`output/<run>/ellipse_sweep.png`** — 2-row × 4-column figure:
 
 - **Top row:** MLE slope s vs n_σ on a log x-axis for each cut parameter.
