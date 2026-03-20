@@ -349,6 +349,51 @@ def _label(p):
     return _PARAM_LABELS.get(p, p)
 
 
+def save_sweep_results(sweep_results, run_dir):
+    """Serialize sweep slopes and ∂s/∂(n_σ) to output/<run>/ellipse_sweep.json.
+
+    JSON structure:
+      {
+        "<param>": {
+          "n_sigma":           [float, ...],
+          "cut_values":        [float, ...],
+          "slopes":            [float or null, ...],
+          "d_slope_d_nsigma":  [float or null, ...]
+        },
+        ...
+      }
+    Derivatives are computed on the valid (non-null) slope subset and mapped
+    back to the full grid; positions with no slope are stored as null.
+    """
+    _SWEEP_PARAMS = ["haty_min", "haty_max", "intercept_plane", "intercept_plane2"]
+    out = {}
+    for p in _SWEEP_PARAMS:
+        records  = sweep_results[p]
+        ns_arr   = np.array([r[0] for r in records])
+        sl_arr   = np.array([r[2] if r[2] is not None else np.nan for r in records])
+        cut_vals = np.array([r[1] for r in records])
+
+        valid       = np.isfinite(sl_arr)
+        derivs_full = np.full(len(ns_arr), np.nan)
+        if valid.sum() >= 2:
+            derivs_full[valid] = np.gradient(sl_arr[valid], ns_arr[valid])
+
+        def _to_list(arr):
+            return [None if np.isnan(v) else float(v) for v in arr]
+
+        out[p] = {
+            "n_sigma":          ns_arr.tolist(),
+            "cut_values":       cut_vals.tolist(),
+            "slopes":           _to_list(sl_arr),
+            "d_slope_d_nsigma": _to_list(derivs_full),
+        }
+
+    out_file = os.path.join(run_dir, "ellipse_sweep.json")
+    with open(out_file, "w") as f:
+        json.dump(out, f, indent=2)
+    print(f"Saved: {out_file}")
+
+
 def plot_ellipse_partial_deriv(sweep_results, n_sigma_vals, run_dir):
     """2-row × 4-column figure: slope vs n_σ (top) and ∂s/∂(n_σ) vs n_σ (bottom).
 
@@ -513,6 +558,7 @@ if __name__ == "__main__":
     sweep_results = run_ellipse_sweep(
         raw_data, mu, sigma, n_sigma_vals, extra_cuts, exe_file)
 
+    save_sweep_results(sweep_results, run_dir)
     plot_ellipse_partial_deriv(sweep_results, n_sigma_vals, run_dir)
 
     # Summary table
