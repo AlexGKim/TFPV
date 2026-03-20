@@ -10,7 +10,9 @@ the Tully-Fisher relation and for the most part occupy a different region of the
 phase space.  An analysis of the full sample would yield a different slope with a
 poorer quality of fit.
 
-## Algorithm: `selection_ellipse.py`
+## Step 1: Estimating the core distribution
+
+Algorithm: `selection_ellipse.py`
 
 The script fits a 2-component Gaussian Mixture Model (GMM) to the observed
 (x, y) = (log₁₀(V/100 km/s), R-band absolute magnitude) phase space, identifies
@@ -146,3 +148,115 @@ python selection_ellipse.py \
 | `--haty_min` | −23.0 | Loose lower magnitude pre-filter |
 | `--haty_max` | −18.0 | Loose upper magnitude pre-filter |
 | `--n_init` | 20 | GMM random restarts for initialisation |
+
+## Step 2: Selection criteria
+
+Algorithm: `ellipse_sweep.py`
+
+### Motivation
+
+The four selection-cut parameters derived in Step 1 from the 1σ GMM ellipse
+(ŷ_min, ŷ_max, c₁, c₂) are starting-point estimates.  Tightening or loosening
+each cut changes which galaxies enter the Stan model and therefore shifts the
+maximum-likelihood TFR slope s.  The goal of this step is to identify the
+range of each parameter for which s is insensitive to small perturbations —
+the **stability plateau** — and to verify that the 1σ ellipse boundary falls
+within that plateau.
+
+### Parametrisation
+
+Each cut is expressed as a function of a single scale parameter n_σ ≥ 0:
+
+| Cut | At scale n_σ |
+|-----|-------------|
+| ŷ_min | μ_y − n_σ · y_extent |
+| ŷ_max | μ_y + n_σ · y_extent |
+| c₁ (intercept_plane) | min intercept of lines through ±n_σ·σ_minor endpoints |
+| c₂ (intercept_plane2) | max intercept of same lines |
+
+where y_extent = √(σ_major² sin²θ + σ_minor² cos²θ) is the y-projection of the
+1σ ellipse, and θ is the major-axis angle.  The slope of the oblique cuts
+(slope_plane = tan θ) is fixed — it encodes the TFR orientation and does not
+depend on n_σ.  At n_σ = 1 the cuts exactly bound the 1σ ellipse.
+
+### Algorithm
+
+For each of the four cut parameters p ∈ {ŷ_min, ŷ_max, c₁, c₂}:
+
+1. Fix the other three parameters at their 1σ values.
+2. Evaluate n_σ on a log-spaced grid from n_σ_min to n_σ_max (default 0.7–1.7,
+   21 points).
+3. At each grid point apply the cuts to the galaxy sample, build the Stan data
+   and initialisation JSON, and call the compiled `tophat` executable in MAP
+   (optimize) mode.
+4. Extract the MLE slope s from the `slope` generated quantity in the Stan CSV
+   output.  `slope = slope_std / sd_x` converts from the model's standardised
+   parameterisation to original units automatically.
+5. Compute the numerical derivative ∂s/∂(n_σ) via `numpy.gradient` with the
+   actual (non-uniform) n_σ coordinates as second argument, giving correct
+   central differences on the log-spaced grid.
+
+### Stan initialisation
+
+At each grid point the OLS slope on the standardised sample is used to
+initialise `slope_std`, clamped to the model's parameter bounds (−9·sd_x,
+−4·sd_x).  This clamping is necessary because loosening the selection window
+can shift the OLS slope outside those bounds, which would cause Stan's
+initialisation to fail.
+
+### Interpretation
+
+**Stability plateau:** A region where ∂s/∂(n_σ) ≈ 0 indicates that the fitted
+TFR slope is insensitive to the exact placement of that cut.  The 1σ ellipse
+boundary (n_σ = 1, dashed vertical line) should ideally fall within this flat
+region.
+
+**Bound-hitting at tight cuts:** For n_σ ≲ 0.7 the MLE slope often saturates
+at the Stan model's upper bound (−4).  This is not a numerical failure but a
+physical effect: a very narrow selection window makes the selection-correction
+term dominate the likelihood, the signal-to-correction ratio collapses, and
+the optimiser finds no well-identified interior maximum.  Points at the
+constraint boundary should be excluded from plateau identification.
+
+**Monotone vs non-monotone profiles:** A monotone slope profile (∂s/∂(n_σ)
+constant sign) with a flat plateau in the middle indicates the cut is
+well-behaved.  A non-monotone profile with sign changes signals that multiple
+regimes compete (e.g., at loose cuts the selection region extends into a
+non-TFR population, reversing the bias direction).
+
+### Usage
+
+```bash
+python ellipse_sweep.py \
+    --source fullmocks \
+    --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \
+    --run c000_ph000_r001
+```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--source` | `fullmocks` | Data source: `fullmocks` or `DESI` |
+| `--fits_file FILE` | auto | Path to FITS file; auto-detected from `--dir` if omitted |
+| `--dir DIR` | `data/` | Directory searched for FITS files |
+| `--run RUN` | required | Run name; reads `output/<run>/selection_ellipse.json` |
+| `--exe EXE` | `tophat` | Path to compiled Stan tophat executable |
+| `--n_sigma_min` | 0.7 | Lower end of n_σ grid |
+| `--n_sigma_max` | 1.7 | Upper end of n_σ grid |
+| `--n_sigma_n` | 21 | Number of log-spaced grid points |
+| `--z_obs_min` | 0.03 | Minimum redshift cut |
+| `--z_obs_max` | 0.10 | Maximum redshift cut |
+| `--n_sweep_objects` | 10000 | Subsample size (0 = use all) |
+
+### Output
+
+**`output/<run>/ellipse_sweep.png`** — 2-row × 4-column figure:
+
+- **Top row:** MLE slope s vs n_σ on a log x-axis for each cut parameter.
+  A secondary top axis shows the corresponding cut value.  Dashed vertical
+  line marks n_σ = 1.
+- **Bottom row:** ∂s/∂(n_σ) vs n_σ (log x-axis).  Dashed horizontal line at
+  zero; dashed vertical line at n_σ = 1.
+
+A summary table is printed to stdout reporting, at the grid point closest to
+n_σ = 1, the cut value, MLE slope, derivative, and number of selected galaxies
+for each parameter.
