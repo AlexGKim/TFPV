@@ -858,12 +858,18 @@ def find_best_stable_max_N(df, vol_threshold_factor=25.0):
 
     Algorithm
     ---------
-    1. Exclude boundary-hitting fits (slope at _SLOPE_LO / _SLOPE_HI) from the
-       working set ('interior').  Those fits have degenerate likelihoods; their
-       anomalously near-zero volatility would bias the percentile threshold downward.
+    Volatility is pre-computed for every grid point by compute_volatility, using
+    all grid neighbors regardless of whether they hit the slope bounds.
+
+    1. Define 'interior' as fits whose best-fit slope landed strictly between
+       _SLOPE_LO and _SLOPE_HI.  Boundary-hitting fits are excluded from this
+       working set because their degenerate likelihoods produce artificially
+       near-zero volatility (a boundary-hitting point surrounded by other
+       boundary-hitting neighbors has near-zero slope differences), which would
+       bias the percentile threshold downward if included.
     2. Compute a volatility threshold = the vol_threshold_factor-th percentile of
-       interior volatility.  All interior points at or below this threshold form the
-       'plateau' — the set of least cut-sensitive configurations.
+       the interior volatility values.  All interior points at or below this
+       threshold form the 'plateau' — the set of least cut-sensitive configurations.
     3. Return the plateau point with the largest N_sel (number of selected galaxies).
 
     Percentile vs multiplicative threshold
