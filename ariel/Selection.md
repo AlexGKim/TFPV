@@ -149,7 +149,7 @@ python selection_ellipse.py \
 | `--haty_max` | −18.0 | Loose upper magnitude pre-filter |
 | `--n_init` | 20 | GMM random restarts for initialisation |
 
-## Step 2: Selection criteria
+## Step 2: Selection plateau search
 
 Algorithm: `ellipse_sweep.py`
 
@@ -290,3 +290,128 @@ python ellipse_sweep.py \
 | `--z_obs_min` | 0.03 | Minimum redshift cut |
 | `--z_obs_max` | 0.10 | Maximum redshift cut |
 | `--n_sweep_objects` | 10000 | Subsample size (0 = use all) |
+
+## Step 3: Selection criteria
+
+Algorithm: `selection_criteria.py`
+
+The sweep profiles from Step 2 show that the MLE slope is stable (∂s/∂(n_σ) ≈ 0)
+over a central plateau and diverges at large n_σ where non-TFR galaxies enter the
+sample.  This step automatically identifies that plateau for each cut parameter,
+chooses a value near its large-n_σ edge, and records the result as the final
+selection cuts used in subsequent analysis.
+
+### 1. Valid points
+
+For each sweep parameter the following points are excluded before any plateau
+analysis:
+
+- slope is NaN (Stan failed or sample too small),
+- derivative is NaN,
+- slope is within `BOUND_TOL = 0.05` of the Stan hard bounds (−9 or −4) —
+  these are bound-hitting points where the optimiser did not find a free interior
+  maximum.
+
+### 2. Two-level plateau detection (`choose_nsigma`)
+
+The algorithm operates in two levels.
+
+**Level 1 — broad plateau.**  A global threshold
+
+$$\tau_1 = d_\mathrm{threshold} \times \max_i |\partial s / \partial n_\sigma|$$
+
+is computed over all valid points.  Points with |∂s/∂(n_σ)| < τ₁ form the broad
+plateau.  If fewer than two valid points exist the algorithm falls back to n_σ = 1.
+If no broad plateau exists the closest valid point to n_σ = 1 is returned with
+status `no_plateau`.
+
+**Level 2 — group selection.**  The broad plateau is split into maximal contiguous
+runs (adjacent grid indices).  The run containing the globally flattest valid point
+(minimum |∂s/∂(n_σ)|) is selected as the candidate group.
+
+**Boundary exception.**  When the global minimum |∂s/∂(n_σ)| falls on the
+leftmost valid point the derivative profile is monotonically drifting — there is
+no interior stable region.  In this case Levels 2–3 are skipped and the right edge
+of the broad plateau group is used directly (Level 1 fallback).
+
+**Level 3 — local "close to zero" criterion.**  Within the selected group a point
+is considered close to zero if
+
+$$|\partial s / \partial n_\sigma| < d_\mathrm{threshold} \times \mathrm{IQR}(\partial s / \partial n_\sigma)$$
+
+where IQR is computed over the signed derivatives of the selected group.  This
+criterion is relative to the width of the local derivative distribution rather
+than its maximum, so it correctly identifies points that are genuinely near zero
+even when the group contains some moderate outliers.  The close-to-zero points are
+split into contiguous sub-runs and the **rightmost** sub-run is chosen — this gives
+the loosest cut that is still demonstrably stable.
+
+**Edge and chosen n_σ.**  Let the rightmost sub-run have last two members
+n_σ_{prev} and n_σ_{edge}.  The chosen value is
+
+$$n_{\sigma,\mathrm{chosen}} = n_{\sigma,\mathrm{prev}} + \mathrm{frac} \times (n_{\sigma,\mathrm{edge}} - n_{\sigma,\mathrm{prev}})$$
+
+with `frac = 0.8` by default.  If the sub-run contains only one point,
+n_σ_chosen = n_σ_edge.  The cut value is obtained by linear interpolation of
+the sweep grid at n_σ_chosen.
+
+If n_σ_edge equals the rightmost valid point the plateau may extend beyond the
+sweep range; status `plateau_at_edge` is reported and a wider sweep is
+recommended.
+
+### 3. slope_plane
+
+The oblique-cut slope is fixed at the value from `selection_ellipse.json`
+throughout and is copied unchanged into the output.
+
+### 4. Output
+
+**`output/<run>/selection_criteria.json`** — final cut values:
+
+```json
+{
+  "haty_min":         <float>,
+  "haty_max":         <float>,
+  "slope_plane":      <float>,
+  "intercept_plane":  <float>,
+  "intercept_plane2": <float>,
+  "n_sigma_chosen": {
+    "haty_min":         <float>,
+    "haty_max":         <float>,
+    "intercept_plane":  <float>,
+    "intercept_plane2": <float>
+  }
+}
+```
+
+**`output/<run>/selection_criteria.png`** — 2-row × 4-column figure (same layout
+as `ellipse_sweep.png`) with an added orange dashed vertical line at n_σ_chosen
+in both the slope and derivative rows for each parameter.  Warning text appears in
+the subplot title for non-`ok` status flags.
+
+**`output/<run>/selection_criteria_data.png`** — galaxy scatter plot (identical
+layout to `selection_ellipse.png`) with the selected cut lines overlaid in
+deepskyblue (horizontal magnitude cuts) and limegreen (oblique plane cuts).
+Galaxy colour encodes exp(−½χ²) computed from the saved core-component covariance,
+serving as a proxy for P(core component) without refitting the GMM.  Produced only
+when `--source` is provided.
+
+### Usage
+
+```bash
+python selection_criteria.py --run c000_ph000_r001
+
+# Also produce the galaxy scatter overplot:
+python selection_criteria.py --run c000_ph000_r001 \
+    --source fullmocks \
+    --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits
+```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--run RUN` | required | Run name; reads/writes `output/<run>/` |
+| `--d_threshold` | 0.3 | Plateau threshold as fraction of max\|∂s/∂n_σ\| (Level 1) and IQR (Level 3) |
+| `--frac` | 0.8 | Interpolation fraction between preceding sub-run point and edge |
+| `--source` | — | Data source for scatter overplot: `fullmocks` or `DESI` (omit to skip) |
+| `--fits_file FILE` | auto | Path to FITS file; auto-detected from `--dir` if omitted |
+| `--dir DIR` | `data/` | Directory searched for FITS files |
