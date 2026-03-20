@@ -854,15 +854,46 @@ def find_best(df, criterion="score"):
 
 
 def find_best_stable_max_N(df, vol_threshold_factor=25.0):
-    """Return the plateau point with the most galaxies.
+    """Return the cut combination in the low-volatility plateau with the most galaxies.
 
-    'Plateau' = volatility <= Pth percentile of interior volatility, where P is
-    vol_threshold_factor (0–100, default 25).
+    Algorithm
+    ---------
+    1. Exclude boundary-hitting fits (slope at _SLOPE_LO / _SLOPE_HI) from the
+       working set ('interior').  Those fits have degenerate likelihoods; their
+       anomalously near-zero volatility would bias the percentile threshold downward.
+    2. Compute a volatility threshold = the vol_threshold_factor-th percentile of
+       interior volatility.  All interior points at or below this threshold form the
+       'plateau' — the set of least cut-sensitive configurations.
+    3. Return the plateau point with the largest N_sel (number of selected galaxies).
 
-    Boundary-hitting fits (slope at the MLE bounds _SLOPE_LO / _SLOPE_HI) are
-    excluded before computing the percentile threshold.  Those fits have a
-    degenerate likelihood for the given cut combination; their near-zero
-    volatility would otherwise skew the threshold.
+    Percentile vs multiplicative threshold
+    ----------------------------------------
+    The old approach (vol_threshold = vol_min * factor) broke when vol_min was
+    near zero: a tiny vol_min made the threshold too tight to span the physically
+    meaningful plateau.  A percentile threshold is scale-independent — it always
+    selects a fixed fraction of the distribution regardless of absolute values.
+
+    Volatility definition (see also module docstring and compute_volatility)
+    -------------------------------------------------------------------------
+    volatility(g) = mean over adjacent grid neighbors g' of
+                      |slope(g) − slope(g')| / sqrt(σ(g)² + σ(g')²)
+    Low volatility → the fitted TFR slope is insensitive to small changes in the
+    selection cuts, i.e., the cut combination is in a stable region of parameter space.
+
+    Choosing max-N within the plateau
+    ----------------------------------
+    The volatility landscape can contain more than one low-volatility plateau.  For
+    example, very loose cuts and very tight cuts may both yield a stable slope, but
+    at different values.  Maximising N_sel within the plateau selects the solution
+    with the most galaxies — typically the physically meaningful one (tight enough
+    cuts to exclude contamination, loose enough to retain the full population).
+
+    Parameters
+    ----------
+    vol_threshold_factor : float, optional
+        Percentile (0–100) of the interior volatility distribution used as the
+        plateau threshold.  Default 25 (bottom quarter = least-volatile 25% of
+        grid points).  Increase to widen the plateau; decrease to restrict it.
     """
     sub = df.dropna(subset=["volatility", "N", "score"])
     if sub.empty:
@@ -1115,8 +1146,12 @@ if __name__ == "__main__":
     sp_rec.add_argument("--true_slope", type=float, default=None,
                         help="True TFR slope (fullmocks) for bias reporting")
     sp_rec.add_argument("--vol_threshold_factor", type=float, default=25.0,
-                        help="Plateau threshold: percentile of interior-slope volatility "
-                             "distribution (0–100, default 25)")
+                        help="Plateau threshold: Pth percentile of the interior-slope "
+                             "volatility distribution (0–100, default 25).  "
+                             "Grid points with volatility <= this percentile value "
+                             "form the 'stable plateau'; the cut combination with the "
+                             "most galaxies is selected from within it.  "
+                             "Increase P to widen the plateau; decrease to restrict it.")
     sp_rec.add_argument("--write_best", action="store_true",
                         help="Write cut_sweep_best_config.json at the best grid point")
 
