@@ -153,8 +153,6 @@ python selection_ellipse.py \
 
 Algorithm: `ellipse_sweep.py`
 
-### Motivation
-
 The four selection-cut parameters derived in Step 1 from the 1σ GMM ellipse
 (ŷ_min, ŷ_max, c₁, c₂) are starting-point estimates.  Tightening or loosening
 each cut changes which galaxies enter the Stan model and therefore shifts the
@@ -163,9 +161,19 @@ range of each parameter for which s is insensitive to small perturbations —
 the **stability plateau** — and to verify that the 1σ ellipse boundary falls
 within that plateau.
 
-### Parametrisation
+### 1. Data loading
 
-Each cut is expressed as a function of a single scale parameter n_σ ≥ 0:
+Reads the same FITS file used in Step 1 (fullmocks or DESI) and applies
+redshift cuts z_obs_min < z ≤ z_obs_max.  The raw sample may be randomly
+subsampled to `--n_sweep_objects` objects (default 10 000) to keep each Stan
+call fast.  Reads `output/<run>/selection_ellipse.json` for the GMM mean **μ**
+and covariance **Σ** of the core component.
+
+### 2. Ellipse scale parametrisation
+
+Each cut is expressed as a function of a single scale parameter n_σ ≥ 0.
+Eigendecomposing **Σ** gives σ_minor, σ_major, and major-axis angle θ.  The
+four cuts at scale n_σ are:
 
 | Cut | At scale n_σ |
 |-----|-------------|
@@ -174,37 +182,41 @@ Each cut is expressed as a function of a single scale parameter n_σ ≥ 0:
 | c₁ (intercept_plane) | min intercept of lines through ±n_σ·σ_minor endpoints |
 | c₂ (intercept_plane2) | max intercept of same lines |
 
-where y_extent = √(σ_major² sin²θ + σ_minor² cos²θ) is the y-projection of the
-1σ ellipse, and θ is the major-axis angle.  The slope of the oblique cuts
-(slope_plane = tan θ) is fixed — it encodes the TFR orientation and does not
-depend on n_σ.  At n_σ = 1 the cuts exactly bound the 1σ ellipse.
+where y_extent = √(σ_major² sin²θ + σ_minor² cos²θ) is the y-projection of
+the ellipse.  The oblique-cut slope (slope_plane = tan θ) is fixed at the 1σ
+value for all n_σ.  At n_σ = 1 the cuts exactly bound the 1σ ellipse.
 
-### Algorithm
+### 3. Stan MAP optimisation
+
+At each grid point the galaxy sample is filtered by the current cuts, then:
+
+1. The sample mean and standard deviation of x are computed; x is
+   standardised to x_std = (x − mean_x) / sd_x.
+2. An OLS slope on the standardised sample initialises `slope_std`, clamped
+   to the model's parameter bounds (−9·sd_x, −4·sd_x).  Clamping is necessary
+   because a loose selection window can push OLS outside those bounds, causing
+   Stan to fail at initialisation.
+3. Data and init JSON files are written to a temporary directory and the
+   compiled `tophat` executable is called in `optimize` (MAP) mode via
+   `subprocess`.
+4. The MLE slope s is read from the `slope` generated quantity in the Stan CSV
+   output.  (`slope = slope_std / sd_x` converts from the standardised
+   parameterisation automatically.)
+
+### 4. Sweep
 
 For each of the four cut parameters p ∈ {ŷ_min, ŷ_max, c₁, c₂}:
 
-1. Fix the other three parameters at their 1σ values.
-2. Evaluate n_σ on a log-spaced grid from n_σ_min to n_σ_max (default 0.7–1.7,
-   21 points).
-3. At each grid point apply the cuts to the galaxy sample, build the Stan data
-   and initialisation JSON, and call the compiled `tophat` executable in MAP
-   (optimize) mode.
-4. Extract the MLE slope s from the `slope` generated quantity in the Stan CSV
-   output.  `slope = slope_std / sd_x` converts from the model's standardised
-   parameterisation to original units automatically.
-5. Compute the numerical derivative ∂s/∂(n_σ) via `numpy.gradient` with the
-   actual (non-uniform) n_σ coordinates as second argument, giving correct
-   central differences on the log-spaced grid.
+- Fix the other three at their 1σ values.
+- Evaluate n_σ on a log-spaced grid from n_σ_min to n_σ_max (default 0.7–1.7,
+  21 points).
+- Run Stan MAP at each grid point (Section 3) and record (n_σ, cut value,
+  slope, N_selected).
+- Compute the numerical derivative ∂s/∂(n_σ) via `numpy.gradient` using the
+  actual (non-uniform) n_σ coordinates as the second argument, giving correct
+  central differences on the log-spaced grid.
 
-### Stan initialisation
-
-At each grid point the OLS slope on the standardised sample is used to
-initialise `slope_std`, clamped to the model's parameter bounds (−9·sd_x,
-−4·sd_x).  This clamping is necessary because loosening the selection window
-can shift the OLS slope outside those bounds, which would cause Stan's
-initialisation to fail.
-
-### Interpretation
+### 5. Interpretation
 
 **Stability plateau:** A region where ∂s/∂(n_σ) ≈ 0 indicates that the fitted
 TFR slope is insensitive to the exact placement of that cut.  The 1σ ellipse
@@ -223,6 +235,20 @@ constant sign) with a flat plateau in the middle indicates the cut is
 well-behaved.  A non-monotone profile with sign changes signals that multiple
 regimes compete (e.g., at loose cuts the selection region extends into a
 non-TFR population, reversing the bias direction).
+
+### 6. Output
+
+**`output/<run>/ellipse_sweep.png`** — 2-row × 4-column figure:
+
+- **Top row:** MLE slope s vs n_σ on a log x-axis for each cut parameter.
+  A secondary top axis shows the corresponding cut value.  Dashed vertical
+  line marks n_σ = 1.
+- **Bottom row:** ∂s/∂(n_σ) vs n_σ (log x-axis).  Dashed horizontal line at
+  zero; dashed vertical line at n_σ = 1.
+
+A summary table is also printed to stdout reporting, at the grid point closest
+to n_σ = 1, the cut value, MLE slope, derivative, and number of selected
+galaxies for each parameter.
 
 ### Usage
 
@@ -246,17 +272,3 @@ python ellipse_sweep.py \
 | `--z_obs_min` | 0.03 | Minimum redshift cut |
 | `--z_obs_max` | 0.10 | Maximum redshift cut |
 | `--n_sweep_objects` | 10000 | Subsample size (0 = use all) |
-
-### Output
-
-**`output/<run>/ellipse_sweep.png`** — 2-row × 4-column figure:
-
-- **Top row:** MLE slope s vs n_σ on a log x-axis for each cut parameter.
-  A secondary top axis shows the corresponding cut value.  Dashed vertical
-  line marks n_σ = 1.
-- **Bottom row:** ∂s/∂(n_σ) vs n_σ (log x-axis).  Dashed horizontal line at
-  zero; dashed vertical line at n_σ = 1.
-
-A summary table is printed to stdout reporting, at the grid point closest to
-n_σ = 1, the cut value, MLE slope, derivative, and number of selected galaxies
-for each parameter.
