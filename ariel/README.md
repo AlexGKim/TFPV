@@ -2,8 +2,17 @@
 
 Bayesian statistical modeling of the Tully-Fisher Relation (TFR) for peculiar velocity analysis. The TFR is an empirical relation between galaxy rotation velocity (`x = log10(V/100 km/s)`) and absolute magnitude (`y`).
 
-This project does two things:
-
+This project does three things:
+0. **Sample selection**: There are normal galaxies occupy a compact
+region of the data phase space who obey a Tully-Fisher
+relation with a specific slope.  There are a small
+froction of other galaxies
+that do not follow the Tully-Fisher relation that for the
+most part occupy a different region of data phase space.
+An analysis of the full sample would yield a different slope
+with a poorer quality of fit.  The objective is to determine
+sample selection criteria that gives high completeness
+and purity of normal galaxies.
 1. **Fit the TFR**: Infer TFR parameters from galaxy rotation velocity and absolute magnitude data, accounting for observational selection effects (magnitude limits and oblique plane cuts in x–y space).
 2. **Infer absolute magnitudes**: Given fitted TFR parameters and observed rotation velocities, infer absolute magnitudes for individual galaxies.
 
@@ -88,28 +97,15 @@ throughout.
 export FITS=/path/to/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
 export RUN=c000_ph000_r000
 
-# 1. Visualise with default cuts
-python fullmocks_data.py --file $FITS --run $RUN
+# Steps 1–3: Sample selection (see Selection.md)
+python selection_ellipse.py --file $FITS --run $RUN
+python ellipse_sweep.py --source fullmocks --fits_file $FITS --run $RUN
+python selection_criteria.py --source fullmocks --fits_file $FITS --run $RUN
 
-# 2. Sweep cuts and write best config
-python cut_sweep.py sweep --source fullmocks --fits_file $FITS --run $RUN \
-  --haty_max_range LO HI        --haty_max_n N \
-  --haty_min_range LO HI        --haty_min_n N \
-  --slope_plane_range LO HI     --slope_plane_n N \
-  --intercept_plane_range LO HI --intercept_plane_n N \
-  --intercept_plane2_range LO HI --intercept_plane2_n N
-python cut_sweep.py recommend --run $RUN --write_best
-
-# 3. Re-prepare data with optimal cuts (auto-loads cut_sweep_best_config.json)
-python fullmocks_data.py --file $FITS --run $RUN
-
-# 4. Compile Stan (once, from ../../cmdstan/)
-make ../TFPV/ariel/tophat ../TFPV/ariel/normal
-
-# 5. Run MCMC
-./tophat sample num_warmup=500 num_samples=500 num_chains=4 adapt save_metric=1 \
-  data file=output/$RUN/input.json init=output/$RUN/init.json \
-  output file=output/$RUN/tophat.csv
+# Steps 4–6: TFR fitting (see TFFit.md)
+python fullmocks_data.py --file $FITS --run $RUN <cuts from selection_criteria.json>
+make -C ../../cmdstan ../TFPV/ariel/tophat ../TFPV/ariel/normal
+./tophat sample ... data file=output/$RUN/input.json ...
 
 # 6. Diagnose + corner plot
 ../../cmdstan/bin/stansummary output/$RUN/tophat_?.csv
@@ -125,213 +121,23 @@ python predict.py --run $RUN --model tophat --source fullmocks --dir $(dirname $
 
 Each step produces plots and diagnostic statistics to `output/<run>/` for validation and paper inclusion. The checks in Step 7 should be applied after every step where outputs are produced, not only after MCMC.
 
-### Step 1: Visualize Dataset
 
-Each data source has a dedicated prep script. Use `--run <name>` to write all outputs to `output/<name>/` and save `config.json` recording the exact selection parameters used. Run with default cuts first, then inspect `output/<run>/data.png` to understand the data and the cut geometry before optimising.
+### Steps 1–3: Sample Selection
 
-```bash
-python ariel_data.py --run ariel
-python desi_data.py  --run DESI
-```
+Fit a noise- and truncation-corrected GMM to the observed phase space, sweep the
+derived ellipse cuts to identify the slope-stability plateau, and automatically
+choose the loosest stable cut value for each parameter.
 
-For **AbacusSummit fullmocks** the same initial visualisation applies. Each FITS file named
-`TF_extended_AbacusSummit_base_c???_ph???_r???_z0.11.fits`
-produces its own run directory named after the simulation ID extracted from the filename
-(e.g. `c000_ph000_r000`). On NERSC, these files live under
-`/global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4/`.
-
-**FITS columns used:**
-
-| Column | Description | Stan field |
-|---|---|---|
-| `LOGVROT` | log10(V_rot / km/s) | `x = LOGVROT − 2` |
-| `LOGVROT_ERR` | uncertainty on LOGVROT | `sigma_x` |
-| `R_ABSMAG_SB26` | R-band absolute magnitude (SB26) | `y` |
-| `R_ABSMAG_SB26_ERR` | uncertainty on R_ABSMAG_SB26 | `sigma_y` |
-| `ZOBS` | observed redshift | `z_obs` |
-| `MAIN` | boolean — only `MAIN=True` rows are used | — |
-
-**Default selection parameters** (override any with the corresponding flag):
-
-| Parameter | Default | Flag |
-|---|---|---|
-| `haty_max` | −20.0 | `--haty_max` |
-| `haty_min` | −22.2 | `--haty_min` |
-| `z_obs_min` | 0.03 | `--z_obs_min` |
-| `z_obs_max` | 0.10 | `--z_obs_max` |
-| `slope_plane` | −7.5 | `--slope_plane` |
-| `intercept_plane` | −21.0 | `--intercept_plane` |
-| `intercept_plane2` | −19.2 | `--intercept_plane2` |
-| `n_objects` | 5000 | `--n_objects` |
-
-```bash
-# Process all matching FITS files in --dir
-python fullmocks_data.py --dir /path/to/mocks
-
-# Process a single specific FITS file
-python fullmocks_data.py --file /path/to/mocks/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
-
-# Process only the first matching file in --dir (for debugging)
-python fullmocks_data.py --dir /path/to/mocks --one
-
-# Override selection parameters or subsample size
-python fullmocks_data.py --dir /path/to/mocks --n_objects 5000 --random_seed 42
-
-# NERSC — all files
-python fullmocks_data.py \
-  --dir /global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4
-
-# NERSC — single file
-python fullmocks_data.py \
-  --file /global/cfs/cdirs/desi/science/td/pv/mocks/TF_mocks/fullmocks/v0.5.4/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
-```
+→ See [Selection.md](Selection.md) for the full algorithm and usage.
 
 ---
 
-### Step 2: Optimise Selection Cuts
+### Steps 4–6: TFR Fitting
 
-The five selection-cut parameters (`haty_max`, `haty_min`, `slope_plane`, `intercept_plane`, `intercept_plane2`) can be determined quantitatively instead of by hand using `cut_sweep.py`.
+Prepare the Stan JSON input from the chosen selection cuts, compile the Stan tophat
+and normal models, and run MCMC sampling to infer the TFR parameters.
 
-The script sweeps a grid of cut values, fits the tophat model likelihood at each point via fast Python MLE, and selects the best grid point using the **max-N-in-plateau** criterion:
-
-1. **Volatility** — mean `|Δslope / sqrt(σ² + σ'²)|` over adjacent neighbors. Defines the stability plateau: all points with `volatility ≤ vol_min × --vol_threshold_factor` (default 3×).
-2. **Within the plateau, maximize N** — the loosest stable cuts use the most galaxies and minimize statistical uncertainty on the slope.
-
-The MLE implements the same tophat log-likelihood as Stan, including the Jacobian for the change-of-variables from `y_TF` to `x`, the `y_TF` tophat-prior truncation correction, and a **bivariate normal strip integral** for the selection correction. The strip integral is computed via 8-point Gauss-Legendre quadrature (matching Stan's `integrate_binormal_strip_sinh2_gl`) using `scipy.stats.multivariate_normal.cdf`, giving slopes consistent with the Stan posterior near the true latent-variable slope.
-
-The workflow is split into two subcommands: `sweep` (runs the grid, writes `cut_sweep.csv`, no plots) and `recommend` (reads the CSV, generates plots and the sweet-spot summary).
-
-```bash
-# Step 1 — run the sweep (writes cut_sweep.csv only)
-python cut_sweep.py sweep --source fullmocks \
-  --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \
-  --run c000_ph000_r001
-
-# Fast debug run: 3-point grid (~243 evaluations, ~50× faster); data capped at 10 000 by default
-python cut_sweep.py sweep --source fullmocks --fits_file ... --run c000_ph000_r001 --debug
-
-# Use all data (no subsampling cap)
-python cut_sweep.py sweep --source fullmocks --fits_file ... --run c000_ph000_r001 --n_sweep_objects 0
-
-# DESI
-python cut_sweep.py sweep --source DESI --run DESI
-
-# Narrow the grid around a region of interest
-python cut_sweep.py sweep --source fullmocks --fits_file ... --run c000_ph000_r001 \
-  --haty_max_range -21.0 -19.0 --haty_max_n 7 \
-  --intercept_plane_range -21.0 -19.5 --intercept_plane_n 7
-
-# Step 2 — generate plots and recommendations from the saved CSV
-python cut_sweep.py recommend --run c000_ph000_r001
-
-# Write the best config JSON and report bias (if true slope is known)
-python cut_sweep.py recommend --run c000_ph000_r001 --write_best --true_slope -8.3
-
-# Widen or tighten the plateau threshold (default 3.0)
-python cut_sweep.py recommend --run c000_ph000_r001 --vol_threshold_factor 5.0 --write_best
-```
-
-**Default grid ranges** (5 points each, override with `--<param>_range LO HI` and `--<param>_n N`):
-
-| Parameter | Default range |
-|---|---|
-| `haty_max` | −20.0 to −19.0 |
-| `haty_min` | −22.2 to −21.3 |
-| `slope_plane` | −7.5 to −5.5 |
-| `intercept_plane` | −21.0 to −19.8 |
-| `intercept_plane2` | −19.2 to −18.0 |
-
-After the sweep a **sweet spot summary** is printed: each parameter is classified as SENSITIVE (slope varies significantly across the grid) or INSENSITIVE, with the recommended loosest stable cut value.
-
-The redshift window (`z_obs_min`, `z_obs_max`) is treated as a fixed hyperparameter during the sweep (override with `--z_obs_min` and `--z_obs_max`).
-
----
-
-### Step 3: Prepare Data with Optimal Cuts
-
-Re-run the data prep script using the optimal parameters identified in Step 2.
-
-For **fullmocks**, `fullmocks_data.py` automatically loads `cut_sweep_best_config.json` from the run directory when present — no flags needed:
-
-```bash
-python fullmocks_data.py --dir /path/to/mocks
-```
-
-For `ariel_data.py` / `desi_data.py`, pass the optimal parameter values explicitly:
-
-```bash
-python ariel_data.py --run ariel_tight --haty_max -18.0 --haty_min -24.0 \
-  --slope_plane -8.5 --intercept_plane -20.5 --intercept_plane2 -19.1
-python desi_data.py --run DESI_z01 --haty_max -19.0 --haty_min -22.0 --z_obs_min 0.01
-```
-
-Inspect `output/<run>/data.png` to confirm the cuts look correct before proceeding.
-
----
-
-### Step 4: Compile Stan Models
-
-Run from inside the `../../cmdstan/` directory:
-
-```bash
-make ../TFPV/ariel/tophat
-make ../TFPV/ariel/normal
-```
-
-To compile with GPU support on NERSC:
-
-```bash
-export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
-make STAN_OPENCL=TRUE ../TFPV/ariel/tophat
-cp ../TFPV/ariel/tophat ../TFPV/ariel/tophat_g
-```
-
----
-
-### Step 5: Run MCMC Sampling
-
-#### First run — adapt and save metric
-
-On the first run (no prior metric available), let Stan adapt the mass matrix and step size, and save the resulting metric for reuse:
-
-```bash
-./tophat sample num_warmup=500 num_samples=500 num_chains=4 \
-  adapt save_metric=1 \
-  data file=output/ariel/input.json \
-  init=output/ariel/init.json \
-  output file=output/ariel/tophat.csv
-```
-
-This writes `tophat_metric.json` (containing `"inv_metric"`) alongside the chain CSVs in `output/ariel/`. The adapted step size is recorded in the CSV chain headers.
-
-#### Subsequent runs — load saved metric and fixed step size
-
-Once a metric and step size have been saved, subsequent runs can skip most of the warmup:
-
-```bash
-./tophat sample algorithm=hmc metric=diag_e \
-  metric_file=output/c000_ph000_r001/tophat_metric.json \
-  stepsize=0.11871086 \
-  num_warmup=50 num_samples=500 num_chains=4 \
-  data file=output/c000_ph000_r001/input.json \
-  init=output/c000_ph000_r001/init.json \
-  output file=output/c000_ph000_r001/tophat.csv
-```
-
-Notes:
-- `metric_file` must be a JSON file containing only the key `"inv_metric"`.
-- Retrieve the step size from the CSV chain header (search for `stepsize=`) or from `stansummary` output.
-- `num_warmup=50` is sufficient when the metric and step size are pre-set.
-
-#### DESI data example
-
-```bash
-./tophat sample num_warmup=500 num_samples=500 num_chains=4 \
-  adapt save_metric=1 \
-  data file=output/DESI/input.json \
-  init=output/DESI/init.json \
-  output file=output/DESI/tophat.csv
-```
+→ See [TFFit.md](TFFit.md) for the full algorithm and usage.
 
 ---
 
