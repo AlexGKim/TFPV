@@ -44,6 +44,7 @@ Output (all in output/<run>/):
   cut_sweep.csv                   — full grid results
   cut_sweep_1d.png                — 1-D slope profiles (one panel per parameter)
   cut_sweep_2d_<p1>_<p2>.png     — 2-D slices (slope / volatility / loglike)
+  cut_sweep_corner.png            — corner plot (1-D diagonal + 2-D lower triangle)
   cut_sweep_best_config.json      — optimal cut parameters
 """
 
@@ -331,6 +332,7 @@ def tophat_loglik(x_std, sigma_x_std, y, sigma_y,
 _N_MIN = 30   # minimum galaxies to attempt a fit
 _SLOPE_LO = -9.0   # MLE slope lower bound (original units)
 _SLOPE_HI = -4.0   # MLE slope upper bound (original units)
+_STABLE_SIGMA = 2.0  # stable if |slope - ref| < _STABLE_SIGMA * sigma
 
 
 def fit_mle(x, sigma_x, y, sigma_y, haty_min, haty_max,
@@ -593,7 +595,7 @@ def _label(p):
     return _PARAM_LABELS.get(p, p)
 
 
-def plot_1d(df, param_cols, best_cuts, true_slope, out_file):
+def plot_1d(df, param_cols, best_cuts, true_slope, out_file, rec_cuts=None):
     """1-D slope ± σ profiles, one panel per parameter."""
     ncols = len(param_cols)
     fig, axes = plt.subplots(1, ncols, figsize=(4 * ncols, 4), sharey=False)
@@ -613,10 +615,17 @@ def plot_1d(df, param_cols, best_cuts, true_slope, out_file):
         if true_slope is not None:
             ax.axhline(true_slope, color="crimson", linestyle="--",
                        linewidth=1.5, label=f"true slope = {true_slope:.2f}")
-        ax.axvline(best_cuts[p], color="orange", linestyle=":", linewidth=1.5,
-                   label="best")
+        ax.axhline(_SLOPE_LO, color="red", linestyle="--", linewidth=0.8, alpha=0.5,
+                   label=f"bound ({_SLOPE_LO:.0f})")
+        ax.axhline(_SLOPE_HI, color="red", linestyle="--", linewidth=0.8, alpha=0.5,
+                   label=f"bound ({_SLOPE_HI:.0f})")
+        ax.axvline(best_cuts[p], color="steelblue", linestyle=":", linewidth=1.5,
+                   label=f"best ({best_cuts[p]:.2f})")
+        if rec_cuts is not None and rec_cuts[p] != best_cuts[p]:
+            ax.axvline(rec_cuts[p], color="orange", linestyle=":", linewidth=1.5,
+                       label=f"rec ({rec_cuts[p]:.2f})")
         ax.set_xlabel(_label(p), fontsize=11)
-        ax.set_ylabel("slope", fontsize=11)
+        ax.set_ylabel("fitted TFR slope", fontsize=11)
         ax.set_title(_label(p), fontsize=11)
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=8)
@@ -680,16 +689,156 @@ def plot_2d(df, p1, p2, param_cols, best_cuts, out_file):
     print(f"Saved: {out_file}")
 
 
-def make_plots(df, param_cols, best_cuts, run_dir, true_slope=None):
+def plot_corner(df, param_cols, best_cuts, true_slope, out_file, rec_cuts=None):
+    """Corner plot: 1-D slope profiles on diagonal, 2-D slope heatmaps on lower triangle."""
+    import matplotlib.cm as cm
+    import matplotlib.colors as mcolors
+
+    N = len(param_cols)
+    if N == 0:
+        return
+
+    # Reference slope/sigma at best_cuts
+    ref_mask = pd.Series(True, index=df.index)
+    for p in param_cols:
+        ref_mask &= df[p] == best_cuts[p]
+    ref_rows = df[ref_mask].dropna(subset=["slope", "sigma_slope"])
+    if ref_rows.empty:
+        print("WARNING: plot_corner: no data at best_cuts — skipping.")
+        return
+    ref_slope = float(ref_rows["slope"].iloc[0])
+    ref_sigma = float(ref_rows["sigma_slope"].iloc[0])
+    all_slopes = df["slope"].dropna().values
+    tol = 0.01
+    interior_slopes = all_slopes[
+        (all_slopes > _SLOPE_LO + tol) & (all_slopes < _SLOPE_HI - tol)
+    ]
+    color_slopes = interior_slopes if len(interior_slopes) >= 10 else all_slopes
+    vmin_color = float(np.nanpercentile(color_slopes, 2))
+    vmax_color = float(np.nanpercentile(color_slopes, 98))
+
+    fig, axes = plt.subplots(N, N, figsize=(3.5 * N, 3.5 * N), constrained_layout=True)
+    if N == 1:
+        axes = np.array([[axes]])
+
+    for i in range(N):
+        for j in range(N):
+            ax = axes[i, j]
+
+            if j > i:
+                ax.set_visible(False)
+                continue
+
+            pi = param_cols[i]
+            pj = param_cols[j]
+
+            if i == j:
+                # Diagonal: 1-D slope profile
+                p = param_cols[i]
+                mask = pd.Series(True, index=df.index)
+                for q in param_cols:
+                    if q != p:
+                        mask &= df[q] == best_cuts[q]
+                sub = df[mask].sort_values(p)
+                ax.errorbar(sub[p], sub["slope"], yerr=sub["sigma_slope"],
+                            fmt="o-", color="steelblue", capsize=3, linewidth=1.2,
+                            markersize=4)
+                if true_slope is not None:
+                    ax.axhline(true_slope, color="crimson", linestyle="--",
+                               linewidth=1.2)
+                ax.axvline(best_cuts[p], color="steelblue", linestyle=":",
+                           linewidth=1.5)
+                if rec_cuts is not None and rec_cuts[p] != best_cuts[p]:
+                    ax.axvline(rec_cuts[p], color="orange", linestyle=":",
+                               linewidth=1.5)
+                ax.set_xlabel(_label(p), fontsize=8)
+                ax.set_ylabel("slope", fontsize=8)
+                ax.tick_params(labelsize=7)
+                ax.grid(True, alpha=0.3)
+
+            else:
+                # Lower triangle: 2-D slope heatmap
+                # x-axis = pj (param_cols[j]), y-axis = pi (param_cols[i])
+                mask = pd.Series(True, index=df.index)
+                for q in param_cols:
+                    if q not in (pi, pj):
+                        mask &= df[q] == best_cuts[q]
+                sub = df[mask]
+                if sub.empty:
+                    ax.set_visible(False)
+                    continue
+
+                v_x = sorted(sub[pj].unique())
+                v_y = sorted(sub[pi].unique())
+                shape = (len(v_y), len(v_x))
+                slope_grid = np.full(shape, np.nan)
+                for _, row in sub.iterrows():
+                    if np.isnan(row["slope"]):
+                        continue
+                    ix = v_x.index(row[pj])
+                    iy = v_y.index(row[pi])
+                    slope_grid[iy, ix] = row["slope"]
+
+                ax.imshow(slope_grid, aspect="auto", origin="lower",
+                          cmap="RdYlGn",
+                          vmin=vmin_color, vmax=vmax_color,
+                          extent=[min(v_x), max(v_x), min(v_y), max(v_y)])
+
+                # Stable-region boundary contours
+                if not np.all(np.isnan(slope_grid)):
+                    try:
+                        xs = np.linspace(min(v_x), max(v_x), slope_grid.shape[1])
+                        ys = np.linspace(min(v_y), max(v_y), slope_grid.shape[0])
+                        ax.contour(xs, ys, slope_grid,
+                                   levels=[ref_slope - _STABLE_SIGMA * ref_sigma,
+                                           ref_slope + _STABLE_SIGMA * ref_sigma],
+                                   colors="white", linestyles="dashed",
+                                   linewidths=0.8)
+                    except Exception:
+                        pass
+
+                # Blue crosshairs at best_cuts
+                ax.axvline(best_cuts[pj], color="steelblue", linestyle="--",
+                           linewidth=1.0)
+                ax.axhline(best_cuts[pi], color="steelblue", linestyle="--",
+                           linewidth=1.0)
+
+                # Orange x at rec_cuts where they differ
+                if rec_cuts is not None:
+                    if rec_cuts[pj] != best_cuts[pj] or rec_cuts[pi] != best_cuts[pi]:
+                        ax.plot(rec_cuts[pj], rec_cuts[pi], "x", color="orange",
+                                markersize=8, markeredgewidth=1.5)
+
+                ax.set_xlabel(_label(pj), fontsize=8)
+                ax.set_ylabel(_label(pi), fontsize=8)
+                ax.tick_params(labelsize=7)
+
+    # Shared colorbar
+    sm = cm.ScalarMappable(
+        cmap="RdYlGn",
+        norm=mcolors.Normalize(vmin=vmin_color, vmax=vmax_color))
+    sm.set_array([])
+    fig.colorbar(sm, ax=axes.ravel().tolist(), shrink=0.6, label="fitted TFR slope")
+
+    fig.suptitle("Corner plot: slope phase space", fontsize=12)
+    plt.savefig(out_file, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {out_file}")
+
+
+def make_plots(df, param_cols, best_cuts, run_dir, true_slope=None, rec_cuts=None):
     """Generate all 1-D and 2-D plots."""
     out_1d = os.path.join(run_dir, "cut_sweep_1d.png")
-    plot_1d(df, param_cols, best_cuts, true_slope, out_1d)
+    plot_1d(df, param_cols, best_cuts, true_slope, out_1d, rec_cuts=rec_cuts)
 
     for p1, p2 in itertools.combinations(param_cols, 2):
         safe1 = p1.replace("_", "")
         safe2 = p2.replace("_", "")
         out_2d = os.path.join(run_dir, f"cut_sweep_2d_{safe1}_{safe2}.png")
         plot_2d(df, p1, p2, param_cols, best_cuts, out_2d)
+
+    out_corner = os.path.join(run_dir, "cut_sweep_corner.png")
+    plot_corner(df, param_cols, best_cuts, true_slope, out_corner, rec_cuts=rec_cuts)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -704,17 +853,16 @@ def find_best(df, criterion="score"):
     return sub.loc[sub[criterion].idxmax()]
 
 
-def find_best_stable_max_N(df, vol_threshold_factor=3.0):
+def find_best_stable_max_N(df, vol_threshold_factor=25.0):
     """Return the plateau point with the most galaxies.
 
-    'Plateau' = volatility <= vol_min * vol_threshold_factor.
-    Falls back to the score-best point if no plateau is found.
+    'Plateau' = volatility <= Pth percentile of interior volatility, where P is
+    vol_threshold_factor (0–100, default 25).
 
     Boundary-hitting fits (slope at the MLE bounds _SLOPE_LO / _SLOPE_HI) are
-    excluded before computing vol_min.  Those fits have a degenerate likelihood
-    for the given cut combination; their near-zero volatility (all neighbours
-    are also degenerate) would otherwise drive vol_min ≈ 0 and make the
-    threshold insensitive to vol_threshold_factor.
+    excluded before computing the percentile threshold.  Those fits have a
+    degenerate likelihood for the given cut combination; their near-zero
+    volatility would otherwise skew the threshold.
     """
     sub = df.dropna(subset=["volatility", "N", "score"])
     if sub.empty:
@@ -725,11 +873,8 @@ def find_best_stable_max_N(df, vol_threshold_factor=3.0):
     ]
     if interior.empty:
         interior = sub   # nothing to exclude — use everything
-    vol_min = float(interior["volatility"].min())
-    vol_threshold = max(vol_min * vol_threshold_factor, vol_min + 1e-6)
+    vol_threshold = float(np.percentile(interior["volatility"], vol_threshold_factor))
     stable = interior[interior["volatility"] <= vol_threshold]
-    if stable.empty:
-        return interior.loc[interior["score"].idxmax()]   # fallback
     return stable.loc[stable["N"].idxmax()]
 
 
@@ -762,8 +907,8 @@ def sweetspot_summary(df, param_cols, best_cuts, true_slope=None):
     Also reports whether the log-likelihood is a reliable criterion.
     """
     W = 70
-    STABLE_SIGMA = 2.0   # a point is 'stable' if |slope - ref| < STABLE_SIGMA * σ
-    SENS_SIGMA   = 3.0   # parameter is 'sensitive' if range > SENS_SIGMA * median(σ)
+    STABLE_SIGMA = _STABLE_SIGMA  # a point is 'stable' if |slope - ref| < STABLE_SIGMA * σ
+    SENS_SIGMA   = 3.0            # parameter is 'sensitive' if range > SENS_SIGMA * median(σ)
 
     # Reference slope at the best-score cuts
     ref_mask = pd.Series(True, index=df.index)
@@ -818,30 +963,47 @@ def sweetspot_summary(df, param_cols, best_cuts, true_slope=None):
         vals    = sub[p].values
         ns      = sub["N"].values
 
-        slope_range   = float(slopes.max() - slopes.min())
-        median_sigma  = float(np.median(sigmas))
-        sensitive     = slope_range > SENS_SIGMA * median_sigma
+        tol = 0.01
+        interior = (slopes > _SLOPE_LO + tol) & (slopes < _SLOPE_HI - tol)
+        n_boundary = int((~interior).sum())
 
-        # Stable: slope within STABLE_SIGMA * σ of the reference
-        combined_sigma = np.maximum(sigmas, ref_sigma)
-        stable = np.abs(slopes - ref_slope) < STABLE_SIGMA * combined_sigma
+        i_slopes = slopes[interior]
+        i_sigmas = sigmas[interior]
+        i_vals   = vals[interior]
+        i_ns     = ns[interior]
 
         print(f"\n  {_label(p)}  [{p}]")
         print(f"    Tested range: [{vals.min():.2f}, {vals.max():.2f}]  "
               f"({len(vals)} points)")
+
+        if i_slopes.size == 0:
+            print(f"    WARNING: all tested values have slope at optimizer boundary — "
+                  f"widen the grid or tighten the cut range.")
+            recommendations[p] = best_cuts[p]
+            continue
+        if n_boundary:
+            print(f"    ({n_boundary} point(s) at optimizer slope boundary excluded)")
+
+        slope_range   = float(i_slopes.max() - i_slopes.min())
+        median_sigma  = float(np.median(i_sigmas))
+        sensitive     = slope_range > SENS_SIGMA * median_sigma
+
+        # Stable: slope within STABLE_SIGMA * σ of the reference
+        combined_sigma = np.maximum(i_sigmas, ref_sigma)
+        stable = np.abs(i_slopes - ref_slope) < STABLE_SIGMA * combined_sigma
 
         if not sensitive:
             print(f"    INSENSITIVE — slope varies by only {slope_range:.4f} "
                   f"({slope_range/median_sigma:.1f}σ) across the full range.")
             print(f"    All tested values are in the stable region.")
             # prefer the loosest cut (most galaxies) even when insensitive
-            best_idx = int(np.argmax(ns))
-            rec_val  = float(vals[best_idx])
-            rec_note = (f"loosest value — maximises N_sel = {int(ns[best_idx])}")
+            best_idx = int(np.argmax(i_ns))
+            rec_val  = float(i_vals[best_idx])
+            rec_note = (f"loosest value — maximises N_sel = {int(i_ns[best_idx])}")
         else:
-            stable_vals = vals[stable]
-            stable_ns   = ns[stable]
-            unstable    = vals[~stable]
+            stable_vals = i_vals[stable]
+            stable_ns   = i_ns[stable]
+            unstable    = i_vals[~stable]
             print(f"    SENSITIVE — slope varies by {slope_range:.4f} "
                   f"({slope_range/median_sigma:.1f}σ).")
             print(f"    Unstable values (slope deviates > {STABLE_SIGMA}σ): "
@@ -849,7 +1011,7 @@ def sweetspot_summary(df, param_cols, best_cuts, true_slope=None):
             if len(stable_vals) > 0:
                 print(f"    Stable region: [{stable_vals.min():.2f}, "
                       f"{stable_vals.max():.2f}]  "
-                      f"(slope ≈ {slopes[stable].mean():.4f})")
+                      f"(slope ≈ {i_slopes[stable].mean():.4f})")
                 # prefer the loosest stable cut (most galaxies)
                 best_idx = int(np.argmax(stable_ns))
                 rec_val  = float(stable_vals[best_idx])
@@ -952,9 +1114,9 @@ if __name__ == "__main__":
                         help="Run name; reads output/<run>/cut_sweep.csv")
     sp_rec.add_argument("--true_slope", type=float, default=None,
                         help="True TFR slope (fullmocks) for bias reporting")
-    sp_rec.add_argument("--vol_threshold_factor", type=float, default=3.0,
-                        help="Plateau threshold: volatility <= vol_min * factor "
-                             "(default 3.0)")
+    sp_rec.add_argument("--vol_threshold_factor", type=float, default=25.0,
+                        help="Plateau threshold: percentile of interior-slope volatility "
+                             "distribution (0–100, default 25)")
     sp_rec.add_argument("--write_best", action="store_true",
                         help="Write cut_sweep_best_config.json at the best grid point")
 
@@ -1052,4 +1214,4 @@ if __name__ == "__main__":
                 cfg_path = os.path.join(run_dir, "cut_sweep_best_config.json")
                 write_best_config(rec_cuts, best_row, fixed_cuts, cfg_path)
 
-            make_plots(df, param_cols, rec_cuts, run_dir, args.true_slope)
+            make_plots(df, param_cols, best_cuts, run_dir, args.true_slope, rec_cuts=rec_cuts)
