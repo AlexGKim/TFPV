@@ -179,8 +179,8 @@ tophat model) are silently skipped.
 |-------|--------------------|-------|
 | `slope` | `slope` | both |
 | `intercept` | `intercept.1` / `intercept[1]` / `intercept` | both |
-| `sigma_int_x` | `sigma_int_x` | both |
-| `sigma_int_y` | `sigma_int_y` | both |
+| `$\sigma_{\rm int,x}$` | `sigma_int_x` | both |
+| `$\sigma_{\rm int,y}$` | `sigma_int_y` | both |
 | `mu_{y_TF}` | `mu_y_TF` | normal only |
 | `tau` | `tau` | normal only |
 
@@ -215,7 +215,7 @@ python corner.py \
 
 # Overlay true parameter values (e.g. from simulation)
 python corner.py --run c000_ph000_r001 --model tophat \
-    --truth slope=-8.3 intercept=-20.1 sigma_int_x=0.03 sigma_int_y=0.5
+    --truth slope=-8.3 intercept=-20.1 '$\sigma_{\rm int,x}$=0.03' '$\sigma_{\rm int,y}$=0.5'
 ```
 
 | Argument | Default | Description |
