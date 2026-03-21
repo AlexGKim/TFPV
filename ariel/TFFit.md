@@ -161,3 +161,68 @@ Notes:
 - `metric_file` must be a JSON file containing only the key `"inv_metric"`.
 - `num_warmup=50` is sufficient when the metric and step size are pre-set.
 - Replace `tophat` with `normal` to run the Gaussian prior model.
+
+---
+
+## Step 4: Posterior Corner Plot
+
+Algorithm: `corner.py`
+
+Reads the Stan CSV chain files from `output/<run>/` and produces a corner plot
+of the TFR posterior parameters using ChainConsumer. Parameters present in the
+CSV are plotted; missing parameters (e.g. `mu_y_TF` and `tau` are absent in the
+tophat model) are silently skipped.
+
+### 1. Parameters plotted
+
+| Label | Stan CSV column(s) | Model |
+|-------|--------------------|-------|
+| `slope` | `slope` | both |
+| `intercept` | `intercept.1` / `intercept[1]` / `intercept` | both |
+| `sigma_int_x` | `sigma_int_x` | both |
+| `sigma_int_y` | `sigma_int_y` | both |
+| `mu_{y_TF}` | `mu_y_TF` | normal only |
+| `tau` | `tau` | normal only |
+
+### 2. Output
+
+| File | Description |
+|------|-------------|
+| `output/<run>/<model>.png` | corner plot of posterior parameters |
+
+Mean, std, and median for each plotted parameter are also printed to stdout,
+along with ChainConsumer's 1D summary (16th/50th/84th percentiles).
+
+### Usage
+
+```bash
+# Standard usage with --run (reads output/<run>/<model>_?.csv)
+python corner.py --run c000_ph000_r001 --model tophat
+python corner.py --run c000_ph000_r001 --model normal
+
+# Overlay two models on the same plot
+python corner.py \
+    'output/c000_ph000_r001/tophat_?.csv' \
+    'output/c000_ph000_r001/normal_?.csv' \
+    --output output/c000_ph000_r001/compare.png
+
+# Compare two runs
+python corner.py \
+    'output/c000_ph000_r001/tophat_?.csv' \
+    'output/c000_ph000_r002/tophat_?.csv' \
+    --name c000_ph000_r001 --name c000_ph000_r002 \
+    --output output/compare_runs.png
+
+# Overlay true parameter values (e.g. from simulation)
+python corner.py --run c000_ph000_r001 --model tophat \
+    --truth slope=-8.3 intercept=-20.1 sigma_int_x=0.03 sigma_int_y=0.5
+```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `PATTERN …` | — | Glob patterns for Stan CSV files (quote each to prevent shell expansion) |
+| `--run NAME` | — | Run name; reads `output/<NAME>/<model>_?.csv`, writes `output/<NAME>/<model>.png` |
+| `--model` | `tophat` | Model to plot when using `--run`: `tophat` or `normal` |
+| `--output FILE` | `corner_plot.png` | Output PNG path (overrides the `--run` default) |
+| `--name LABEL` | — | Legend label for a chain (repeat once per pattern, in order) |
+| `--truth PARAM=VALUE …` | — | True parameter values to overlay as vertical/horizontal lines |
