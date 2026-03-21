@@ -143,43 +143,11 @@ and normal models, and run MCMC sampling to infer the TFR parameters.
 
 ### Step 6: Predict Absolute Magnitudes
 
-```bash
-python predict.py --run DESI           --model tophat --source DESI
-python predict.py --run ariel          --model tophat --source ariel
+Given the fitted TFR posterior, compute the posterior predictive mean and
+uncertainty of the latent absolute magnitude y_* for each galaxy by
+marginalizing over MCMC draws.
 
-# fullmocks: reads FITS from --dir, compares predictions to R_ABSMAG_SB26_TRUE
-python predict.py --run c000_ph000_r000 --model tophat --source fullmocks \
-  --dir /path/to/mocks --n_objects 100000
-
-# fullmocks with looser selection (expand magnitude and plane-cut windows)
-python predict.py --run c000_ph000_r000 --model tophat --source fullmocks \
-  --dir /path/to/mocks --n_objects 100000 \
-  --delta_haty_min -0.5 --delta_haty_max 0.5 \
-  --delta_intercept_plane -0.05 --delta_intercept_plane2 0.05 \
-  --delta_z_obs_min -0.03
-```
-
-The `--source fullmocks` flag produces output plots in `output/<run>/`:
-- `{model}_grid.png` — `mean_pred − yhat_obs` (observed residual on x–y grid)
-- `{model}_truth_diff_grid.png` — `mean_pred − R_ABSMAG_SB26_TRUE` (prediction vs. simulation truth)
-- `{model}_highpull.png` — scatter in (x̂, ŷ) with pull > 4 galaxies highlighted in red
-- `redshift_{model}.png` — pull vs. redshift scatter with weighted mean
-- `redshift_hist_{model}.png` — pull histograms in 9 log-spaced redshift bins
-
-**Selection flags for `--source fullmocks`** (offsets default to 0, i.e. match training selection):
-
-| Flag | Effect |
-|---|---|
-| `--delta_haty_min FLOAT` | shift `haty_min` cut (negative = looser) |
-| `--delta_haty_max FLOAT` | shift `haty_max` cut (positive = looser) |
-| `--delta_z_obs_min FLOAT` | shift `z_obs_min` cut (negative = looser) |
-| `--delta_z_obs_max FLOAT` | shift `z_obs_max` cut (positive = looser) |
-| `--delta_intercept_plane FLOAT` | shift lower plane intercept (negative = looser) |
-| `--delta_intercept_plane2 FLOAT` | shift upper plane intercept (positive = looser) |
-
-The oblique plane cut is applied by default (matching training selection).
-
-Use `--n_objects` (any source) to limit the number of galaxies used for prediction.
+→ See [Predict.md](Predict.md) for the full algorithm and usage.
 
 ---
 
