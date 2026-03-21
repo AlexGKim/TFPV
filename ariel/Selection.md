@@ -136,9 +136,7 @@ selection cuts overlaid.
 ### Usage
 
 ```bash
-python selection_ellipse.py \
-    --file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \
-    --run c000_ph000_r001
+python selection_ellipse.py --file $FITS --run $RUN
 ```
 
 | Argument | Default | Description |
@@ -271,10 +269,7 @@ galaxies for each parameter.
 ### Usage
 
 ```bash
-python ellipse_sweep.py \
-    --source fullmocks \
-    --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \
-    --run c000_ph000_r001
+python ellipse_sweep.py --source fullmocks --fits_file $FITS --run $RUN
 ```
 
 | Argument | Default | Description |
@@ -399,12 +394,10 @@ when `--source` is provided.
 ### Usage
 
 ```bash
-python selection_criteria.py --run c000_ph000_r001
+python selection_criteria.py --run $RUN
 
 # Also produce the galaxy scatter overplot:
-python selection_criteria.py --run c000_ph000_r001 \
-    --source fullmocks \
-    --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits
+python selection_criteria.py --run $RUN --source fullmocks --fits_file $FITS
 ```
 
 | Argument | Default | Description |

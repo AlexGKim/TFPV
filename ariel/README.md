@@ -157,12 +157,12 @@ These checks should be applied after every step that produces outputs (data prep
 
 ```bash
 # Convergence diagnostics
-../../cmdstan/bin/stansummary output/DESI/tophat_?.csv
-../../cmdstan/bin/diagnose   output/DESI/tophat_?.csv
+../../cmdstan/bin/stansummary output/$RUN/tophat_?.csv
+../../cmdstan/bin/diagnose   output/$RUN/tophat_?.csv
 
-# Corner plots — writes output/<run>/tophat.png or normal.png
-python corner.py --run DESI  --model tophat
-python corner.py --run ariel --model tophat
+# Corner plots — writes output/$RUN/tophat.png or normal.png
+python corner.py --run $RUN --model tophat
+python corner.py --run $RUN --model normal
 ```
 
 ---

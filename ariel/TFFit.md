@@ -65,9 +65,7 @@ OLS on the selected sample initialises `slope` and `intercept` for Stan's
 ### Usage
 
 ```bash
-python fullmocks_data.py \
-    --file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \
-    --run c000_ph000_r001
+python fullmocks_data.py --file $FITS --run $RUN
 ```
 
 Cut parameters are loaded automatically from
@@ -131,9 +129,9 @@ step size, and save the resulting metric for reuse:
 ```bash
 ./tophat sample num_warmup=500 num_samples=500 num_chains=4 \
   adapt save_metric=1 \
-  data file=output/c000_ph000_r001/input.json \
-  init=output/c000_ph000_r001/init.json \
-  output file=output/c000_ph000_r001/tophat.csv
+  data file=output/$RUN/input.json \
+  init=output/$RUN/init.json \
+  output file=output/$RUN/tophat.csv
 ```
 
 This writes `tophat_1.csv` … `tophat_4.csv` and `tophat_metric.json` (containing
@@ -147,17 +145,17 @@ warmup:
 
 ```bash
 ./tophat sample algorithm=hmc metric=diag_e \
-  metric_file=output/c000_ph000_r001/tophat_metric.json \
+  metric_file=output/$RUN/tophat_metric.json \
   stepsize=0.11871086 \
   num_warmup=50 num_samples=500 num_chains=4 \
-  data file=output/c000_ph000_r001/input.json \
-  init=output/c000_ph000_r001/init.json \
-  output file=output/c000_ph000_r001/tophat.csv
+  data file=output/$RUN/input.json \
+  init=output/$RUN/init.json \
+  output file=output/$RUN/tophat.csv
 ```
 
 Notes:
 - Retrieve the adapted step size from the CSV chain header:
-  `grep stepsize= output/c000_ph000_r001/tophat_1.csv`
+  `grep stepsize= output/$RUN/tophat_1.csv`
 - `metric_file` must be a JSON file containing only the key `"inv_metric"`.
 - `num_warmup=50` is sufficient when the metric and step size are pre-set.
 - Replace `tophat` with `normal` to run the Gaussian prior model.
@@ -196,25 +194,25 @@ along with ChainConsumer's 1D summary (16th/50th/84th percentiles).
 ### Usage
 
 ```bash
-# Standard usage with --run (reads output/<run>/<model>_?.csv)
-python corner.py --run c000_ph000_r001 --model tophat
-python corner.py --run c000_ph000_r001 --model normal
+# Standard usage with --run (reads output/$RUN/<model>_?.csv)
+python corner.py --run $RUN --model tophat
+python corner.py --run $RUN --model normal
 
 # Overlay two models on the same plot
 python corner.py \
-    'output/c000_ph000_r001/tophat_?.csv' \
-    'output/c000_ph000_r001/normal_?.csv' \
-    --output output/c000_ph000_r001/compare.png
+    "output/$RUN/tophat_?.csv" \
+    "output/$RUN/normal_?.csv" \
+    --output output/$RUN/compare.png
 
 # Compare two runs
 python corner.py \
-    'output/c000_ph000_r001/tophat_?.csv' \
-    'output/c000_ph000_r002/tophat_?.csv' \
-    --name c000_ph000_r001 --name c000_ph000_r002 \
+    "output/$RUN/tophat_?.csv" \
+    "output/c000_ph000_r002/tophat_?.csv" \
+    --name $RUN --name c000_ph000_r002 \
     --output output/compare_runs.png
 
 # Overlay true parameter values (e.g. from simulation)
-python corner.py --run c000_ph000_r001 --model tophat \
+python corner.py --run $RUN --model tophat \
     --truth slope=-8.3 intercept=-20.1 '$\sigma_{\rm int,x}$=0.03' '$\sigma_{\rm int,y}$=0.5'
 ```
 

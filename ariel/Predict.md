@@ -81,31 +81,30 @@ prediction sample.
 ### Usage
 
 ```bash
+# Fullmocks — reads FITS from --dir, compares predictions to R_ABSMAG_SB26_TRUE
+python predict.py --run $RUN --model tophat --source fullmocks --dir $(dirname $FITS)
+
+# Subsample galaxies used for prediction
+python predict.py --run $RUN --model tophat --source fullmocks \
+  --dir $(dirname $FITS) --n_objects 100000
+
+# Looser prediction selection (expand windows relative to training cuts)
+python predict.py --run $RUN --model tophat --source fullmocks \
+  --dir $(dirname $FITS) --n_objects 100000 \
+  --delta_haty_min -0.5 --delta_haty_max 0.5 \
+  --delta_intercept_plane -0.05 --delta_intercept_plane2 0.05 \
+  --delta_z_obs_min -0.03
+
+# Predict on a different simulation realization than the one used for fitting
+python predict.py --run $RUN --model tophat --source fullmocks \
+  --dir $(dirname $FITS) --predict_run c000_ph000_r002
+
 # DESI
 python predict.py --run DESI --model tophat --source DESI
 python predict.py --run DESI --model normal --source DESI
 
 # Ariel mock
 python predict.py --run ariel --model tophat --source ariel
-
-# Fullmocks — reads FITS from --dir, compares predictions to R_ABSMAG_SB26_TRUE
-python predict.py --run c000_ph000_r001 --model tophat --source fullmocks \
-  --dir /path/to/mocks
-
-# Subsample galaxies used for prediction
-python predict.py --run c000_ph000_r001 --model tophat --source fullmocks \
-  --dir /path/to/mocks --n_objects 100000
-
-# Looser prediction selection (expand windows relative to training cuts)
-python predict.py --run c000_ph000_r001 --model tophat --source fullmocks \
-  --dir /path/to/mocks --n_objects 100000 \
-  --delta_haty_min -0.5 --delta_haty_max 0.5 \
-  --delta_intercept_plane -0.05 --delta_intercept_plane2 0.05 \
-  --delta_z_obs_min -0.03
-
-# Predict on a different simulation realization than the one used for fitting
-python predict.py --run c000_ph000_r001 --model tophat --source fullmocks \
-  --dir /path/to/mocks --predict_run c000_ph000_r002
 ```
 
 | Argument | Default | Description |
