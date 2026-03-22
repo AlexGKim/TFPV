@@ -86,7 +86,11 @@ def process_desi_tf_data(
         V_0p4R26 = np.asarray(data["V_0p4R26"], dtype=float)
         V_0p4R26_ERR = np.asarray(data["V_0p4R26_ERR"], dtype=float)
         R_ABSMAG_SB26 = np.asarray(data["R_ABSMAG_SB26"], dtype=float)
-        R_ABSMAG_SB26_ERR = np.asarray(data["R_ABSMAG_SB26_ERR"], dtype=float)
+        if "R_ABSMAG_SB26_ERR" in names:
+            R_ABSMAG_SB26_ERR = np.asarray(data["R_ABSMAG_SB26_ERR"], dtype=float)
+        else:
+            print("Warning: R_ABSMAG_SB26_ERR absent; falling back to R_MAG_SB26_ERR")
+            R_ABSMAG_SB26_ERR = np.asarray(data["R_MAG_SB26_ERR"], dtype=float)
         z_all_raw = np.asarray(data[z_col_use], dtype=float)
 
     total_rows = len(V_0p4R26)

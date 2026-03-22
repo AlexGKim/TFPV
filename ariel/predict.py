@@ -371,6 +371,18 @@ def load_xy_and_uncertainties_from_desi(
         else:
             z_col_use = z_col
 
+        # Resolve mag_err_col with fallback
+        if mag_err_col not in names:
+            fallback = "R_MAG_SB26_ERR"
+            if fallback in names:
+                print(f"Warning: {mag_err_col!r} absent; falling back to {fallback!r}")
+                mag_err_col = fallback
+            else:
+                raise ValueError(
+                    f"Missing magnitude error column {mag_err_col!r} and fallback "
+                    f"{fallback!r}. Available: {sorted(list(names))[:30]} ..."
+                )
+
         # Required columns
         required = [vel_col, vel_err_col, mag_col, mag_err_col, z_col_use]
         missing = [c for c in required if c not in names]

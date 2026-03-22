@@ -1,23 +1,65 @@
 #!/usr/bin/env python3
 """
-ellipse_sweep.py — Parametric sweep of TFR selection cuts along the GMM ellipse scale.
+ellipse_sweep.py — Selection-cut optimisation and parametric sweep for TFR fitting.
 
-For each of the four selection-cut parameters (haty_min, haty_max, intercept_plane,
-intercept_plane2), varies the ellipse scale n_σ over a log-spaced grid while keeping
-the other three parameters fixed at their 1σ values.  At each grid point the TFR slope
-is estimated by Stan MAP optimisation (tophat model).  The resulting slope profiles and
-their numerical derivatives ∂s/∂(n_σ) are plotted.
+Three operating modes, selected by CLI flags:
+
+─── Default mode (no flag) ───────────────────────────────────────────────────
+Two-phase 2D fiducial search over (n_σ_perp, n_σ_mag), followed by a 1D
+parametric sweep of each cut parameter.
+
+  Phase 1 (coarse): evaluates MLE slope on an n_σ_perp × n_σ_mag grid.
+  Phase 2 (fine):   zooms into the transition band identified in phase 1.
+
+  The fiducial point is the highest-N grid point with |MLE slope − GMM slope|
+  ≤ slope_tol, contracted slightly inward.
+
+  Outputs:
+    output/<run>/fiducial_search.png   — 2×2 coarse/fine heatmaps
+    output/<run>/ellipse_sweep.json    — 1D sweep slopes and ∂s/∂(n_σ)
+    output/<run>/ellipse_sweep.png     — 1D slope profiles and derivatives
+
+─── --coarse_only ────────────────────────────────────────────────────────────
+Runs only Phase 1 (coarse grid); skips Phase 2, the 1D sweep, and the
+summary table.  Produces a 1×2 heatmap instead of 2×2.
+
+  Output:
+    output/<run>/fiducial_search.png   — 1×2 coarse heatmap
+
+─── --mag_split ──────────────────────────────────────────────────────────────
+2D grid over (n_σ_ŷmin, n_σ_ŷmax) with haty_min and haty_max scaled
+independently, repeated for each n_σ_perp in --n_sigma_perp_min/max/n.
+Results are saved to JSON for fast replotting.
+
+  Outputs:
+    output/<run>/mag_split_grid.json   — grid results
+    output/<run>/mag_split_grid.png    — (n_perp × 2) heatmap
+
+─── --mag_split_plot ─────────────────────────────────────────────────────────
+Replot mag_split_grid.png from a previously saved mag_split_grid.json
+without rerunning any Stan calls.
 
 Requires output/<run>/selection_ellipse.json (produced by selection_ellipse.py).
 
 Usage:
-  python ellipse_sweep.py \\
-      --source fullmocks \\
-      --fits_file data/TF_extended_AbacusSummit_base_c000_ph000_r001_z0.11.fits \\
-      --run c000_ph000_r001
+  # Default: fiducial search + 1D sweep
+  python ellipse_sweep.py --source DESI --fits_file data/... --run DESI
 
-Output:
-  output/<run>/ellipse_sweep.png
+  # Coarse-only fiducial search
+  python ellipse_sweep.py --source DESI --fits_file data/... --run DESI \\
+      --coarse_only --n_sigma_perp_min 3 --n_sigma_perp_max 9 --n_sigma_perp_n 4 \\
+      --n_sigma_mag_min 2 --n_sigma_mag_max 6 --n_sigma_mag_n 3
+
+  # Mag-split grid
+  python ellipse_sweep.py --source DESI --fits_file data/... --run DESI \\
+      --mag_split \\
+      --n_sigma_perp_min 2 --n_sigma_perp_max 10 --n_sigma_perp_n 5 \\
+      --n_sigma_mag_lo_min 1 --n_sigma_mag_lo_max 5 --n_sigma_mag_lo_n 3 \\
+      --n_sigma_mag_hi_min 1 --n_sigma_mag_hi_max 5 --n_sigma_mag_hi_n 3
+
+  # Replot mag-split from saved JSON
+  python ellipse_sweep.py --source DESI --fits_file data/... --run DESI \\
+      --mag_split_plot
 """
 
 import argparse
@@ -91,7 +133,7 @@ def load_desi(fits_file="data/DESI-DR1_TF_pv_cat_v15.fits"):
 
     # Redshift — try several candidate column names
     zobs = None
-    for col in ("ZOBS", "Z_OBS", "zobs", "Z", "ZHELIO"):
+    for col in ("Z_DESI", "Z_DESI_CMB", "ZOBS", "Z_OBS", "zobs", "Z", "ZHELIO"):
         if col in data.names:
             zobs = np.asarray(data[col], dtype=float)
             break
@@ -190,6 +232,42 @@ def _cuts_at_nsigma(mu, sigma, n_sigma):
         slope_plane=slope,
         intercept_plane=min(i1, i2),
         intercept_plane2=max(i1, i2),
+    )
+
+
+def _cuts_mixed(mu, sigma, n_sigma_perp, n_sigma_mag):
+    """Cuts with independent scaling for strip width and magnitude window.
+
+    intercept_plane, intercept_plane2, slope_plane → from n_sigma_perp
+    haty_min, haty_max                             → from n_sigma_mag
+    """
+    perp = _cuts_at_nsigma(mu, sigma, n_sigma_perp)
+    mag  = _cuts_at_nsigma(mu, sigma, n_sigma_mag)
+    return dict(
+        haty_min        = mag["haty_min"],
+        haty_max        = mag["haty_max"],
+        slope_plane     = perp["slope_plane"],
+        intercept_plane = perp["intercept_plane"],
+        intercept_plane2= perp["intercept_plane2"],
+    )
+
+
+def _cuts_mag_asymmetric(mu, sigma, n_sigma_perp, n_sigma_lo, n_sigma_hi):
+    """Cuts with independent n_σ scaling for haty_min and haty_max.
+
+    haty_min = mu[1] - n_sigma_lo * y_extent
+    haty_max = mu[1] + n_sigma_hi * y_extent
+    intercept_plane, intercept_plane2, slope_plane → from n_sigma_perp
+    """
+    perp     = _cuts_at_nsigma(mu, sigma, n_sigma_perp)
+    unit     = _cuts_at_nsigma(mu, sigma, 1.0)
+    y_extent = unit["haty_max"] - float(mu[1])
+    return dict(
+        haty_min        = float(mu[1]) - n_sigma_lo * y_extent,
+        haty_max        = float(mu[1]) + n_sigma_hi * y_extent,
+        slope_plane     = perp["slope_plane"],
+        intercept_plane = perp["intercept_plane"],
+        intercept_plane2= perp["intercept_plane2"],
     )
 
 
@@ -297,17 +375,323 @@ def _stan_mle_slope(data_dict, init_dict, exe_file, tmp_dir):
 # SECTION 5: SWEEP
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_ellipse_sweep(raw_data, mu, sigma, n_sigma_vals, extra_cuts, exe_file):
-    """Sweep each ellipse cut parameter over n_sigma_vals, others fixed at 1σ.
+def _run_grid(raw_data, mu, sigma, extra_cuts, exe_file, gmm_slope, slope_tol,
+              perp_vals, mag_vals, label, tmp_dir):
+    """Run MLE slope at every (perp, mag) grid point; return list of (nsp, nsm, slope, N)."""
+    results = []
+    print(f"\n  [{label}]")
+    print(f"  {'n_σ_perp':>9}  {'n_σ_mag':>7}  {'MLE slope':>10}  {'diff':>8}  {'N':>6}")
+    print(f"  {'-'*9}  {'-'*7}  {'-'*10}  {'-'*8}  {'-'*6}")
+    for n_sigma_perp in perp_vals:
+        for n_sigma_mag in mag_vals:
+            cuts = _cuts_mixed(mu, sigma, float(n_sigma_perp), float(n_sigma_mag))
+            cuts.update(extra_cuts)
+            data_dict, init_dict = _build_stan_dicts(raw_data, cuts)
+            if data_dict is None:
+                print(f"  {n_sigma_perp:9.2f}  {n_sigma_mag:7.2f}  {'—':>10}  {'—':>8}  {'<30':>6}")
+                results.append((float(n_sigma_perp), float(n_sigma_mag), float("nan"), 0))
+                continue
+            slope = _stan_mle_slope(data_dict, init_dict, exe_file, tmp_dir)
+            N = data_dict["N_total"]
+            if slope is None:
+                print(f"  {n_sigma_perp:9.2f}  {n_sigma_mag:7.2f}  {'failed':>10}  {'—':>8}  {N:6d}")
+                results.append((float(n_sigma_perp), float(n_sigma_mag), float("nan"), N))
+                continue
+            diff = slope - gmm_slope
+            print(f"  {n_sigma_perp:9.2f}  {n_sigma_mag:7.2f}  {slope:10.4f}  {diff:+8.4f}  {N:6d}")
+            results.append((float(n_sigma_perp), float(n_sigma_mag), slope, N))
+    return results
+
+
+def find_fiducial_cuts(raw_data, mu, sigma, extra_cuts, exe_file, gmm_slope,
+                       n_sigma_perp_vals, n_sigma_mag_vals, slope_tol=0.5,
+                       contraction=0.9, coarse_only=False, n_fine_perp=10, n_fine_mag=8):
+    """Two-phase 2D grid search over (n_sigma_perp, n_sigma_mag) for the fiducial cuts.
+
+    Phase 1 (coarse): runs on the supplied n_sigma_perp_vals × n_sigma_mag_vals grid.
+    Phase 2 (fine): zooms into the perp/mag transition band found in phase 1.
+
+    Best-point selection (max N within slope_tol) runs on fine-grid results only.
+
+    Returns (fiducial_n_sigma_perp, fiducial_n_sigma_mag, ref_cuts, mle_slope,
+             grid_info, raw_best_perp, raw_best_mag).
+    """
+    print(f"\nSearching for fiducial cuts (GMM slope={gmm_slope:.4f}, tol={slope_tol}) …")
+    print(f"  Coarse n_σ_perp grid: {n_sigma_perp_vals}")
+    print(f"  Coarse n_σ_mag  grid: {n_sigma_mag_vals}")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # ── Phase 1: coarse ──────────────────────────────────────────────────
+        coarse_results = _run_grid(
+            raw_data, mu, sigma, extra_cuts, exe_file, gmm_slope, slope_tol,
+            n_sigma_perp_vals, n_sigma_mag_vals, "coarse", tmp_dir)
+
+        # Detect transition band in n_σ_perp
+        perp_good = {}
+        for nsp, nsm, slope, N in coarse_results:
+            if not np.isnan(slope) and abs(slope - gmm_slope) <= slope_tol:
+                perp_good[nsp] = True
+            elif nsp not in perp_good:
+                perp_good[nsp] = False
+
+        sorted_perps = np.sort(list(perp_good.keys()))
+        no_good_perps  = [p for p in sorted_perps if not perp_good[p]]
+        has_good_perps = [p for p in sorted_perps if perp_good[p]]
+
+        if not no_good_perps:
+            print("  Warning: coarse grid has no biased-slope cells — widen perp range")
+        if not has_good_perps:
+            print("  Warning: coarse grid has no cells within slope_tol — widen perp range")
+
+        if no_good_perps and has_good_perps:
+            coarse_perp_step = float(sorted_perps[1] - sorted_perps[0]) if len(sorted_perps) > 1 else 0
+            fine_perp_lo = max(float(sorted_perps[0]),  no_good_perps[-1]  - coarse_perp_step)
+            fine_perp_hi = min(float(sorted_perps[-1]), has_good_perps[-1] + coarse_perp_step)
+        else:
+            fine_perp_lo, fine_perp_hi = float(sorted_perps[0]), float(sorted_perps[-1])
+
+        # Mag range: span of "good" cells ± 1 coarse step
+        good_mags   = sorted({nsm for _, nsm, slope, _ in coarse_results
+                               if not np.isnan(slope) and abs(slope - gmm_slope) <= slope_tol})
+        sorted_mags = np.sort(list({nsm for _, nsm, _, _ in coarse_results}))
+        if good_mags and len(sorted_mags) > 1:
+            coarse_mag_step = float(sorted_mags[1] - sorted_mags[0])
+            fine_mag_lo = max(float(sorted_mags[0]),  good_mags[0]  - coarse_mag_step)
+            fine_mag_hi = min(float(sorted_mags[-1]), good_mags[-1] + coarse_mag_step)
+        else:
+            fine_mag_lo, fine_mag_hi = float(sorted_mags[0]), float(sorted_mags[-1])
+
+        fine_perp_vals = np.linspace(fine_perp_lo, fine_perp_hi, n_fine_perp)
+        fine_mag_vals  = np.linspace(fine_mag_lo,  fine_mag_hi,  n_fine_mag)
+
+        if coarse_only:
+            fine_results = []
+            fine_perp_vals = n_sigma_perp_vals
+            fine_mag_vals  = n_sigma_mag_vals
+        else:
+            print(f"\n  Fine n_σ_perp: [{fine_perp_lo:.3f}, {fine_perp_hi:.3f}]  ({n_fine_perp} pts)")
+            print(f"  Fine n_σ_mag:  [{fine_mag_lo:.3f},  {fine_mag_hi:.3f}]  ({n_fine_mag} pts)")
+
+            # ── Phase 2: fine ────────────────────────────────────────────────────
+            fine_results = _run_grid(
+                raw_data, mu, sigma, extra_cuts, exe_file, gmm_slope, slope_tol,
+                fine_perp_vals, fine_mag_vals, "fine", tmp_dir)
+
+    # Best-point selection: fine results when available, coarse when coarse_only
+    selection_results = coarse_results if coarse_only else fine_results
+    best_perp  = None
+    best_mag   = None
+    best_cuts  = None
+    best_slope = None
+    best_N     = -1
+    fb_perp  = None
+    fb_mag   = None
+    fb_cuts  = None
+    fb_slope = None
+    fb_diff  = float("inf")
+
+    for nsp, nsm, slope, N in selection_results:
+        if np.isnan(slope):
+            continue
+        diff = slope - gmm_slope
+        if abs(diff) <= slope_tol and N > best_N:
+            best_N     = N
+            best_perp  = nsp
+            best_mag   = nsm
+            best_cuts  = _cuts_mixed(mu, sigma, nsp, nsm)
+            best_cuts.update(extra_cuts)
+            best_slope = slope
+        if abs(diff) < fb_diff:
+            fb_diff  = abs(diff)
+            fb_perp  = nsp
+            fb_mag   = nsm
+            fb_cuts  = _cuts_mixed(mu, sigma, nsp, nsm)
+            fb_cuts.update(extra_cuts)
+            fb_slope = slope
+
+    phase_label = "coarse" if coarse_only else "fine"
+    if best_perp is None and fb_perp is not None:
+        best_perp  = fb_perp
+        best_mag   = fb_mag
+        best_cuts  = fb_cuts
+        best_slope = fb_slope
+        print(f"  Warning: no {phase_label}-grid point within tol={slope_tol}; using min |diff| fallback.")
+
+    if best_perp is None:
+        best_perp  = float(fine_perp_vals[-1])
+        best_mag   = float(fine_mag_vals[-1])
+        best_cuts  = _cuts_mixed(mu, sigma, best_perp, best_mag)
+        best_cuts.update(extra_cuts)
+        best_slope = None
+        print("  Warning: no valid fine-grid point found; using last grid point as fallback.")
+
+    raw_best_perp = best_perp
+    raw_best_mag  = best_mag
+
+    # Apply slight contraction and re-run MLE at the contracted point
+    if contraction != 1.0:
+        c_perp = best_perp * contraction
+        c_mag  = best_mag  * contraction
+        print(f"\n  Contracting fiducial by {contraction}: "
+              f"({best_perp:.2f}, {best_mag:.2f}) → ({c_perp:.2f}, {c_mag:.2f})")
+        c_cuts = _cuts_mixed(mu, sigma, c_perp, c_mag)
+        c_cuts.update(extra_cuts)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            data_dict, init_dict = _build_stan_dicts(raw_data, c_cuts)
+            if data_dict is not None:
+                c_slope = _stan_mle_slope(data_dict, init_dict, exe_file, tmp_dir)
+                best_perp  = c_perp
+                best_mag   = c_mag
+                best_cuts  = c_cuts
+                best_slope = c_slope
+            else:
+                print("  Warning: contracted point has N < _N_MIN; keeping uncontracted fiducial.")
+
+    print(f"\n→ fiducial: n_sigma_perp={best_perp:.2f}  n_sigma_mag={best_mag:.2f}"
+          f"  MLE slope={best_slope if best_slope is not None else 'n/a'}")
+
+    grid_info = dict(
+        coarse_results=coarse_results,
+        coarse_perp_vals=n_sigma_perp_vals,
+        coarse_mag_vals=n_sigma_mag_vals,
+        fine_results=fine_results,
+        fine_perp_vals=fine_perp_vals,
+        fine_mag_vals=fine_mag_vals,
+        coarse_only=coarse_only,
+    )
+    return best_perp, best_mag, best_cuts, best_slope, grid_info, raw_best_perp, raw_best_mag
+
+
+def _make_grids(results, perp_vals, mag_vals):
+    """Build (slope_grid, N_grid) from a list of (nsp, nsm, slope, N) results."""
+    perp_arr = np.asarray(perp_vals)
+    mag_arr  = np.asarray(mag_vals)
+    slope_grid = np.full((len(mag_arr), len(perp_arr)), np.nan)
+    N_grid     = np.full((len(mag_arr), len(perp_arr)), np.nan)
+    for nsp, nsm, slope, N in results:
+        ip = int(np.argmin(np.abs(perp_arr - nsp)))
+        im = int(np.argmin(np.abs(mag_arr  - nsm)))
+        slope_grid[im, ip] = slope
+        N_grid[im, ip]     = float(N) if N > 0 else np.nan
+    return slope_grid, N_grid
+
+
+def plot_fiducial_search(grid_info, gmm_slope, slope_tol,
+                         raw_best_perp, raw_best_mag,
+                         fiducial_perp, fiducial_mag,
+                         run_dir):
+    """Save a heatmap of the fiducial grid search to fiducial_search.png.
+
+    coarse_only=False (default): 2×2 layout.
+      Row 0: coarse grid (slope | N) with dashed rectangle marking fine zoom region.
+      Row 1: fine grid   (slope | N) with open-circle raw-best and yellow-star fiducial.
+
+    coarse_only=True: 1×2 layout.
+      Single row: coarse grid (slope | N) with markers on both panels.
+    """
+    import matplotlib.colors as mcolors
+    import matplotlib.patches as mpatches
+
+    is_coarse_only = grid_info.get("coarse_only", False)
+
+    coarse_perp = np.asarray(grid_info["coarse_perp_vals"])
+    coarse_mag  = np.asarray(grid_info["coarse_mag_vals"])
+    fine_perp   = np.asarray(grid_info["fine_perp_vals"])
+    fine_mag    = np.asarray(grid_info["fine_mag_vals"])
+
+    c_slope_grid, c_N_grid = _make_grids(
+        grid_info["coarse_results"], coarse_perp, coarse_mag)
+    c_diff_grid = c_slope_grid - gmm_slope
+
+    if is_coarse_only:
+        fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
+        rows = [
+            ([axes[0], axes[1]], coarse_perp, coarse_mag,
+             c_slope_grid, c_N_grid, c_diff_grid, "Coarse"),
+        ]
+    else:
+        f_slope_grid, f_N_grid = _make_grids(
+            grid_info["fine_results"], fine_perp, fine_mag)
+        f_diff_grid = f_slope_grid - gmm_slope
+        fig, axes = plt.subplots(2, 2, figsize=(11, 9))
+        rows = [
+            (axes[0], coarse_perp, coarse_mag, c_slope_grid, c_N_grid, c_diff_grid, "Coarse"),
+            (axes[1], fine_perp,   fine_mag,   f_slope_grid, f_N_grid, f_diff_grid, "Fine"),
+        ]
+
+    for row_axes, perp_arr, mag_arr, slope_grid, N_grid, diff_grid, row_label in rows:
+        for ax, data, cmap_name, cbar_label, title in zip(
+                row_axes,
+                [slope_grid, N_grid],
+                ["RdYlGn", "viridis"],
+                ["MLE slope", "N"],
+                ["MLE slope" if is_coarse_only else f"{row_label}: MLE slope",
+                 "N"         if is_coarse_only else f"{row_label}: N"]):
+
+            cmap = plt.get_cmap(cmap_name).copy()
+            cmap.set_bad("lightgray")
+            vmin = np.nanmin(data) if np.any(np.isfinite(data)) else 0
+            vmax = np.nanmax(data) if np.any(np.isfinite(data)) else 1
+            norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+            pcm = ax.pcolormesh(perp_arr, mag_arr, data, cmap=cmap, norm=norm,
+                                shading="nearest")
+            fig.colorbar(pcm, ax=ax, label=cbar_label)
+
+            # tolerance contour |diff| = slope_tol
+            try:
+                ax.contour(perp_arr, mag_arr, np.abs(diff_grid), levels=[slope_tol],
+                           colors="white", linewidths=1.2)
+            except Exception:
+                pass
+
+            ax.set_xlabel(r"$n_{\sigma,\perp}$")
+            ax.set_ylabel(r"$n_{\sigma,\mathrm{mag}}$")
+            ax.set_title(title)
+
+        # Coarse row in two-phase mode: dashed rectangle showing fine zoom region
+        if row_label == "Coarse" and not is_coarse_only:
+            fp_lo, fp_hi = float(fine_perp[0]),  float(fine_perp[-1])
+            fm_lo, fm_hi = float(fine_mag[0]),   float(fine_mag[-1])
+            for ax in row_axes:
+                rect = mpatches.Rectangle(
+                    (fp_lo, fm_lo), fp_hi - fp_lo, fm_hi - fm_lo,
+                    linewidth=1.5, edgecolor="white", facecolor="none",
+                    linestyle="--", zorder=5)
+                ax.add_patch(rect)
+
+        # Markers: on fine row in two-phase mode; on coarse row in coarse_only mode
+        if (row_label == "Fine" and not is_coarse_only) or is_coarse_only:
+            for ax in row_axes:
+                if raw_best_perp is not None and raw_best_mag is not None:
+                    ax.plot(raw_best_perp, raw_best_mag, "o", color="white",
+                            mfc="none", mew=1.5, ms=10, label="best grid pt", zorder=5)
+                if fiducial_perp is not None and fiducial_mag is not None:
+                    ax.plot(fiducial_perp, fiducial_mag, "*", color="yellow",
+                            ms=14, label="fiducial", zorder=6)
+                ax.legend(fontsize=8, loc="upper left")
+
+    fig.suptitle(f"Fiducial search  (GMM slope={gmm_slope:.3f}, tol={slope_tol})")
+    fig.tight_layout()
+    out_path = os.path.join(run_dir, "fiducial_search.png")
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+    print(f"  Saved fiducial search heatmap → {out_path}")
+
+
+def run_ellipse_sweep(raw_data, mu, sigma, n_sigma_vals, extra_cuts, exe_file,
+                      ref_cuts=None):
+    """Sweep each ellipse cut parameter over n_sigma_vals, others fixed at ref_cuts.
 
     For each of the four cut parameters (haty_min, haty_max, intercept_plane,
     intercept_plane2), varies the ellipse scale n_σ while keeping the others
-    fixed at their 1σ values.  slope_plane is always fixed at the 1σ value.
+    fixed at their ref_cuts values.  slope_plane is always fixed at the
+    ref_cuts value.
 
     Returns dict mapping parameter name → list of (n_sigma, cut_value, slope, N).
     """
     _SWEEP_PARAMS = ["haty_min", "haty_max", "intercept_plane", "intercept_plane2"]
-    ref1 = _cuts_at_nsigma(mu, sigma, 1.0)
+    if ref_cuts is None:
+        ref_cuts = _cuts_at_nsigma(mu, sigma, 1.0)
     results = {p: [] for p in _SWEEP_PARAMS}
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -315,9 +699,9 @@ def run_ellipse_sweep(raw_data, mu, sigma, n_sigma_vals, extra_cuts, exe_file):
             print(f"  Sweeping {p} …")
             for n_sigma in n_sigma_vals:
                 cuts_nsigma = _cuts_at_nsigma(mu, sigma, n_sigma)
-                cuts = dict(ref1)
+                cuts = dict(ref_cuts)
                 cuts[p] = cuts_nsigma[p]
-                cuts["slope_plane"] = ref1["slope_plane"]
+                cuts["slope_plane"] = ref_cuts["slope_plane"]
                 cuts.update(extra_cuts)
 
                 data_dict, init_dict = _build_stan_dicts(raw_data, cuts)
@@ -394,8 +778,11 @@ def save_sweep_results(sweep_results, run_dir):
     print(f"Saved: {out_file}")
 
 
-def plot_ellipse_partial_deriv(sweep_results, n_sigma_vals, run_dir):
+def plot_ellipse_partial_deriv(sweep_results, run_dir, ref_n_sigma_by_param=None):
     """2-row × 4-column figure: slope vs n_σ (top) and ∂s/∂(n_σ) vs n_σ (bottom).
+
+    ref_n_sigma_by_param: dict mapping each sweep param to its reference n_σ
+    for the axvline.  Falls back to 1.0 for any param not in the dict.
 
     Saved to output/<run>/ellipse_sweep.png.
     """
@@ -410,6 +797,8 @@ def plot_ellipse_partial_deriv(sweep_results, n_sigma_vals, run_dir):
                              for r in records])
         cut_vals = np.array([r[1] for r in records])
 
+        ref_ns = ref_n_sigma_by_param.get(p, 1.0) if ref_n_sigma_by_param else 1.0
+
         ax_top = axes[0, col]
         ax_bot = axes[1, col]
 
@@ -418,8 +807,8 @@ def plot_ellipse_partial_deriv(sweep_results, n_sigma_vals, run_dir):
         ax_top.plot(ns_arr[valid], slopes[valid], "o-", color="steelblue",
                     linewidth=1.5, markersize=4)
         ax_top.set_xscale("log")
-        ax_top.axvline(1.0, color="gray", linestyle="--", linewidth=1.0,
-                       label=r"$n_\sigma=1$")
+        ax_top.axvline(ref_ns, color="gray", linestyle="--", linewidth=1.0,
+                       label=rf"$n_\sigma={ref_ns:.2f}$")
         ax_top.set_xlabel(r"$n_\sigma$", fontsize=10)
         ax_top.set_ylabel("MLE slope", fontsize=10)
         ax_top.set_title(_label(p), fontsize=11)
@@ -446,8 +835,8 @@ def plot_ellipse_partial_deriv(sweep_results, n_sigma_vals, run_dir):
                         linewidth=1.5, markersize=4)
         ax_bot.set_xscale("log")
         ax_bot.axhline(0, color="gray", linestyle="--", linewidth=0.8)
-        ax_bot.axvline(1.0, color="gray", linestyle="--", linewidth=1.0,
-                       label=r"$n_\sigma=1$")
+        ax_bot.axvline(ref_ns, color="gray", linestyle="--", linewidth=1.0,
+                       label=rf"$n_\sigma={ref_ns:.2f}$")
         ax_bot.set_xlabel(r"$n_\sigma$", fontsize=10)
         ax_bot.set_ylabel(r"$\partial s / \partial (n_\sigma)$", fontsize=10)
         ax_bot.grid(True, alpha=0.3, which="both")
@@ -461,6 +850,156 @@ def plot_ellipse_partial_deriv(sweep_results, n_sigma_vals, run_dir):
     plt.savefig(out_file, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved: {out_file}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 6b: MAG-SPLIT GRID
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_mag_split_grid(raw_data, mu, sigma, extra_cuts, exe_file, gmm_slope,
+                       perp_vals, lo_vals, hi_vals):
+    """2D grid over (n_sigma_lo, n_sigma_hi) for each n_sigma_perp value.
+
+    n_sigma_lo scales haty_min; n_sigma_hi scales haty_max independently.
+    Returns dict {n_sigma_perp: [(nlo, nhi, slope, N), ...]}.
+    """
+    results_by_perp = {}
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        for n_sigma_perp in perp_vals:
+            results = []
+            print(f"\n  [mag-split]  n_σ_perp={n_sigma_perp}")
+            print(f"  {'n_σ_lo':>7}  {'n_σ_hi':>7}  {'MLE slope':>10}  {'diff':>8}  {'N':>6}")
+            print(f"  {'-'*7}  {'-'*7}  {'-'*10}  {'-'*8}  {'-'*6}")
+            for nlo in lo_vals:
+                for nhi in hi_vals:
+                    cuts = _cuts_mag_asymmetric(mu, sigma, float(n_sigma_perp),
+                                                float(nlo), float(nhi))
+                    cuts.update(extra_cuts)
+                    data_dict, init_dict = _build_stan_dicts(raw_data, cuts)
+                    if data_dict is None:
+                        print(f"  {nlo:7.2f}  {nhi:7.2f}  {'—':>10}  {'—':>8}  {'<30':>6}")
+                        results.append((float(nlo), float(nhi), float("nan"), 0))
+                        continue
+                    slope = _stan_mle_slope(data_dict, init_dict, exe_file, tmp_dir)
+                    N = data_dict["N_total"]
+                    if slope is None:
+                        print(f"  {nlo:7.2f}  {nhi:7.2f}  {'failed':>10}  {'—':>8}  {N:6d}")
+                        results.append((float(nlo), float(nhi), float("nan"), N))
+                        continue
+                    diff = slope - gmm_slope
+                    print(f"  {nlo:7.2f}  {nhi:7.2f}  {slope:10.4f}  {diff:+8.4f}  {N:6d}")
+                    results.append((float(nlo), float(nhi), slope, N))
+            results_by_perp[float(n_sigma_perp)] = results
+    return results_by_perp
+
+
+def plot_mag_split_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
+                        gmm_slope, slope_tol, run_dir):
+    """Save (n_perp × 2) heatmap of mag-split grid to mag_split_grid.png.
+
+    Each row is a fixed n_σ_perp value.
+    x-axis: n_σ_hi (haty_max), y-axis: n_σ_lo (haty_min).
+    Left column: MLE slope with tolerance contour. Right column: N.
+    """
+    import matplotlib.colors as mcolors
+
+    lo_arr   = np.asarray(lo_vals)
+    hi_arr   = np.asarray(hi_vals)
+    n_perp   = len(perp_vals)
+
+    # Shared colour scales across all perp rows
+    all_diffs = [s - gmm_slope for rs in results_by_perp.values()
+                 for _, _, s, _ in rs if np.isfinite(s)]
+    all_N     = [float(N) for rs in results_by_perp.values()
+                 for _, _, _, N in rs if N > 0]
+    abs_max   = max(abs(d) for d in all_diffs) if all_diffs else 1.0
+    N_vmin    = min(all_N) if all_N else 0
+    N_vmax    = max(all_N) if all_N else 1
+
+    # Diverging symlog norm: linear within ±linthresh, log outside
+    linthresh = slope_tol / 4.0
+    diff_norm = mcolors.SymLogNorm(linthresh=linthresh, vmin=-abs_max, vmax=abs_max,
+                                   base=10)
+
+    fig, axes = plt.subplots(n_perp, 2, figsize=(11, 4.5 * n_perp),
+                             squeeze=False)
+
+    for row, n_sigma_perp in enumerate(perp_vals):
+        results = results_by_perp[float(n_sigma_perp)]
+        slope_grid = np.full((len(lo_arr), len(hi_arr)), np.nan)
+        N_grid     = np.full((len(lo_arr), len(hi_arr)), np.nan)
+        for nlo, nhi, slope, N in results:
+            il = int(np.argmin(np.abs(lo_arr - nlo)))
+            ih = int(np.argmin(np.abs(hi_arr - nhi)))
+            slope_grid[il, ih] = slope
+            N_grid[il, ih]     = float(N) if N > 0 else np.nan
+        diff_grid = slope_grid - gmm_slope
+
+        for col, (data, cmap_name, norm, cbar_label) in enumerate([
+                (diff_grid, "RdBu",    diff_norm,
+                 "MLE slope"),
+                (N_grid,    "viridis", mcolors.Normalize(vmin=N_vmin, vmax=N_vmax),
+                 "N")]):
+            ax = axes[row, col]
+            cmap = plt.get_cmap(cmap_name).copy()
+            cmap.set_bad("lightgray")
+            pcm = ax.pcolormesh(hi_arr, lo_arr, data, cmap=cmap, norm=norm,
+                                shading="nearest")
+            cb = fig.colorbar(pcm, ax=ax, label=cbar_label)
+            if col == 0:
+                ticks = cb.get_ticks()
+                cb.set_ticks(ticks)
+                cb.set_ticklabels([f"{gmm_slope + t:.2f}" for t in ticks])
+            if col == 0:
+                try:
+                    ax.contour(hi_arr, lo_arr, np.abs(diff_grid),
+                               levels=[slope_tol], colors="white", linewidths=1.2)
+                except Exception:
+                    pass
+            ax.set_xlabel(r"$n_{\sigma,\hat{y}_\text{max}}$")
+            ax.set_ylabel(r"$n_{\sigma,\hat{y}_\text{min}}$")
+            col_title = "MLE slope" if col == 0 else "N"
+            ax.set_title(f"$n_{{\\sigma,\\perp}}={n_sigma_perp:.1f}$  —  {col_title}")
+
+    fig.suptitle(
+        f"Mag-split grid  (GMM slope={gmm_slope:.3f}, tol={slope_tol})",
+        fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.98])
+    out_path = os.path.join(run_dir, "mag_split_grid.png")
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+    print(f"  Saved mag-split heatmap → {out_path}")
+
+
+def save_mag_split_results(results_by_perp, perp_vals, lo_vals, hi_vals, run_dir):
+    """Save mag-split grid results to mag_split_grid.json."""
+    out = {
+        "perp_vals": list(perp_vals),
+        "lo_vals":   list(lo_vals),
+        "hi_vals":   list(hi_vals),
+        "results_by_perp": {
+            str(k): v for k, v in results_by_perp.items()
+        },
+    }
+    out_path = os.path.join(run_dir, "mag_split_grid.json")
+    with open(out_path, "w") as f:
+        json.dump(out, f, indent=2)
+    print(f"  Saved mag-split results → {out_path}")
+
+
+def load_mag_split_results(run_dir):
+    """Load mag-split grid results from mag_split_grid.json."""
+    in_path = os.path.join(run_dir, "mag_split_grid.json")
+    with open(in_path) as f:
+        data = json.load(f)
+    perp_vals = np.array(data["perp_vals"])
+    lo_vals   = np.array(data["lo_vals"])
+    hi_vals   = np.array(data["hi_vals"])
+    results_by_perp = {
+        float(k): [tuple(row) for row in v]
+        for k, v in data["results_by_perp"].items()
+    }
+    return results_by_perp, perp_vals, lo_vals, hi_vals
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -483,17 +1022,59 @@ if __name__ == "__main__":
     parser.add_argument("--exe", default="tophat",
                         help="Path to compiled Stan tophat executable")
     parser.add_argument("--n_sigma_min", type=float, default=0.7,
-                        help="Lower end of n_σ grid")
+                        help="Lower end of sweep n_σ grid")
     parser.add_argument("--n_sigma_max", type=float, default=1.7,
-                        help="Upper end of n_σ grid")
+                        help="Upper end of sweep n_σ grid")
     parser.add_argument("--n_sigma_n",   type=int,   default=21,
-                        help="Number of log-spaced grid points")
+                        help="Number of log-spaced sweep grid points")
     parser.add_argument("--z_obs_min", type=float, default=0.03,
                         help="Minimum redshift cut")
     parser.add_argument("--z_obs_max", type=float, default=0.10,
                         help="Maximum redshift cut")
     parser.add_argument("--n_sweep_objects", type=int, default=10000,
                         help="Subsample raw data to this many objects (0 = use all)")
+    parser.add_argument("--slope_tol", type=float, default=0.5,
+                        help="Tolerance |MLE slope - GMM slope| for fiducial search")
+    # 2D fiducial search grid
+    parser.add_argument("--n_sigma_perp_min", type=float, default=1.0,
+                        help="Lower end of n_sigma_perp grid for fiducial search")
+    parser.add_argument("--n_sigma_perp_max", type=float, default=4.0,
+                        help="Upper end of n_sigma_perp grid for fiducial search")
+    parser.add_argument("--n_sigma_perp_n",   type=int,   default=7,
+                        help="Number of n_sigma_perp grid points")
+    parser.add_argument("--n_sigma_mag_min",  type=float, default=0.5,
+                        help="Lower end of n_sigma_mag grid for fiducial search")
+    parser.add_argument("--n_sigma_mag_max",  type=float, default=3.0,
+                        help="Upper end of n_sigma_mag grid for fiducial search")
+    parser.add_argument("--n_sigma_mag_n",    type=int,   default=6,
+                        help="Number of n_sigma_mag grid points")
+    parser.add_argument("--fiducial_contraction", type=float, default=0.9,
+                        help="Factor applied to best (n_sigma_perp, n_sigma_mag) to get fiducial (< 1 pulls slightly inward)")
+    parser.add_argument("--n_fine_perp", type=int, default=10,
+                        help="Number of fine-grid points along n_sigma_perp")
+    parser.add_argument("--n_fine_mag",  type=int, default=8,
+                        help="Number of fine-grid points along n_sigma_mag")
+    parser.add_argument("--coarse_only", action="store_true",
+                        help="Run only the coarse grid; skip fine-pass MLE")
+    # Mag-split mode: vary haty_min and haty_max independently
+    parser.add_argument("--mag_split", action="store_true",
+                        help="Run mag-split 2D grid (vary n_σ_lo and n_σ_hi independently)")
+    parser.add_argument("--mag_split_plot", action="store_true",
+                        help="Replot mag-split grid from saved mag_split_grid.json (no Stan calls)")
+    parser.add_argument("--n_sigma_perp", type=float, default=None,
+                        help="Fixed n_σ_perp for --mag_split mode")
+    parser.add_argument("--n_sigma_mag_lo_min", type=float, default=1.0,
+                        help="Lower end of n_σ_lo grid (haty_min) for --mag_split")
+    parser.add_argument("--n_sigma_mag_lo_max", type=float, default=4.0,
+                        help="Upper end of n_σ_lo grid (haty_min) for --mag_split")
+    parser.add_argument("--n_sigma_mag_lo_n",   type=int,   default=4,
+                        help="Number of n_σ_lo grid points for --mag_split")
+    parser.add_argument("--n_sigma_mag_hi_min", type=float, default=1.0,
+                        help="Lower end of n_σ_hi grid (haty_max) for --mag_split")
+    parser.add_argument("--n_sigma_mag_hi_max", type=float, default=4.0,
+                        help="Upper end of n_σ_hi grid (haty_max) for --mag_split")
+    parser.add_argument("--n_sigma_mag_hi_n",   type=int,   default=4,
+                        help="Number of n_σ_hi grid points for --mag_split")
 
     args = parser.parse_args()
 
@@ -552,36 +1133,106 @@ if __name__ == "__main__":
             if os.path.exists(candidate):
                 exe_file = candidate
 
+    gmm_slope = float(ell["slope_plane"])
+
+    # ── Mag-split mode ───────────────────────────────────────────────────────
+    if args.mag_split_plot:
+        results_by_perp, perp_vals, lo_vals, hi_vals = load_mag_split_results(run_dir)
+        plot_mag_split_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
+                            gmm_slope, args.slope_tol, run_dir)
+        import sys; sys.exit(0)
+
+    if args.mag_split:
+        perp_vals = np.linspace(args.n_sigma_perp_min, args.n_sigma_perp_max,
+                                args.n_sigma_perp_n)
+        lo_vals   = np.linspace(args.n_sigma_mag_lo_min, args.n_sigma_mag_lo_max,
+                                args.n_sigma_mag_lo_n)
+        hi_vals   = np.linspace(args.n_sigma_mag_hi_min, args.n_sigma_mag_hi_max,
+                                args.n_sigma_mag_hi_n)
+        print(f"Running mag-split grid: perp={perp_vals}  "
+              f"lo={lo_vals}  hi={hi_vals}  exe={exe_file}")
+        mag_split_results = run_mag_split_grid(
+            raw_data, mu, sigma, extra_cuts, exe_file, gmm_slope,
+            perp_vals, lo_vals, hi_vals)
+        save_mag_split_results(mag_split_results, perp_vals, lo_vals, hi_vals, run_dir)
+        plot_mag_split_grid(
+            mag_split_results, perp_vals, lo_vals, hi_vals,
+            gmm_slope, args.slope_tol, run_dir)
+        import sys; sys.exit(0)
+
+    # ── Standard fiducial search ─────────────────────────────────────────────
     print(f"Running ellipse sweep: {args.n_sigma_n} n_σ values in "
           f"[{args.n_sigma_min}, {args.n_sigma_max}], exe={exe_file}")
 
-    sweep_results = run_ellipse_sweep(
-        raw_data, mu, sigma, n_sigma_vals, extra_cuts, exe_file)
+    # 2D fiducial search: find best (n_sigma_perp, n_sigma_mag) pair
+    n_sigma_perp_vals = np.linspace(
+        args.n_sigma_perp_min, args.n_sigma_perp_max, args.n_sigma_perp_n)
+    n_sigma_mag_vals  = np.linspace(
+        args.n_sigma_mag_min, args.n_sigma_mag_max, args.n_sigma_mag_n)
 
-    save_sweep_results(sweep_results, run_dir)
-    plot_ellipse_partial_deriv(sweep_results, n_sigma_vals, run_dir)
+    (n_sigma_perp, n_sigma_mag, ref_cuts, ref_slope,
+     grid_info, raw_best_perp, raw_best_mag) = find_fiducial_cuts(
+        raw_data, mu, sigma, extra_cuts, exe_file, gmm_slope,
+        n_sigma_perp_vals, n_sigma_mag_vals, slope_tol=args.slope_tol,
+        contraction=args.fiducial_contraction, coarse_only=args.coarse_only,
+        n_fine_perp=args.n_fine_perp, n_fine_mag=args.n_fine_mag)
+
+    plot_fiducial_search(
+        grid_info, gmm_slope, args.slope_tol,
+        raw_best_perp, raw_best_mag,
+        n_sigma_perp, n_sigma_mag,
+        run_dir)
+
+    if args.coarse_only:
+        print("  (--coarse_only: skipping 1D ellipse sweep)")
+    else:
+        # Ensure both fiducial n_σ values are in the sweep grid
+        for fiducial_ns in (n_sigma_perp, n_sigma_mag):
+            if not np.any(np.isclose(n_sigma_vals, fiducial_ns)):
+                n_sigma_vals = np.sort(np.append(n_sigma_vals, fiducial_ns))
+
+        sweep_results = run_ellipse_sweep(
+            raw_data, mu, sigma, n_sigma_vals, extra_cuts, exe_file,
+            ref_cuts=ref_cuts)
+
+        save_sweep_results(sweep_results, run_dir)
+
+        ref_n_sigma_by_param = {
+            "haty_min":         n_sigma_mag,
+            "haty_max":         n_sigma_mag,
+            "intercept_plane":  n_sigma_perp,
+            "intercept_plane2": n_sigma_perp,
+        }
+        plot_ellipse_partial_deriv(sweep_results, run_dir,
+                                   ref_n_sigma_by_param=ref_n_sigma_by_param)
 
     # Summary table
     _SWEEP_PARAMS = ["haty_min", "haty_max", "intercept_plane", "intercept_plane2"]
-    ref1 = _cuts_at_nsigma(mu, sigma, 1.0)
     print("\n" + "=" * 60)
-    print("ELLIPSE SWEEP SUMMARY  (at n_σ = 1.0)")
+    print(f"ELLIPSE SWEEP SUMMARY")
+    print(f"  fiducial: n_sigma_perp={n_sigma_perp:.2f}  n_sigma_mag={n_sigma_mag:.2f}")
     print("=" * 60)
-    for p in _SWEEP_PARAMS:
-        records = sweep_results[p]
-        # Find the record closest to n_sigma = 1.0
-        idx1 = int(np.argmin(np.abs(np.array([r[0] for r in records]) - 1.0)))
-        _, cut_val, slope1, N1 = records[idx1]
-        ns_arr = np.array([r[0] for r in records])
-        sl_arr = np.array([r[2] if r[2] is not None else np.nan
-                           for r in records])
-        valid  = np.isfinite(sl_arr)
-        if valid.sum() >= 2:
-            deriv_at1 = float(np.gradient(sl_arr[valid], ns_arr[valid])[
-                np.argmin(np.abs(ns_arr[valid] - 1.0))])
-        else:
-            deriv_at1 = float("nan")
-        print(f"  {p:22s}  cut={cut_val:7.3f}  "
-              f"slope={slope1 if slope1 is not None else float('nan'):7.4f}  "
-              f"ds/dn_σ={deriv_at1:+.4f}  N={N1}")
+    print(f"  GMM slope (Gaussian fit): {gmm_slope:.4f}")
+    if ref_slope is not None:
+        print(f"  MLE slope at fiducial:    {ref_slope:.4f}")
+    if not args.coarse_only:
+        for p in _SWEEP_PARAMS:
+            records = sweep_results[p]
+            # Find record whose cut_value is closest to the fiducial cut value
+            ref_cut_val = ref_cuts[p]
+            idx_ref = int(np.argmin(np.abs(np.array([r[1] for r in records]) - ref_cut_val)))
+            _, cut_val, slope_ref, N_ref = records[idx_ref]
+            ns_arr = np.array([r[0] for r in records])
+            sl_arr = np.array([r[2] if r[2] is not None else np.nan
+                               for r in records])
+            ref_ns = ref_n_sigma_by_param[p]
+            valid  = np.isfinite(sl_arr)
+            if valid.sum() >= 2:
+                deriv_at_ref = float(np.gradient(sl_arr[valid], ns_arr[valid])[
+                    np.argmin(np.abs(ns_arr[valid] - ref_ns))])
+            else:
+                deriv_at_ref = float("nan")
+            print(f"  {p:22s}  cut={cut_val:7.3f}  "
+                  f"slope={slope_ref if slope_ref is not None else float('nan'):7.4f}  "
+                  f"ds/dn_σ={deriv_at_ref:+.4f}  N={N_ref}")
     print("=" * 60)

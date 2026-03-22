@@ -34,39 +34,58 @@ from sklearn.mixture import GaussianMixture
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_data(fits_file, haty_min, haty_max):
+def load_data(fits_file, haty_min, haty_max, source="fullmocks"):
     print(f"Reading FITS file: {fits_file}")
     with fits.open(fits_file) as hdul:
         data = hdul[1].data  # type: ignore[union-attr]
         total_rows = len(data)
-        main_mask = np.asarray(data["MAIN"], dtype=bool)
-        data_main = data[main_mask]
 
-    print(f"  Total rows: {total_rows}  |  MAIN=True: {np.sum(main_mask)}")
+        if source == "fullmocks":
+            main_mask = np.asarray(data["MAIN"], dtype=bool)
+            data_main = data[main_mask]
+            print(f"  Total rows: {total_rows}  |  MAIN=True: {np.sum(main_mask)}")
 
-    logvrot     = np.asarray(data_main["LOGVROT"],           dtype=float)
-    logvrot_err = np.asarray(data_main["LOGVROT_ERR"],       dtype=float)
-    absmag      = np.asarray(data_main["R_ABSMAG_SB26"],     dtype=float)
-    absmag_err  = np.asarray(data_main["R_ABSMAG_SB26_ERR"], dtype=float)
+            logvrot     = np.asarray(data_main["LOGVROT"],           dtype=float)
+            logvrot_err = np.asarray(data_main["LOGVROT_ERR"],       dtype=float)
+            absmag      = np.asarray(data_main["R_ABSMAG_SB26"],     dtype=float)
+            absmag_err  = np.asarray(data_main["R_ABSMAG_SB26_ERR"], dtype=float)
 
-    x_raw     = logvrot - 2.0
-    sigma_x   = logvrot_err
-    y_raw     = absmag
-    sigma_y   = absmag_err
+            x_raw   = logvrot - 2.0
+            sigma_x = logvrot_err
+            y_raw   = absmag
+            sigma_y = absmag_err
+
+        else:  # DESI
+            print(f"  Total rows: {total_rows}  (no MAIN filter for DESI source)")
+            names = set(data.dtype.names or ())
+
+            V     = np.asarray(data["V_0p4R26"],     dtype=float)
+            V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+            absmag = np.asarray(data["R_ABSMAG_SB26"], dtype=float)
+
+            if "R_ABSMAG_SB26_ERR" in names:
+                absmag_err = np.asarray(data["R_ABSMAG_SB26_ERR"], dtype=float)
+            else:
+                print("  Warning: R_ABSMAG_SB26_ERR absent; falling back to R_MAG_SB26_ERR")
+                absmag_err = np.asarray(data["R_MAG_SB26_ERR"], dtype=float)
+
+            x_raw   = np.log10(np.where(V > 0, V, np.nan) / 100.0)
+            sigma_x = V_err / (np.where(V > 0, V, np.nan) * np.log(10.0))
+            y_raw   = absmag
+            sigma_y = absmag_err
 
     valid = (
         np.isfinite(x_raw)
         & np.isfinite(sigma_x)
         & np.isfinite(y_raw)
         & np.isfinite(sigma_y)
-        & (logvrot > 0)
         & (sigma_x > 0)
         & (sigma_y >= 0)
         & (y_raw >= haty_min)
         & (y_raw <= haty_max)
     )
 
-    print(f"  Valid rows after MAIN + validity + pre-filter: {valid.sum()}")
+    print(f"  Valid rows after validity + pre-filter: {valid.sum()}")
     return x_raw[valid], y_raw[valid], sigma_x[valid], sigma_y[valid]
 
 
@@ -397,6 +416,8 @@ def main():
     )
     parser.add_argument("--file",     required=True,  help="Path to FITS file")
     parser.add_argument("--run",      required=True,  help="Output run directory under output/")
+    parser.add_argument("--source",   choices=["fullmocks", "DESI"], default="fullmocks",
+                        help="Data source: fullmocks (default) or DESI")
     parser.add_argument("--haty_min", type=float, default=-23.0,
                         help="Loose lower magnitude pre-filter (default: -23.0)")
     parser.add_argument("--haty_max", type=float, default=-18.0,
@@ -409,7 +430,7 @@ def main():
     os.makedirs(run_dir, exist_ok=True)
 
     # Load data (now includes sigma_x, sigma_y)
-    x, y, sigma_x, sigma_y = load_data(args.file, args.haty_min, args.haty_max)
+    x, y, sigma_x, sigma_y = load_data(args.file, args.haty_min, args.haty_max, args.source)
 
     # Detect truncation from data extremes
     x_hi, y_lo = detect_truncation(x, y)
