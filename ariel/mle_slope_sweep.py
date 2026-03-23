@@ -273,7 +273,7 @@ def plot_mle_slope_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
                                 shading="nearest")
             cb = fig.colorbar(pcm, ax=ax, label=cbar_label)
             if col == 0:
-                ticks = cb.get_ticks()
+                ticks = list(cb.get_ticks())
                 cb.set_ticks(ticks)
                 cb.set_ticklabels([f"{center + t:.2f}" for t in ticks])
                 try:
@@ -307,7 +307,7 @@ def plot_mle_slope_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
         f"color center={center:.3f}, tol={slope_tol})",
         fontsize=11,
     )
-    fig.tight_layout(rect=[0, 0, 1, 0.98])
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
     out_path = os.path.join(run_dir, "mle_slope_grid.png")
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
