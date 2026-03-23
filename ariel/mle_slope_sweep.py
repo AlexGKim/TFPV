@@ -61,21 +61,18 @@ from ellipse_sweep import (
 # SECTION 1: GEOMETRY — MLE-line-centred strip
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _cuts_mle_strip(mu, sigma, gmm_slope, mle_slope, mle_intercept,
+def _cuts_mle_strip(mu, sigma, mle_slope, mle_intercept,
                     n_sigma_perp, n_sigma_lo, n_sigma_hi):
     """Selection cuts with the oblique strip centred on the MLE line.
 
     Strip geometry:
-      slope_plane = gmm_slope  (GMM ellipse orientation — keeps the Stan
-                                integrand non-degenerate; using mle_slope
-                                makes k = 1 - slope_plane_std/slope_std → 0
-                                at the optimum, destabilising the optimizer)
-      The strip centre intercept is shifted so the centre line passes through
-      the MLE prediction at x = mu[0]:
-        c_center = mle_intercept + (mle_slope - gmm_slope) * mu[0]
-      The two bounding lines are then separated by
-        n_sigma_perp * sigma_minor * sqrt(1 + gmm_slope^2)
-      in intercept units (= n_sigma_perp * sigma_minor perpendicular distance).
+      slope_plane = mle_slope  (MLE TFR slope — this is the defining
+                                difference from ellipse_sweep, which uses
+                                the GMM multimodal-fit slope)
+      The two bounding lines are at perpendicular distance
+        n_sigma_perp * sigma_minor
+      from the MLE line, giving an intercept half-separation of
+        n_sigma_perp * sigma_minor * sqrt(1 + mle_slope^2).
 
     Magnitude limits use the GMM y-extent (1σ ellipse), scaled independently:
       haty_min = mu[1] - n_sigma_lo * y_extent
@@ -96,21 +93,16 @@ def _cuts_mle_strip(mu, sigma, gmm_slope, mle_slope, mle_intercept,
     haty_min = float(mu[1]) - n_sigma_lo * float(y_extent)
     haty_max = float(mu[1]) + n_sigma_hi * float(y_extent)
 
-    # Centre the GMM-slope strip on the MLE line at x = mu[0]:
-    #   c_center = y_MLE(mu[0]) - gmm_slope * mu[0]
-    #            = mle_intercept + (mle_slope - gmm_slope) * mu[0]
-    c_center = mle_intercept + (mle_slope - gmm_slope) * float(mu[0])
-
-    # Half-separation of the two bounding intercepts for perpendicular
-    # distance = n_sigma_perp * sigma_minor (minor axis of GMM ellipse).
-    ip_half_sep = n_sigma_perp * float(sigma_minor) * np.sqrt(1.0 + gmm_slope**2)
-    intercept_plane  = c_center - ip_half_sep
-    intercept_plane2 = c_center + ip_half_sep
+    # Perpendicular half-separation in intercept units:
+    #   perp_dist = |Δintercept| / sqrt(1 + mle_slope^2)
+    ip_half_sep = n_sigma_perp * float(sigma_minor) * np.sqrt(1.0 + mle_slope**2)
+    intercept_plane  = mle_intercept - ip_half_sep
+    intercept_plane2 = mle_intercept + ip_half_sep
 
     return dict(
         haty_min=haty_min,
         haty_max=haty_max,
-        slope_plane=float(gmm_slope),
+        slope_plane=float(mle_slope),
         intercept_plane=float(intercept_plane),
         intercept_plane2=float(intercept_plane2),
     )
@@ -120,7 +112,7 @@ def _cuts_mle_strip(mu, sigma, gmm_slope, mle_slope, mle_intercept,
 # SECTION 2: GRID RUNNER
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_mle_slope_grid(raw_data, mu, sigma, gmm_slope, mle_slope, mle_intercept,
+def run_mle_slope_grid(raw_data, mu, sigma, mle_slope, mle_intercept,
                        extra_cuts, exe_file, ref_slope,
                        perp_vals, lo_vals, hi_vals):
     """3-D grid over (n_sigma_perp, n_sigma_lo, n_sigma_hi).
@@ -139,7 +131,7 @@ def run_mle_slope_grid(raw_data, mu, sigma, gmm_slope, mle_slope, mle_intercept,
             for nlo in lo_vals:
                 for nhi in hi_vals:
                     cuts = _cuts_mle_strip(
-                        mu, sigma, gmm_slope, mle_slope, mle_intercept,
+                        mu, sigma, mle_slope, mle_intercept,
                         float(n_sigma_perp), float(nlo), float(nhi),
                     )
                     cuts.update(extra_cuts)
@@ -204,7 +196,7 @@ def load_mle_slope_results(run_dir):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def plot_mle_slope_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
-                        gmm_slope, mle_slope, mle_intercept, slope_tol, run_dir,
+                        mle_slope, mle_intercept, slope_tol, run_dir,
                         mu=None, sigma=None):
     """Save (n_perp × 2) heatmap to output/<run>/mle_slope_grid.png.
 
@@ -302,10 +294,9 @@ def plot_mle_slope_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
 
     fig.suptitle(
         f"MLE-slope grid  "
-        f"(gmm_slope={gmm_slope:.3f}, mle_slope={mle_slope:.3f}, "
-        f"mle_intercept={mle_intercept:.3f}, "
+        f"(mle_slope={mle_slope:.3f}, mle_intercept={mle_intercept:.3f}, "
         f"color center={center:.3f}, tol={slope_tol})",
-        fontsize=11,
+        fontsize=12,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.98))
     out_path = os.path.join(run_dir, "mle_slope_grid.png")
@@ -370,9 +361,8 @@ if __name__ == "__main__":
             f"{ellipse_path} not found — run selection_ellipse.py first.")
     with open(ellipse_path) as f:
         ell = json.load(f)
-    mu        = np.array(ell["mean"])
-    sigma     = np.array(ell["covariance"])
-    gmm_slope = float(ell["slope_plane"])
+    mu    = np.array(ell["mean"])
+    sigma = np.array(ell["covariance"])
 
     # ── Load MLE JSON ─────────────────────────────────────────────────────────
     mle_path = os.path.join(run_dir, "mle_nsigma.json")
@@ -385,14 +375,13 @@ if __name__ == "__main__":
     mle_intercept = float(mle_data["mle_intercept"])
     print(f"Loaded MLE: slope={mle_slope:.4f}  intercept={mle_intercept:.4f}"
           f"  (from n_sigma={mle_data.get('n_sigma', '?')})")
-    print(f"GMM slope_plane: {gmm_slope:.4f}")
 
     # ── Plot-only mode ────────────────────────────────────────────────────────
     if args.plot_only:
         results_by_perp, perp_vals, lo_vals, hi_vals = load_mle_slope_results(run_dir)
         plot_mle_slope_grid(
             results_by_perp, perp_vals, lo_vals, hi_vals,
-            gmm_slope, mle_slope, mle_intercept, args.slope_tol, run_dir,
+            mle_slope, mle_intercept, args.slope_tol, run_dir,
             mu=mu, sigma=sigma,
         )
         import sys; sys.exit(0)
@@ -453,13 +442,13 @@ if __name__ == "__main__":
     print(f"  exe      : {exe_file}")
 
     results_by_perp = run_mle_slope_grid(
-        raw_data, mu, sigma, gmm_slope, mle_slope, mle_intercept,
+        raw_data, mu, sigma, mle_slope, mle_intercept,
         extra_cuts, exe_file, mle_slope,
         perp_vals, lo_vals, hi_vals,
     )
     save_mle_slope_results(results_by_perp, perp_vals, lo_vals, hi_vals, run_dir)
     plot_mle_slope_grid(
         results_by_perp, perp_vals, lo_vals, hi_vals,
-        gmm_slope, mle_slope, mle_intercept, args.slope_tol, run_dir,
+        mle_slope, mle_intercept, args.slope_tol, run_dir,
         mu=mu, sigma=sigma,
     )
