@@ -129,7 +129,14 @@ def load_desi(fits_file="data/DESI-DR1_TF_pv_cat_v15.fits"):
     V     = np.asarray(data["V_0p4R26"],         dtype=float)
     V_err = np.asarray(data["V_0p4R26_ERR"],     dtype=float)
     mag   = np.asarray(data["R_ABSMAG_SB26"],    dtype=float)
-    mag_e = np.asarray(data["R_ABSMAG_SB26_ERR"], dtype=float)
+    mag_e = None
+    for col in ("R_ABSMAG_SB26_ERR", "R_MAG_SB26_ERR_CORR", "R_MAG_SB26_ERR"):
+        if col in data.names:
+            mag_e = np.asarray(data[col], dtype=float)
+            break
+    if mag_e is None:
+        raise KeyError("No magnitude error column found; tried "
+                       "R_ABSMAG_SB26_ERR, R_MAG_SB26_ERR_CORR, R_MAG_SB26_ERR")
 
     # Redshift — try several candidate column names
     zobs = None
@@ -355,7 +362,45 @@ def _stan_mle_slope(data_dict, init_dict, exe_file, tmp_dir):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SECTION 5: MAG-SPLIT GRID
+# SECTION 5: REFERENCE SLOPE (1σ ELLIPSE)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_1sigma_slope(raw_data, mu, sigma, extra_cuts, exe_file, run_dir):
+    """Compute MLE slope for the 1σ GMM ellipse and save to reference_slope.json.
+
+    Returns (slope, N) or (None, 0) on failure.
+    """
+    cuts = _cuts_at_nsigma(mu, sigma, 1.0)
+    cuts.update(extra_cuts)
+    data_dict, init_dict = _build_stan_dicts(raw_data, cuts)
+    if data_dict is None:
+        print("Warning: 1σ ellipse sample too small to fit")
+        return None, 0
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        slope = _stan_mle_slope(data_dict, init_dict, exe_file, tmp_dir)
+    N = data_dict["N_total"]
+    result = {"slope": slope, "N": N,
+              "haty_min": cuts["haty_min"], "haty_max": cuts["haty_max"]}
+    path = os.path.join(run_dir, "reference_slope.json")
+    with open(path, "w") as f:
+        json.dump(result, f, indent=2)
+    print(f"  1σ ellipse MLE slope: {slope:.4f}  N={N}")
+    print(f"  Saved reference slope → {path}")
+    return slope, N
+
+
+def load_1sigma_slope(run_dir):
+    """Load previously computed 1σ MLE slope, or return None."""
+    path = os.path.join(run_dir, "reference_slope.json")
+    if not os.path.exists(path):
+        return None, 0
+    with open(path) as f:
+        d = json.load(f)
+    return d.get("slope"), d.get("N", 0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 6: MAG-SPLIT GRID
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_mag_split_grid(raw_data, mu, sigma, extra_cuts, exe_file, gmm_slope,
@@ -396,7 +441,8 @@ def run_mag_split_grid(raw_data, mu, sigma, extra_cuts, exe_file, gmm_slope,
 
 
 def plot_mag_split_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
-                        gmm_slope, slope_tol, run_dir, fiducial=None):
+                        gmm_slope, slope_tol, run_dir, fiducial=None,
+                        mu=None, sigma=None):
     """Save (n_perp × 2) heatmap of mag-split grid to mag_split_grid.png.
 
     Each row is a fixed n_σ_perp value.
@@ -427,6 +473,16 @@ def plot_mag_split_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
     linthresh = slope_tol / 4.0
     diff_norm = mcolors.SymLogNorm(linthresh=linthresh, vmin=-abs_max, vmax=abs_max,
                                    base=10)
+
+    # Compute actual cut values for secondary axes if GMM params provided
+    if mu is not None and sigma is not None:
+        unit     = _cuts_at_nsigma(mu, sigma, 1.0)
+        y_extent = unit["haty_max"] - float(mu[1])
+        haty_max_vals = float(mu[1]) + hi_arr * y_extent  # for top x-axis
+        haty_min_vals = float(mu[1]) - lo_arr * y_extent  # for right y-axis
+    else:
+        haty_max_vals = None
+        haty_min_vals = None
 
     fig, axes = plt.subplots(n_perp, 2, figsize=(11, 4.5 * n_perp),
                              squeeze=False)
@@ -467,6 +523,20 @@ def plot_mag_split_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
             ax.set_ylabel(r"$n_{\sigma,\hat{y}_\text{min}}$")
             col_title = "MLE slope" if col == 0 else "N"
             ax.set_title(f"$n_{{\\sigma,\\perp}}={n_sigma_perp:.1f}$  —  {col_title}")
+            if haty_max_vals is not None and row == n_perp - 1:
+                ax_top = ax.twiny()
+                ax_top.set_xlim(ax.get_xlim())
+                ax_top.set_xticks(hi_arr)
+                ax_top.set_xticklabels([f"{v:.1f}" for v in haty_max_vals],
+                                       fontsize=7, rotation=45, ha="left")
+                ax_top.set_xlabel(r"$\hat{y}_\text{max}$", fontsize=8)
+            if haty_min_vals is not None and row == n_perp - 1:
+                ax_right = ax.twinx()
+                ax_right.set_ylim(ax.get_ylim())
+                ax_right.set_yticks(lo_arr)
+                ax_right.set_yticklabels([f"{v:.1f}" for v in haty_min_vals],
+                                         fontsize=7)
+                ax_right.set_ylabel(r"$\hat{y}_\text{min}$", fontsize=8)
 
     if fiducial is not None:
         fid_row = int(np.argmin(np.abs(np.array(list(perp_vals)) - fiducial["n_sigma_perp"])))
@@ -486,8 +556,8 @@ def plot_mag_split_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
 
 
 def plot_fiducial_slope_hist(results_by_perp, perp_vals, gmm_slope,
-                             slope_tol, run_dir):
-    """Histogram of all MLE slopes, with good-cell and 32–68 percentile subsets overlaid."""
+                             slope_tol, run_dir, ref_slope=None):
+    """Histogram of all MLE slopes, with good-cell and 16–84 percentile subsets overlaid."""
     all_slopes, good_slopes = [], []
     for n_sigma_perp in perp_vals:
         for _, _, slope, _ in results_by_perp[float(n_sigma_perp)]:
@@ -500,24 +570,21 @@ def plot_fiducial_slope_hist(results_by_perp, perp_vals, gmm_slope,
         return
     all_slopes  = np.array(all_slopes)
     good_slopes = np.array(good_slopes)
-    lo_pct = float(np.percentile(good_slopes, 32)) if len(good_slopes) else gmm_slope
-    hi_pct = float(np.percentile(good_slopes, 68)) if len(good_slopes) else gmm_slope
+    lo_pct = float(np.percentile(good_slopes, 16)) if len(good_slopes) else gmm_slope
+    hi_pct = float(np.percentile(good_slopes, 84)) if len(good_slopes) else gmm_slope
     mid_slopes = good_slopes[(good_slopes >= lo_pct) & (good_slopes <= hi_pct)]
 
-    bins = np.linspace(all_slopes.min() - 0.1, all_slopes.max() + 0.1, 40)
+    bins = np.linspace(good_slopes.min() - 0.05, good_slopes.max() + 0.05, 30)
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.hist(all_slopes,  bins=bins, color="gray",      alpha=0.5,
-            label=f"All cells (N={len(all_slopes)})")
     ax.hist(good_slopes, bins=bins, color="steelblue", alpha=0.7,
             label=f"|diff| < tol (N={len(good_slopes)})")
     ax.hist(mid_slopes,  bins=bins, color="orange",    alpha=0.9,
-            label=f"32–68 pct band (N={len(mid_slopes)})")
+            label=f"16–84 pct band (N={len(mid_slopes)})")
     ax.axvline(lo_pct,    color="orange", linestyle="--", linewidth=1.2,
-               label=f"32nd pct = {lo_pct:.3f}")
+               label=f"16nd pct = {lo_pct:.3f}")
     ax.axvline(hi_pct,    color="orange", linestyle=":",  linewidth=1.2,
-               label=f"68th pct = {hi_pct:.3f}")
-    ax.axvline(gmm_slope, color="black",  linestyle="-",  linewidth=1.5,
-               label=f"GMM slope = {gmm_slope:.3f}")
+               label=f"84th pct = {hi_pct:.3f}")
+
     ax.set_xlabel("MLE slope")
     ax.set_ylabel("Count")
     ax.set_title("MLE slope distribution — fiducial selection")
@@ -534,7 +601,7 @@ def find_fiducial_from_mag_split(results_by_perp, perp_vals, gmm_slope,
     """Select fiducial (n_σ_perp, n_σ_lo, n_σ_hi) from mag-split grid.
 
     1. Filter to cells with |MLE slope − GMM slope| < slope_tol.
-    2. Among those, keep only cells whose slope falls within the 32nd–68th
+    2. Among those, keep only cells whose slope falls within the 16nd–84th
        percentile of good-cell slopes (the "typical" slope band).
     3. Among that subset, pick the cell with the maximum N.
 
@@ -551,8 +618,8 @@ def find_fiducial_from_mag_split(results_by_perp, perp_vals, gmm_slope,
     if not good:
         return None
     slopes = np.array([s for _, _, _, s, _ in good])
-    lo_pct = float(np.percentile(slopes, 32))
-    hi_pct = float(np.percentile(slopes, 68))
+    lo_pct = float(np.percentile(slopes, 16))
+    hi_pct = float(np.percentile(slopes, 84))
     mid = [(perp, nlo, nhi, slope, N) for perp, nlo, nhi, slope, N in good
            if lo_pct <= slope <= hi_pct]
     if not mid:
@@ -659,21 +726,21 @@ if __name__ == "__main__":
                         help="Replot mag-split grid from saved mag_split_grid.json (no Stan calls)")
     parser.add_argument("--n_sigma_perp_min", type=float, default=5.0,
                         help="Lower end of n_σ_perp grid")
-    parser.add_argument("--n_sigma_perp_max", type=float, default=7.0,
+    parser.add_argument("--n_sigma_perp_max", type=float, default=5.0,
                         help="Upper end of n_σ_perp grid")
-    parser.add_argument("--n_sigma_perp_n",   type=int,   default=3,
+    parser.add_argument("--n_sigma_perp_n",   type=int,   default=1,
                         help="Number of n_σ_perp grid points")
-    parser.add_argument("--n_sigma_mag_lo_min", type=float, default=2.7,
+    parser.add_argument("--n_sigma_mag_lo_min", type=float, default=3.0,
                         help="Lower end of n_σ_lo grid (haty_min)")
-    parser.add_argument("--n_sigma_mag_lo_max", type=float, default=4.2,
+    parser.add_argument("--n_sigma_mag_lo_max", type=float, default=4.0,
                         help="Upper end of n_σ_lo grid (haty_min)")
-    parser.add_argument("--n_sigma_mag_lo_n",   type=int,   default=4,
+    parser.add_argument("--n_sigma_mag_lo_n",   type=int,   default=5,
                         help="Number of n_σ_lo grid points")
-    parser.add_argument("--n_sigma_mag_hi_min", type=float, default=2.8,
+    parser.add_argument("--n_sigma_mag_hi_min", type=float, default=3.0,
                         help="Lower end of n_σ_hi grid (haty_max)")
-    parser.add_argument("--n_sigma_mag_hi_max", type=float, default=4.8,
+    parser.add_argument("--n_sigma_mag_hi_max", type=float, default=4.5,
                         help="Upper end of n_σ_hi grid (haty_max)")
-    parser.add_argument("--n_sigma_mag_hi_n",   type=int,   default=5,
+    parser.add_argument("--n_sigma_mag_hi_n",   type=int,   default=7,
                         help="Number of n_σ_hi grid points")
 
     args = parser.parse_args()
@@ -743,7 +810,8 @@ if __name__ == "__main__":
         plot_fiducial_slope_hist(results_by_perp, perp_vals, gmm_slope,
                                  args.slope_tol, run_dir)
         plot_mag_split_grid(results_by_perp, perp_vals, lo_vals, hi_vals,
-                            gmm_slope, args.slope_tol, run_dir, fiducial=fiducial)
+                            gmm_slope, args.slope_tol, run_dir, fiducial=fiducial,
+                            mu=mu, sigma=sigma)
         if fiducial is not None:
             save_fiducial(fiducial, mu, sigma, run_dir)
         import sys; sys.exit(0)
@@ -772,4 +840,5 @@ if __name__ == "__main__":
                              args.slope_tol, run_dir)
     plot_mag_split_grid(
         mag_split_results, perp_vals, lo_vals, hi_vals,
-        gmm_slope, args.slope_tol, run_dir, fiducial=fiducial)
+        gmm_slope, args.slope_tol, run_dir, fiducial=fiducial,
+        mu=mu, sigma=sigma)
