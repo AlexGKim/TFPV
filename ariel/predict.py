@@ -1797,6 +1797,162 @@ def fullmocks(kind="normal",
     return mean_y, sd_pred, zobs_star
 
 
+def write_desi_catalog(model, run_dir, fits_path):
+    """
+    Augment a DESI FITS catalog with TFR-derived quantities and write to
+    output/<run>/<model>_catalog.fits.
+
+    New columns added:
+      MU_TF        = R_MAG_SB26_CORR - mean_pred
+      MU_ERR       = sqrt(R_MAG_SB26_CORR_ERR^2 + sd_pred^2)
+      LOGDIST      = 0.2 * ((R_MAG_SB26 - R_MAG_SB26_ABS) - MU_TF)
+      LOGDIST_ERR  = 0.2 * MU_ERR
+      MAIN         = bool (True if passes selection cuts from config.json)
+    """
+    _p = lambda name: os.path.join(run_dir, name)
+
+    # 1. Read the full FITS, keeping all rows
+    z_col_candidates = ("Z_DESI", "zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE")
+    with fits.open(fits_path) as hdul:
+        primary_hdu = hdul[0].copy()
+        table_hdu = hdul[1].copy()
+        data = hdul[1].data
+        names = set(data.dtype.names or ())
+        n_rows = len(data)
+
+        # Resolve z column
+        z_col_use = None
+        for cand in z_col_candidates:
+            if cand in names:
+                z_col_use = cand
+                break
+        if z_col_use is None:
+            raise ValueError(
+                f"Could not find redshift column. Tried: {z_col_candidates}. "
+                f"Available: {sorted(list(names))[:30]} ..."
+            )
+
+        # Resolve corrected magnitude error column with fallback
+        corr_err_col = "R_MAG_SB26_CORR_ERR"
+        if corr_err_col not in names:
+            fallback = "R_MAG_SB26_ERR"
+            if fallback in names:
+                print(f"Warning: {corr_err_col!r} absent; falling back to {fallback!r}")
+                corr_err_col = fallback
+            else:
+                raise ValueError(
+                    f"Missing magnitude error column {corr_err_col!r} and fallback "
+                    f"{fallback!r}. Available: {sorted(list(names))[:30]} ..."
+                )
+
+        # 2. Extract working arrays for all rows
+        V         = np.asarray(data["V_0p4R26"],       dtype=float)
+        V_err     = np.asarray(data["V_0p4R26_ERR"],   dtype=float)
+        app_corr  = np.asarray(data["R_MAG_SB26_CORR"],dtype=float)
+        app_corr_err = np.asarray(data[corr_err_col],  dtype=float)
+        app       = np.asarray(data["R_MAG_SB26"],     dtype=float)
+        abs_mag   = np.asarray(data["R_MAG_SB26_ABS"], dtype=float)
+        zobs      = np.asarray(data[z_col_use],        dtype=float)
+
+    with np.errstate(invalid='ignore', divide='ignore'):
+        xhat    = np.where(V > 0, np.log10(V / 100.0),            np.nan)
+        sigma_x = np.where(V > 0, V_err / (V * np.log(10.0)),     np.nan)
+
+    # 3. Validity mask for prediction
+    valid = (
+        np.isfinite(V)   & (V > 0)   &
+        np.isfinite(V_err) & (V_err > 0) &
+        np.isfinite(xhat) &
+        np.isfinite(sigma_x) & (sigma_x > 0)
+    )
+
+    # 4. Load posterior draws
+    if model == "normal":
+        draws = read_cmdstan_posterior(
+            _p("normal_?.csv"),
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+            drop_diagnostics=True,
+        )
+    else:
+        draws = read_cmdstan_posterior(
+            _p("tophat_?.csv"),
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+            drop_diagnostics=True,
+        )
+
+    # 5. Compute mean_pred and sd_pred for valid rows only
+    xhat_valid    = xhat[valid]
+    sigma_x_valid = sigma_x[valid]
+
+    if model == "normal":
+        mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_normal_vectorized(
+            draws, xhat_valid, sigma_x_valid
+        )
+    else:
+        with open(_p("input.json"), "r") as f:
+            input_data = json.load(f)
+        y_min = input_data.get("y_min")
+        y_max = input_data.get("y_max")
+        mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_tophat_vectorized(
+            draws, xhat_valid, sigma_x_valid,
+            y_min=y_min, y_max=y_max,
+            on_bad_Z="floor", Z_floor=1e-300,
+        )
+
+    # 6. Map predictions back to full-length arrays (NaN for invalid rows)
+    mean_pred_full = np.full(n_rows, np.nan)
+    sd_pred_full   = np.full(n_rows, np.nan)
+    mean_pred_full[valid] = mean_pred_valid
+    sd_pred_full[valid]   = sd_pred_valid
+
+    # 7. Compute new columns
+    MU_TF       = app_corr - mean_pred_full
+    MU_ERR      = np.sqrt(app_corr_err**2 + sd_pred_full**2)
+    MU_ZCMB     = app - abs_mag                        # intermediate only
+    LOGDIST     = 0.2 * (MU_ZCMB - MU_TF)
+    LOGDIST_ERR = 0.2 * MU_ERR
+
+    # 8. Compute MAIN flag using config.json selection cuts
+    with open(_p("config.json"), "r") as f:
+        cfg = json.load(f)
+
+    main = valid.copy()
+    z_obs_min = cfg.get("z_obs_min")
+    if z_obs_min is not None:
+        main &= (zobs > z_obs_min)
+    haty_min_cfg = cfg.get("haty_min")
+    haty_max_cfg = cfg.get("haty_max")
+    if haty_min_cfg is not None:
+        main &= (app >= haty_min_cfg)
+    if haty_max_cfg is not None:
+        main &= (app <= haty_max_cfg)
+    slope_plane      = cfg.get("slope_plane")
+    intercept_plane  = cfg.get("intercept_plane")
+    intercept_plane2 = cfg.get("intercept_plane2")
+    if slope_plane is not None and intercept_plane is not None:
+        main &= (app >= slope_plane * xhat + intercept_plane)
+        if intercept_plane2 is not None:
+            main &= (app <= slope_plane * xhat + intercept_plane2)
+
+    # 9. Write output FITS: original columns + five new columns
+    new_cols = [
+        fits.Column(name="MU_TF",       format="E", array=MU_TF.astype(np.float32)),
+        fits.Column(name="MU_ERR",      format="E", array=MU_ERR.astype(np.float32)),
+        fits.Column(name="LOGDIST",     format="E", array=LOGDIST.astype(np.float32)),
+        fits.Column(name="LOGDIST_ERR", format="E", array=LOGDIST_ERR.astype(np.float32)),
+        fits.Column(name="MAIN",        format="L", array=main),
+    ]
+    all_cols = fits.ColDefs(list(table_hdu.columns) + new_cols)
+    new_table_hdu = fits.BinTableHDU.from_columns(all_cols)
+    out_hdul = fits.HDUList([primary_hdu, new_table_hdu])
+    out_path = _p(f"{model}_catalog.fits")
+    out_hdul.writeto(out_path, overwrite=True)
+
+    print(f"Written {n_rows} rows to {out_path}")
+    print(f"  MAIN: {main.sum()} objects pass selection cuts")
+    print(f"  MU_TF finite: {np.isfinite(MU_TF).sum()} objects")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Posterior predictions and diagnostics.')
     parser.add_argument('--run', default=None,
@@ -1825,12 +1981,22 @@ if __name__ == "__main__":
                         help='Offset added to input.json intercept_plane (default: 0)')
     parser.add_argument('--delta_intercept_plane2', type=float, default=0.0,
                         help='Offset added to input.json intercept_plane2 (default: 0)')
+    parser.add_argument('--input', default=None,
+                        help='Input FITS catalog path (required with --catalog)')
+    parser.add_argument('--catalog', action='store_true',
+                        help='Write augmented catalog FITS to output/<run>/<model>_catalog.fits')
     args = parser.parse_args()
 
     run_dir = os.path.join('output', args.run) if args.run else None
 
     if args.source == 'DESI':
         DESI(args.model, run_dir=run_dir)
+        if args.catalog:
+            write_desi_catalog(
+                args.model,
+                run_dir,
+                args.input or 'data/SGA-2020_iron_Vrot_VI_corr.fits',
+            )
     elif args.source == 'fullmocks':
         fits_id = args.predict_run if args.predict_run else args.run
         pattern = os.path.join(args.dir, f'TF_extended_AbacusSummit_base_{fits_id}_*.fits')
