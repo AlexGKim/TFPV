@@ -2241,9 +2241,27 @@ def write_cov(model, run_dir):
 
     np.fill_diagonal(cov, np.diag(cov) + sigma_y_star**2)
 
+    fits_out = os.path.join(run_dir, f"{model}_cov.fits")
+    hdr = fits.Header()
+    hdr["COMMENT"] = "Posterior predictive covariance matrix (float32)"
+    hdr["COMMENT"] = f"Row/col order: MAIN=True rows of {model}_catalog.fits"
+    hdr["MODEL"]   = model
+    hdr["RUN"]     = os.path.basename(run_dir)
+    fits.writeto(fits_out, cov.astype(np.float32), header=hdr, overwrite=True)
+    print(f"Saved covariance FITS to {fits_out}")
+
     run_name = os.path.basename(run_dir)
     out_path = os.path.join(run_dir, f"{model}_cov.png")
     plot_cov(cov, out_path, title=f"{run_name} {model} model")
+
+    G = cov.shape[0]
+    n_sub = min(512, G)
+    rng = np.random.default_rng(0)
+    idx = rng.choice(G, size=n_sub, replace=False)
+    idx.sort()
+    cov_sub = cov[np.ix_(idx, idx)]
+    out_path_sub = os.path.join(run_dir, f"{model}_cov_sub.png")
+    plot_cov(cov_sub, out_path_sub, title=f"{run_name} {model} model (random subset of {n_sub})")
 
 
 if __name__ == "__main__":
