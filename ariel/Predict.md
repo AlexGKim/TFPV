@@ -129,3 +129,101 @@ match the training selection stored in `input.json`):
 | `--delta_intercept_plane2 FLOAT` | shift upper plane intercept (positive = looser) |
 
 The oblique plane cut is applied by default. Pass `--no_plane_cut` to disable it.
+
+---
+
+## Step 2: Posterior Predictive Covariance
+
+Algorithm: `predict_cov.py`
+
+The predicted magnitudes y\*[g] are covariant because they share the same
+posterior draws θ_m. The full (G, G) covariance matrix is needed for
+downstream peculiar velocity likelihood evaluation.
+
+### Method
+
+By the law of total covariance:
+
+```
+Cov(y*[g1], y*[g2]) = (1/M) Σ_m μ[m,g1]·μ[m,g2]  −  mean_y[g1]·mean_y[g2]
+```
+
+where μ[m,g] = E[y\* | x̂_g, θ_m] is the per-draw conditional mean
+(Gaussian conjugacy for the normal model; truncated-normal mean for the
+tophat model). The covariance is accumulated via chunked matrix multiply
+(`mu_chunk.T @ mu_chunk`) to avoid allocating the full (M, G) matrix.
+
+**Note:** The diagonal of `cov` is the between-draw variance of μ[m,g]
+only. It does **not** include the within-draw variance E[σ²_{int,y}],
+which is the extra term in `sd_y**2` returned by `predict.py`. Use `sd_y`
+from `predict.py` for individual magnitude uncertainties; use `cov` here
+for correlated structure across galaxies.
+
+**Memory:** G = 9 474, M = 2 000, chunk\_size = 200 → ~15 MB peak
+intermediate vs ~300 MB for the naive `np.cov` approach. Output (G, G)
+matrix: ~720 MB float64 in both cases.
+
+### Usage (Python API)
+
+`predict_cov.py` is a library module, not a script. Import it after
+running `predict.py` to obtain draws and galaxy arrays.
+
+```python
+import json
+import numpy as np
+from predict import read_cmdstan_posterior
+from predict_cov import ystar_pp_cov_normal_vectorized, ystar_pp_cov_tophat_vectorized
+
+# Load posterior draws
+draws = read_cmdstan_posterior(
+    "output/DESI/normal_?.csv",
+    keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "mu_y_TF", "tau"],
+    drop_diagnostics=True,
+)
+
+# Load galaxy data
+with open("output/DESI/input.json") as f:
+    data = json.load(f)
+xhat_star    = np.array(data["x"])
+sigma_x_star = np.array(data["sigma_x"])
+
+# Normal model covariance
+cov = ystar_pp_cov_normal_vectorized(draws, xhat_star, sigma_x_star)
+# cov.shape == (G, G)
+
+# Tophat model covariance (bounds from input.json)
+draws_th = read_cmdstan_posterior(
+    "output/DESI/tophat_?.csv",
+    keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+    drop_diagnostics=True,
+)
+cov_th = ystar_pp_cov_tophat_vectorized(
+    draws_th, xhat_star, sigma_x_star,
+    bounds_json="output/DESI/input.json",   # supplies y_min, y_max
+)
+
+# Or pass bounds explicitly
+cov_th = ystar_pp_cov_tophat_vectorized(
+    draws_th, xhat_star, sigma_x_star,
+    y_min=data["y_min"], y_max=data["y_max"],
+)
+```
+
+### Function signatures
+
+```
+ystar_pp_cov_normal_vectorized(draws, xhat_star, sigma_x_star, chunk_size=200)
+    draws       : DataFrame with columns slope, intercept.1,
+                  sigma_int_x, sigma_int_y, mu_y_TF, tau
+    → cov : (G, G) ndarray
+
+ystar_pp_cov_tophat_vectorized(draws, xhat_star, sigma_x_star, *,
+                                bounds_json=None, y_min=None, y_max=None,
+                                on_bad_Z="floor", Z_floor=1e-300,
+                                chunk_size=200)
+    draws       : DataFrame with columns slope, intercept.1,
+                  sigma_int_x, sigma_int_y
+    bounds_json : JSON file path supplying y_min/y_max (ignored if
+                  y_min and y_max are given directly)
+    → cov : (G, G) ndarray
+```
