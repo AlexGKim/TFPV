@@ -224,3 +224,19 @@ python corner.py --run $RUN --model tophat \
 | `--output FILE` | `corner_plot.png` | Output PNG path (overrides the `--run` default) |
 | `--name LABEL` | — | Legend label for a chain (repeat once per pattern, in order) |
 | `--truth PARAM=VALUE …` | — | True parameter values to overlay as vertical/horizontal lines |
+
+---
+
+## Summary of Generated Files
+
+| File | Script | Description |
+|------|--------|-------------|
+| `output/<run>/input.json` | `fullmocks_data.py` / `desi_data.py` | Stan data: galaxy observables (x, y, σ_x, σ_y, z_obs), selection cut parameters, prior hyperparameters, redshift bin count |
+| `output/<run>/init.json` | `fullmocks_data.py` / `desi_data.py` | OLS-derived initial values for Stan parameters (slope, intercept, scatter) |
+| `output/<run>/data.png` | `fullmocks_data.py` / `desi_data.py` | (x, y) scatter plot of the full sample and the selected subsample with selection cuts overlaid |
+| `output/<run>/config.json` | `fullmocks_data.py` / `desi_data.py` | Exact selection parameter values and sample size used, for reproducibility |
+| `output/<run>/tophat_1.csv … tophat_4.csv` | CmdStan `tophat` | MCMC chain files for the tophat model; each contains parameter draws, log-probability, and generated quantities |
+| `output/<run>/normal_1.csv … normal_4.csv` | CmdStan `normal` | MCMC chain files for the normal model |
+| `output/<run>/tophat_metric_1.json … tophat_metric_4.json` | CmdStan `tophat` | Per-chain adapted mass matrices saved by `adapt save_metric=1`; used to warm-start subsequent runs |
+| `output/<run>/tophat.png` | `corner.py` | Corner plot of the tophat model posterior (slope, intercept, σ_int_x, σ_int_y) |
+| `output/<run>/normal.png` | `corner.py` | Corner plot of the normal model posterior (adds mu_y_TF, τ) |

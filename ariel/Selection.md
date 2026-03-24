@@ -235,3 +235,16 @@ python ellipse_sweep.py --source DESI --fits_file $FITS --run $RUN --mag_split_p
 > not part of the active DESI or fullmocks workflow.  The fiducial cuts written
 > by Step 2 (`mag_split_fiducial.json`) are consumed directly by the data
 > preparation scripts in Step 4.
+
+---
+
+## Summary of Generated Files
+
+| File | Script | Description |
+|------|--------|-------------|
+| `output/<run>/selection_ellipse.json` | `selection_ellipse.py` | Core GMM parameters (mean, covariance, semi-axes, angle) and derived 1σ selection cut values (haty_min, haty_max, slope_plane, intercept_plane, intercept_plane2) |
+| `output/<run>/selection_ellipse.png` | `selection_ellipse.py` | Phase-space (x, y) scatter coloured by P(core component), with 1σ/2σ/3σ GMM ellipses and the four derived selection cuts overlaid |
+| `output/<run>/mag_split_grid.json` | `ellipse_sweep.py` | Full 3-D grid results: MLE slope and galaxy count at every (n_σ_perp, n_σ_ŷmin, n_σ_ŷmax) grid point |
+| `output/<run>/mag_split_grid.png` | `ellipse_sweep.py` | Heatmap of MLE slope over the (n_σ_ŷmin, n_σ_ŷmax) grid, one panel per n_σ_perp value, with the fiducial point marked |
+| `output/<run>/fiducial_slope_hist.png` | `ellipse_sweep.py` | Histogram of MLE slopes across all grid cells at the fiducial n_σ_perp, with the GMM slope and tolerance band indicated |
+| `output/<run>/mag_split_fiducial.json` | `ellipse_sweep.py` | Chosen fiducial cut values: haty_min, haty_max, slope_plane, intercept_plane, intercept_plane2, and the corresponding n_σ scale parameters |

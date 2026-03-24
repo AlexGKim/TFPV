@@ -256,3 +256,32 @@ plot_cov(cov, output_path, *, title="Posterior predictive covariance", vmax=None
                   percentile of |cov|); correlation panel always ±1
     Writes a two-panel PNG: left = covariance, right = correlation matrix.
 ```
+
+---
+
+## Summary of Generated Files
+
+**All sources (`--source DESI`, `fullmocks`, `ariel`):**
+
+| File | Description |
+|------|-------------|
+| `output/<run>/{model}_grid.png` | Mean predicted magnitude minus observed ŷ, averaged on a 2-D (x̂, ŷ) grid; highlights systematic residuals as a function of rotation velocity and magnitude |
+| `output/<run>/redshift_grid_{model}.png` | Residual (mean_pred − ŷ_obs) heat-map on a 2-D (x̂, redshift) grid; shows redshift-dependent biases |
+| `output/<run>/redshift_{model}.png` | Per-galaxy pull (mean_pred − ŷ_obs) / σ_pred vs. redshift scatter with inverse-variance weighted mean |
+| `output/<run>/{model}_cov.fits` | Posterior predictive covariance matrix, float32, shape (G, G); row/column order matches MAIN=True rows of `{model}_catalog.fits` |
+| `output/<run>/{model}_cov.png` | Two-panel visualisation of the full covariance matrix: left panel = covariance, right panel = correlation |
+| `output/<run>/{model}_cov_sub.png` | Same two-panel visualisation for a random subset of ≤512 galaxies; useful for visual inspection when G is large |
+
+**`--source DESI` with `--catalog` only:**
+
+| File | Description |
+|------|-------------|
+| `output/<run>/{model}_catalog.fits` | Input FITS catalog augmented with predicted mean absolute magnitude and uncertainty columns for all MAIN=True galaxies |
+
+**`--source fullmocks` only:**
+
+| File | Description |
+|------|-------------|
+| `output/<run>/{model}_truth_diff_grid.png` | (mean_pred − y_true) / σ_pred averaged on a 2-D (x̂, ŷ) grid; requires truth column `R_ABSMAG_SB26_TRUE` |
+| `output/<run>/{model}_highpull.png` | (x̂, ŷ) scatter with galaxies having pull > 4 highlighted in red |
+| `output/<run>/redshift_hist_{model}.png` | Pull histograms in 9 log-spaced redshift bins |
