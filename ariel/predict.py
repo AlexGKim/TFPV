@@ -1805,7 +1805,7 @@ def write_desi_catalog(model, run_dir, fits_path):
     New columns added:
       MU_TF        = R_MAG_SB26_CORR - mean_pred
       MU_ERR       = sqrt(R_MAG_SB26_CORR_ERR^2 + sd_pred^2)
-      LOGDIST      = 0.2 * ((R_MAG_SB26 - R_MAG_SB26_ABS) - MU_TF)
+      LOGDIST      = 0.2 * ((R_MAG_SB26 - R_ABSMAG_SB26) - MU_TF)
       LOGDIST_ERR  = 0.2 * MU_ERR
       MAIN         = bool (True if passes selection cuts from config.json)
     """
@@ -1851,7 +1851,18 @@ def write_desi_catalog(model, run_dir, fits_path):
         app_corr  = np.asarray(data["R_MAG_SB26_CORR"],dtype=float)
         app_corr_err = np.asarray(data[corr_err_col],  dtype=float)
         app       = np.asarray(data["R_MAG_SB26"],     dtype=float)
-        abs_mag   = np.asarray(data["R_MAG_SB26_ABS"], dtype=float)
+        abs_mag_col = "R_ABSMAG_SB26"
+        if abs_mag_col not in names:
+            fallback = "R_MAG_SB26_ABS"
+            if fallback in names:
+                print(f"Warning: {abs_mag_col!r} absent; falling back to {fallback!r}")
+                abs_mag_col = fallback
+            else:
+                raise ValueError(
+                    f"Missing absolute magnitude column {abs_mag_col!r} and fallback "
+                    f"{fallback!r}. Available: {sorted(list(names))[:30]} ..."
+                )
+        abs_mag   = np.asarray(data[abs_mag_col],      dtype=float)
         zobs      = np.asarray(data[z_col_use],        dtype=float)
 
     with np.errstate(invalid='ignore', divide='ignore'):
