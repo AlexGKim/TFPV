@@ -1185,10 +1185,10 @@ def DESI(kind="normal",
     sigma_y2= sd_pred2
 
 
-    # --- GRID: residuals on (xhat, yhat) ---
+    # --- GRID: residuals on (xhat, yhat) — selection sample only ---
     if make_residual_grid:
         fig, ax, img = create_average_grid_image(
-            xhat_star, yhat_star, mean_y,
+            xhat_star2, yhat_star2, mean_y2,
             grid_resolution_x=grid_resolution_x,
             grid_resolution_y=grid_resolution_y,
         )
