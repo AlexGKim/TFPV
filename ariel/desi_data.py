@@ -519,16 +519,20 @@ if __name__ == "__main__":
     if args.run is not None:
         run_dir = os.path.join('output', args.run)
         os.makedirs(run_dir, exist_ok=True)
-        fiducial_path = os.path.join(run_dir, 'mag_split_fiducial.json')
-        if os.path.exists(fiducial_path):
-            with open(fiducial_path) as _f:
-                _fid = json.load(_f)
-            args.haty_min         = _fid['haty_min']
-            args.haty_max         = _fid['haty_max']
-            args.slope_plane      = _fid['slope_plane']
-            args.intercept_plane  = _fid['intercept_plane']
-            args.intercept_plane2 = _fid['intercept_plane2']
-            print(f"Loaded selection parameters from {fiducial_path}")
+        for _fname in ('select_v2_fiducial.json', 'mag_split_fiducial.json'):
+            fiducial_path = os.path.join(run_dir, _fname)
+            if os.path.exists(fiducial_path):
+                with open(fiducial_path) as _f:
+                    _fid = json.load(_f)
+                args.haty_min         = _fid['haty_min']
+                args.haty_max         = _fid['haty_max']
+                args.slope_plane      = _fid['slope_plane']
+                args.intercept_plane  = _fid['intercept_plane']
+                args.intercept_plane2 = _fid['intercept_plane2']
+                if 'z_obs_min' in _fid:
+                    args.z_obs_min    = _fid['z_obs_min']
+                print(f"Loaded selection parameters from {fiducial_path}")
+                break
         output_json = args.output or os.path.join(run_dir, 'input.json')
         init_json   = args.init   or os.path.join(run_dir, 'init.json')
         plot_file   = args.plot   or os.path.join(run_dir, 'data.png')

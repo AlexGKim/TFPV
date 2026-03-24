@@ -36,11 +36,12 @@ from sklearn.mixture import GaussianMixture
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_data(fits_file, haty_min, haty_max, source="fullmocks"):
+def load_data(fits_file, haty_min, haty_max, source="fullmocks", z_obs_min=None):
     print(f"Reading FITS file: {fits_file}")
     with fits.open(fits_file) as hdul:
         data = hdul[1].data  # type: ignore[union-attr]
         total_rows = len(data)
+        names = set(data.dtype.names or ())
 
         if source == "fullmocks":
             main_mask = np.asarray(data["MAIN"], dtype=bool)
@@ -57,9 +58,15 @@ def load_data(fits_file, haty_min, haty_max, source="fullmocks"):
             y_raw   = absmag
             sigma_y = absmag_err
 
+            # Redshift for fullmocks
+            zobs = None
+            for col in ("ZOBS", "Z_OBS", "zobs"):
+                if col in names:
+                    zobs = np.asarray(data_main[col], dtype=float)
+                    break
+
         else:  # DESI
             print(f"  Total rows: {total_rows}  (no MAIN filter for DESI source)")
-            names = set(data.dtype.names or ())
 
             V     = np.asarray(data["V_0p4R26"],     dtype=float)
             V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
@@ -76,6 +83,13 @@ def load_data(fits_file, haty_min, haty_max, source="fullmocks"):
             y_raw   = absmag
             sigma_y = absmag_err
 
+            # Redshift for DESI
+            zobs = None
+            for col in ("Z_DESI", "Z_DESI_CMB", "ZOBS", "Z_OBS", "zobs", "Z", "ZHELIO"):
+                if col in names:
+                    zobs = np.asarray(data[col], dtype=float)
+                    break
+
     valid = (
         np.isfinite(x_raw)
         & np.isfinite(sigma_x)
@@ -86,6 +100,10 @@ def load_data(fits_file, haty_min, haty_max, source="fullmocks"):
         & (y_raw >= haty_min)
         & (y_raw <= haty_max)
     )
+
+    if z_obs_min is not None and zobs is not None:
+        valid &= np.isfinite(zobs) & (zobs >= z_obs_min)
+        print(f"  Redshift cut z >= {z_obs_min} applied")
 
     print(f"  Valid rows after validity + pre-filter: {valid.sum()}")
     return x_raw[valid], y_raw[valid], sigma_x[valid], sigma_y[valid]
@@ -715,6 +733,8 @@ def main():
                         help="Loose upper magnitude pre-filter (default: -18.0)")
     parser.add_argument("--n_init",   type=int,   default=20,
                         help="GMM random restarts for initialisation (default: 20)")
+    parser.add_argument("--z_obs_min", type=float, default=0.03,
+                        help="Minimum redshift cut (default: 0.03)")
     parser.add_argument("--exe",      default=None,
                         help="Path to compiled Stan tophat executable; if given, run MLE at --n_sigma")
     parser.add_argument("--n_sigma",  type=float, default=3.0,
@@ -725,7 +745,8 @@ def main():
     os.makedirs(run_dir, exist_ok=True)
 
     # Load data (now includes sigma_x, sigma_y)
-    x, y, sigma_x, sigma_y = load_data(args.file, args.haty_min, args.haty_max, args.source)
+    x, y, sigma_x, sigma_y = load_data(args.file, args.haty_min, args.haty_max, args.source,
+                                        z_obs_min=args.z_obs_min)
 
     # Detect truncation from data extremes
     x_hi, y_lo = detect_truncation(x, y)

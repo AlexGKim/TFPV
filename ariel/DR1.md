@@ -18,7 +18,7 @@ Fit a noise- and truncation-corrected 2-component GMM to the (x, y) phase
 space to estimate the TFR core selection boundary.
 
 ```bash
-python selection_ellipse.py --file $FITS --run $RUN --source DESI
+python selection_ellipse.py --file $FITS --run $RUN --source DESI --z_obs_min 0.03
 ```
 
 Inspect the output:
@@ -27,47 +27,38 @@ Inspect the output:
 open output/$RUN/selection_ellipse.png
 ```
 
-The printed "Derived selection cuts" block provides starting estimates for
-`haty_min`, `haty_max`, `slope_plane`, `intercept_plane`, and
-`intercept_plane2` to use in the steps below.
-
 ---
 
-## Step 2: Selection plateau search
+## Step 2: MLE fit and pull-profile diagnostic
 
-Scan a 3D grid over (n_σ_perp, n_σ_lo, n_σ_hi) using Stan MAP optimization
-to find where the MLE TFR slope is stable.  The fiducial cuts are selected
-automatically as the max-N cell within the 16–84 percentile band of converged
-slopes, and written to `output/$RUN/mag_split_fiducial.json`.
+Run Stan MAP optimisation on the 3σ-ellipse selection and produce a pull
+profile over all catalog objects.  Use the plot to guide the choice of the
+final magnitude window.
 
 ```bash
-python ellipse_sweep.py \
-    --source DESI \
-    --fits_file $FITS \
-    --run $RUN
+python select_v2.py --run $RUN --fits_file $FITS --exe ./tophat
 ```
 
-Inspect the heatmap and slope histogram:
+Inspect the pull profile:
 
 ```bash
-open output/$RUN/mag_split_grid.png
-open output/$RUN/fiducial_slope_hist.png
-```
-
-Replot from saved results without rerunning Stan:
-
-```bash
-python ellipse_sweep.py --source DESI --fits_file $FITS --run $RUN --mag_split_plot
+open output/$RUN/select_v2_pull.png
 ```
 
 ---
 
-## Step 3: Selection criteria
+## Step 3: Set fiducial selection criteria
 
-Cut parameters are read automatically from `output/$RUN/mag_split_fiducial.json`
-when `--run` is passed to `desi_data.py`.  No manual step required; proceed to
-Step 4.  Individual parameters can still be overridden on the command line if
-needed.
+Based on the pull profile, interactively choose the perpendicular cut width
+(in σ units) and the magnitude window, then write
+`output/$RUN/select_v2_fiducial.json` for use by `desi_data.py`.
+
+```bash
+python set_fiducial.py --run $RUN
+```
+
+The script prints the 1σ reference values and prompts for `n_sigma_perp`,
+`haty_min`, `haty_max`, and `z_obs_min` (default 0.03).
 
 ---
 
@@ -77,12 +68,12 @@ Convert the FITS file to Stan JSON format using the selection parameters
 chosen in Step 3.
 
 ```bash
-python desi_data.py --input $FITS --run $RUN --z_obs_min 0.01
+python desi_data.py --input $FITS --run $RUN
 ```
 
 Selection parameters (`haty_min`, `haty_max`, `slope_plane`, `intercept_plane`,
-`intercept_plane2`) are loaded automatically from
-`output/$RUN/mag_split_fiducial.json` written in Step 3.
+`intercept_plane2`, `z_obs_min`) are loaded automatically from
+`output/$RUN/select_v2_fiducial.json` written in Step 3.
 
 Inspect the scatter plot to verify the selection looks correct:
 
