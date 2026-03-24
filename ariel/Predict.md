@@ -69,6 +69,7 @@ prediction sample.
 |------|-------------|
 | `output/<run>/{model}_grid.png` | mean_pred − ŷ_obs averaged on (x̂, ŷ) grid |
 | `output/<run>/redshift_{model}.png` | pull vs. redshift scatter with weighted mean |
+| `output/<run>/{model}_cov.png` | posterior predictive covariance + correlation matrix (two panels) |
 
 **`--source fullmocks` only:**
 
@@ -140,7 +141,8 @@ The oblique plane cut is applied by default. Pass `--no_plane_cut` to disable it
 
 ## Step 2: Posterior Predictive Covariance
 
-Algorithm: `predict_cov.py`
+`write_cov` is called automatically at the end of every `predict.py` run and
+writes `output/<run>/{model}_cov.png`. No separate invocation is needed.
 
 The predicted magnitudes y\*[g] are covariant because they share the same
 posterior draws θ_m. The full (G, G) covariance matrix is needed for
@@ -169,10 +171,10 @@ for correlated structure across galaxies.
 intermediate vs ~300 MB for the naive `np.cov` approach. Output (G, G)
 matrix: ~720 MB float64 in both cases.
 
-### Usage (Python API)
+### Python API
 
-`predict_cov.py` is a library module, not a script. Import it after
-running `predict.py` to obtain draws and galaxy arrays.
+The covariance functions are available in both `predict.py` and the
+`predict_cov.py` library module for direct use:
 
 ```python
 import json

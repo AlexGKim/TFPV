@@ -162,43 +162,9 @@ python predict.py --run $RUN --model normal  --source DESI \
 `output/$RUN/{tophat,normal}_catalog.fits` containing the input columns plus
 predicted mean magnitude and uncertainty.
 
-See [Predict.md](Predict.md) for full argument reference and covariance
-computation instructions.
-
----
-
-## Step 9: Posterior predictive covariance
-
-```python
-import json, numpy as np
-from predict import read_cmdstan_posterior
-from predict_cov import (ystar_pp_cov_normal_vectorized,
-                         ystar_pp_cov_tophat_vectorized,
-                         plot_cov)
-
-with open(f"output/{RUN}/input.json") as f:
-    data = json.load(f)
-xhat_star    = np.array(data["x"])
-sigma_x_star = np.array(data["sigma_x"])
-
-# Normal model
-draws = read_cmdstan_posterior(
-    f"output/{RUN}/normal_?.csv",
-    keep=["slope","intercept.1","sigma_int_x","sigma_int_y","mu_y_TF","tau"],
-    drop_diagnostics=True)
-cov = ystar_pp_cov_normal_vectorized(draws, xhat_star, sigma_x_star)
-plot_cov(cov, f"output/{RUN}/normal_cov.png", title=f"{RUN} normal model")
-
-# Tophat model
-draws_th = read_cmdstan_posterior(
-    f"output/{RUN}/tophat_?.csv",
-    keep=["slope","intercept.1","sigma_int_x","sigma_int_y"],
-    drop_diagnostics=True)
-cov_th = ystar_pp_cov_tophat_vectorized(
-    draws_th, xhat_star, sigma_x_star,
-    bounds_json=f"output/{RUN}/input.json")
-plot_cov(cov_th, f"output/{RUN}/tophat_cov.png", title=f"{RUN} tophat model")
-```
-
-Output images: `output/$RUN/normal_cov.png`, `output/$RUN/tophat_cov.png`
+The posterior predictive covariance is computed automatically at the end of
+each run and saved to `output/$RUN/{tophat,normal}_cov.png`
 (covariance + correlation matrix, two panels each).
+
+See [Predict.md](Predict.md) for full argument reference and covariance
+computation details.
