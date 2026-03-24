@@ -162,11 +162,17 @@ python predict.py --run $RUN --model normal  --source DESI \
 `output/$RUN/{tophat,normal}_catalog.fits` containing the input columns plus
 predicted mean magnitude and uncertainty.
 
-The posterior predictive covariance is computed automatically at the end of
-each run and saved to:
+Per run, the following output files are written:
 
-- `output/$RUN/{tophat,normal}_cov.fits` — full (G, G) matrix, float32
-- `output/$RUN/{tophat,normal}_cov.png` — covariance + correlation matrix, two panels
+| File | Description |
+|------|-------------|
+| `output/$RUN/{model}_grid.png` | mean_pred − ŷ_obs on (x̂, ŷ) grid |
+| `output/$RUN/redshift_grid_{model}.png` | residual heat-map on (x̂, redshift) grid |
+| `output/$RUN/redshift_{model}.png` | pull vs. redshift scatter |
+| `output/$RUN/{model}_catalog.fits` | augmented FITS catalog with predicted magnitudes |
+| `output/$RUN/{model}_cov.fits` | posterior predictive covariance matrix, float32, (G, G) |
+| `output/$RUN/{model}_cov.png` | covariance + correlation matrix, two panels |
+| `output/$RUN/{model}_cov_sub.png` | same for a random subset of ≤512 galaxies |
 
 See [Predict.md](Predict.md) for full argument reference and covariance
 computation details.

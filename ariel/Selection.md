@@ -151,125 +151,64 @@ python selection_ellipse.py --file $FITS --run $RUN
 
 Algorithm: `ellipse_sweep.py`
 
-The four selection-cut parameters derived in Step 1 from the 1σ GMM ellipse
-(ŷ_min, ŷ_max, c₁, c₂) are starting-point estimates.  Tightening or loosening
-each cut changes which galaxies enter the Stan model and therefore shifts the
-maximum-likelihood TFR slope s.  The goal of this step is to identify the
-range of each parameter for which s is insensitive to small perturbations —
-the **stability plateau** — and to verify that the 1σ ellipse boundary falls
-within that plateau.
+Starting from the GMM core parameters in `selection_ellipse.json`, this step
+evaluates MLE TFR slopes on a 3-D grid over (n_σ_perp, n_σ_ŷmin, n_σ_ŷmax)
+and automatically selects the fiducial cut values.
 
 ### 1. Data loading
 
 Reads the same FITS file used in Step 1 (fullmocks or DESI) and applies
-redshift cuts z_obs_min < z ≤ z_obs_max.  The raw sample may be randomly
-subsampled to `--n_sweep_objects` objects (default 10 000) to keep each Stan
-call fast.  Reads `output/<run>/selection_ellipse.json` for the GMM mean **μ**
-and covariance **Σ** of the core component.
+redshift cuts.  The raw sample may be randomly subsampled to
+`--n_sweep_objects` objects (default 10 000) to keep each Stan call fast.
+Reads `output/<run>/selection_ellipse.json` for the GMM mean **μ** and
+covariance **Σ** of the core component.
 
-### 2. Ellipse scale parametrisation
+### 2. Grid parametrisation
 
-Each cut is expressed as a function of a single scale parameter n_σ ≥ 0.
-Eigendecomposing **Σ** gives σ_minor, σ_major, and major-axis angle θ.  The
-four cuts at scale n_σ are:
+Three independent scale parameters control the selection boundary:
 
-| Cut | At scale n_σ |
-|-----|-------------|
-| ŷ_min | μ_y − n_σ · y_extent |
-| ŷ_max | μ_y + n_σ · y_extent |
-| c₁ (intercept_plane) | min intercept of lines through ±n_σ·σ_minor endpoints |
-| c₂ (intercept_plane2) | max intercept of same lines |
+| Parameter | Controls |
+|-----------|----------|
+| n_σ_perp | width of the oblique plane cut (perpendicular to TFR) |
+| n_σ_ŷmin | faint-end magnitude cut (ŷ_min = μ_y − n_σ_ŷmin · y_extent) |
+| n_σ_ŷmax | bright-end magnitude cut (ŷ_max = μ_y + n_σ_ŷmax · y_extent) |
 
 where y_extent = √(σ_major² sin²θ + σ_minor² cos²θ) is the y-projection of
-the ellipse.  The oblique-cut slope (slope_plane = tan θ) is fixed at the 1σ
-value for all n_σ.  At n_σ = 1 the cuts exactly bound the 1σ ellipse.
+the 1σ ellipse.  The oblique-cut slope (slope_plane = tan θ) is fixed
+throughout.
 
 ### 3. Stan MAP optimisation
 
-At each grid point the galaxy sample is filtered by the current cuts, then:
+At each grid point the galaxy sample is filtered by the current cuts, then the
+compiled `tophat` executable is called in `optimize` (MAP) mode via
+`subprocess`.  The MLE slope s is read from the `slope` generated quantity in
+the Stan CSV output.
 
-1. The sample mean and standard deviation of x are computed; x is
-   standardised to x_std = (x − mean_x) / sd_x.
-2. An OLS slope on the standardised sample initialises `slope_std`, clamped
-   to the model's parameter bounds (−9·sd_x, −4·sd_x).  Clamping is necessary
-   because a loose selection window can push OLS outside those bounds, causing
-   Stan to fail at initialisation.
-3. Data and init JSON files are written to a temporary directory and the
-   compiled `tophat` executable is called in `optimize` (MAP) mode via
-   `subprocess`.
-4. The MLE slope s is read from the `slope` generated quantity in the Stan CSV
-   output.  (`slope = slope_std / sd_x` converts from the standardised
-   parameterisation automatically.)
+### 4. Fiducial selection
 
-### 4. Sweep
+The fiducial point is the highest-N grid cell satisfying
+|MLE slope − GMM slope| ≤ slope_tol (default 0.5).  Ties are broken by
+selecting the point with the most galaxies.  The chosen (n_σ_perp, n_σ_ŷmin,
+n_σ_ŷmax) is converted to actual cut values (haty_min, haty_max,
+intercept_plane, intercept_plane2) and written to
+`output/<run>/mag_split_fiducial.json`.
 
-For each of the four cut parameters p ∈ {ŷ_min, ŷ_max, c₁, c₂}:
+### 5. Output
 
-- Fix the other three at their 1σ values.
-- Evaluate n_σ on a log-spaced grid from n_σ_min to n_σ_max (default 0.7–1.7,
-  21 points).
-- Run Stan MAP at each grid point (Section 3) and record (n_σ, cut value,
-  slope, N_selected).
-- Compute the numerical derivative ∂s/∂(n_σ) via `numpy.gradient` using the
-  actual (non-uniform) n_σ coordinates as the second argument, giving correct
-  central differences on the log-spaced grid.
-
-### 5. Interpretation
-
-**Stability plateau:** A region where ∂s/∂(n_σ) ≈ 0 indicates that the fitted
-TFR slope is insensitive to the exact placement of that cut.  The 1σ ellipse
-boundary (n_σ = 1, dashed vertical line) should ideally fall within this flat
-region.
-
-**Bound-hitting at tight cuts:** For n_σ ≲ 0.7 the MLE slope often saturates
-at the Stan model's upper bound (−4).  This is not a numerical failure but a
-physical effect: a very narrow selection window makes the selection-correction
-term dominate the likelihood, the signal-to-correction ratio collapses, and
-the optimiser finds no well-identified interior maximum.  Points at the
-constraint boundary should be excluded from plateau identification.
-
-**Monotone vs non-monotone profiles:** A monotone slope profile (∂s/∂(n_σ)
-constant sign) with a flat plateau in the middle indicates the cut is
-well-behaved.  A non-monotone profile with sign changes signals that multiple
-regimes compete (e.g., at loose cuts the selection region extends into a
-non-TFR population, reversing the bias direction).
-
-### 6. Output
-
-**`output/<run>/ellipse_sweep.json`** — sweep data for downstream use:
-
-```json
-{
-  "<param>": {
-    "n_sigma":          [float, ...],
-    "cut_values":       [float, ...],
-    "slopes":           [float or null, ...],
-    "d_slope_d_nsigma": [float or null, ...]
-  },
-  ...
-}
-```
-
-One entry per cut parameter (`haty_min`, `haty_max`, `intercept_plane`,
-`intercept_plane2`).  Grid points where Stan returned no valid result are
-stored as `null`.
-
-**`output/<run>/ellipse_sweep.png`** — 2-row × 4-column figure:
-
-- **Top row:** MLE slope s vs n_σ on a log x-axis for each cut parameter.
-  A secondary top axis shows the corresponding cut value.  Dashed vertical
-  line marks n_σ = 1.
-- **Bottom row:** ∂s/∂(n_σ) vs n_σ (log x-axis).  Dashed horizontal line at
-  zero; dashed vertical line at n_σ = 1.
-
-A summary table is also printed to stdout reporting, at the grid point closest
-to n_σ = 1, the cut value, MLE slope, derivative, and number of selected
-galaxies for each parameter.
+| File | Description |
+|------|-------------|
+| `output/<run>/mag_split_grid.json` | full 3-D grid results |
+| `output/<run>/mag_split_grid.png` | (n_σ_perp × 2) heatmap of MLE slope |
+| `output/<run>/fiducial_slope_hist.png` | histogram of MLE slopes at fiducial n_σ_perp |
+| `output/<run>/mag_split_fiducial.json` | chosen cut values |
 
 ### Usage
 
 ```bash
-python ellipse_sweep.py --source fullmocks --fits_file $FITS --run $RUN
+python ellipse_sweep.py --source DESI --fits_file $FITS --run $RUN
+
+# Replot from saved JSON without rerunning Stan:
+python ellipse_sweep.py --source DESI --fits_file $FITS --run $RUN --mag_split_plot
 ```
 
 | Argument | Default | Description |
@@ -279,132 +218,20 @@ python ellipse_sweep.py --source fullmocks --fits_file $FITS --run $RUN
 | `--dir DIR` | `data/` | Directory searched for FITS files |
 | `--run RUN` | required | Run name; reads `output/<run>/selection_ellipse.json` |
 | `--exe EXE` | `tophat` | Path to compiled Stan tophat executable |
-| `--n_sigma_min` | 0.7 | Lower end of n_σ grid |
-| `--n_sigma_max` | 1.7 | Upper end of n_σ grid |
-| `--n_sigma_n` | 21 | Number of log-spaced grid points |
 | `--z_obs_min` | 0.03 | Minimum redshift cut |
 | `--z_obs_max` | 0.10 | Maximum redshift cut |
 | `--n_sweep_objects` | 10000 | Subsample size (0 = use all) |
+| `--slope_tol` | 0.5 | Max \|MLE slope − GMM slope\| for fiducial selection |
+| `--n_sigma_perp_min/max/n` | 5/5/1 | n_σ_perp grid range and count |
+| `--n_sigma_mag_lo_min/max/n` | 0.2/1.6/8 | n_σ_ŷmin grid range and count |
+| `--n_sigma_mag_hi_min/max/n` | 2.5/4.5/9 | n_σ_ŷmax grid range and count |
+| `--mag_split_plot` | off | Replot from saved `mag_split_grid.json`; no Stan calls |
 
 ## Step 3: Selection criteria
 
-Algorithm: `selection_criteria.py`
-
-The sweep profiles from Step 2 show that the MLE slope is stable (∂s/∂(n_σ) ≈ 0)
-over a central plateau and diverges at large n_σ where non-TFR galaxies enter the
-sample.  This step automatically identifies that plateau for each cut parameter,
-chooses a value near its large-n_σ edge, and records the result as the final
-selection cuts used in subsequent analysis.
-
-### 1. Valid points
-
-For each sweep parameter the following points are excluded before any plateau
-analysis:
-
-- slope is NaN (Stan failed or sample too small),
-- derivative is NaN,
-- slope is within `BOUND_TOL = 0.05` of the Stan hard bounds (−9 or −4) —
-  these are bound-hitting points where the optimiser did not find a free interior
-  maximum.
-
-### 2. Two-level plateau detection (`choose_nsigma`)
-
-The algorithm operates in two levels.
-
-**Level 1 — broad plateau.**  A global threshold
-
-$$\tau_1 = d_\mathrm{threshold} \times \max_i |\partial s / \partial n_\sigma|$$
-
-is computed over all valid points.  Points with |∂s/∂(n_σ)| < τ₁ form the broad
-plateau.  If fewer than two valid points exist the algorithm falls back to n_σ = 1.
-If no broad plateau exists the closest valid point to n_σ = 1 is returned with
-status `no_plateau`.
-
-**Level 2 — group selection.**  The broad plateau is split into maximal contiguous
-runs (adjacent grid indices).  The run containing the globally flattest valid point
-(minimum |∂s/∂(n_σ)|) is selected as the candidate group.
-
-**Boundary exception.**  When the global minimum |∂s/∂(n_σ)| falls on the
-leftmost valid point the derivative profile is monotonically drifting — there is
-no interior stable region.  In this case Levels 2–3 are skipped and the right edge
-of the broad plateau group is used directly (Level 1 fallback).
-
-**Level 3 — local "close to zero" criterion.**  Within the selected group a point
-is considered close to zero if
-
-$$|\partial s / \partial n_\sigma| < d_\mathrm{threshold} \times \mathrm{IQR}(\partial s / \partial n_\sigma)$$
-
-where IQR is computed over the signed derivatives of the selected group.  This
-criterion is relative to the width of the local derivative distribution rather
-than its maximum, so it correctly identifies points that are genuinely near zero
-even when the group contains some moderate outliers.  The close-to-zero points are
-split into contiguous sub-runs and the **rightmost** sub-run is chosen — this gives
-the loosest cut that is still demonstrably stable.
-
-**Edge and chosen n_σ.**  Let the rightmost sub-run have last two members
-n_σ_{prev} and n_σ_{edge}.  The chosen value is
-
-$$n_{\sigma,\mathrm{chosen}} = n_{\sigma,\mathrm{prev}} + \mathrm{frac} \times (n_{\sigma,\mathrm{edge}} - n_{\sigma,\mathrm{prev}})$$
-
-with `frac = 0.8` by default.  If the sub-run contains only one point,
-n_σ_chosen = n_σ_edge.  The cut value is obtained by linear interpolation of
-the sweep grid at n_σ_chosen.
-
-If n_σ_edge equals the rightmost valid point the plateau may extend beyond the
-sweep range; status `plateau_at_edge` is reported and a wider sweep is
-recommended.
-
-### 3. slope_plane
-
-The oblique-cut slope is fixed at the value from `selection_ellipse.json`
-throughout and is copied unchanged into the output.
-
-### 4. Output
-
-**`output/<run>/selection_criteria.json`** — final cut values:
-
-```json
-{
-  "haty_min":         <float>,
-  "haty_max":         <float>,
-  "slope_plane":      <float>,
-  "intercept_plane":  <float>,
-  "intercept_plane2": <float>,
-  "n_sigma_chosen": {
-    "haty_min":         <float>,
-    "haty_max":         <float>,
-    "intercept_plane":  <float>,
-    "intercept_plane2": <float>
-  }
-}
-```
-
-**`output/<run>/selection_criteria.png`** — 2-row × 4-column figure (same layout
-as `ellipse_sweep.png`) with an added orange dashed vertical line at n_σ_chosen
-in both the slope and derivative rows for each parameter.  Warning text appears in
-the subplot title for non-`ok` status flags.
-
-**`output/<run>/selection_criteria_data.png`** — galaxy scatter plot (identical
-layout to `selection_ellipse.png`) with the selected cut lines overlaid in
-deepskyblue (horizontal magnitude cuts) and limegreen (oblique plane cuts).
-Galaxy colour encodes exp(−½χ²) computed from the saved core-component covariance,
-serving as a proxy for P(core component) without refitting the GMM.  Produced only
-when `--source` is provided.
-
-### Usage
-
-```bash
-python selection_criteria.py --run $RUN
-
-# Also produce the galaxy scatter overplot:
-python selection_criteria.py --run $RUN --source fullmocks --fits_file $FITS
-```
-
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--run RUN` | required | Run name; reads/writes `output/<run>/` |
-| `--d_threshold` | 0.3 | Plateau threshold as fraction of max\|∂s/∂n_σ\| (Level 1) and IQR (Level 3) |
-| `--frac` | 0.8 | Interpolation fraction between preceding sub-run point and edge |
-| `--source` | — | Data source for scatter overplot: `fullmocks` or `DESI` (omit to skip) |
-| `--fits_file FILE` | auto | Path to FITS file; auto-detected from `--dir` if omitted |
-| `--dir DIR` | `data/` | Directory searched for FITS files |
+> **Note:** `selection_criteria.py` provides an alternative plateau-detection
+> algorithm that reads a 1-D per-parameter sweep from `ellipse_sweep.json`.
+> This file is not produced by the current `ellipse_sweep.py`; the script is
+> not part of the active DESI or fullmocks workflow.  The fiducial cuts written
+> by Step 2 (`mag_split_fiducial.json`) are consumed directly by the data
+> preparation scripts in Step 4.

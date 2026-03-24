@@ -12,9 +12,9 @@ tophat and normal models, and runs MCMC sampling to infer TFR parameters.
 
 Algorithm: `fullmocks_data.py`
 
-### 1. Reading selection cuts from `selection_criteria.json`
+### 1. Reading selection cuts from `cut_sweep_best_config.json`
 
-When `output/<run>/selection_criteria.json` is present, `fullmocks_data.py`
+When `output/<run>/cut_sweep_best_config.json` is present, `fullmocks_data.py`
 loads the cut values automatically — no flags needed for the cut parameters.
 Cut values may also be passed explicitly on the command line (CLI flags take
 precedence over the JSON).

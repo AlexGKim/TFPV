@@ -36,14 +36,18 @@ The statistical models are described in detail in `doc/model1.tex`, `doc/model2.
 
 ```
 ariel/
+  selection_ellipse.py               — noise- and truncation-corrected GMM fit to phase space
+  ellipse_sweep.py                   — 3-D mag-split grid sweep; auto-selects fiducial cuts
+  selection_criteria.py              — legacy plateau-detection (requires old ellipse_sweep.json)
   ariel_data.py                      — data prep for Ariel mock catalog
-  desi_data.py                       — data prep for DESI survey data
-  fullmocks_data.py                  — data prep for AbacusSummit FITS mocks
+  desi_data.py                       — data prep for DESI survey data (reads mag_split_fiducial.json)
+  fullmocks_data.py                  — data prep for AbacusSummit FITS mocks (reads cut_sweep_best_config.json)
   tophat.stan                        — Stan model (tophat prior)
   normal.stan                        — Stan model (normal prior)
   corner.py                          — posterior corner plots (uses chainconsumer)
   predict.py                         — infer absolute magnitudes from fitted TFR
-  cut_sweep.py                       — quantitative selection cut optimisation (grid sweep)
+  predict_cov.py                     — posterior predictive covariance library
+  cut_sweep.py                       — fullmocks selection cut grid sweep (produces cut_sweep_best_config.json)
   plot_magnitude_predictions.py      — publication-quality magnitude prediction plots (fullmocks)
   plot_desi_magnitude_predictions.py — magnitude prediction plots for DESI
   figs/distributions.py              — figures of latent variable distributions (paper figures)
@@ -66,24 +70,32 @@ All data products live under `output/<run>/` where `<run>` is a short name for t
 
 ```
 output/<run>/
+  selection_ellipse.json            — core Gaussian parameters and derived cuts
+  selection_ellipse.png             — phase-space scatter with GMM ellipses and cuts
+  mag_split_grid.json               — 3-D mag-split grid sweep results
+  mag_split_grid.png                — heatmap of MLE slope over (n_σ_ŷmin, n_σ_ŷmax)
+  fiducial_slope_hist.png           — histogram of MLE slopes at fiducial n_σ_perp
+  mag_split_fiducial.json           — chosen cut values (DESI workflow)
+  cut_sweep_best_config.json        — optimal cut parameters (fullmocks workflow)
   config.json                       — selection parameters used (for reproducibility)
   input.json                        — Stan data
   init.json                         — Stan initial conditions
   data.png                          — galaxy scatter plot with selection cuts
   tophat_1.csv … tophat_4.csv       — MCMC chains (tophat model)
   normal_1.csv  … normal_4.csv      — MCMC chains (normal model)
-  tophat_metric.json                — saved mass matrix (written by adapt save_metric=1)
+  tophat_metric_1.json … tophat_metric_4.json  — per-chain adapted mass matrices
   tophat.png                        — corner plot (tophat posterior)
   normal.png                        — corner plot (normal posterior)
-  tophat_grid.png                   — mean_pred − yhat_obs on (x, y) grid
-  tophat_truth_diff_grid.png        — (mean_pred − y_true) / sd_pred on (x, y) grid
+  tophat_grid.png                   — mean_pred − yhat_obs on (x̂, ŷ) grid
+  redshift_grid_tophat.png          — residual heat-map on (x̂, redshift) grid
   redshift_tophat.png               — pull vs. redshift scatter
-  redshift_hist_tophat.png          — pull histograms in 9 log-spaced redshift bins
-  tophat_highpull.png               — scatter in (x̂, ŷ) with pull > 4 galaxies highlighted
-  cut_sweep.csv                     — grid sweep results (cut_sweep.py)
-  cut_sweep_1d.png                  — 1-D slope profiles per selection parameter
-  cut_sweep_2d_<p1>_<p2>.png       — 2-D slices: slope / volatility / log-likelihood
-  cut_sweep_best_config.json        — optimal cut parameters from the sweep
+  tophat_cov.fits                   — posterior predictive covariance matrix, float32, (G, G)
+  tophat_cov.png                    — covariance + correlation matrix, two panels
+  tophat_cov_sub.png                — same for a random subset of ≤512 galaxies
+  tophat_catalog.fits               — augmented FITS catalog with predicted magnitudes (DESI)
+  tophat_truth_diff_grid.png        — (mean_pred − y_true) / sd_pred on (x̂, ŷ) grid (fullmocks)
+  redshift_hist_tophat.png          — pull histograms in 9 log-spaced redshift bins (fullmocks)
+  tophat_highpull.png               — scatter with pull > 4 galaxies highlighted (fullmocks)
 ```
 
 ---
@@ -97,21 +109,26 @@ throughout.
 export FITS=/path/to/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
 export RUN=c000_ph000_r000
 
-# Steps 1–3: Sample selection (see Selection.md)
+# Steps 1–2: Sample selection (see Selection.md)
 python selection_ellipse.py --file $FITS --run $RUN
 python ellipse_sweep.py --source fullmocks --fits_file $FITS --run $RUN
-python selection_criteria.py --source fullmocks --fits_file $FITS --run $RUN
+# → writes output/$RUN/mag_split_fiducial.json
 
-# Steps 4–6: TFR fitting (see TFFit.md)
-python fullmocks_data.py --file $FITS --run $RUN <cuts from selection_criteria.json>
+# Steps 3–5: TFR fitting (see TFFit.md)
+# fullmocks_data.py reads cut_sweep_best_config.json if present, else use CLI args
+python fullmocks_data.py --file $FITS --run $RUN
 make -C ../../cmdstan ../TFPV/ariel/tophat ../TFPV/ariel/normal
-./tophat sample ... data file=output/$RUN/input.json ...
+./tophat sample num_warmup=500 num_samples=500 num_chains=4 \
+    adapt save_metric=1 \
+    data file=output/$RUN/input.json \
+    init=output/$RUN/init.json \
+    output file=output/$RUN/tophat.csv
 
-# 6. Diagnose + corner plot
+# Step 6: Diagnose + corner plot
 ../../cmdstan/bin/stansummary output/$RUN/tophat_?.csv
 python corner.py --run $RUN --model tophat
 
-# 7. Predict
+# Step 7: Predict
 python predict.py --run $RUN --model tophat --source fullmocks --dir $(dirname $FITS)
 ```
 
@@ -141,7 +158,7 @@ and normal models, and run MCMC sampling to infer the TFR parameters.
 
 ---
 
-### Step 6: Predict Absolute Magnitudes
+### Step 7: Predict Absolute Magnitudes
 
 Given the fitted TFR posterior, compute the posterior predictive mean and
 uncertainty of the latent absolute magnitude y_* for each galaxy by
@@ -151,7 +168,7 @@ marginalizing over MCMC draws.
 
 ---
 
-### Step 7: Diagnose and Visualize
+### Step 8: Diagnose and Visualize
 
 These checks should be applied after every step that produces outputs (data prep, cut sweep, MCMC, predictions), not only at the end. At minimum, run them after MCMC and after prediction.
 

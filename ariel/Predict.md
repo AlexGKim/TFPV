@@ -68,9 +68,11 @@ prediction sample.
 | File | Description |
 |------|-------------|
 | `output/<run>/{model}_grid.png` | mean_pred − ŷ_obs averaged on (x̂, ŷ) grid |
+| `output/<run>/redshift_grid_{model}.png` | residual heat-map on (x̂, redshift) grid |
 | `output/<run>/redshift_{model}.png` | pull vs. redshift scatter with weighted mean |
 | `output/<run>/{model}_cov.fits` | posterior predictive covariance matrix, float32, shape (G, G) |
-| `output/<run>/{model}_cov.png` | posterior predictive covariance + correlation matrix (two panels) |
+| `output/<run>/{model}_cov.png` | covariance + correlation matrix, two panels |
+| `output/<run>/{model}_cov_sub.png` | same for a random subset of ≤512 galaxies |
 
 **`--source fullmocks` only:**
 
@@ -143,9 +145,13 @@ The oblique plane cut is applied by default. Pass `--no_plane_cut` to disable it
 ## Step 2: Posterior Predictive Covariance
 
 `write_cov` is called automatically at the end of every `predict.py` run and
-writes `output/<run>/{model}_cov.fits` (the matrix) and
-`output/<run>/{model}_cov.png` (visualisation). No separate invocation is
-needed.
+writes three files — no separate invocation is needed:
+
+| File | Description |
+|------|-------------|
+| `output/<run>/{model}_cov.fits` | full (G, G) matrix, float32 |
+| `output/<run>/{model}_cov.png` | covariance + correlation matrix, two panels |
+| `output/<run>/{model}_cov_sub.png` | same for a random subset of ≤512 galaxies |
 
 The predicted magnitudes y\*[g] are covariant because they share the same
 posterior draws θ_m. The full (G, G) covariance matrix is needed for
