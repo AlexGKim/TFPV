@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.stats import norm
 
 from predict import (
@@ -76,6 +77,60 @@ def ystar_pp_cov_normal_vectorized(draws, xhat_star, sigma_x_star, chunk_size=20
 
     cov = accum / M - np.outer(mean_y, mean_y)
     return cov
+
+
+def plot_cov(cov, output_path, *, title="Posterior predictive covariance", vmax=None):
+    """
+    Save a visualisation of the (G, G) covariance matrix to a PNG.
+
+    Shows two panels: the covariance matrix and the derived correlation matrix
+    r[g1,g2] = cov[g1,g2] / sqrt(var[g1]*var[g2]), both with a symmetric
+    diverging colormap centred at zero.
+
+    Parameters
+    ----------
+    cov : (G, G) ndarray
+    output_path : str or Path
+        File to write (PNG).
+    title : str
+        Suptitle for the figure.
+    vmax : float or None
+        Colour-scale limit for the covariance panel.  Defaults to the 99th
+        percentile of |cov| so a few large outliers don't wash out the image.
+    """
+    var = np.diag(cov)
+    with np.errstate(invalid="ignore"):
+        std   = np.sqrt(np.maximum(var, 0.0))
+        denom = np.outer(std, std)
+        corr  = np.where(denom > 0, cov / denom, 0.0)
+
+    if vmax is None:
+        vmax = float(np.nanpercentile(np.abs(cov), 99))
+    vmax = vmax if vmax > 0 else 1.0
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle(title)
+
+    im0 = axes[0].imshow(cov, origin="upper", aspect="auto",
+                         cmap="RdBu_r", vmin=-vmax, vmax=vmax,
+                         interpolation="nearest")
+    axes[0].set_title("Covariance")
+    axes[0].set_xlabel("galaxy index")
+    axes[0].set_ylabel("galaxy index")
+    fig.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
+
+    im1 = axes[1].imshow(corr, origin="upper", aspect="auto",
+                         cmap="RdBu_r", vmin=-1, vmax=1,
+                         interpolation="nearest")
+    axes[1].set_title("Correlation")
+    axes[1].set_xlabel("galaxy index")
+    axes[1].set_ylabel("galaxy index")
+    fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved covariance image to {output_path}")
 
 
 def ystar_pp_cov_tophat_vectorized(
