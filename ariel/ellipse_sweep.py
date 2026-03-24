@@ -732,13 +732,13 @@ if __name__ == "__main__":
                         help="Number of n_σ_perp grid points")
     parser.add_argument("--n_sigma_mag_lo_min", type=float, default=0.2,
                         help="Lower end of n_σ_lo grid (haty_min)")
-    parser.add_argument("--n_sigma_mag_lo_max", type=float, default=1.6,
+    parser.add_argument("--n_sigma_mag_lo_max", type=float, default=1.4,
                         help="Upper end of n_σ_lo grid (haty_min)")
     parser.add_argument("--n_sigma_mag_lo_n",   type=int,   default=8,
                         help="Number of n_σ_lo grid points")
-    parser.add_argument("--n_sigma_mag_hi_min", type=float, default=2.5,
+    parser.add_argument("--n_sigma_mag_hi_min", type=float, default=1,
                         help="Lower end of n_σ_hi grid (haty_max)")
-    parser.add_argument("--n_sigma_mag_hi_max", type=float, default=4.5,
+    parser.add_argument("--n_sigma_mag_hi_max", type=float, default=3,
                         help="Upper end of n_σ_hi grid (haty_max)")
     parser.add_argument("--n_sigma_mag_hi_n",   type=int,   default=9,
                         help="Number of n_σ_hi grid points")
