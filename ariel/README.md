@@ -1,9 +1,10 @@
-# Tully-Fisher Peculiar Velocity (TFPV) — Ariel
+# Tully-Fisher Peculiar Velocity (TFPV)
 
 Bayesian statistical modeling of the Tully-Fisher Relation (TFR) for peculiar velocity analysis. The TFR is an empirical relation between galaxy rotation velocity (`x = log10(V/100 km/s)`) and absolute magnitude (`y`).
 
 This project does three things:
-0. **Sample selection**: There are normal galaxies occupy a compact
+
+1. **Sample selection**: Normal galaxies occupy a compact
 region of the data phase space who obey a Tully-Fisher
 relation with a specific slope.  There are a small
 froction of other galaxies
@@ -13,13 +14,15 @@ An analysis of the full sample would yield a different slope
 with a poorer quality of fit.  The objective is to determine
 sample selection criteria that gives high completeness
 and purity of normal galaxies.
-1. **Fit the TFR**: Infer TFR parameters from galaxy rotation velocity and absolute magnitude data, accounting for observational selection effects (magnitude limits and oblique plane cuts in x–y space).
-2. **Infer absolute magnitudes**: Given fitted TFR parameters and observed rotation velocities, infer absolute magnitudes for individual galaxies.
+2. **Fit the TFR**: Infer TFR parameters from galaxy rotation velocity and absolute magnitude data, accounting for observational selection effects (magnitude limits and oblique plane cuts in x–y space).
+3. **Infer absolute magnitudes**: Given fitted TFR parameters and observed rotation velocities, infer absolute magnitudes for individual galaxies.
 
 Two Stan models are provided, differing in the assumed distribution of the latent true magnitude y_TF:
 
 - **`tophat.stan`**: Uniform (tophat) prior on y_TF; latent magnitudes marginalized with Gauss-Legendre quadrature.
 - **`normal.stan`**: Gaussian prior on y_TF; adds hyperparameters `mu_y_TF` and `tau`.
+
+The tophat model gives better performance on mock data: the latent distribution is not accurately described by either model but the flat/cuspy central region is better captured by the tophat.
 
 The statistical models are described in detail in `doc/model1.tex`, `doc/model2.tex`, and `doc/model3.tex`.
 
@@ -53,13 +56,6 @@ ariel/
   figs/distributions.py              — figures of latent variable distributions (paper figures)
   doc/                               — LaTeX descriptions of the statistical models
   output/                            — all data products (gitignored)
-```
-
-**Possibly deprecated** (may no longer be needed; retained for reference):
-
-```
-  plot_dwarf.py     — diagnostic scatter for dwarf-galaxy outliers
-  integral_test.py  — unit tests for bivariate-normal strip integral
 ```
 
 ---
@@ -96,40 +92,6 @@ output/<run>/
   tophat_truth_diff_grid.png        — (mean_pred − y_true) / sd_pred on (x̂, ŷ) grid (fullmocks)
   redshift_hist_tophat.png          — pull histograms in 9 log-spaced redshift bins (fullmocks)
   tophat_highpull.png               — scatter with pull > 4 galaxies highlighted (fullmocks)
-```
-
----
-
-## Fullmocks Quick-Start
-
-End-to-end for a single AbacusSummit simulation file. Replace the path and run name
-throughout.
-
-```bash
-export FITS=/path/to/TF_extended_AbacusSummit_base_c000_ph000_r000_z0.11.fits
-export RUN=c000_ph000_r000
-
-# Steps 1–2: Sample selection (see Selection.md)
-python selection_ellipse.py --file $FITS --run $RUN
-python ellipse_sweep.py --source fullmocks --fits_file $FITS --run $RUN
-# → writes output/$RUN/mag_split_fiducial.json
-
-# Steps 3–5: TFR fitting (see TFFit.md)
-# fullmocks_data.py reads cut_sweep_best_config.json if present, else use CLI args
-python fullmocks_data.py --file $FITS --run $RUN
-make -C ../../cmdstan ../TFPV/ariel/tophat ../TFPV/ariel/normal
-./tophat sample num_warmup=500 num_samples=500 num_chains=4 \
-    adapt save_metric=1 \
-    data file=output/$RUN/input.json \
-    init=output/$RUN/init.json \
-    output file=output/$RUN/tophat.csv
-
-# Step 6: Diagnose + corner plot
-../../cmdstan/bin/stansummary output/$RUN/tophat_?.csv
-python corner.py --run $RUN --model tophat
-
-# Step 7: Predict
-python predict.py --run $RUN --model tophat --source fullmocks --dir $(dirname $FITS)
 ```
 
 ---
@@ -181,6 +143,20 @@ These checks should be applied after every step that produces outputs (data prep
 python corner.py --run $RUN --model tophat
 python corner.py --run $RUN --model normal
 ```
+
+---
+
+## RUN Procedures
+
+Each run documents the exact command sequence used, the data set, and the
+selection parameters chosen.
+
+### DR1 — SGA-2020 (DESI DR1)
+
+First end-to-end run on real DESI data using the
+`SGA-2020_iron_Vrot_VI_corr.fits` catalog.
+
+→ See [DR1.md](DR1.md) for the full command sequence and output file listing.
 
 ---
 
