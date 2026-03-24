@@ -163,8 +163,10 @@ python predict.py --run $RUN --model normal  --source DESI \
 predicted mean magnitude and uncertainty.
 
 The posterior predictive covariance is computed automatically at the end of
-each run and saved to `output/$RUN/{tophat,normal}_cov.png`
-(covariance + correlation matrix, two panels each).
+each run and saved to:
+
+- `output/$RUN/{tophat,normal}_cov.fits` — full (G, G) matrix, float32
+- `output/$RUN/{tophat,normal}_cov.png` — covariance + correlation matrix, two panels
 
 See [Predict.md](Predict.md) for full argument reference and covariance
 computation details.
