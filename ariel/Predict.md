@@ -99,9 +99,13 @@ python predict.py --run $RUN --model tophat --source fullmocks \
 python predict.py --run $RUN --model tophat --source fullmocks \
   --dir $(dirname $FITS) --predict_run c000_ph000_r002
 
-# DESI
+# DESI — predictions only
 python predict.py --run DESI --model tophat --source DESI
 python predict.py --run DESI --model normal --source DESI
+
+# DESI — predictions + write augmented catalog FITS
+python predict.py --run DESI --model tophat --source DESI \
+  --catalog --input data/SGA-2020_iron_Vrot_VI_corr.fits
 
 # Ariel mock
 python predict.py --run ariel --model tophat --source ariel
@@ -115,6 +119,8 @@ python predict.py --run ariel --model tophat --source ariel
 | `--n_objects INT` | all | Subsample size for prediction |
 | `--dir DIR` | `data` | Directory containing FITS files (`fullmocks` only) |
 | `--predict_run NAME` | same as `--run` | Simulation ID for the FITS file to predict on (`fullmocks` only) |
+| `--catalog` | off | Write augmented catalog to `output/<run>/<model>_catalog.fits` (`DESI` only) |
+| `--input PATH` | `data/SGA-2020_iron_Vrot_VI_corr.fits` | Input FITS path used by `--catalog` |
 
 **Selection offset flags for `--source fullmocks`** (all default to 0, i.e.
 match the training selection stored in `input.json`):
@@ -207,6 +213,11 @@ cov_th = ystar_pp_cov_tophat_vectorized(
     draws_th, xhat_star, sigma_x_star,
     y_min=data["y_min"], y_max=data["y_max"],
 )
+
+# Save covariance + correlation image
+from predict_cov import plot_cov
+plot_cov(cov,    "output/DESI/normal_cov.png",  title="DESI normal model")
+plot_cov(cov_th, "output/DESI/tophat_cov.png",  title="DESI tophat model")
 ```
 
 ### Function signatures
@@ -226,4 +237,11 @@ ystar_pp_cov_tophat_vectorized(draws, xhat_star, sigma_x_star, *,
     bounds_json : JSON file path supplying y_min/y_max (ignored if
                   y_min and y_max are given directly)
     → cov : (G, G) ndarray
+
+plot_cov(cov, output_path, *, title="Posterior predictive covariance", vmax=None)
+    cov         : (G, G) ndarray from either covariance function above
+    output_path : PNG file to write
+    vmax        : colour-scale limit for covariance panel (default: 99th
+                  percentile of |cov|); correlation panel always ±1
+    Writes a two-panel PNG: left = covariance, right = correlation matrix.
 ```
