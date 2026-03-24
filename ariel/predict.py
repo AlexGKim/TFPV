@@ -1931,19 +1931,22 @@ def write_desi_catalog(model, run_dir, fits_path):
     z_obs_min = cfg.get("z_obs_min")
     if z_obs_min is not None:
         main &= (zobs > z_obs_min)
+    z_obs_max = cfg.get("z_obs_max")
+    if z_obs_max is not None:
+        main &= (zobs <= z_obs_max)
     haty_min_cfg = cfg.get("haty_min")
     haty_max_cfg = cfg.get("haty_max")
     if haty_min_cfg is not None:
-        main &= (app >= haty_min_cfg)
+        main &= (abs_mag >= haty_min_cfg)
     if haty_max_cfg is not None:
-        main &= (app <= haty_max_cfg)
+        main &= (abs_mag <= haty_max_cfg)
     slope_plane      = cfg.get("slope_plane")
     intercept_plane  = cfg.get("intercept_plane")
     intercept_plane2 = cfg.get("intercept_plane2")
     if slope_plane is not None and intercept_plane is not None:
-        main &= (app >= slope_plane * xhat + intercept_plane)
+        main &= (abs_mag >= slope_plane * xhat + intercept_plane)
         if intercept_plane2 is not None:
-            main &= (app <= slope_plane * xhat + intercept_plane2)
+            main &= (abs_mag <= slope_plane * xhat + intercept_plane2)
 
     # 9. Write output FITS: original columns + five new columns
     new_cols = [
