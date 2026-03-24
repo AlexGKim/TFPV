@@ -130,21 +130,6 @@ marginalizing over MCMC draws.
 
 ---
 
-### Step 8: Diagnose and Visualize
-
-These checks should be applied after every step that produces outputs (data prep, cut sweep, MCMC, predictions), not only at the end. At minimum, run them after MCMC and after prediction.
-
-```bash
-# Convergence diagnostics
-../../cmdstan/bin/stansummary output/$RUN/tophat_?.csv
-../../cmdstan/bin/diagnose   output/$RUN/tophat_?.csv
-
-# Corner plots — writes output/$RUN/tophat.png or normal.png
-python corner.py --run $RUN --model tophat
-python corner.py --run $RUN --model normal
-```
-
----
 
 ## RUN Procedures
 
