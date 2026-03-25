@@ -1167,11 +1167,16 @@ def DESI(kind="normal",
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
 
-    # --- load data ---
+    # --- apply config.json selection to full sample ---
+    with open(_p("config.json"), "r") as f:
+        cfg = json.load(f)
 
-    xhat_star2, sigma_x_star2, yhat_star2, sigma_y_star2, zobs_star2 = load_xy_and_uncertainties_from_stan_json(
-        _p("input.json"))
-    
+    main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star)
+
+    xhat_star2    = xhat_star[main_mask]
+    sigma_x_star2 = sigma_x_star[main_mask]
+    yhat_star2    = yhat_star[main_mask]
+    zobs_star2    = zobs_star[main_mask]
 
     # --- posterior + predictive ---
     if kind == "normal":
@@ -1182,8 +1187,6 @@ def DESI(kind="normal",
         )
 
     mean_y2 = mean_pred2 - yhat_star2
-    sigma_y2= sd_pred2
-
 
     # --- GRID: residuals on (xhat, yhat) — selection sample only ---
     if make_residual_grid:
@@ -1222,9 +1225,8 @@ def DESI(kind="normal",
         plt.close(fig)
 
     # --- redshift residual errorbar plot ---
-    # plt.errorbar(zobs_star, mean_y, yerr=sigma_y, fmt=".", alpha=0.05, label=label)
     plt.scatter(zobs_star, mean_y, marker=".", alpha=0.2, label="Full Sample")
-    plt.scatter(zobs_star2, mean_y2, marker=".", alpha=0.2, label=f"Training Susbset")
+    plt.scatter(zobs_star2, mean_y2, marker=".", alpha=0.2, label="Main Sample")
 
     
     plt.xscale("log")
@@ -1797,6 +1799,23 @@ def fullmocks(kind="normal",
     return mean_y, sd_pred, zobs_star
 
 
+def _apply_main_cuts(cfg, xhat, yhat):
+    """Return boolean mask for MAIN=True using config.json cuts (no z cuts)."""
+    mask = np.ones(len(xhat), dtype=bool)
+    if cfg.get("haty_min") is not None:
+        mask &= (yhat >= cfg["haty_min"])
+    if cfg.get("haty_max") is not None:
+        mask &= (yhat <= cfg["haty_max"])
+    slope_plane      = cfg.get("slope_plane")
+    intercept_plane  = cfg.get("intercept_plane")
+    intercept_plane2 = cfg.get("intercept_plane2")
+    if slope_plane is not None and intercept_plane is not None:
+        mask &= (yhat >= slope_plane * xhat + intercept_plane)
+        if intercept_plane2 is not None:
+            mask &= (yhat <= slope_plane * xhat + intercept_plane2)
+    return mask
+
+
 def write_desi_catalog(model, run_dir, fits_path):
     """
     Augment a DESI FITS catalog with TFR-derived quantities and write to
@@ -1927,26 +1946,7 @@ def write_desi_catalog(model, run_dir, fits_path):
     with open(_p("config.json"), "r") as f:
         cfg = json.load(f)
 
-    main = valid.copy()
-    z_obs_min = cfg.get("z_obs_min")
-    if z_obs_min is not None:
-        main &= (zobs > z_obs_min)
-    z_obs_max = cfg.get("z_obs_max")
-    if z_obs_max is not None:
-        main &= (zobs <= z_obs_max)
-    haty_min_cfg = cfg.get("haty_min")
-    haty_max_cfg = cfg.get("haty_max")
-    if haty_min_cfg is not None:
-        main &= (abs_mag >= haty_min_cfg)
-    if haty_max_cfg is not None:
-        main &= (abs_mag <= haty_max_cfg)
-    slope_plane      = cfg.get("slope_plane")
-    intercept_plane  = cfg.get("intercept_plane")
-    intercept_plane2 = cfg.get("intercept_plane2")
-    if slope_plane is not None and intercept_plane is not None:
-        main &= (abs_mag >= slope_plane * xhat + intercept_plane)
-        if intercept_plane2 is not None:
-            main &= (abs_mag <= slope_plane * xhat + intercept_plane2)
+    main = valid & _apply_main_cuts(cfg, xhat, abs_mag)
 
     # 9. Write output FITS: original columns + five new columns
     new_cols = [
@@ -2210,16 +2210,22 @@ def write_cov(model, run_dir):
     """
     Compute and save the posterior predictive covariance matrix for model
     ('normal' or 'tophat') using draws from output/<run>/<model>_?.csv and
-    galaxy data from output/<run>/input.json.
+    the MAIN sample from the FITS catalog (as defined by config.json cuts).
 
     Output: output/<run>/<model>_cov.png
     """
-    input_json = os.path.join(run_dir, "input.json")
-    with open(input_json) as f:
-        data = json.load(f)
-    xhat_star    = np.array(data["x"])
-    sigma_x_star = np.array(data["sigma_x"])
-    sigma_y_star = np.array(data["sigma_y"])
+    config_json = os.path.join(run_dir, "config.json")
+    with open(config_json) as f:
+        cfg = json.load(f)
+
+    fits_path = cfg["source"]
+    xhat_star_full, sigma_x_star_full, yhat_star_full, sigma_y_star_full, _ = \
+        load_xy_and_uncertainties_from_desi(fits_path, row=None, sort_by_zobs=False)
+
+    main = _apply_main_cuts(cfg, xhat_star_full, yhat_star_full)
+    xhat_star    = xhat_star_full[main]
+    sigma_x_star = sigma_x_star_full[main]
+    sigma_y_star = sigma_y_star_full[main]
 
     csv_pattern = os.path.join(run_dir, f"{model}_?.csv")
     if model == "normal":
@@ -2235,6 +2241,7 @@ def write_cov(model, run_dir):
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
             drop_diagnostics=True,
         )
+        input_json = os.path.join(run_dir, "input.json")
         cov = ystar_pp_cov_tophat_vectorized(
             draws, xhat_star, sigma_x_star,
             bounds_json=input_json,

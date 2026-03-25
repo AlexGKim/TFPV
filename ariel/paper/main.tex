@@ -1,0 +1,649 @@
+% ****** Start of file main.tex ******
+%
+\documentclass[%
+ amsmath,amssymb,
+ aps, onecolumn
+]{revtex4-2}
+
+\usepackage{graphicx}% Include figure files
+\usepackage{dcolumn}% Align table columns on decimal point
+\usepackage{bm}% bold math
+
+\usepackage{hyperref}% required for \href and \nolinkurl in bibliography
+\usepackage{aas_macros}% AAS journal abbreviations used in references.bib
+
+\begin{document}
+
+\preprint{APS/123-QED}
+
+\title{Model-Based Calibration of the Tully-Fisher Relation for DESI DR1 Peculiar Velocities}
+
+%\author[0000-0001-6315-8743]{Alex G.\ Kim}
+\author{Alex G.\ Kim}
+\email{agkim@lbl.gov}
+%\homepage[]{Your web page}
+%\thanks{}
+%\altaffiliation{}
+\affiliation{Physics Division, Lawrence Berkeley National Laboratory\\
+1 Cyclotron Road, Berkeley, CA 94720 USA}
+
+
+\collaboration{DESI Collaboration}%\noaffiliation
+
+\date{\today}
+
+\begin{abstract}
+We present a model-based calibration of the Tully-Fisher relation (TFR) using
+the full spiral-galaxy sample from the DESI Data Release 1 (DR1) Peculiar
+Velocity survey.  The DR1 catalog contains 10,278 spiral galaxies drawn from
+the Siena Galaxy Atlas.  We define the TFR phase-space variables
+$x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$
+(the $r$-band isophotal absolute magnitude at $SB=26$~mag\,arcsec$^{-2}$),
+and fit a two-component Gaussian mixture model (GMM) to the observed
+$(x,\,y)$ distribution to characterize the spiral population.
+The dominant GMM component (weight $w=0.932$) defines the orientation of
+oblique selection cuts in phase space; galaxies passing these cuts together
+with a redshift window $0.03 < z < 0.1$ constitute the training sample of
+5,928 galaxies.  We calibrate the TFR by fitting a Stan tophat model to
+this sample via Hamiltonian Monte Carlo, obtaining slope
+$a = -6.797 \pm 0.071$, intercept $b = -19.236 \pm 0.017$,
+intrinsic scatter along the velocity axis $\sigma_{\mathrm{int},x} = 0.026 \pm 0.003$,
+and intrinsic scatter along the magnitude axis $\sigma_{\mathrm{int},y} = 0.422 \pm 0.012$.
+The calibrated model is applied to the full DR1 spiral sample to produce a
+peculiar velocity catalog (\texttt{tophat\_catalog.fits}) and a full posterior
+predictive covariance matrix (\texttt{tophat\_cov.fits}).
+\end{abstract}
+
+\maketitle
+
+
+\section{Introduction}
+\label{sec:intro}
+The Tully-Fisher relation
+\citep[TFR;][]{Tully1977} describes an empirical correlation that links
+the intrinsic brightness of spiral galaxies to their rotational velocities.
+Higher luminosity spiral galaxies exhibit discs with higher rotational speeds,
+a correlation that
+can be explained by the underlying dark matter halos that surround galaxies
+\citep{1998MNRAS.295..319M}.
+The distance to a spiral can then be inferred given measurements
+of rotation velocity and flux: the galaxy luminosity is inferred
+from the velocity and TFR, and the distance can be inferred from the luminosity--flux ratio.
+Spiral galaxies, through the TFR, have served as popular
+distance indicators actively collected and analyzed by a number of surveys \citep[e.g.][]{1997AJ....113...53G, 2000ApJ...529..698S, 2008ApJ...676..184T,1998MNRAS.295..319M, 2019MNRAS.487.2061H,
+2020MNRAS.497.1275S,2020ApJ...902..145K}.
+
+The Dark Energy Spectroscopic Instrument (DESI) collaboration
+is executing such a survey.
+DESI is using the Kitt Peak Mayall 4-m Telescope
+instrumented with a multi-object spectrograph to observe galaxies,
+quasars, and other sources using a survey strategy that is now
+delivering precision measurements of the growth of structure [cite].
+A Peculiar Velocity survey, described in  \cite{Saulder2023},  targets
+supernova hosts, Fundamental plane galaxies, and spirals
+and is a component of the larger survey.
+
+The first suite of DESI spiral-galaxy and TFR measurements using the Early Data Release
+\citep{DESI_EDR} are reported in \citet{2024Douglass}.
+There, the first catalog of 1106 TFR-based peculiar velocity measurements from DESI
+was presented, with deep measurements obtained in and around the Coma cluster.
+The Data Release 1 (DR1) expands the spiral sample to 10,278 galaxies covering the
+full DESI footprint, and is the focus of the present analysis.
+
+The TFR relation takes the form
+\begin{align}
+    y = b + a\, x,
+\end{align}
+where $y = M_R$ is the absolute magnitude, $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$
+is the log rotation velocity relative to $100~\text{km\,s}^{-1}$, and $a$ and $b$ are the
+TFR slope and zero point, respectively.
+In previous work, data were bias-corrected to account for non-trivial observational
+features and sample selection \citep{2006ApJ...653..861M}, and
+$a$ and $b$ are fit by minimizing a least-squares
+merit function \citep{2012ApJ...749...78T, 1997AJ....113...53G}. Some analyses ran multiple iterations in order to refine their sample selection.
+
+In this work we present a different approach toward calibrating the TFR. Rather than fitting a line (or curve) to the data, we adopt a galaxy model that contains an intrinsic TFR and
+fit for the TFR parameters. The advantages of this model-fitting approach include
+%
+\begin{itemize}
+    \item Ability to simultaneously consider measurement uncertainty that is Gaussian in velocity with intrinsic dispersion Gaussian in log-velocity.
+    \item Incorporation of velocity measurement error due to imperfect observations (in our case the fiber not correctly placed along the galaxy disc).
+    \item Sample selection incorporated into the likelihood without
+    the need for bias corrections.
+    \item Convergence to a solution with a single fit.
+    \item Fitting of nuisance parameters. The TFR exhibits scatter larger than that expected from measurement uncertainty, which is attributed to intrinsic dispersion.  The intrinsic dispersion and its axis can be modeled and fitted in the analysis.
+    \item The model and the fit results from one dataset can be applied
+    to a different dataset.
+\end{itemize}
+%
+A requirement of the modeling approach is that the intrinsic velocity distribution must be specified.
+
+In this article we present a model-based calibration of the
+TFR using the full spiral-galaxy sample from the DESI DR1 Peculiar Velocity survey.
+We describe the GMM-based selection function used to define the training sample
+(\S\ref{sec:selection}), the Stan tophat model and its likelihood
+(\S\ref{sec:model}), the MCMC fit results and diagnostics (\S\ref{sec:results}),
+and the output peculiar velocity catalog (\S\ref{sec:catalog}).
+
+
+\section{Data}
+\label{sec:data}
+The DESI DR1 Peculiar Velocity spiral sample contains 10,278 galaxies drawn from the Siena Galaxy Atlas \citep[SGA;][]{SGA}, which is based on the DESI Legacy Imaging Surveys DR9 data \citep{DESI_Imaging}, covering areas north of $-30^\circ$ declination. The SGA includes galaxies with diameters larger than 20'' at the 25th
+magnitude isophote, denoted as $D(25)$. To be part of the TFR sample, a galaxy must have a Sersic index less than 2, indicating it is likely a spiral galaxy, and an inclination angle greater than $25^\circ$, ensuring a significant portion of the galaxy's rotational velocity is visible and the galaxy's major axis is properly aligned.
+
+SGA provides galaxy shape and magnitude information
+at the $r$-band  $SB=26$~$\text{mag}\,\text{arcsec}^{-2}$ isophote, in the form of the photometric axis ratio $b/a$
+(not to be confused with the $a$ and $b$ of the TFR),
+the position angle PA of the semi-major axis,
+and the radius $R_{26}$.  The SGA
+isophotal magnitude is denoted $R$.
+
+The redshift and $R$ isophotal magnitude of the DR1 sample galaxies are shown in Fig.~\ref{fig:zR}.  The SGA has a $D(25)>0.333'$
+sample-selection criterion, which translates to a fuzzy edge
+in the $R$ magnitude.
+
+\begin{figure}
+    \centering
+    %\includegraphics[width=1\linewidth]{figures/zR.png}
+    \fbox{\parbox{0.95\linewidth}{\centering\vspace{3cm}[zR.png --- redshift vs.\ apparent magnitude scatter plot]\vspace{3cm}}}
+    \caption{Redshifts and $R$ isophotal magnitudes of the full DESI DR1 TFR sample.}
+    \label{fig:zR}
+\end{figure}
+
+The DESI measurements are taken at
+the galactic center and on both sides along the major axis oriented according to the SGA PA.
+Rotational velocities were measured at $0.33R_{26}$,
+the distance at which reliable redshifts could consistently be measured.  The redshifts measured at different positions
+are combined to obtain a redshift $z$ and measured
+rotational velocity $V_\text{obs}$ for each galaxy
+\citep{2024Douglass}.
+
+SGA and DESI data are combined to infer the rotation
+velocity $V_\text{rot}$.
+The galaxy inclination angle $i$ is derived from
+\begin{equation}\label{eqn:BAtoi}
+    \cos^2 i = \frac{(b/a)^2 - q_0^2}{1 - q_0^2},
+\end{equation}
+where $q_0 = 0.2$ \citep{Tully2000}.
+This in
+turn is used to convert the observed line-of-sight velocity to the
+the rotation velocity as
+\begin{equation}\label{eqn:Vcorrected}
+    V_{\text{rot}} = \frac{V_{\text{obs}}}{\sin i}.
+\end{equation}
+
+The analysis variables used throughout this paper are
+\begin{align}
+    x &= \log_{10}\!\left(\frac{V_\text{rot}}{100~\text{km\,s}^{-1}}\right), \\
+    y &= M_R,
+\end{align}
+where $M_R$ is the $r$-band SB26 absolute magnitude computed from
+the apparent magnitude $R$ and the luminosity distance at the observed redshift.
+
+The above equation for $V_\text{rot}$ applies when the fiber is
+positioned on the
+semi-major axis, which
+is perpendicular to the rotation velocity.
+DESI fibers are placed according to the PA's from SGA,
+which are based
+on imaging.  Galaxy velocity maps, however,
+better determine
+the axis where line-of-sight rotation
+velocities are maximized.
+We use the subset of our galaxies also observed by
+SDSS Mapping Nearby Galaxies at APO Survey \citep[MaNGA][]{MaNGA} in SDSS MaNGA DR17 \citep{SDSS_DR17}
+and modeled by
+\cite{Ravi2023} to estimate
+the SGA PA uncertainties.
+
+The distribution of the differences between MaNGA and SGA PA's is shown
+in Fig.~\ref{fig:Dpa}.
+The distribution is modeled
+as a Cauchy distribution with
+a best-fit $\gamma=4.217^\circ$,
+which we adopt as the uncertainty in the SGA PA measurement.
+
+\begin{figure}
+    \centering
+    %\includegraphics[width=1\linewidth]{figures/DPA.png}
+    \fbox{\parbox{0.95\linewidth}{\centering\vspace{3cm}[DPA.png --- PA difference histogram]\vspace{3cm}}}
+    \caption{Distribution
+    of the differences between the PA determined from MaNGA and
+    SGA for galaxies in both
+    samples.  Fitting to a Cauchy distribution gives a best-fit $\gamma=4.217^\circ$, overplotted with the solid orange curve.}
+    \label{fig:Dpa}
+\end{figure}
+
+
+\section{Selection Function}
+\label{sec:selection}
+The DR1 spiral catalog spans a broad range of galaxy properties, including a
+dwarf-galaxy population that does not conform to the standard spiral TFR.
+Rather than applying simple velocity and magnitude cuts, we define the
+training sample using an oblique selection boundary in $(x,\,y)$ phase space
+whose orientation is informed by the data themselves via a Gaussian mixture
+model (GMM) fit.
+
+\subsection{Phase-Space Distribution}
+\label{sec:gmm}
+We fit a two-component GMM to the $(x,\,y)$ distribution of the full
+10,278-galaxy DR1 catalog.  The dominant component represents the TFR
+spiral population; the secondary component captures outliers and dwarf galaxies.
+
+The best-fit GMM yields a dominant-component weight of $w = 0.932$.
+The mean of the dominant component is
+$(\bar{x},\,\bar{y}) = (0.185,\,-20.530)$,
+with semi-axes $[0.064,\, 0.930]$ and orientation angle $98.4^\circ$
+measured from the $x$-axis.
+The elongated ellipse with a nearly vertical orientation reflects the
+steep slope of the TFR: the long axis of the component is closely aligned
+with the TFR direction in $(x,\,y)$ space.
+
+The GMM ellipses overlaid on the phase-space scatter are shown in
+Fig.~\ref{fig:selection_ellipse}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/selection_ellipse.png}
+    \caption{Distribution of DR1 spiral galaxies in $(x,\,y)$ phase space,
+    where $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$.
+    The two GMM ellipses (at $1\sigma$) are overplotted; the dominant component
+    (weight $w = 0.932$) is shown in orange.  The orientation of the dominant
+    ellipse defines the slope of the oblique selection cuts described in
+    \S\ref{sec:oblique}.}
+    \label{fig:selection_ellipse}
+\end{figure}
+
+\subsection{Oblique Selection Cuts}
+\label{sec:oblique}
+The dominant GMM ellipse defines a preferred direction in $(x,\,y)$ space.
+We use this direction to construct oblique (tilted) selection boundaries that
+are parallel to the TFR and perpendicular to the scatter axis.
+
+The two boundaries are:
+\begin{align}
+    y &\geq s_\text{plane}\, x + c_1 \quad \text{(lower boundary)}, \\
+    y &\leq s_\text{plane}\, x + c_2 \quad \text{(upper boundary)},
+\end{align}
+where $s_\text{plane}$ is fixed by the GMM ellipse orientation, and
+$c_1$, $c_2$ are determined by the parameter $n_{\sigma,\perp}$,
+the number of perpendicular $\sigma$ from the ellipse center to each boundary.
+
+In addition to the oblique cuts, a magnitude window
+$\hat{y}_\text{min} \leq y \leq \hat{y}_\text{max}$ is imposed to remove
+the brightest and faintest extremes of the distribution, and a redshift window
+$z_\text{min} < z < z_\text{max}$ is applied to the training sample only
+(the full sample without $z$ cuts is used for the peculiar velocity catalog).
+
+The full sample and the selected training region are shown in
+Fig.~\ref{fig:data}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/data.png}
+    \caption{Full DR1 spiral sample (grey) and training sample (colored points)
+    in $(x,\,y)$ phase space.  The oblique selection boundaries and magnitude
+    limits are indicated.  The training sample contains 5,928 galaxies.}
+    \label{fig:data}
+\end{figure}
+
+\subsection{Fiducial Selection Parameters}
+\label{sec:fiducial}
+To verify that the fiducial selection does not introduce bias in the TFR
+calibration, we run Stan MLE on the $n_{\sigma,\perp} = 3$ ellipse and
+examine the pull profile (normalized residual as a function of position in
+phase space).  A flat pull profile confirms that the selection does not
+preferentially bias the sample in any region of phase space.
+The pull profile for the fiducial selection is shown in
+Fig.~\ref{fig:pull}, and is consistent with zero across the full range.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/select_v2_pull.png}
+    \caption{Pull profile (normalized mean residual) as a function of $x$
+    for the fiducial selection.  The profile is consistent with zero,
+    confirming that the oblique selection does not bias the TFR calibration.}
+    \label{fig:pull}
+\end{figure}
+
+The fiducial selection parameters for the DR1 run are listed in
+Table~\ref{tab:fiducial}.
+
+\begin{table}
+    \centering
+    \caption{Fiducial selection parameters for the DR1 training sample.}
+    \label{tab:fiducial}
+    \begin{tabular}{lc}
+        \hline
+        Parameter & Value \\
+        \hline
+        $\hat{y}_\text{min}$ & $-22.0$ \\
+        $\hat{y}_\text{max}$ & $-19.25$ \\
+        $s_\text{plane}$ & $-6.798$ \\
+        $c_1$ (lower intercept) & $-20.589$ \\
+        $c_2$ (upper intercept) & $-17.951$ \\
+        $n_{\sigma,\perp}$ & $3.0$ \\
+        $z_\text{min}$ & $0.03$ \\
+        $z_\text{max}$ & $0.10$ \\
+        Training sample $N$ & $5{,}928$ \\
+        \hline
+    \end{tabular}
+\end{table}
+
+
+\section{Model}
+\label{sec:model}
+We model the TFR using a Stan implementation of a tophat model.
+The model is described in detail in \S\ref{sec:likelihood};
+here we summarize its key elements.
+
+The analysis variables for galaxy $i$ are the observed log-velocity
+$\hat{x}_i$ with measurement uncertainty $\sigma_{x,i}$
+and the observed absolute magnitude $\hat{y}_i$ with measurement uncertainty
+$\sigma_{y,i}$.
+The TFR is
+\begin{equation}
+    y = a\, x + b + \varepsilon_y,
+\end{equation}
+where $a$ is the slope, $b$ the intercept, and
+$\varepsilon_y \sim \mathcal{N}(0, \sigma_{\mathrm{int},y})$ is intrinsic
+scatter along the $y$ axis.  The true log-velocity $x$ has additional
+intrinsic scatter $\sigma_{\mathrm{int},x}$ about the TFR locus.
+
+The latent true log-velocity $\hat{x}_\text{true}$ is drawn from a uniform
+(tophat) prior over the observed $x$ range that satisfies the oblique
+selection boundaries.  This choice correctly accounts for the truncation
+imposed by the selection function without introducing a parametric assumption
+about the intrinsic galaxy velocity function.
+
+The velocity measurement uncertainty includes a contribution from imperfect
+fiber placement along the galaxy major axis.  The offset $\delta\phi$ between
+the DESI fiber position angle and the true galaxy major axis is modeled as
+\begin{equation}
+    \delta\phi \sim \text{Cauchy}(0,\, \gamma=4.217^\circ),
+\end{equation}
+which propagates to an additional multiplicative factor $\sec(\delta\phi)$ in
+the observed rotation velocity.
+
+The MAIN sample used for the peculiar velocity catalog is defined by the
+same magnitude and oblique cuts as the training sample but without any
+redshift restriction, ensuring full-sky coverage for peculiar velocity
+measurement.
+
+
+\section{Results}
+\label{sec:results}
+
+\subsection{MCMC Fit}
+\label{sec:mcmc}
+The model is fit to the 5,928-galaxy training sample using Hamiltonian Monte
+Carlo as implemented in Stan \citep{STAN_html} via the CmdStan interface.
+We run 4 chains, each with 1000 warm-up and 1000 sampling iterations.
+Two chains converge for the DR1 dataset; the combined posterior uses
+2,000 samples.  The mean acceptance rate is $0.938$ and there are no
+divergences.
+
+The posterior 68\% confidence intervals for the global TFR parameters are
+given in Table~\ref{tab:results}.  The full posterior corner plot is shown
+in Fig.~\ref{fig:tophat}.
+
+\begin{table}
+    \centering
+    \caption{Posterior means and $1\sigma$ uncertainties for the DR1 tophat
+    model fit.}
+    \label{tab:results}
+    \begin{tabular}{lcc}
+        \hline
+        Parameter & Posterior mean & $1\sigma$ \\
+        \hline
+        slope $a$ & $-6.797$ & $\pm 0.071$ \\
+        intercept $b$ & $-19.236$ & $\pm 0.017$ \\
+        $\sigma_{\mathrm{int},x}$ & $0.026$ & $\pm 0.003$ \\
+        $\sigma_{\mathrm{int},y}$ & $0.422$ & $\pm 0.012$ \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{figure*}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/tophat.png}
+    \caption{Corner plot of the posterior distribution for the four global
+    TFR parameters from the DR1 tophat model fit.  Contours show the
+    $1\sigma$ and $2\sigma$ confidence regions.}
+    \label{fig:tophat}
+\end{figure*}
+
+\subsection{Diagnostics}
+\label{sec:diagnostics}
+To check for systematic residuals, we compute the mean prediction residual
+$\hat{y}_\text{pred} - \hat{y}_\text{obs}$ on a grid in $(x,\,y)$ phase
+space.  Fig.~\ref{fig:tophat_grid} shows this residual grid; the residuals
+are consistent with zero across the full phase space, with no evidence for
+a non-linear TFR or magnitude-dependent bias.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/tophat_grid.png}
+    \caption{Mean prediction residual $\hat{y}_\text{pred} - \hat{y}_\text{obs}$
+    binned on a grid in $(x,\,y)$ phase space for the training sample.
+    The residuals are consistent with zero, with no evidence for systematic
+    trends.}
+    \label{fig:tophat_grid}
+\end{figure}
+
+We also examine the residuals as a function of redshift to check for
+redshift-dependent systematic effects.  Fig.~\ref{fig:redshift_tophat}
+shows the TFR residuals versus $z$ for both the training sample and the
+full MAIN sample.  No significant redshift trend is detected over the range
+$0.03 < z < 0.1$.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/redshift_tophat.png}
+    \caption{TFR residuals as a function of observed redshift for the
+    training sample (colored) and the full MAIN sample (grey).
+    No significant redshift trend is detected.}
+    \label{fig:redshift_tophat}
+\end{figure}
+
+
+\section{Peculiar Velocity Catalog}
+\label{sec:catalog}
+The calibrated tophat model is applied to all galaxies in the MAIN sample
+(those satisfying the magnitude and oblique cuts without the redshift
+restriction) to produce a peculiar velocity catalog.
+
+\subsection{Output Files}
+The catalog is provided as \texttt{tophat\_catalog.fits}, which augments the
+input FITS table with five new columns:
+\begin{itemize}
+    \item \texttt{MU\_TF}: the TFR distance modulus residual,
+    $\hat{m}_\text{obs} - \bar{m}_\text{pred}$.
+    \item \texttt{MU\_ERR}: the combined uncertainty on \texttt{MU\_TF},
+    propagated from measurement and intrinsic scatter.
+    \item \texttt{LOGDIST}: the log-distance estimate,
+    $0.2 \times (\hat{m}_\text{obs} - M_\text{TF})$.
+    \item \texttt{LOGDIST\_ERR}: the uncertainty on \texttt{LOGDIST}.
+    \item \texttt{MAIN}: a boolean flag indicating whether the galaxy
+    satisfies the magnitude and oblique cuts (without redshift restriction).
+\end{itemize}
+
+The full posterior predictive covariance matrix among all MAIN-sample
+galaxies is provided as \texttt{tophat\_cov.fits}.  This $N\times N$
+matrix encodes the correlated uncertainties arising from the shared
+TFR calibration parameters and is required for cosmological analyses
+that use the full peculiar velocity field.  The covariance matrix
+structure is visualized in Fig.~\ref{fig:tophat_cov}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/tophat_cov.png}
+    \caption{Visualization of the posterior predictive covariance matrix
+    for the MAIN-sample peculiar velocity estimates.  Off-diagonal
+    correlations arise from the shared TFR calibration parameters.}
+    \label{fig:tophat_cov}
+\end{figure}
+
+
+\section{Conclusions}
+\label{sec:conclusions}
+We have presented a model-based calibration of the Tully-Fisher relation
+using the full spiral-galaxy sample from the DESI DR1 Peculiar Velocity survey.
+The key results are as follows.
+\begin{itemize}
+    \item A two-component GMM fit to the DR1 phase space identifies the
+    dominant spiral TFR population (weight $w = 0.932$) and defines the
+    orientation of oblique selection cuts.  The fiducial selection yields
+    a training sample of 5,928 galaxies with a flat pull profile confirming
+    no selection-induced bias.
+    \item The Stan tophat model, which places a uniform prior on the latent
+    log-velocity within the observed selection region, correctly accounts for
+    the complex oblique selection boundary without the need for explicit
+    bias corrections.
+    \item MCMC posterior parameters are slope $a = -6.797 \pm 0.071$,
+    intercept $b = -19.236 \pm 0.017$, and intrinsic scatter
+    $\sigma_{\mathrm{int},x} = 0.026 \pm 0.003$,
+    $\sigma_{\mathrm{int},y} = 0.422 \pm 0.012$.
+    Residual diagnostics in both phase space and redshift show no evidence
+    for systematic trends.
+    \item The calibrated model is applied to produce a peculiar velocity
+    catalog (\texttt{tophat\_catalog.fits}) and a posterior predictive
+    covariance matrix (\texttt{tophat\_cov.fits}) for the full MAIN sample.
+\end{itemize}
+
+This work is distinguished from other approaches in that it fits a TFR model
+rather than fitting a TFR to data.  The difference is highlighted in that
+here parameter estimation is based on the model likelihood whereas in other
+work a reasonable yet arbitrary merit function is optimized.  A feature of
+the TFR model is that it must specify the latent parameter distribution, upon
+which we find that the results are sensitive.  An advantage of our approach
+is that the model can be used to analyze independent datasets in a
+self-consistent manner.
+
+Peculiar velocity measurements from the MAIN catalog, including the study
+of large-scale flows and comparison with existing peculiar velocity compilations,
+will be presented in a follow-up paper.
+
+\begin{acknowledgments}
+    This material is based upon work supported by the U.S. Department of Energy (DOE), Office of Science, Office of High-Energy Physics, under Contract No. DE--AC02--05CH11231, and by the National Energy Research Scientific Computing Center, a DOE Office of Science User Facility under the same contract. Additional support for DESI was provided by the U.S.
+    National Science Foundation (NSF), Division of Astronomical Sciences under Contract No. AST-0950945 to the NSF's National Optical-Infrared Astronomy Research Laboratory; the Science and Technology Facilities Council of the United Kingdom; the Gordon and Betty Moore Foundation;
+    the Heising-Simons Foundation; the French Alternative Energies and Atomic Energy Commission (CEA); the National Council of Humanities, Science and Technology of Mexico (CONAHCYT); the Ministry of Science, Innovation and Universities of Spain
+    (MICIU/AEI/10.13039/501100011033), and by the DESI Member Institutions: \url{https://www.desi.lbl.gov/collaborating-institutions}. Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the U. S. National Science Foundation, the U. S. Department of Energy, or any of the listed funding agencies.
+
+The authors are honored to be permitted to conduct scientific research on Iolkam Du'ag (Kitt Peak), a mountain with particular significance to the Tohono O'odham Nation.
+\end{acknowledgments}
+
+% Software: Stan \citep{STAN_html} using the CmdStan interface,
+% ChainConsumer \citep{Hinton2016}
+
+
+\appendix
+\section{Model and Likelihood Derivation}
+\label{sec:likelihood}
+The data are from observations of a set of TFR galaxies.
+Per galaxy there are
+\begin{itemize}
+    \item $\hat{x}$ the log rotation velocity $\log_{10}(V_\text{rot}/100)$
+    with measurement uncertainty $\sigma_x$.
+    \item $\hat{y} = M_R$ the absolute $r$-band magnitude with measurement
+    uncertainty $\sigma_y$.
+\end{itemize}
+The galaxy set undergoes sample selection through the oblique cuts described
+in \S\ref{sec:selection}.  The selection boundaries in $(x,\,y)$ space are
+characterized by the slope $s_\text{plane}$ and intercepts $c_1$, $c_2$
+of the two oblique boundaries, plus the magnitude limits $\hat{y}_\text{min}$
+and $\hat{y}_\text{max}$.
+
+The probability of observations given a model with parameter set $\Theta$ is
+\begin{equation}
+\prod_{i=1}^{N} p(\hat{x}_i,\hat{y}_i|\Theta),
+\end{equation}
+where all measurements of all $N$ galaxies are taken to be independent.
+$\Theta$ includes global parameters that characterize the TFR:
+the slope $a$, intercept $b$, intrinsic scatter $\sigma_{\mathrm{int},x}$
+and $\sigma_{\mathrm{int},y}$.
+
+There is a set of latent parameters used in calculating the probability of
+the observations.  The latent parameters are the per-object
+\begin{itemize}
+\item True log-velocity $x$, the latent TFR variable.
+\item True absolute magnitude $y = a\,x + b + \varepsilon_y$,
+where $\varepsilon_y$ is drawn from the intrinsic scatter distribution.
+\item The offset $\delta\phi$ between the fiber position angle and the
+true galaxy major axis.
+\end{itemize}
+
+The model specifies each term as follows:
+\begin{itemize}
+    \item $p(\delta\phi|.) = \text{Cauchy}(\delta\phi;\,\gamma)$.
+    The uncertainty in fiber placement deduced from galaxies common to SGA
+    and MaNGA, with $\gamma = 4.217^\circ$.
+    \item $p(\varepsilon_y|.) = \mathcal{N}(\varepsilon_y;\,\sigma_{\mathrm{int},y})$.
+    Intrinsic scatter along the $y$ axis.
+    \item $p(x|.) = \text{Uniform}(x;\,x_\text{min},\,x_\text{max})$.
+    The latent true log-velocity is drawn from a tophat (uniform) prior
+    within the selection region.  The boundaries $x_\text{min}$, $x_\text{max}$
+    are determined by the oblique selection cuts evaluated at the observed $y$.
+    \item $p(y|x,\varepsilon_y) = \delta_D(y - (a\,x + b + \varepsilon_y))$.
+    Deterministic TFR relationship.
+    \item $p(\hat{x}|.) = \mathcal{N}_T(\hat{x};\,V\sec(\delta\phi)/100,\,\sigma_x;\,
+    x_\text{sel})$.
+    Observed log-velocity is a truncated Gaussian at the selection boundary,
+    where $V$ is the expected rotation velocity at the fiber position and
+    the factor $\sec(\delta\phi)$ accounts for the fiber placement offset.
+    \item $p(\hat{y}|.) = \mathcal{N}_T(\hat{y};\,y,\,\sigma_y;\,\hat{y}_\text{min},\hat{y}_\text{max})$.
+    Observed magnitude is a truncated Gaussian at the selection boundaries.
+\end{itemize}
+
+Putting all this together, the likelihood for a single galaxy is
+\begin{align}
+    p(\hat{x},\hat{y}|\Theta) &=
+    \int
+    \mathcal{N}_T\!\left(\hat{x} - \frac{x\sec(\delta\phi)}{1};\,\sigma_x,\,x_\text{sel}\right)
+    \mathcal{N}_T(\hat{y} - (ax+b+\varepsilon_y);\,\sigma_y,\,\hat{y}_\text{min},\hat{y}_\text{max})
+    \nonumber \\
+    &\quad\times
+    \text{Uniform}(x;\,x_\text{min},\,x_\text{max})\,
+    \mathcal{N}(\varepsilon_y;\,\sigma_{\mathrm{int},y})\,
+    \text{Cauchy}(\delta\phi;\,\gamma)
+    \;dx\,d\varepsilon_y\,d\delta\phi.
+\end{align}
+There are $2N_\text{gal}$ latent parameters $\{x,\,\varepsilon_y\}$ and
+4 global parameters $\{a,\,b,\,\sigma_{\mathrm{int},x},\,\sigma_{\mathrm{int},y}\}$.
+The $\delta\phi$ integral is evaluated numerically using a sum over
+Cauchy quantiles.
+
+\subsection{Inferring Peculiar Velocities}
+A galaxy has intrinsic parameters $\mu$ (distance modulus),
+$x_\text{true}$ (true log-velocity), and $\varepsilon_y$ (TFR scatter).
+These are inferred from observations $\hat{x}$, $\hat{y}$, and the
+TFR parameters calibrated in the training stage.
+
+The TFR-predicted apparent magnitude at observed redshift $z_\text{obs}$ is
+$m_\text{pred} = a\,x_\text{true} + b + \mu(z_\text{obs})$.
+The peculiar velocity distance modulus residual is
+\begin{equation}
+    \mu_\text{TF} = \hat{m}_\text{obs} - m_\text{pred},
+\end{equation}
+which is nonzero when the galaxy's true distance differs from that implied
+by its observed redshift (i.e., when it has a peculiar velocity).
+
+Sample selection cuts are applied, and only galaxies satisfying the MAIN
+selection (magnitude and oblique cuts, no $z$ restriction) are included in
+the catalog.  The likelihood for a detected galaxy with observables $\hat{x}$
+and $\hat{y}$ is
+\begin{align}
+    \mathcal{L}(\mu;\,\hat{x},\hat{y}) &=
+    \frac{f(\hat{x},\hat{y}|\mu)}{p_\text{det}(\mu)},
+\end{align}
+where $p_\text{det}$ is the probability of the galaxy satisfying the
+selection given its distance modulus $\mu$.
+
+
+\bibliographystyle{aasjournal}
+
+\bibliography{references}% Produces the bibliography via BibTeX.
+
+\end{document}
+%
+% ****** End of file main.tex ******
