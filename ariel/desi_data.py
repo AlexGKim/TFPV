@@ -39,6 +39,7 @@ def process_desi_tf_data(
         "Z_DESI",
     ),
     z_obs_min=None,  # <<< NEW: Minimum redshift for inclusion
+    z_obs_max=None,
 ):
     """
     Process DESI TF data: convert to Stan JSON format and create initial conditions.
@@ -152,6 +153,8 @@ def process_desi_tf_data(
             # ---- NEW REDSHIFT CUT ----
             if (z_obs_min is not None) and (zobs_all[i] <= z_obs_min):
                 continue
+            if (z_obs_max is not None) and (zobs_all[i] > z_obs_max):
+                continue
             z_filtered_rows += 1
             # ---------------------------
 
@@ -253,6 +256,7 @@ def process_desi_tf_data(
         "tau": tau,
         "z_obs": z_obs_data,  # now defined, aligned, and JSON‑serializable
         "z_obs_min": float(z_obs_min) if z_obs_min is not None else None,
+        "z_obs_max": float(z_obs_max) if z_obs_max is not None else None,
     }
 
     if plane_cut:
@@ -318,6 +322,8 @@ def process_desi_tf_data(
 
     if z_obs_min is not None:
         print(f"  Rows with z_obs > {z_obs_min}: {z_filtered_rows}")
+    if z_obs_max is not None:
+        print(f"  Rows with z_obs <= {z_obs_max}: {z_filtered_rows}")
 
     if plane_cut:
         if not two_sided:
@@ -508,6 +514,8 @@ if __name__ == "__main__":
                         help='Random seed for reproducible subsampling')
     parser.add_argument('--z_obs_min', type=float, default=0.01,
                         help='Minimum redshift')
+    parser.add_argument('--z_obs_max', type=float, default=0.1,
+                        help='Maximum redshift')
     parser.add_argument('--slope_plane', type=float, default=-6.5,
                         help='Slope of oblique selection cut')
     parser.add_argument('--intercept_plane', type=float, default=-20.5,
@@ -531,6 +539,8 @@ if __name__ == "__main__":
                 args.intercept_plane2 = _fid['intercept_plane2']
                 if 'z_obs_min' in _fid:
                     args.z_obs_min    = _fid['z_obs_min']
+                if 'z_obs_max' in _fid:
+                    args.z_obs_max    = _fid['z_obs_max']
                 print(f"Loaded selection parameters from {fiducial_path}")
                 break
         output_json = args.output or os.path.join(run_dir, 'input.json')
@@ -543,6 +553,7 @@ if __name__ == "__main__":
             'n_objects': args.n_objects,
             'random_seed': args.random_seed,
             'z_obs_min': args.z_obs_min,
+            'z_obs_max': args.z_obs_max,
             'slope_plane': args.slope_plane,
             'intercept_plane': args.intercept_plane,
             'intercept_plane2': args.intercept_plane2,
@@ -580,6 +591,7 @@ if __name__ == "__main__":
         n_objects=args.n_objects,
         random_seed=args.random_seed,
         z_obs_min=args.z_obs_min,
+        z_obs_max=args.z_obs_max,
     )
 
     # Create plot showing both complete and selected samples

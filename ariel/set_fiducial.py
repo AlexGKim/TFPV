@@ -74,6 +74,7 @@ def main():
     haty_min     = prompt_float("Enter haty_min (bright-end magnitude limit, e.g. -22): ")
     haty_max     = prompt_float("Enter haty_max (dim-end   magnitude limit, e.g. -19.5): ")
     z_obs_min    = prompt_float("Enter z_obs_min (minimum redshift) [default 0.03]: ", default=0.03)
+    z_obs_max    = prompt_float("Enter z_obs_max (maximum redshift) [default 0.1]: ", default=0.1)
 
     if haty_min >= haty_max:
         raise ValueError(f"haty_min ({haty_min}) must be less than haty_max ({haty_max}).")
@@ -81,6 +82,8 @@ def main():
         raise ValueError(f"n_sigma_perp must be positive, got {n_sigma_perp}.")
     if z_obs_min < 0:
         raise ValueError(f"z_obs_min must be non-negative, got {z_obs_min}.")
+    if z_obs_max <= z_obs_min:
+        raise ValueError(f"z_obs_max ({z_obs_max}) must be greater than z_obs_min ({z_obs_min}).")
 
     # Compute oblique intercepts at the requested n_sigma_perp
     cuts = _cuts_at_nsigma(mu, sigma, n_sigma_perp)
@@ -93,6 +96,7 @@ def main():
         "intercept_plane2": cuts["intercept_plane2"],
         "n_sigma_perp":     n_sigma_perp,
         "z_obs_min":        z_obs_min,
+        "z_obs_max":        z_obs_max,
     }
 
     print()
@@ -100,6 +104,7 @@ def main():
     print(f"  haty_min         = {fiducial['haty_min']}")
     print(f"  haty_max         = {fiducial['haty_max']}")
     print(f"  z_obs_min        = {fiducial['z_obs_min']}")
+    print(f"  z_obs_max        = {fiducial['z_obs_max']}")
     print(f"  n_sigma_perp     = {fiducial['n_sigma_perp']}")
     print(f"  slope_plane      = {fiducial['slope_plane']:.6f}")
     print(f"  intercept_plane  = {fiducial['intercept_plane']:.6f}")
