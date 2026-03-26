@@ -203,10 +203,6 @@ $c_1 < c_2$ are their intercepts, and $d\equiv c_2-c_1$ is the
 perpendicular band width.
 
 
-The parallelogram selection region leads to the likelihood being dependent on 
-the bivariate normal standard cumulative distribution function, as shown in
-\S\ref{sec:likelihood}.  
-
 The TFR is unknown a priori, so the diagonal band is based on an initial estimate
 of the slope of the distribution.  Variations in the selected slope perturb
 the galaxies that enter the analysis, but otherwise do not bias the fits.
@@ -345,7 +341,10 @@ conditional on $y_{\mathrm{TF}}$:
     &= \frac{\sigma_{2,i}}{\sigma_{u,i}}.
 \label{eqn:shear_params}
 \end{align}
-
+The above is derived by transforming the $\hat{x}$--$\hat{y}$ to a new coordinate system where
+the parallelogram transforms into an axis-aligned rectangle.  The rectangular selection region
+is described by the sums and differences of four half planes.  The selection probability of
+a half plane is the standard bivariate-normal CDF.
 
 \section{Selection Function}
 \label{sec:selection}
