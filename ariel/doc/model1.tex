@@ -1,5 +1,5 @@
 \section{Fitting the Tully-Fisher Relation}
-\label{sec:simple_noPV}
+\label{sec:likelihood}
 Consider a simple model in which peculiar velocities are not included and the background cosmology is known.
 In this case observed redshifts can be converted to distances and observed magnitudes can be converted to absolute magnitudes.
 
@@ -22,7 +22,7 @@ The benefit of this model is that the likelihood for each galaxy can be computed
 \end{description}
 
 \subsection{Model}
-\label{sec:model}
+\label{sec:app1:model}
 
 Each galaxy has a latent parameter that determines its TF properties. The galaxy absolute magnitude and
 rotation velocity are drawn independently and probabilistically based on this parameter using the TF relation.
@@ -144,7 +144,7 @@ where
 \end{equation}
 
 \subsection{Sample Selection}
-\label{sec:selection}
+\label{sec:app1:selection}
 
 \subsubsection{DESI TF Sample Selection}
 In practice, sample selection can bias the analysis because the probability that an object enters the final
@@ -350,9 +350,9 @@ Writing $\Phi_2(h,k;\varrho)$ for the standard bivariate normal CDF with
 correlation $\varrho$, i.e.\ $\Phi_2(h,k;\varrho)=P(Z_1\le h, Z_2\le k)$, define
 the standardized bounds
 \begin{equation}
-a_i(t;y_{\rm TF}) \equiv \frac{\mu_{u,i}(y_{\rm TF})-t}{\sigma_{u,i}},
+h_i(t;y_{\rm TF}) \equiv \frac{\mu_{u,i}(y_{\rm TF})-t}{\sigma_{u,i}},
 \qquad
-b_i(y_\star;y_{\rm TF}) \equiv \frac{y_\star-\mu_{y,i}(y_{\rm TF})}{\sigma_{2,i}}
+k_i(y_\star;y_{\rm TF}) \equiv \frac{y_\star-\mu_{y,i}(y_{\rm TF})}{\sigma_{2,i}}
 = \frac{y_\star-y_{\rm TF}}{\sigma_{2,i}}.
 \end{equation}
 Then, for any $t\in\{0,d\}$ and $y_\star\in\{\hat y_{\min},\hat y_{\max}\}$,
@@ -360,7 +360,7 @@ Then, for any $t\in\{0,d\}$ and $y_\star\in\{\hat y_{\min},\hat y_{\max}\}$,
 P(\hat u_i\ge t,\;\hat y_i\le y_\star\mid \theta)
 =
 \int dy_{\rm TF}\;p(y_{\rm TF})\;
-\Phi_2\!\Bigl(a_i(t;y_{\rm TF}),\ b_i(y_\star;y_{\rm TF});\ -\rho_i\Bigr),
+\Phi_2\!\Bigl(h_i(t;y_{\rm TF}),\ k_i(y_\star;y_{\rm TF});\ -\rho_i\Bigr),
 \end{equation}
 where the sign flip in the correlation arises from rewriting
 $\hat u_i\ge t$ as $-\hat u_i\le -t$.
@@ -370,11 +370,11 @@ Substituting these quadrant terms into the inclusion--exclusion identity gives
 P(S_i=1 \mid \theta)
 &=
 \int dy_{\rm TF}\;p(y_{\rm TF})\;\Big[
-\Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)
--\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)\\
+\Phi_2\!\Bigl(h_i(0;y_{\rm TF}),\ k_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)
+-\Phi_2\!\Bigl(h_i(d;y_{\rm TF}),\ k_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)\\
 &\hspace{62pt}
--\Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
-+\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
+-\Phi_2\!\Bigl(h_i(0;y_{\rm TF}),\ k_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
++\Phi_2\!\Bigl(h_i(d;y_{\rm TF}),\ k_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
 \Big].
 \end{aligned}
 \end{equation}
@@ -402,11 +402,11 @@ where
 \begin{aligned}
 I_i(y_{\rm TF})
 &\equiv
-\Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)
--\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)\\
+\Phi_2\!\Bigl(h_i(0;y_{\rm TF}),\ k_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)
+-\Phi_2\!\Bigl(h_i(d;y_{\rm TF}),\ k_i(\hat y_{\max};y_{\rm TF});\ -\rho_i\Bigr)\\
 &\quad
--\Phi_2\!\Bigl(a_i(0;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
-+\Phi_2\!\Bigl(a_i(d;y_{\rm TF}),\ b_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr).
+-\Phi_2\!\Bigl(h_i(0;y_{\rm TF}),\ k_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr)
++\Phi_2\!\Bigl(h_i(d;y_{\rm TF}),\ k_i(\hat y_{\min};y_{\rm TF});\ -\rho_i\Bigr).
 \end{aligned}
 \end{equation}
 
