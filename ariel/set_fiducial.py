@@ -141,7 +141,6 @@ def main():
         haty_lines={"haty_min": haty_min, "haty_max": haty_max},
         filename="select_v2_fiducial_pull.png",
     )
-    print(f"Saved pull plot → {os.path.join(run_dir, 'select_v2_fiducial_pull.png')}")
 
 
 if __name__ == "__main__":

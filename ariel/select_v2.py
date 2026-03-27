@@ -146,8 +146,7 @@ def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
                 line on both panels (e.g. {"haty_min": -22, "haty_max": -19.5}).
     filename:   output filename (default "select_v2_pull.png").
     """
-    valid     = np.isfinite(pulls)
-    bar_width = float(np.median(bin_widths[valid])) * 0.8
+    valid = np.isfinite(pulls)
 
     fig, axes = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
 
@@ -155,7 +154,7 @@ def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
     ax0    = axes[0]
     colors = np.where(pulls[valid] >= 0, "steelblue", "tomato")
     ax0.bar(bin_centers[valid], pulls[valid],
-            width=bar_width, color=colors, alpha=0.75)
+            width=bin_widths[valid] * 0.8, color=colors, alpha=0.75)
     ax0.axhline(0, color="black", linewidth=0.8, linestyle="--")
     if haty_lines:
         for label, val in haty_lines.items():
@@ -176,7 +175,7 @@ def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
     ax1         = axes[1]
     colors_mean = np.where(wt_means[valid] >= 0, "steelblue", "tomato")
     ax1.bar(bin_centers[valid], wt_means[valid],
-            width=bar_width,
+            width=bin_widths[valid] * 0.8,
             yerr=wt_uncs[valid],
             color=colors_mean, alpha=0.75,
             error_kw=dict(ecolor="black", capsize=3))
