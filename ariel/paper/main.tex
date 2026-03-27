@@ -251,6 +251,13 @@ bounds $y_{\min}$ and $y_{\max}$.
 \begin{align}
 y_{\mathrm{TF},i} &\sim \mathrm{Uniform}(y_{\min},\,y_{\max}).
 \end{align}
+The bounds extend slightly beyond the selection window to accommodate
+scatter at the selection boundary,
+\begin{align}
+y_{\min} &= \hat{y}_{\min} - 0.5\,\mathrm{mag}, &
+y_{\max} &= \hat{y}_{\max} + 1.0\,\mathrm{mag}.
+\label{eqn:ymin_ymax}
+\end{align}
 Normal distributions were also considered,
 but top-hat better described
 the flat-cuspy distribution of galaxy absolute magnitudes and provided more stable results in
@@ -364,6 +371,7 @@ rectangular survey truncation at the bright and high-velocity limits of the
 data.  The dominant component is interpreted to represent the TFR spiral population; the
 secondary component captures outliers and dwarf galaxies.  
 
+% based on contents in output/DR1/selection_ellipse.json
 The best-fit GMM yields a dominant-component weight of $w = 0.932$.
 The mean of the dominant component is
 $(\bar{x},\,\bar{y}) = (0.185,\,-20.530)$,
