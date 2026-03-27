@@ -89,6 +89,120 @@ def _stan_mle_params(data_dict, init_dict, exe_file, tmp_dir):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Pull-plot helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _compute_pull_stats(raw_data, params, y_min, y_max, n_bins):
+    """Compute per-galaxy residuals and equal-occupancy binned pull statistics.
+
+    Returns (bin_centers, bin_widths, pulls, wt_means, wt_uncs).
+    """
+    draws  = pd.DataFrame([params])
+    x_all  = raw_data["x"]
+    sx_all = raw_data["sigma_x"]
+    y_all  = raw_data["y"]
+    sy_all = raw_data["sigma_y"]
+
+    mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
+        draws, x_all, sx_all,
+        y_min=y_min, y_max=y_max,
+        on_bad_Z="floor", Z_floor=1e-300,
+    )
+
+    delta       = mean_pred - y_all
+    sigma_delta = np.sqrt(sd_pred**2 + sy_all**2)
+
+    quantiles   = np.linspace(0, 100, n_bins + 1)
+    bin_edges   = np.percentile(y_all, quantiles)
+    bin_edges   = np.unique(bin_edges)
+    n_bins_act  = len(bin_edges) - 1
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    bin_widths  = np.diff(bin_edges)
+
+    wt_means = np.full(n_bins_act, np.nan)
+    wt_uncs  = np.full(n_bins_act, np.nan)
+    pulls    = np.full(n_bins_act, np.nan)
+
+    for i in range(n_bins_act):
+        lo, hi = bin_edges[i], bin_edges[i + 1]
+        mask = (y_all >= lo) & (y_all < hi) if i < n_bins_act - 1 else (y_all >= lo) & (y_all <= hi)
+        n = mask.sum()
+        if n < 2:
+            continue
+        w           = 1.0 / sigma_delta[mask] ** 2
+        wt_means[i] = np.sum(w * delta[mask]) / np.sum(w)
+        wt_uncs[i]  = 1.0 / np.sqrt(np.sum(w))
+        pulls[i]    = wt_means[i] / wt_uncs[i]
+
+    return bin_centers, bin_widths, pulls, wt_means, wt_uncs
+
+
+def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
+                   bin_centers, bin_widths, pulls, wt_means, wt_uncs,
+                   haty_lines=None, filename="select_v2_pull.png"):
+    """Draw and save select_v2_pull.png.
+
+    haty_lines: optional dict mapping label → M_abs value drawn as a vertical
+                line on both panels (e.g. {"haty_min": -22, "haty_max": -19.5}).
+    filename:   output filename (default "select_v2_pull.png").
+    """
+    valid     = np.isfinite(pulls)
+    bar_width = float(np.median(bin_widths[valid])) * 0.8
+
+    fig, axes = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
+
+    # Top panel: pull
+    ax0    = axes[0]
+    colors = np.where(pulls[valid] >= 0, "steelblue", "tomato")
+    ax0.bar(bin_centers[valid], pulls[valid],
+            width=bar_width, color=colors, alpha=0.75)
+    ax0.axhline(0, color="black", linewidth=0.8, linestyle="--")
+    if haty_lines:
+        for label, val in haty_lines.items():
+            ax0.axvline(val, color="darkorange", linewidth=1.2,
+                        linestyle="--", label=label)
+        ax0.legend(fontsize=8)
+    ax0.set_ylabel("Pull  (weighted mean / unc)")
+    ax0.set_title(
+        f"Residual pull — {run_name}  (N_all={n_all}, N_sel={n_sel}, "
+        f"slope={params['slope']:.3f}, "
+        f"intercept={params['intercept.1']:.3f})"
+    )
+    p_lo, p_hi = np.nanpercentile(pulls[valid], [2, 98])
+    pad = 0.15 * max(p_hi - p_lo, 1e-6)
+    ax0.set_ylim(p_lo - pad, p_hi + pad)
+
+    # Bottom panel: weighted mean ± uncertainty
+    ax1         = axes[1]
+    colors_mean = np.where(wt_means[valid] >= 0, "steelblue", "tomato")
+    ax1.bar(bin_centers[valid], wt_means[valid],
+            width=bar_width,
+            yerr=wt_uncs[valid],
+            color=colors_mean, alpha=0.75,
+            error_kw=dict(ecolor="black", capsize=3))
+    ax1.axhline(0, color="black", linewidth=0.8, linestyle="--")
+    if haty_lines:
+        for label, val in haty_lines.items():
+            ax1.axvline(val, color="darkorange", linewidth=1.2,
+                        linestyle="--", label=label)
+        ax1.legend(fontsize=8)
+    ax1.set_xlabel(r"$M_\mathrm{abs}$ bin center")
+    ax1.set_ylabel(r"$\langle\Delta M\rangle_w$  (weighted mean)")
+    lo_vals = wt_means[valid] - wt_uncs[valid]
+    hi_vals = wt_means[valid] + wt_uncs[valid]
+    p_lo = float(np.nanpercentile(lo_vals, 2))
+    p_hi = float(np.nanpercentile(hi_vals, 98))
+    pad = 0.15 * max(p_hi - p_lo, 1e-6)
+    ax1.set_ylim(p_lo - pad, p_hi + pad)
+
+    fig.tight_layout()
+    pull_path = os.path.join(run_dir, filename)
+    fig.savefig(pull_path, dpi=150)
+    plt.close(fig)
+    print(f"Saved pull profile → {pull_path}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -136,7 +250,7 @@ def main():
     sigma = np.array(ell["covariance"])
     cuts3 = _cuts_at_nsigma(mu, sigma, 3.0)
 
-    # ── Set-fiducial mode: record user-chosen cuts and exit ───────────────────
+    # ── Set-fiducial mode: record user-chosen cuts, then regenerate pull plot ──
     if args.set_fiducial:
         fiducial = {
             "haty_min":         args.haty_min,
@@ -151,6 +265,38 @@ def main():
         print(f"Saved fiducial criteria → {fiducial_path}")
         for k, v in fiducial.items():
             print(f"  {k} = {v}")
+
+        # Regenerate pull plot with fiducial cut lines marked
+        mle_path = os.path.join(run_dir, "select_v2_mle.json")
+        if not os.path.exists(mle_path):
+            print(f"Warning: {mle_path} not found — skipping pull plot.")
+            return
+        with open(mle_path) as f:
+            params = json.load(f)
+
+        cuts3_no_z = {k: cuts3[k] for k in
+                      ("haty_min", "haty_max", "slope_plane",
+                       "intercept_plane", "intercept_plane2")}
+        raw_data = load_desi(args.fits_file)
+        x_sel, _, _, _ = apply_cuts(raw_data, cuts3_no_z)
+        data_dict, _ = _build_stan_dicts(raw_data, cuts3_no_z)
+        if data_dict is None:
+            print("Warning: could not build Stan data dict — skipping pull plot.")
+            return
+        y_min = float(data_dict["y_min"])
+        y_max = float(data_dict["y_max"])
+
+        bin_centers, bin_widths, pulls, wt_means, wt_uncs = \
+            _compute_pull_stats(raw_data, params, y_min, y_max, args.n_bins)
+        _save_pull_plot(
+            run_dir, args.run,
+            n_all=len(raw_data["x"]), n_sel=len(x_sel),
+            params=params,
+            bin_centers=bin_centers, bin_widths=bin_widths,
+            pulls=pulls, wt_means=wt_means, wt_uncs=wt_uncs,
+            haty_lines={"haty_min": args.haty_min, "haty_max": args.haty_max},
+            filename="select_v2_fiducial_pull.png",
+        )
         return
 
     # ── Diagnostic mode: 3-sigma cuts for MLE ────────────────────────────────
@@ -205,89 +351,34 @@ def main():
         json.dump(params, f, indent=2)
     print(f"Saved MLE parameters → {mle_path}")
 
-    # ── Compute per-galaxy residual over full catalog ─────────────────────────
-    # draws is a 1-row DataFrame (MLE point estimate used as single draw)
-    draws  = pd.DataFrame([params])
-    y_min  = float(data_dict["y_min"])
-    y_max  = float(data_dict["y_max"])
+    # ── Compute per-galaxy residual and pull profile over full catalog ─────────
+    y_min = float(data_dict["y_min"])
+    y_max = float(data_dict["y_max"])
 
-    x_all  = raw_data["x"]
-    sx_all = raw_data["sigma_x"]
-    y_all  = raw_data["y"]
-    sy_all = raw_data["sigma_y"]
+    bin_centers, bin_widths, pulls, wt_means, wt_uncs = \
+        _compute_pull_stats(raw_data, params, y_min, y_max, args.n_bins)
 
-    mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
-        draws, x_all, sx_all,
-        y_min=y_min, y_max=y_max,
-        on_bad_Z="floor", Z_floor=1e-300,
+    pull_stats = {
+        "n_all":        int(len(raw_data["x"])),
+        "n_sel":        int(len(x)),
+        "bin_centers":  bin_centers.tolist(),
+        "bin_widths":   bin_widths.tolist(),
+        "pulls":        pulls.tolist(),
+        "wt_means":     wt_means.tolist(),
+        "wt_uncs":      wt_uncs.tolist(),
+    }
+    pull_stats_path = os.path.join(run_dir, "select_v2_pull_stats.json")
+    with open(pull_stats_path, "w") as f:
+        json.dump(pull_stats, f)
+    print(f"Saved pull stats → {pull_stats_path}")
+
+    _save_pull_plot(
+        run_dir, args.run,
+        n_all=pull_stats["n_all"], n_sel=pull_stats["n_sel"],
+        params=params,
+        bin_centers=bin_centers, bin_widths=bin_widths,
+        pulls=pulls, wt_means=wt_means, wt_uncs=wt_uncs,
     )
-
-    # delta = mean_pred(M_abs) - M_abs_obs
-    # Equivalent to m_TF_pred - m_obs once distance modulus cancels.
-    delta       = mean_pred - y_all
-    sigma_delta = np.sqrt(sd_pred**2 + sy_all**2)
-
-    # ── Step 5: Bin by M_abs and compute weighted statistics ──────────────────
-    # Equal-occupancy bins via quantiles over full catalog
-    quantiles   = np.linspace(0, 100, args.n_bins + 1)
-    bin_edges   = np.percentile(y_all, quantiles)
-    bin_edges   = np.unique(bin_edges)          # drop duplicates at tails
-    n_bins_act  = len(bin_edges) - 1
-    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
-    bin_widths  = np.diff(bin_edges)
-
-    wt_means = np.full(n_bins_act, np.nan)
-    wt_uncs  = np.full(n_bins_act, np.nan)
-    pulls    = np.full(n_bins_act, np.nan)
-    bin_ns   = np.zeros(n_bins_act, dtype=int)
-
-    for i in range(n_bins_act):
-        lo, hi = bin_edges[i], bin_edges[i + 1]
-        # Include right edge in last bin
-        mask = (y_all >= lo) & (y_all < hi) if i < n_bins_act - 1 else (y_all >= lo) & (y_all <= hi)
-        n = mask.sum()
-        bin_ns[i] = n
-        if n < 2:
-            continue
-        w           = 1.0 / sigma_delta[mask] ** 2
-        wt_means[i] = np.sum(w * delta[mask]) / np.sum(w)
-        wt_uncs[i]  = 1.0 / np.sqrt(np.sum(w))
-        pulls[i]    = wt_means[i] / wt_uncs[i]
-
-    # ── Step 6: Plot pull profile ──────────────────────────────────────────────
-    valid   = np.isfinite(pulls)
-    colors  = np.where(pulls[valid] >= 0, "steelblue", "tomato")
-
-    fig, axes = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
-
-    # Top panel: pull
-    ax0 = axes[0]
-    ax0.bar(bin_centers[valid], pulls[valid],
-            width=bin_widths[valid] * 0.8, color=colors, alpha=0.75)
-    ax0.axhline(0, color="black", linewidth=0.8, linestyle="--")
-    ax0.set_ylabel("Pull  (weighted mean / unc)")
-    ax0.set_title(
-        f"Residual pull — {args.run}  (N_all={len(x_all)}, N_sel={len(x)}, "
-        f"slope={params['slope']:.3f}, "
-        f"intercept={params['intercept.1']:.3f})"
-    )
-
-    # Bottom panel: weighted mean ± uncertainty
-    ax1 = axes[1]
-    ax1.bar(bin_centers[valid], wt_means[valid],
-            width=bin_widths[valid] * 0.8,
-            yerr=wt_uncs[valid],
-            color="steelblue", alpha=0.75,
-            error_kw=dict(ecolor="black", capsize=3))
-    ax1.axhline(0, color="black", linewidth=0.8, linestyle="--")
-    ax1.set_xlabel(r"$M_\mathrm{abs}$ bin center")
-    ax1.set_ylabel(r"$\langle\Delta M\rangle_w$  (weighted mean)")
-
-    fig.tight_layout()
-    pull_path = os.path.join(run_dir, "select_v2_pull.png")
-    fig.savefig(pull_path, dpi=150)
-    plt.close(fig)
-    print(f"Saved pull profile → {pull_path}")
 
 
 if __name__ == "__main__":

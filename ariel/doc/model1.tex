@@ -14,7 +14,7 @@ The benefit of this model is that the likelihood for each galaxy can be computed
 
 \subsection{Parameters}
 \begin{description}
-    \item[$s$, $c$:] Slope and intercept of the Tully--Fisher relation.
+    \item[$\alpha$, $\beta$:] Slope and intercept of the Tully--Fisher relation.
     \item[$\sigma_{\text{int},x}$, $\sigma_{\text{int},y}$:] Intrinsic scatter in the $x$-, $y$-directions.
     \item[$y_{\text{TF},i}$:] Latent ``on-relation'' absolute magnitude for galaxy $i$.
     \item[$x_i$, $y_i$:] Latent true $x$, $y$ for galaxy $i$.
@@ -29,7 +29,7 @@ rotation velocity are drawn independently and probabilistically based on this pa
 Measurement errors are independent and normally distributed. Specifically, for each galaxy $i$:
 \begin{align}
 y_i \mid y_{\text{TF},i} &\sim \mathcal N(y_{\text{TF},i},\sigma^2_{\text{int},y}),\\
-x_i \mid y_{\text{TF},i}, s, c &\sim \mathcal N\!\left(\frac{y_{\text{TF},i}-c}{s},\sigma^2_{\text{int},x}\right).
+x_i \mid y_{\text{TF},i}, \alpha, \beta &\sim \mathcal N\!\left(\frac{y_{\text{TF},i}-\beta}{\alpha},\sigma^2_{\text{int},x}\right).
 \end{align}
 
 The latent parameter $y_{\text{TF},i}$ has an underlying distribution; we consider either a top-hat
@@ -49,7 +49,7 @@ For a complete sample
 \hat y_i \mid y_i &\sim \mathcal N(y_i,\sigma^2_{y,i}).
 \end{align}
 
-Let $\theta \equiv \bigl(s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}, \Xi \bigr)$.
+Let $\theta \equiv \bigl(\alpha,\beta,\sigma_{\text{int},x},\sigma_{\text{int},y}, \Xi \bigr)$.
 The total likelihood is
 \begin{align}
 \mathcal L(\theta;\{\hat x_i\},\{\hat y_i\})
@@ -61,7 +61,7 @@ where the likelihood for an individual galaxy is
 &= p(\hat x_i,\hat y_i \mid \theta) \label{eqn:likelihood}\\
 &= \int dx_i\,dy_i\,dy_{\text{TF}}\;
 p(\hat x_i\mid x_i)\,p(\hat y_i\mid y_i)\,
-p(x_i\mid y_{\text{TF}},s,c)\,p(y_i\mid y_{\text{TF}})\,p(y_{\text{TF}}).
+p(x_i\mid y_{\text{TF}},\alpha,\beta)\,p(y_i\mid y_{\text{TF}})\,p(y_{\text{TF}}).
 \end{align}
 
 Convolving intrinsic and measurement scatter gives
@@ -71,14 +71,14 @@ Convolving intrinsic and measurement scatter gives
 \end{align}
 so that
 \begin{align}
-\hat x_i \mid y_{\text{TF},i} &\sim \mathcal N\!\left(\frac{y_{\text{TF},i}-c}{s},\sigma^2_{1,i}\right),\\
+\hat x_i \mid y_{\text{TF},i} &\sim \mathcal N\!\left(\frac{y_{\text{TF},i}-\beta}{\alpha},\sigma^2_{1,i}\right),\\
 \hat y_i \mid y_{\text{TF},i} &\sim \mathcal N(y_{\text{TF},i},\sigma^2_{2,i}),
 \end{align}
 and therefore the per-galaxy likelihood can be written as
 \begin{align}
 \mathcal L_i
 &= \int dy_{\text{TF}}\;
-\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma^2_{1,i}\right)\,
+\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-\beta}{\alpha},\sigma^2_{1,i}\right)\,
 \mathcal N\!\left(\hat y_i;y_{\text{TF}},\sigma^2_{2,i}\right)\,
 p(y_{\text{TF}}).
 \label{eqn:likelihood_pg}
@@ -98,10 +98,10 @@ Then
 \mathcal L_i
 &= \frac{1}{y_{\max}-y_{\min}}
 \int_{y_{\min}}^{y_{\max}} dy_{\text{TF}}\;
-\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma^2_{1,i}\right)\,
+\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-\beta}{\alpha},\sigma^2_{1,i}\right)\,
 \mathcal N\!\left(\hat y_i;y_{\text{TF}},\sigma^2_{2,i}\right)\\
-&= \frac{|s|}{y_{\max}-y_{\min}}\;
-\mathcal N\!\left(\hat y_i; c+s\hat x_i,\ \sigma^2_{\text{tot},i}\right)
+&= \frac{|\alpha|}{y_{\max}-y_{\min}}\;
+\mathcal N\!\left(\hat y_i; \beta+\alpha\hat x_i,\ \sigma^2_{\text{tot},i}\right)
 \left[
 \Phi\!\left(\frac{y_{\max}-\mu_{*,i}}{\sigma_{*,i}}\right)
 -
@@ -110,9 +110,9 @@ Then
 \end{align}
 where $\Phi$ is the standard normal CDF and
 \begin{align}
-\sigma_{\text{tot},i}^2 &= s^2\sigma_{1,i}^2+\sigma_{2,i}^2,\\
-\mu_{*,i} &= \frac{(s\hat x_i+c)\,\sigma_{2,i}^2+\hat y_i\,s^2\sigma_{1,i}^2}{\sigma_{\text{tot},i}^2},\\
-\sigma_{*,i}^2 &= \frac{s^2\sigma_{1,i}^2\sigma_{2,i}^2}{\sigma_{\text{tot},i}^2}.
+\sigma_{\text{tot},i}^2 &= \alpha^2\sigma_{1,i}^2+\sigma_{2,i}^2,\\
+\mu_{*,i} &= \frac{(\alpha\hat x_i+\beta)\,\sigma_{2,i}^2+\hat y_i\,\alpha^2\sigma_{1,i}^2}{\sigma_{\text{tot},i}^2},\\
+\sigma_{*,i}^2 &= \frac{\alpha^2\sigma_{1,i}^2\sigma_{2,i}^2}{\sigma_{\text{tot},i}^2}.
 \end{align}
 
 \subsubsection{Normal Model for $y_{\text{TF},i}$}
@@ -123,12 +123,12 @@ Then
 &=
 \int_{-\infty}^{\infty} dy_{\text{TF}}\;
 \mathcal N\!\left(y_{\text{TF}};\mu_{y_\mathrm{TF}},\tau^2\right)\,
-\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-c}{s},\sigma^2_{1,i}\right)\,
+\mathcal N\!\left(\hat x_i;\frac{y_{\text{TF}}-\beta}{\alpha},\sigma^2_{1,i}\right)\,
 \mathcal N\!\left(\hat y_i;y_{\text{TF}},\sigma^2_{2,i}\right)\\
 &=
 \mathcal N_2\!\left(
 \begin{bmatrix}\hat x_i\\ \hat y_i\end{bmatrix};
-\begin{bmatrix}\dfrac{\mu_{y_\mathrm{TF}}-c}{s}\\[4pt] \mu_{y_\mathrm{TF}}\end{bmatrix},
+\begin{bmatrix}\dfrac{\mu_{y_\mathrm{TF}}-\beta}{\alpha}\\[4pt] \mu_{y_\mathrm{TF}}\end{bmatrix},
 \Sigma_i
 \right),
 \end{align}
@@ -137,10 +137,10 @@ where
 \Sigma_i
 =
 \begin{bmatrix}
-\dfrac{\tau^{2}}{s^{2}}+\sigma_{1,i}^{2} & \dfrac{\tau^{2}}{s}\\[6pt]
-\dfrac{\tau^{2}}{s} & \tau^{2}+\sigma_{2,i}^{2}
+\dfrac{\tau^{2}}{\alpha^{2}}+\sigma_{1,i}^{2} & \dfrac{\tau^{2}}{\alpha}\\[6pt]
+\dfrac{\tau^{2}}{\alpha} & \tau^{2}+\sigma_{2,i}^{2}
 \end{bmatrix},
-\qquad s\neq 0.
+\qquad \alpha\neq 0.
 \end{equation}
 
 \subsection{Sample Selection}
@@ -273,7 +273,7 @@ with
 \boldsymbol\mu_i(y_{\rm TF})
 =
 \begin{bmatrix}
-y_{\mathrm{TF}}-\bar s\,\dfrac{y_{\mathrm{TF}}-c}{s}-\bar c_1\\[8pt]
+y_{\mathrm{TF}}-\bar s\,\dfrac{y_{\mathrm{TF}}-\beta}{\alpha}-\bar c_1\\[8pt]
 y_{\mathrm{TF}}
 \end{bmatrix},
 \qquad
@@ -288,7 +288,7 @@ y_{\mathrm{TF}}
 \end{equation}
 Define (for later convenience) the components
 \begin{equation}
-\mu_{u,i}(y_{\rm TF}) \equiv y_{\mathrm{TF}}-\bar s\,\frac{y_{\mathrm{TF}}-c}{s}-\bar c_1,
+\mu_{u,i}(y_{\rm TF}) \equiv y_{\mathrm{TF}}-\bar s\,\frac{y_{\mathrm{TF}}-\beta}{\alpha}-\bar c_1,
 \qquad
 \mu_{y,i}(y_{\rm TF}) \equiv y_{\mathrm{TF}}.
 \end{equation}
@@ -302,7 +302,7 @@ Define the (conditional) correlation
 With these definitions, the product of the 1D Gaussians appearing in the
 integrand of Eq.~\ref{eqn:likelihood_pg} can be written compactly as
 \begin{equation}
-\mathcal N\!\left(\hat x_i;\frac{y_{\mathrm{TF}}-c}{s},\sigma^2_{1,i}\right)\,
+\mathcal N\!\left(\hat x_i;\frac{y_{\mathrm{TF}}-\beta}{\alpha},\sigma^2_{1,i}\right)\,
 \mathcal N\!\left(\hat y_i;y_{\mathrm{TF}},\sigma^2_{2,i}\right)
 =
 |\bar s|\;
@@ -503,17 +503,17 @@ result),
 \boldsymbol\Sigma^{(xy)}_i
 \right),
 \qquad
-\mu_{x,i}=\frac{\mu_{y_\mathrm{TF}}-c}{s},\ \ \mu_{y,i}=\mu_{y_\mathrm{TF}},
+\mu_{x,i}=\frac{\mu_{y_\mathrm{TF}}-\beta}{\alpha},\ \ \mu_{y,i}=\mu_{y_\mathrm{TF}},
 \end{equation}
 with
 \begin{equation}
 \boldsymbol\Sigma^{(xy)}_i
 =
 \begin{bmatrix}
-\dfrac{\tau^{2}}{s^{2}}+\sigma_{1,i}^{2} & \dfrac{\tau^{2}}{s}\\[6pt]
-\dfrac{\tau^{2}}{s} & \tau^{2}+\sigma_{2,i}^{2}
+\dfrac{\tau^{2}}{\alpha^{2}}+\sigma_{1,i}^{2} & \dfrac{\tau^{2}}{\alpha}\\[6pt]
+\dfrac{\tau^{2}}{\alpha} & \tau^{2}+\sigma_{2,i}^{2}
 \end{bmatrix},
-\qquad s\neq 0.
+\qquad \alpha\neq 0.
 \end{equation}
 
 Introduce the sheared coordinate (as above)
@@ -538,17 +538,17 @@ where
 \begin{align}
 \mu_{u,i}
 &=\mu_{y,i}-\bar s\,\mu_{x,i}-\bar c_1
-=\mu_{y_\mathrm{TF}}-\bar s\,\frac{\mu_{y_\mathrm{TF}}-c}{s}-\bar c_1,\\[3pt]
+=\mu_{y_\mathrm{TF}}-\bar s\,\frac{\mu_{y_\mathrm{TF}}-\beta}{\alpha}-\bar c_1,\\[3pt]
 \sigma_{y,\mathrm{tot},i}^2
 &\equiv \Sigma^{(uy)}_{yy,i}
 =\tau^2+\sigma_{2,i}^2,\\
 \Sigma^{(uy)}_{uy,i}
-&=\sigma_{y,\mathrm{tot},i}^2-\bar s\,\frac{\tau^2}{s},\\
+&=\sigma_{y,\mathrm{tot},i}^2-\bar s\,\frac{\tau^2}{\alpha},\\
 \sigma_{u,i}^2
 &\equiv \Sigma^{(uy)}_{uu,i}
 =\sigma_{y,\mathrm{tot},i}^2
-+\bar s^2\!\left(\frac{\tau^2}{s^2}+\sigma_{1,i}^2\right)
--2\bar s\,\frac{\tau^2}{s}.
++\bar s^2\!\left(\frac{\tau^2}{\alpha^2}+\sigma_{1,i}^2\right)
+-2\bar s\,\frac{\tau^2}{\alpha}.
 \end{align}
 Let
 \[
@@ -605,7 +605,7 @@ one may evaluate the numerator in $(\hat u,\hat y)$ coordinates using
 $\mathcal N_2(\hat{\boldsymbol z}_i;\,[\mu_{u,i},\mu_{y,i}]^T,\boldsymbol\Sigma^{(uy)}_i)$ and the corresponding Jacobian.)
 
 \subsection{Priors}
-Use flat priors for $(s,c)$ and weakly informative priors for the intrinsic scatters:
+Use flat priors for $(\alpha,\beta)$ and weakly informative priors for the intrinsic scatters:
 \begin{align}
 \sigma_{\text{int},x} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right),\\
 \sigma_{\text{int},y} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right).

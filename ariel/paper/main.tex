@@ -46,7 +46,7 @@ oblique selection cuts in phase space; galaxies passing these cuts together
 with a redshift window $0.03 < z < 0.1$ constitute the training sample of
 5,928 galaxies.  We calibrate the TFR by fitting a Stan tophat model to
 this sample via Hamiltonian Monte Carlo, obtaining slope
-$a = -6.797 \pm 0.071$, intercept $b = -19.236 \pm 0.017$,
+$\alpha = -6.797 \pm 0.071$, intercept $\beta = -19.236 \pm 0.017$,
 intrinsic scatter along the velocity axis $\sigma_{\mathrm{int},x} = 0.026 \pm 0.003$,
 and intrinsic scatter along the magnitude axis $\sigma_{\mathrm{int},y} = 0.422 \pm 0.012$.
 The calibrated model is applied to the full DR1 spiral sample to produce a
@@ -194,12 +194,12 @@ Together the four boundaries define a parallelogram-shaped region,
 \;\Longleftrightarrow\;
 \hat{y}_{\min} \le \hat{y} \le \hat{y}_{\max}
 \;\text{ and }\;
-s_{\text{plane}}\,\hat{x}+c_1 \le \hat{y} \le s_{\text{plane}}\,\hat{x}+c_2,
+\bar{s}\,\hat{x}+\bar{c}_1 \le \hat{y} \le \bar{s}\,\hat{x}+\bar{c}_2,
 \label{eqn:selection_region}
 \end{equation}
 where $\hat{y}_{\min}$ and $\hat{y}_{\max}$ are the magnitude limits,
-$s_{\text{plane}}$ is the slope of the oblique boundaries,
-$c_1 < c_2$ are their intercepts, and $d\equiv c_2-c_1$ is the
+$\bar{s}$ is the slope of the oblique boundaries,
+$\bar{c}_1 < \bar{c}_2$ are their intercepts, and $d\equiv \bar{c}_2-\bar{c}_1$ is the
 perpendicular band width.
 
 
@@ -225,7 +225,7 @@ $\hat{x}_i$ with uncertainty $\sigma_{x,i}$ and the observed absolute
 magnitude $\hat{y}_i$ with uncertainty $\sigma_{y,i}$.
 Velocity uncertainties are treated as Gaussian in log-space.
 
-The global TFR parameters are the slope $a$, intercept $b$, and intrinsic
+The global TFR parameters are the slope $\alpha$, intercept $\beta$, and intrinsic
 scatter amplitudes $\sigma_{\mathrm{int},x}$ and $\sigma_{\mathrm{int},y}$
 along the $x$- and $y$-axes respectively.
 Each galaxy $i$ has a latent on-TFR magnitude $y_{\mathrm{TF},i}$ that
@@ -236,7 +236,7 @@ have scatter around the TFR,
 y_i \mid y_{\mathrm{TF},i}
     &\sim \mathcal{N}\!\left(y_{\mathrm{TF},i},\,\sigma_{\mathrm{int},y}^2\right), \\
 x_i \mid y_{\mathrm{TF},i}
-    &\sim \mathcal{N}\!\left(\frac{y_{\mathrm{TF},i}-b}{a},\,\sigma_{\mathrm{int},x}^2\right).
+    &\sim \mathcal{N}\!\left(\frac{y_{\mathrm{TF},i}-\beta}{\alpha},\,\sigma_{\mathrm{int},x}^2\right).
 \end{align}
 Measurements have Gaussian scatter around the true values:
 \begin{align}
@@ -282,8 +282,8 @@ p(\hat{x}_i,\hat{y}_i \mid \theta, S_i=1)
 where
 \begin{align}
 \mathcal{L}_i
-&= \frac{|a|}{y_{\max}-y_{\min}}\;
-   \mathcal{N}\!\left(\hat{y}_i;\,b+a\hat{x}_i,\,\sigma_{\mathrm{tot},i}^2\right)
+&= \frac{|\alpha|}{y_{\max}-y_{\min}}\;
+   \mathcal{N}\!\left(\hat{y}_i;\,\beta+\alpha\hat{x}_i,\,\sigma_{\mathrm{tot},i}^2\right)
    \left[
      \Phi\!\left(\frac{y_{\max}-\mu_{*,i}}{\sigma_{*,i}}\right)
      -\Phi\!\left(\frac{y_{\min}-\mu_{*,i}}{\sigma_{*,i}}\right)
@@ -293,12 +293,12 @@ where
 where $\Phi$ is the standard normal CDF and
 \begin{align}
 \sigma_{\mathrm{tot},i}^2
-    &= a^2\sigma_{1,i}^2+\sigma_{2,i}^2, \\
+    &= \alpha^2\sigma_{1,i}^2+\sigma_{2,i}^2, \\
 \mu_{*,i}
-    &= \frac{(a\hat{x}_i+b)\,\sigma_{2,i}^2
-             +\hat{y}_i\,a^2\sigma_{1,i}^2}{\sigma_{\mathrm{tot},i}^2}, \\
+    &= \frac{(\alpha\hat{x}_i+\beta)\,\sigma_{2,i}^2
+             +\hat{y}_i\,\alpha^2\sigma_{1,i}^2}{\sigma_{\mathrm{tot},i}^2}, \\
 \sigma_{*,i}^2
-    &= \frac{a^2\sigma_{1,i}^2\,\sigma_{2,i}^2}{\sigma_{\mathrm{tot},i}^2}.
+    &= \frac{\alpha^2\sigma_{1,i}^2\,\sigma_{2,i}^2}{\sigma_{\mathrm{tot},i}^2}.
 \label{eqn:posterior_params}
 \end{align}
 is the per-galaxy likelihood if there were no  sample selection.
@@ -323,20 +323,20 @@ I_i(y_{\mathrm{TF}})
 \label{eqn:Ii_def}
 \end{align}
 with $\Phi_2(h,k;\varrho)$ the standard bivariate-normal CDF,
-$d\equiv c_2-c_1$, and the standardised bounds
+$d\equiv \bar{c}_2-\bar{c}_1$, and the standardised bounds
 \begin{align}
 h_i(t;y_{\mathrm{TF}}) &\equiv \frac{\mu_{u,i}(y_{\mathrm{TF}})-t}{\sigma_{u,i}}, &
 k_i(y_\star;y_{\mathrm{TF}}) &\equiv \frac{y_\star - y_{\mathrm{TF}}}{\sigma_{2,i}}.
 \label{eqn:ab_bounds}
 \end{align}
 Here $\mu_{u,i}$, $\sigma_{u,i}$, and $\rho_i$ are the mean, standard deviation,
-and correlation of the sheared observable $\hat{u}_i\equiv\hat{y}_i - s_\text{plane}\hat{x}_i - c_1$
+and correlation of the sheared observable $\hat{u}_i\equiv\hat{y}_i - \bar{s}\hat{x}_i - \bar{c}_1$
 conditional on $y_{\mathrm{TF}}$:
 \begin{align}
 \mu_{u,i}(y_{\mathrm{TF}})
-    &= y_{\mathrm{TF}} - s_\text{plane}\,\frac{y_{\mathrm{TF}}-b}{a} - c_1, \\
+    &= y_{\mathrm{TF}} - \bar{s}\,\frac{y_{\mathrm{TF}}-\beta}{\alpha} - \bar{c}_1, \\
 \sigma_{u,i}^2
-    &= \sigma_{2,i}^2 + s_\text{plane}^2\,\sigma_{1,i}^2, \\
+    &= \sigma_{2,i}^2 + \bar{s}^2\,\sigma_{1,i}^2, \\
 \rho_i
     &= \frac{\sigma_{2,i}}{\sigma_{u,i}}.
 \label{eqn:shear_params}
@@ -346,8 +346,9 @@ the parallelogram transforms into an axis-aligned rectangle.  The rectangular se
 is described by the sums and differences of four half planes.  The selection probability of
 a half plane is the standard bivariate-normal CDF.
 
-\section{Selection Function}
-\label{sec:selection}
+\section{Tully-Fisher Relation Fit}
+\subsection{Training Set Selection}
+\label{sec:training_selection}
 The DR1 spiral catalog spans a broad range of galaxy properties, including a
 dwarf-galaxy population that does not conform to the standard spiral TFR.
 Rather than applying simple velocity and magnitude cuts, we define the
@@ -355,10 +356,12 @@ training sample using an oblique selection boundary in $(x,\,y)$ phase space
 whose orientation is informed by the data themselves via a Gaussian mixture
 model (GMM) fit.
 
-\subsection{Phase-Space Distribution}
-\label{sec:gmm}
-We fit a two-component GMM to the $(x,\,y)$ distribution of the full
-10,278-galaxy DR1 catalog.  The dominant component represents the TFR
+We fit a two-component GMM to the $(x,\,y)$ distribution of galaxies
+passing a redshift cut $z > 0.03$ (to reduce sensitivity to peculiar
+velocities) and a loose magnitude pre-filter $-23 < y < -18$ (to remove
+unphysical extremes before fitting).  The fit accounts for per-galaxy
+measurement noise and rectangular survey truncation at the bright and
+high-velocity limits of the data.  The dominant component represents the TFR
 spiral population; the secondary component captures outliers and dwarf galaxies.
 
 The best-fit GMM yields a dominant-component weight of $w = 0.932$.
@@ -385,26 +388,28 @@ Fig.~\ref{fig:selection_ellipse}.
     \label{fig:selection_ellipse}
 \end{figure}
 
-\subsection{Oblique Selection Cuts}
-\label{sec:oblique}
 The dominant GMM ellipse defines a preferred direction in $(x,\,y)$ space.
 We use this direction to construct oblique (tilted) selection boundaries that
 are parallel to the TFR and perpendicular to the scatter axis.
 
 The two boundaries are:
 \begin{align}
-    y &\geq s_\text{plane}\, x + c_1 \quad \text{(lower boundary)}, \\
-    y &\leq s_\text{plane}\, x + c_2 \quad \text{(upper boundary)},
+    y &\geq \bar{s}\, x + \bar{c}_1 \quad \text{(lower boundary)}, \\
+    y &\leq \bar{s}\, x + \bar{c}_2 \quad \text{(upper boundary)},
 \end{align}
-where $s_\text{plane}$ is fixed by the GMM ellipse orientation, and
-$c_1$, $c_2$ are determined by the parameter $n_{\sigma,\perp}$,
+where $\bar{s}$ is fixed by the GMM ellipse orientation, and
+$\bar{c}_1$, $\bar{c}_2$ are determined by the parameter $n_{\sigma,\perp}$,
 the number of perpendicular $\sigma$ from the ellipse center to each boundary.
 
 In addition to the oblique cuts, a magnitude window
 $\hat{y}_\text{min} \leq y \leq \hat{y}_\text{max}$ is imposed to remove
-the brightest and faintest extremes of the distribution, and a redshift window
-$z_\text{min} < z < z_\text{max}$ is applied to the training sample only
-(the full sample without $z$ cuts is used for the peculiar velocity catalog).
+the brightest and faintest extremes of the distribution.  Initial values
+of $\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ are set by the
+$y$-extent of the $3\sigma$ ellipse and subsequently refined by the user
+based on the pull-profile diagnostic described in \S\ref{sec:fiducial}.
+A redshift window $z_\text{min} < z < z_\text{max}$ is applied to the
+training sample only (the full sample without $z$ cuts is used for the
+peculiar velocity catalog).
 
 The full sample and the selected training region are shown in
 Fig.~\ref{fig:data}.
@@ -418,22 +423,27 @@ Fig.~\ref{fig:data}.
     \label{fig:data}
 \end{figure}
 
-\subsection{Fiducial Selection Parameters}
-\label{sec:fiducial}
 To verify that the fiducial selection does not introduce bias in the TFR
-calibration, we run Stan MLE on the $n_{\sigma,\perp} = 3$ ellipse and
-examine the pull profile (normalized residual as a function of position in
-phase space).  A flat pull profile confirms that the selection does not
-preferentially bias the sample in any region of phase space.
+calibration, we run Stan MLE on the $n_{\sigma,\perp} = 3$ ellipse selection
+and compute the weighted-mean residual $\Delta M = \langle M_\text{pred}\rangle - M_\text{obs}$
+for every object in the full catalog (not only those inside the selection
+region), binned in equal-occupancy bins of $M_R$.  A flat pull profile
+(weighted mean divided by its uncertainty) confirms that the MLE model is
+consistent with the data across the full magnitude range and that the
+selection does not preferentially bias the sample.
 The pull profile for the fiducial selection is shown in
 Fig.~\ref{fig:pull}, and is consistent with zero across the full range.
+The magnitude limits $\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ are
+then set at the values where the pull profile remains flat.
 
 \begin{figure}
     \centering
     \includegraphics[width=1\linewidth]{figures/select_v2_pull.png}
-    \caption{Pull profile (normalized mean residual) as a function of $x$
-    for the fiducial selection.  The profile is consistent with zero,
-    confirming that the oblique selection does not bias the TFR calibration.}
+    \caption{Weighted-mean residual $\Delta M = \langle M_\text{pred}\rangle - M_\text{obs}$
+    and pull profile (normalized by bin uncertainty) as a function of $M_R$
+    for all catalog objects evaluated at the MLE parameters.  The profile is
+    consistent with zero across the full magnitude range, confirming that the
+    oblique selection does not bias the TFR calibration.}
     \label{fig:pull}
 \end{figure}
 
@@ -450,9 +460,9 @@ Table~\ref{tab:fiducial}.
         \hline
         $\hat{y}_\text{min}$ & $-22.0$ \\
         $\hat{y}_\text{max}$ & $-19.25$ \\
-        $s_\text{plane}$ & $-6.798$ \\
-        $c_1$ (lower intercept) & $-20.589$ \\
-        $c_2$ (upper intercept) & $-17.951$ \\
+        $\bar{s}$ & $-6.798$ \\
+        $\bar{c}_1$ (lower intercept) & $-20.589$ \\
+        $\bar{c}_2$ (upper intercept) & $-17.951$ \\
         $n_{\sigma,\perp}$ & $3.0$ \\
         $z_\text{min}$ & $0.03$ \\
         $z_\text{max}$ & $0.10$ \\
@@ -461,7 +471,7 @@ Table~\ref{tab:fiducial}.
     \end{tabular}
 \end{table}
 
-
+\subsection{Fit Results}
 \section{Results}
 \label{sec:results}
 
@@ -487,8 +497,8 @@ in Fig.~\ref{fig:tophat}.
         \hline
         Parameter & Posterior mean & $1\sigma$ \\
         \hline
-        slope $a$ & $-6.797$ & $\pm 0.071$ \\
-        intercept $b$ & $-19.236$ & $\pm 0.017$ \\
+        slope $\alpha$ & $-6.797$ & $\pm 0.071$ \\
+        intercept $\beta$ & $-19.236$ & $\pm 0.017$ \\
         $\sigma_{\mathrm{int},x}$ & $0.026$ & $\pm 0.003$ \\
         $\sigma_{\mathrm{int},y}$ & $0.422$ & $\pm 0.012$ \\
         \hline
@@ -591,8 +601,8 @@ The key results are as follows.
     log-velocity within the observed selection region, correctly accounts for
     the complex oblique selection boundary without the need for explicit
     bias corrections.
-    \item MCMC posterior parameters are slope $a = -6.797 \pm 0.071$,
-    intercept $b = -19.236 \pm 0.017$, and intrinsic scatter
+    \item MCMC posterior parameters are slope $\alpha = -6.797 \pm 0.071$,
+    intercept $\beta = -19.236 \pm 0.017$, and intrinsic scatter
     $\sigma_{\mathrm{int},x} = 0.026 \pm 0.003$,
     $\sigma_{\mathrm{int},y} = 0.422 \pm 0.012$.
     Residual diagnostics in both phase space and redshift show no evidence

@@ -5,7 +5,7 @@ Assume we have already fit the TF model to a sample and obtained the posterior
 \begin{equation}
 p(\theta \mid \{\hat x_i,\hat y_i\}_{i=1}^N),
 \qquad
-\theta \equiv (s,c,\sigma_{\text{int},x},\sigma_{\text{int},y}, \mu_{\mathrm{TF}}, \tau).
+\theta \equiv (\alpha,\beta,\sigma_{\text{int},x},\sigma_{\text{int},y}, \mu_{\mathrm{TF}}, \tau).
 \end{equation}
 We now consider a \emph{new} galaxy, denoted by ``$\star$'', for which we measure a rotation-velocity proxy
 $\hat x_\star$ with uncertainty $\sigma_{x,\star}$, and we wish to infer its true absolute magnitude $y_\star$
@@ -53,7 +53,7 @@ true velocity proxy $x_\star$:
 \begin{equation}
 x_\star \mid y_{\mathrm{TF},\star},\theta
 \sim
-\mathcal N\!\left(\frac{y_{\mathrm{TF},\star}-c}{s},\,\sigma_{\mathrm{int},x}^2\right),
+\mathcal N\!\left(\frac{y_{\mathrm{TF},\star}-\beta}{\alpha},\,\sigma_{\mathrm{int},x}^2\right),
 \qquad
 \hat x_\star \mid x_\star \sim \mathcal N\!\left(x_\star,\,\sigma_{x,\star}^2\right),
 \end{equation}
@@ -61,7 +61,7 @@ which implies
 \begin{equation}
 \hat x_\star \mid y_{\mathrm{TF},\star},\theta
 \sim
-\mathcal N\!\left(\frac{y_{\mathrm{TF},\star}-c}{s},\,\sigma_{x,\mathrm{tot}}^2\right),
+\mathcal N\!\left(\frac{y_{\mathrm{TF},\star}-\beta}{\alpha},\,\sigma_{x,\mathrm{tot}}^2\right),
 \qquad
 \sigma_{x,\mathrm{tot}}^2 \equiv \sigma_{\mathrm{int},x}^2+\sigma_{x,\star}^2 .
 \label{eq:xhat_given_yTF}
@@ -70,18 +70,18 @@ which implies
 \paragraph{Transformed Normal (likelihood as a Gaussian in $y_{\mathrm{TF},\star}$).}
 Define
 \begin{equation}
-\mu_L \equiv c+s\hat x_\star,
+\mu_L \equiv \beta+\alpha\hat x_\star,
 \qquad
-\sigma_L^2 \equiv s^2\sigma_{x,\mathrm{tot}}^2,
+\sigma_L^2 \equiv \alpha^2\sigma_{x,\mathrm{tot}}^2,
 \qquad
-\sigma_L = |s|\,\sigma_{x,\mathrm{tot}}.
+\sigma_L = |\alpha|\,\sigma_{x,\mathrm{tot}}.
 \label{eq:muL_sigmaL_defs}
 \end{equation}
 Then the Normal likelihood in $\hat x_\star$ can be rewritten exactly as
 \begin{equation}
-\mathcal N\!\left(\hat x_\star \,\middle|\, \frac{y_{\mathrm{TF},\star}-c}{s},\,\sigma_{x,\mathrm{tot}}^2\right)
+\mathcal N\!\left(\hat x_\star \,\middle|\, \frac{y_{\mathrm{TF},\star}-\beta}{\alpha},\,\sigma_{x,\mathrm{tot}}^2\right)
 =
-|s|\;
+|\alpha|\;
 \mathcal N\!\left(y_{\mathrm{TF},\star}\mid \mu_L,\sigma_L^2\right).
 \label{eq:likelihood_transformed_normal}
 \end{equation}
@@ -99,10 +99,10 @@ p\!\left(\hat x_\star \mid \sigma_{x,\star},\theta\right)
 \nonumber\\
 &=
 \frac{
-\bigl[\,|s|\,\mathcal N(y_{\mathrm{TF},\star}\mid \mu_L,\sigma_L^2)\bigr]\;
+\bigl[\,|\alpha|\,\mathcal N(y_{\mathrm{TF},\star}\mid \mu_L,\sigma_L^2)\bigr]\;
 p(y_{\mathrm{TF},\star}\mid\theta)
 }{
-|s|\int dy\;\mathcal N(y\mid \mu_L,\sigma_L^2)\;p(y\mid\theta)
+|\alpha|\int dy\;\mathcal N(y\mid \mu_L,\sigma_L^2)\;p(y\mid\theta)
 }
 \nonumber\\
 &=
@@ -136,11 +136,11 @@ p\!\left(\hat x_\star\mid \sigma_{x,\star},\theta\right)
 =
 \mathcal N\!\left(
 \hat x_\star \,\middle|\,
-\frac{\mu_{\mathrm{TF}}-c}{s},\;
-\sigma_{x,\mathrm{tot}}^2+\frac{\tau^2}{s^2}
+\frac{\mu_{\mathrm{TF}}-\beta}{\alpha},\;
+\sigma_{x,\mathrm{tot}}^2+\frac{\tau^2}{\alpha^2}
 \right)
 =
-|s|\;\mathcal N\!\left(\mu_L \mid \mu_{\mathrm{TF}},\ \sigma_L^2+\tau^2\right).
+|\alpha|\;\mathcal N\!\left(\mu_L \mid \mu_{\mathrm{TF}},\ \sigma_L^2+\tau^2\right).
 \end{equation}
 
 \subparagraph{Posterior for $y_{\mathrm{TF},\star}$.}
@@ -196,11 +196,11 @@ Using the transformed likelihood in Eq.~\eqref{eq:likelihood_transformed_normal}
 p\!\left(\hat x_\star\mid \sigma_{x,\star},\theta\right)
 &=
 \int dy\;
-\mathcal N\!\left(\hat x_\star \,\middle|\, \frac{y-c}{s},\ \sigma_{x,\mathrm{tot}}^2\right)\;
+\mathcal N\!\left(\hat x_\star \,\middle|\, \frac{y-\beta}{\alpha},\ \sigma_{x,\mathrm{tot}}^2\right)\;
 \frac{1}{y_{\max}-y_{\min}}\mathbf 1_{[y_{\min},y_{\max}]}(y)
 \nonumber\\
 &=
-\frac{|s|}{y_{\max}-y_{\min}}
+\frac{|\alpha|}{y_{\max}-y_{\min}}
 \int_{y_{\min}}^{y_{\max}}
 \mathcal N\!\left(y \mid \mu_L,\sigma_L^2\right)\,dy
 \nonumber\\
@@ -235,7 +235,7 @@ Z_L \equiv
 \Phi\!\left(\frac{y_{\min}-\mu_L}{\sigma_L}\right),
 \label{eq:post_yTF_tophat}
 \end{equation}
-where $\mu_L=c+s\hat x_\star$ and $\sigma_L=|s|\,\sigma_{x,\mathrm{tot}}$.
+where $\mu_L=\beta+\alpha\hat x_\star$ and $\sigma_L=|\alpha|\,\sigma_{x,\mathrm{tot}}$.
 
 \subparagraph{Predictive for $y_\star$ (closed form).}
 Let $\sigma_y^2 \equiv \sigma_{\mathrm{int},y}^2$ and define

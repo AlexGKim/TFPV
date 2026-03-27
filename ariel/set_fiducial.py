@@ -21,6 +21,7 @@ import os
 import numpy as np
 
 from ellipse_sweep import _cuts_at_nsigma
+from select_v2 import _save_pull_plot
 
 
 def main():
@@ -115,6 +116,32 @@ def main():
         json.dump(fiducial, f, indent=2)
     print()
     print(f"Saved → {fiducial_path}")
+
+    # Generate pull plot with fiducial cut lines
+    pull_stats_path = os.path.join(run_dir, "select_v2_pull_stats.json")
+    mle_path        = os.path.join(run_dir, "select_v2_mle.json")
+    if not os.path.exists(pull_stats_path) or not os.path.exists(mle_path):
+        print(f"Warning: {pull_stats_path} or {mle_path} not found — "
+              "run select_v2.py first to generate pull stats.")
+        return
+    with open(pull_stats_path) as f:
+        ps = json.load(f)
+    with open(mle_path) as f:
+        params = json.load(f)
+
+    _save_pull_plot(
+        run_dir, args.run,
+        n_all=ps["n_all"], n_sel=ps["n_sel"],
+        params=params,
+        bin_centers=np.array(ps["bin_centers"]),
+        bin_widths=np.array(ps["bin_widths"]),
+        pulls=np.array(ps["pulls"]),
+        wt_means=np.array(ps["wt_means"]),
+        wt_uncs=np.array(ps["wt_uncs"]),
+        haty_lines={"haty_min": haty_min, "haty_max": haty_max},
+        filename="select_v2_fiducial_pull.png",
+    )
+    print(f"Saved pull plot → {os.path.join(run_dir, 'select_v2_fiducial_pull.png')}")
 
 
 if __name__ == "__main__":
