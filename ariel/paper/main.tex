@@ -206,8 +206,8 @@ perpendicular band width.
 The TFR is unknown a priori, so the diagonal band is based on an initial estimate
 of the slope of the distribution.  Variations in the selected slope perturb
 the galaxies that enter the analysis, but otherwise do not bias the fits.
-The procedure for selecting the limits is dependent
-on the model and is presented in \S\ref{sec:selection}.
+The procedure for selecting the limits is presented in \S\ref{sec:training_selection}, 
+after the description of the model in the next section.
 
 \section{Model}
 \label{sec:model}
@@ -215,11 +215,11 @@ We construct a probabilistic forward model for the TFR that accounts for
 measurement uncertainties in both observables and for sample selection within
 a single likelihood.
 The full derivation is given in Appendix~\ref{sec:likelihood};
-here we state the key elements and working likelihood expressions.
+here we state the key elements and the expression for the likelihood.
 
 The sample satisfies the selection criteria
 $(\hat{x}_i,\hat{y}_i) \in \mathcal{S}$.
-The training sample contains $N$ galaxies.
+The training sample consists of $N$ galaxies.
 For each galaxy $i$, the observables are the measured log-velocity
 $\hat{x}_i$ with uncertainty $\sigma_{x,i}$ and the observed absolute
 magnitude $\hat{y}_i$ with uncertainty $\sigma_{y,i}$.
@@ -252,10 +252,11 @@ bounds $y_{\min}$ and $y_{\max}$.
 y_{\mathrm{TF},i} &\sim \mathrm{Uniform}(y_{\min},\,y_{\max}).
 \end{align}
 Normal distributions were also considered,
-but studies using mock catalogs showed that the top-hat better described
-the flat-cuspy distribution of galaxy absolute magnitudes.
+but top-hat better described
+the flat-cuspy distribution of galaxy absolute magnitudes and provided more stable results in
+the analysis of mock catalogs.
 
-The likelihood for this model is as follows.
+The likelihood is derived from the above model.
 Given the independence of that galaxy measurements, the total likelihood can be decomposed
 into the product of per-galaxy terms. 
 \begin{align}
@@ -276,10 +277,10 @@ the per-galaxy density is truncated and renormalised,
 p(\hat{x}_i,\hat{y}_i \mid \theta, S_i=1)
 &= \frac{\mathcal{L}_i\;
          \mathbf{1}\!\left\{(\hat{x}_i,\hat{y}_i)\in\mathcal{S}\right\}}
-        {P(S_i=1\mid\theta)},
+        {P(S_i=1\mid\theta)}.
 \label{eqn:selected_density}
 \end{align}
-where
+The numerator is
 \begin{align}
 \mathcal{L}_i
 &= \frac{|\alpha|}{y_{\max}-y_{\min}}\;
@@ -303,7 +304,11 @@ where $\Phi$ is the standard normal CDF and
 \end{align}
 is the per-galaxy likelihood if there were no  sample selection.
 
-The selection probability is
+The denominator, i.e.\ the selection probability, is
+derived by transforming the $\hat{x}$--$\hat{y}$ to a new coordinate system where
+the parallelogram transforms to an axis-aligned rectangle.  The rectangular selection region
+is described by the sums and differences of four half planes.  The selection probability of
+a half plane is the standard bivariate-normal CDF.
 \begin{align}
 P(S_i=1\mid\theta)
 &= \frac{1}{y_{\max}-y_{\min}}
@@ -341,28 +346,23 @@ conditional on $y_{\mathrm{TF}}$:
     &= \frac{\sigma_{2,i}}{\sigma_{u,i}}.
 \label{eqn:shear_params}
 \end{align}
-The above is derived by transforming the $\hat{x}$--$\hat{y}$ to a new coordinate system where
-the parallelogram transforms into an axis-aligned rectangle.  The rectangular selection region
-is described by the sums and differences of four half planes.  The selection probability of
-a half plane is the standard bivariate-normal CDF.
 
 \section{Tully-Fisher Relation Fit}
 \subsection{Training Set Selection}
 \label{sec:training_selection}
-The DR1 spiral catalog spans a broad range of galaxy properties, including a
-dwarf-galaxy population that does not conform to the standard spiral TFR.
-Rather than applying simple velocity and magnitude cuts, we define the
-training sample using an oblique selection boundary in $(x,\,y)$ phase space
-whose orientation is informed by the data themselves via a Gaussian mixture
-model (GMM) fit.
+In this section, we describe the process to determine the parameters that define
+the sample selection entering $\mathcal{S}$ (Eq.~\ref{eqn:selection_region})  as given in
+\S\ref{sec:sampleselection}.
 
-We fit a two-component GMM to the $(x,\,y)$ distribution of galaxies
-passing a redshift cut $z > 0.03$ (to reduce sensitivity to peculiar
+The first step is to estimate the space occupied by normal galaxies using
+a two-component Gaussian Mixture Model fit 
+to the $(x,\,y)$ distribution of
+galaxies passing a redshift cut $z > 0.03$ (to reduce sensitivity to peculiar
 velocities) and a loose magnitude pre-filter $-23 < y < -18$ (to remove
-unphysical extremes before fitting).  The fit accounts for per-galaxy
-measurement noise and rectangular survey truncation at the bright and
-high-velocity limits of the data.  The dominant component represents the TFR
-spiral population; the secondary component captures outliers and dwarf galaxies.
+unphysical extremes).  The fit accounts for per-galaxy measurement noise and
+rectangular survey truncation at the bright and high-velocity limits of the
+data.  The dominant component is interpreted to represent the TFR spiral population; the
+secondary component captures outliers and dwarf galaxies.  
 
 The best-fit GMM yields a dominant-component weight of $w = 0.932$.
 The mean of the dominant component is
@@ -372,7 +372,6 @@ measured from the $x$-axis.
 The elongated ellipse with a nearly vertical orientation reflects the
 steep slope of the TFR: the long axis of the component is closely aligned
 with the TFR direction in $(x,\,y)$ space.
-
 The GMM ellipses overlaid on the phase-space scatter are shown in
 Fig.~\ref{fig:selection_ellipse}.
 
@@ -383,30 +382,15 @@ Fig.~\ref{fig:selection_ellipse}.
     where $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$.
     The two GMM ellipses (at $1\sigma$) are overplotted; the dominant component
     (weight $w = 0.932$) is shown in orange.  The orientation of the dominant
-    ellipse defines the slope of the oblique selection cuts described in
-    \S\ref{sec:oblique}.}
+    ellipse defines the slope of the oblique selection cuts.}
     \label{fig:selection_ellipse}
 \end{figure}
 
-The dominant GMM ellipse defines a preferred direction in $(x,\,y)$ space.
-We use this direction to construct oblique (tilted) selection boundaries that
-are parallel to the TFR and perpendicular to the scatter axis.
-
-The two boundaries are:
-\begin{align}
-    y &\geq \bar{s}\, x + \bar{c}_1 \quad \text{(lower boundary)}, \\
-    y &\leq \bar{s}\, x + \bar{c}_2 \quad \text{(upper boundary)},
-\end{align}
-where $\bar{s}$ is fixed by the GMM ellipse orientation, and
-$\bar{c}_1$, $\bar{c}_2$ are determined by the parameter $n_{\sigma,\perp}$,
-the number of perpendicular $\sigma$ from the ellipse center to each boundary.
-
-In addition to the oblique cuts, a magnitude window
-$\hat{y}_\text{min} \leq y \leq \hat{y}_\text{max}$ is imposed to remove
-the brightest and faintest extremes of the distribution.  Initial values
-of $\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ are set by the
-$y$-extent of the $3\sigma$ ellipse and subsequently refined by the user
-based on the pull-profile diagnostic described in \S\ref{sec:fiducial}.
+The slope $\bar{s}$ is fixed by the orientation of the dominant GMM ellipse,
+and $\bar{c}_1$, $\bar{c}_2$ are set at $n_{\sigma,\perp} = 3$ perpendicular
+$\sigma$ from the ellipse centre.  Initial values of $\hat{y}_\text{min}$ and
+$\hat{y}_\text{max}$ are taken from the $y$-extent of the $3\sigma$ ellipse
+and subsequently refined by the pull-profile diagnostic described below.
 A redshift window $z_\text{min} < z < z_\text{max}$ is applied to the
 training sample only (the full sample without $z$ cuts is used for the
 peculiar velocity catalog).
