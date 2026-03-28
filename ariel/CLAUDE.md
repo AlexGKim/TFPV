@@ -2,11 +2,11 @@
 
 ## Component Map (Authority Hierarchy)
 
-| Concept | Authoritative Source | Narrative | Implementation | Publication |
-|---------|---------------------|-----------|----------------|-------------|
-| Selection algorithm | `doc/model1.tex` | `Selection_v2.md` | `selection_ellipse.py`, `ellipse_sweep.py` | `paper/main.tex` |
-| TFR fitting model | `doc/model2.tex` | `TFFit.md` | `tophat.stan`, `normal.stan` | `paper/main.tex` |
-| Prediction step | `doc/model2.tex` | `Predict.md` | `predict.py`, `predict_cov.py` | `paper/main.tex` |
+| Concept | Authoritative Source | Secondary Authority | Narrative | Publication |
+|---------|---------------------|---------------------|-----------|-------------|
+| Selection algorithm | `doc/model1.tex` | `selection_ellipse.py`, `ellipse_sweep.py` | `Selection_v2.md` | `paper/main.tex` |
+| TFR fitting model | `doc/model2.tex` | `tophat.stan`, `normal.stan` | `TFFit.md` | `paper/main.tex` |
+| Prediction step | `doc/model2.tex` | `predict.py`, `predict_cov.py` | `Predict.md` | `paper/main.tex` |
 | DR1 run commands | `DR1.md` | — | — | — |
 
 **Authority is two-tiered:**
