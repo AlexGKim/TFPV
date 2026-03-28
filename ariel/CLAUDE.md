@@ -2,11 +2,11 @@
 
 ## Component Map (Authority Hierarchy)
 
-| Concept | Authoritative Source | Narrative | Formal Math | Publication |
-|---------|---------------------|-----------|-------------|-------------|
-| Selection algorithm | `selection_ellipse.py`, `ellipse_sweep.py` | `Selection_v2.md` | `doc/model1.tex` | `paper/main.tex` |
-| TFR fitting model | `tophat.stan`, `normal.stan` | `TFFit.md` | `doc/model2.tex`, `doc/model3.tex` | `paper/main.tex` |
-| Prediction step | `predict.py`, `predict_cov.py` | `Predict.md` | `doc/model2.tex` | `paper/main.tex` |
+| Concept | Authoritative Source | Narrative | Implementation | Publication |
+|---------|---------------------|-----------|----------------|-------------|
+| Selection algorithm | `doc/model1.tex` | `Selection_v2.md` | `selection_ellipse.py`, `ellipse_sweep.py` | `paper/main.tex` |
+| TFR fitting model | `doc/model2.tex`, `doc/model3.tex` | `TFFit.md` | `tophat.stan`, `normal.stan` | `paper/main.tex` |
+| Prediction step | `doc/model2.tex` | `Predict.md` | `predict.py`, `predict_cov.py` | `paper/main.tex` |
 | DR1 run commands | `DR1.md` | — | — | — |
 
 **Formal math is truth.** When code and `doc/*.tex` disagree, the math wins. Update the code to match.
