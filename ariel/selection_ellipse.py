@@ -372,9 +372,10 @@ def make_plot(x, y, gmm, core_idx, out_path, x_hi, y_lo):
     )
     plt.colorbar(sc, ax=ax, label="P(core component)")
 
-    sigma_colors = ["gold", "orange", "red"]
-    sigma_styles = ["-", "--", ":"]
-    for n_sigma, color, ls in zip([1, 2, 3], sigma_colors, sigma_styles):
+    sigma_colors = ["gold", "red"]
+    sigma_styles = ["-", ":"]
+    sigma_lws    = [1.5, 2.5]
+    for n_sigma, color, ls, lw in zip([1, 3], sigma_colors, sigma_styles, sigma_lws):
         ell = mpatches.Ellipse(
             mu,
             width=2 * n_sigma * semi_axes[1],   # major axis full diameter
@@ -382,7 +383,7 @@ def make_plot(x, y, gmm, core_idx, out_path, x_hi, y_lo):
             angle=angle,
             edgecolor=color,
             facecolor="none",
-            linewidth=1.5,
+            linewidth=lw,
             linestyle=ls,
             label=f"{n_sigma}σ ellipse",
             zorder=5,
@@ -390,33 +391,31 @@ def make_plot(x, y, gmm, core_idx, out_path, x_hi, y_lo):
         ax.add_patch(ell)
 
     # Truncation boundary used in fit
-    ax.axvline(x_hi, color="white", lw=1.0, ls="-",
-               label=f"x_trunc={x_hi:.3f}")
-    ax.axhline(y_lo, color="white", lw=1.0, ls="-",
-               label=f"y_trunc={y_lo:.2f}")
+    ax.axvline(x_hi, color="white", lw=1.0, ls="-")
+    ax.axhline(y_lo, color="white", lw=1.0, ls="-")
 
-    # Selection boundaries derived from the 1σ ellipse
-    haty_min, haty_max, slope, intercept1, intercept2 = \
-        derived_cuts(mu, sigma)
-
+    # Selection boundaries derived from the 3σ ellipse (bold solid)
+    cuts3 = _cuts_at_nsigma(mu, sigma, 3.0)
     x_line = np.linspace(x.min() - 0.1, x.max() + 0.1, 300)
-    ax.axhline(haty_max, color="cyan", lw=1.2, ls="--",
-               label=f"haty_max={haty_max:.2f}")
-    ax.axhline(haty_min, color="cyan", lw=1.2, ls=":",
-               label=f"haty_min={haty_min:.2f}")
-    ax.plot(x_line, slope * x_line + intercept1,
-            color="lime", lw=1.2, ls="--",
-            label=f"plane1: slope={slope:.2f}, b={intercept1:.2f}")
-    ax.plot(x_line, slope * x_line + intercept2,
-            color="lime", lw=1.2, ls=":",
-            label=f"plane2: slope={slope:.2f}, b={intercept2:.2f}")
+    ax.axhline(cuts3["haty_max"], color="cyan", lw=2.0, ls="-",
+               label=f"haty_max={cuts3['haty_max']:.2f}")
+    ax.axhline(cuts3["haty_min"], color="cyan", lw=2.0, ls="-",
+               label=f"haty_min={cuts3['haty_min']:.2f}")
+    ax.plot(x_line, cuts3["slope_plane"] * x_line + cuts3["intercept_plane"],
+            color="lime", lw=2.0, ls="-",
+            label=f"plane1: b={cuts3['intercept_plane']:.2f}")
+    ax.plot(x_line, cuts3["slope_plane"] * x_line + cuts3["intercept_plane2"],
+            color="lime", lw=2.0, ls="-",
+            label=f"plane2: b={cuts3['intercept_plane2']:.2f}")
 
     ax.set_xlabel(r"$x = \log_{10}(V/100\,\mathrm{km\,s}^{-1})$")
     ax.set_ylabel(r"$y = R\mathrm{-band\ absolute\ magnitude}$")
-    ax.set_title("Noise + truncation-corrected GMM — TFR core ellipses")
+
     ax.legend(fontsize=7, loc="upper left")
     ax.set_xlim(x.min(), x.max())
-    ax.set_ylim(y.min(), y.max())
+    y_pad = 0.3
+    ax.set_ylim(min(y.min(), cuts3["haty_min"]) - y_pad,
+                max(y.max(), cuts3["haty_max"]) + y_pad)
     ax.invert_yaxis()
 
     fig.tight_layout()
