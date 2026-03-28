@@ -2,12 +2,12 @@
 
 ## Component Map (Authority Hierarchy)
 
-| Concept | Authoritative Source | Narrative | Implementation | Publication |
-|---------|---------------------|-----------|----------------|-------------|
-| Selection algorithm | `doc/model1.tex` | `Selection_v2.md` | — | `paper/main.tex` |
-| TFR fitting model | `doc/model2.tex` | `TFFit.md` | — | `paper/main.tex` |
-| Prediction step | `doc/model2.tex` | `Predict.md` | — | `paper/main.tex` |
-| DR1 run commands | `DR1.md` | — | `selection_ellipse.py`, `select_v2.py`, `set_fiducial.py`, `predict.py`, `desi_data.py`, `corner.py` | — |
+| Concept | Authoritative Source | Implementation | Narrative | Publication |
+|---------|---------------------|----------------|-----------|-------------|
+| Selection algorithm | `doc/model1.tex` | — | `Selection_v2.md` | `paper/main.tex` |
+| TFR fitting model | `doc/model2.tex` | — | `TFFit.md` | `paper/main.tex` |
+| Prediction step | `doc/model2.tex` | — | `Predict.md` | `paper/main.tex` |
+| DR1 run commands | `DR1.md` | `selection_ellipse.py`, `select_v2.py`, `set_fiducial.py`, `predict.py`, `desi_data.py`, `corner.py` | — | — |
 
 **Authority is two-tiered:**
 1. **Formal math is truth** for anything specified in `doc/model1.tex` or `doc/model2.tex`. When code and these files disagree, the math wins — update the code to match.
