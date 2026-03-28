@@ -5,11 +5,13 @@
 | Concept | Authoritative Source | Narrative | Implementation | Publication |
 |---------|---------------------|-----------|----------------|-------------|
 | Selection algorithm | `doc/model1.tex` | `Selection_v2.md` | `selection_ellipse.py`, `ellipse_sweep.py` | `paper/main.tex` |
-| TFR fitting model | `doc/model2.tex`, `doc/model3.tex` | `TFFit.md` | `tophat.stan`, `normal.stan` | `paper/main.tex` |
+| TFR fitting model | `doc/model2.tex` | `TFFit.md` | `tophat.stan`, `normal.stan` | `paper/main.tex` |
 | Prediction step | `doc/model2.tex` | `Predict.md` | `predict.py`, `predict_cov.py` | `paper/main.tex` |
 | DR1 run commands | `DR1.md` | — | — | — |
 
-**Formal math is truth.** When code and `doc/*.tex` disagree, the math wins. Update the code to match.
+**Authority is two-tiered:**
+1. **Formal math is truth** for anything specified in `doc/model1.tex` or `doc/model2.tex`. When code and these files disagree, the math wins — update the code to match.
+2. **Implementation is truth** for anything not specified in the formal math. When narrative docs and code disagree, the code wins — update the docs to match.
 
 ---
 
