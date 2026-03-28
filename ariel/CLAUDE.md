@@ -9,13 +9,13 @@
 | Prediction step | `predict.py`, `predict_cov.py` | `Predict.md` | `doc/model2.tex` | `paper/main.tex` |
 | DR1 run commands | `DR1.md` | — | — | — |
 
-**Code is truth.** When code and docs disagree, code wins. Update the docs to match.
+**Formal math is truth.** When code and `doc/*.tex` disagree, the math wins. Update the code to match.
 
 ---
 
 ## Key Parameter Registry
 
-These are ground-truth values. File:line pointers are exact — verify before citing.
+These are ground-truth values derived from `doc/*.tex`. File:line pointers show where each value is implemented in code — if they diverge from the math, fix the code.
 
 | Parameter | Value | Authoritative Location(s) |
 |-----------|-------|--------------------------|
@@ -33,9 +33,9 @@ These are ground-truth values. File:line pointers are exact — verify before ci
 
 ## Consistency Rule
 
-**When changing any parameter value, algorithm step, equation, or output filename in code:**
+**When changing any parameter value, algorithm step, or equation in `doc/*.tex`:**
 
-1. Search `doc/*.tex` for references — update formal math descriptions
+1. Update the corresponding code (`.py`, `.stan`) to implement the new math
 2. Search `Selection_v2.md`, `TFFit.md`, `Predict.md`, `DR1.md` for references — update narrative
 3. Search `paper/main.tex` for references — update publication text
 4. Use `mcp__latex-server__validate_latex` after every edit to `paper/main.tex` or `doc/*.tex`
