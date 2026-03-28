@@ -4,7 +4,7 @@
 
 | Concept | Authoritative Source | Code | Implementation | Publication |
 |---------|---------------------|------|----------------|-------------|
-| Selection algorithm | `doc/model1.tex` | `selection_ellipse.py`, `ellipse_sweep.py` | `Selection_v2.md` | `paper/main.tex` |
+| Selection algorithm | `doc/model1.tex` | `selection_ellipse.py` | `Selection_v2.md` | `paper/main.tex` |
 | TFR fitting model | `doc/model2.tex` | `tophat.stan`, `normal.stan` | `TFFit.md` | `paper/main.tex` |
 | Prediction step | `doc/model2.tex` | `predict.py`, `predict_cov.py` | `Predict.md` | `paper/main.tex` |
 | DR1 run commands | `DR1.md` | `selection_ellipse.py`, `select_v2.py`, `set_fiducial.py`, `predict.py`, `desi_data.py`, `corner.py` | — | — |
