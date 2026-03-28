@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import sys,json; d=json.load(sys.stdin); fp=d.get('tool_input',{}).get('file_path',''); print('CONSISTENCY REMINDER: ' + fp + ' edited — check doc/*.tex, workflow .md files, and paper/main.tex for references that need updating (CLAUDE.md consistency rule).') if any(fp.endswith(e) for e in ['.py','.stan']) else (print('LATEX REMINDER: ' + fp + ' edited — run mcp__latex-server__validate_latex.') if fp.endswith('.tex') else None)\""
+          }
+        ]
+      }
+    ]
+  }
+}
