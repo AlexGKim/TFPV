@@ -245,23 +245,32 @@ Measurements have Gaussian scatter around the true values:
 \end{align}
 
 For a hierarchical model, the underlying distribution of the latent
-parameter must be specified.  Here we adopt 
-a top-hat distribution of $y_{\mathrm{TF}}$ characterised by
-bounds $y_{\min}$ and $y_{\max}$.
-\begin{align}
-y_{\mathrm{TF},i} &\sim \mathrm{Uniform}(y_{\min},\,y_{\max}).
-\end{align}
-The bounds extend slightly beyond the selection window to accommodate
+parameter must be specified. We adopt a top-hat (uniform) prior,
+$y_{\mathrm{TF},i} \sim \mathrm{Uniform}(y_{\min},\,y_{\max})$, with
+bounds extending slightly beyond the selection window to accommodate
 scatter at the selection boundary,
 \begin{align}
-y_{\min} &= \hat{y}_{\min} - 0.5\,\mathrm{mag}, &
-y_{\max} &= \hat{y}_{\max} + 1.0\,\mathrm{mag}.
+y_{\min} &= \hat{y}_{\min} - \Delta y_{\min}, &
+y_{\max} &= \hat{y}_{\max} + \Delta y_{\max}.
 \label{eqn:ymin_ymax}
 \end{align}
-Normal distributions were also considered,
-but top-hat better described
-the flat-cuspy distribution of galaxy absolute magnitudes and provided more stable results in
-the analysis of mock catalogs.
+This choice is motivated both empirically and analytically. Empirically,
+a top-hat better describes the flat-cuspy distribution of galaxy absolute
+magnitudes and yielded more stable results in mock-catalog tests than a
+normal distribution. Analytically, placing the bounds where the true
+latent density $p(y_{\mathrm{TF}})$ is roughly flat makes the uniform prior a good local
+approximation to the true distribution: in this plateau, the posterior is
+dominated by the data likelihood, the normalisation
+$P(S_i = 1 \mid \theta)$ varies only weakly with small changes to
+$\Delta y_{\min}$ and $\Delta y_{\max}$, and the inferred TFR parameters
+become largely insensitive to the precise edge placements. By contrast,
+placing the edges where $p(y_{\mathrm{TF}})$ has a strong gradient would
+shift substantial prior mass for small $\Delta y$ values, potentially
+biasing the results. Selecting $\hat{y}_{\min}$ and $\hat{y}_{\max}$ in
+the low-gradient regime therefore yields both a better top-hat
+approximation and robust insensitivity to the choice of offsets.
+
+
 
 The likelihood is derived from the above model.
 Given the independence of that galaxy measurements, the total likelihood can be decomposed
@@ -357,9 +366,22 @@ conditional on $y_{\mathrm{TF}}$:
 \section{Tully-Fisher Relation Fit}
 \subsection{Training Set Selection}
 \label{sec:training_selection}
-In this section, we describe the process to determine the parameters that define
-the sample selection entering $\mathcal{S}$ (Eq.~\ref{eqn:selection_region})  as given in
-\S\ref{sec:sampleselection}.
+
+In this section we describe the procedure for determining the parameters
+that define the sample selection region $\mathcal{S}$
+(Eq.~\ref{eqn:selection_region}), as introduced in
+\S\ref{sec:sampleselection}. The primary contaminants are dwarf galaxies,
+which are known not to follow the TFR. To excise them, we identify a
+magnitude cut as follows. We adopt a nominal TFR, apply it to all
+galaxies, and examine the residuals between observed and predicted
+magnitudes as a function of absolute magnitude. Because the nominal TFR
+need not be accurate, some overall bias in the residuals is expected and
+acceptable; what we look for instead is residual bias that is
+\emph{anomalous}---i.e.\ that deviates beyond the level attributable to
+an imperfect TFR. Galaxies at absolute magnitudes where such anomalous
+residuals appear are excluded from the sample.
+
+
 
 The first step is to estimate the space occupied by normal galaxies using
 a two-component Gaussian Mixture Model fit 
@@ -394,26 +416,17 @@ Fig.~\ref{fig:selection_ellipse}.
     \label{fig:selection_ellipse}
 \end{figure}
 
-The slope $\bar{s}$ is fixed by the orientation of the dominant GMM ellipse,
+A preliminary selection parallelogram is defined by the 3$\sigma$
+ellipse of the dominant GMM ellipse:
+The slope $\bar{s}$ is fixed by the orientation of the ellipse,
 and $\bar{c}_1$, $\bar{c}_2$ are set at $n_{\sigma,\perp} = 3$ perpendicular
 $\sigma$ from the ellipse centre.  Initial values of $\hat{y}_\text{min}$ and
 $\hat{y}_\text{max}$ are taken from the $y$-extent of the $3\sigma$ ellipse
 and subsequently refined by the pull-profile diagnostic described below.
-A redshift window $z_\text{min} < z < z_\text{max}$ is applied to the
-training sample only (the full sample without $z$ cuts is used for the
-peculiar velocity catalog).
+In addition, the same minimum redshift used in the GMM fit is maintained.
+The selected training region is shown in
+Fig.~\ref{fig:selection_ellipse}.
 
-The full sample and the selected training region are shown in
-Fig.~\ref{fig:data}.
-
-\begin{figure}
-    \centering
-    \includegraphics[width=1\linewidth]{figures/data.png}
-    \caption{Full DR1 spiral sample (grey) and training sample (colored points)
-    in $(x,\,y)$ phase space.  The oblique selection boundaries and magnitude
-    limits are indicated.  The training sample contains 5,928 galaxies.}
-    \label{fig:data}
-\end{figure}
 
 To verify that the fiducial selection does not introduce bias in the TFR
 calibration, we run Stan MLE on the $n_{\sigma,\perp} = 3$ ellipse selection
@@ -462,6 +475,16 @@ Table~\ref{tab:fiducial}.
         \hline
     \end{tabular}
 \end{table}
+
+This is 
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figures/data.png}
+    \caption{Full DR1 spiral sample (grey) and training sample (colored points)
+    in $(x,\,y)$ phase space.  The oblique selection boundaries and magnitude
+    limits are indicated.  The training sample contains 5,928 galaxies.}
+    \label{fig:data}
+\end{figure}
 
 \subsection{Fit Results}
 \section{Results}
