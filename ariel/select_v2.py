@@ -138,7 +138,7 @@ def _compute_pull_stats(raw_data, params, y_min, y_max, n_bins):
 
 
 def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
-                   bin_centers, bin_widths, pulls, wt_means, wt_uncs,
+                   bin_centers, bin_widths, wt_means, wt_uncs,
                    haty_lines=None, filename="select_v2_pull.png"):
     """Draw and save select_v2_pull.png.
 
@@ -146,33 +146,11 @@ def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
                 line on both panels (e.g. {"haty_min": -22, "haty_max": -19.5}).
     filename:   output filename (default "select_v2_pull.png").
     """
-    valid = np.isfinite(pulls)
+    valid = np.isfinite(wt_means)
 
-    fig, axes = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
+    fig, ax1 = plt.subplots(figsize=(9, 5))
 
-    # Top panel: pull
-    ax0    = axes[0]
-    colors = np.where(pulls[valid] >= 0, "steelblue", "tomato")
-    ax0.bar(bin_centers[valid], pulls[valid],
-            width=bin_widths[valid] * 0.8, color=colors, alpha=0.75)
-    ax0.axhline(0, color="black", linewidth=0.8, linestyle="--")
-    if haty_lines:
-        for label, val in haty_lines.items():
-            ax0.axvline(val, color="darkorange", linewidth=1.2,
-                        linestyle="--", label=label)
-        ax0.legend(fontsize=8)
-    ax0.set_ylabel("Pull  (weighted mean / unc)")
-    ax0.set_title(
-        f"Residual pull — {run_name}  (N_all={n_all}, N_sel={n_sel}, "
-        f"slope={params['slope']:.3f}, "
-        f"intercept={params['intercept.1']:.3f})"
-    )
-    p_lo, p_hi = np.nanpercentile(pulls[valid], [2, 98])
-    pad = 0.15 * max(p_hi - p_lo, 1e-6)
-    ax0.set_ylim(p_lo - pad, p_hi + pad)
-
-    # Bottom panel: weighted mean ± uncertainty
-    ax1         = axes[1]
+    # Weighted mean ± uncertainty
     colors_mean = np.where(wt_means[valid] >= 0, "steelblue", "tomato")
     ax1.bar(bin_centers[valid], wt_means[valid],
             width=bin_widths[valid] * 0.8,
@@ -187,6 +165,11 @@ def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
         ax1.legend(fontsize=8)
     ax1.set_xlabel(r"$M_\mathrm{abs}$ bin center")
     ax1.set_ylabel(r"$\langle\Delta M\rangle_w$  (weighted mean)")
+    ax1.set_title(
+        f"Weighted mean residual — {run_name}  (N_all={n_all}, N_sel={n_sel}, "
+        f"slope={params['slope']:.3f}, "
+        f"intercept={params['intercept.1']:.3f})"
+    )
     lo_vals = wt_means[valid] - wt_uncs[valid]
     hi_vals = wt_means[valid] + wt_uncs[valid]
     p_lo = float(np.nanpercentile(lo_vals, 2))
@@ -292,7 +275,7 @@ def main():
             n_all=len(raw_data["x"]), n_sel=len(x_sel),
             params=params,
             bin_centers=bin_centers, bin_widths=bin_widths,
-            pulls=pulls, wt_means=wt_means, wt_uncs=wt_uncs,
+            wt_means=wt_means, wt_uncs=wt_uncs,
             haty_lines={"haty_min": args.haty_min, "haty_max": args.haty_max},
             filename="select_v2_fiducial_pull.png",
         )
@@ -376,7 +359,7 @@ def main():
         n_all=pull_stats["n_all"], n_sel=pull_stats["n_sel"],
         params=params,
         bin_centers=bin_centers, bin_widths=bin_widths,
-        pulls=pulls, wt_means=wt_means, wt_uncs=wt_uncs,
+        wt_means=wt_means, wt_uncs=wt_uncs,
     )
 
 
