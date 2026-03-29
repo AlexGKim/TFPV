@@ -12,5 +12,5 @@ Run three parallel Explore agents:
 
 After all three agents complete, compare their findings and report:
 1. Any discrepancies between layers (value differences, missing descriptions, contradictory equations)
-2. Which layer is authoritative (code is truth)
+2. Which layer is authoritative: `doc/model1.tex`/`doc/model2.tex` are truth for anything they specify (code must match math); code is truth for everything else (docs/paper must match code)
 3. Specific edits needed to bring docs and paper into alignment with code
