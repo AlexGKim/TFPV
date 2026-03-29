@@ -148,36 +148,74 @@ def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
     """
     valid = np.isfinite(wt_means)
 
-    fig, ax1 = plt.subplots(figsize=(9, 5))
+    lo_vals = wt_means[valid] - wt_uncs[valid]
+    hi_vals = wt_means[valid] + wt_uncs[valid]
+    all_vals = np.concatenate([lo_vals, hi_vals])
+    p_lo    = float(np.nanpercentile(all_vals, 2))
+    p_hi    = float(np.nanpercentile(all_vals, 98))
+    p_break = -0.15  # hard cut: outlier below, main cluster above
+    pad_bot = 0.15 * max(p_break - p_lo, 1e-6)
+    pad_top = 0.15 * max(p_hi - p_break, 1e-6)
 
-    # Weighted mean ± uncertainty
     colors_mean = np.where(wt_means[valid] >= 0, "steelblue", "tomato")
-    ax1.bar(bin_centers[valid], wt_means[valid],
-            width=bin_widths[valid] * 0.8,
-            yerr=wt_uncs[valid],
-            color=colors_mean, alpha=0.75,
-            error_kw=dict(ecolor="black", capsize=3))
-    ax1.axhline(0, color="black", linewidth=0.8, linestyle="--")
-    if haty_lines:
-        for label, val in haty_lines.items():
-            ax1.axvline(val, color="darkorange", linewidth=1.2,
-                        linestyle="--", label=label)
-        ax1.legend(fontsize=8)
-    ax1.set_xlabel(r"$M_\mathrm{abs}$ bin center")
-    ax1.set_ylabel(r"$\langle\Delta M\rangle_w$  (weighted mean)")
-    ax1.set_title(
-        f"Weighted mean residual — {run_name}  (N_all={n_all}, N_sel={n_sel}, "
+
+    def _draw_bars(ax):
+        ax.bar(bin_centers[valid], wt_means[valid],
+               width=bin_widths[valid] * 0.8,
+               yerr=wt_uncs[valid],
+               color=colors_mean, alpha=0.75,
+               error_kw=dict(ecolor="black", capsize=3))
+        ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
+
+    def _draw_vlines(ax, legend=False):
+        if haty_lines:
+            for label, val in haty_lines.items():
+                ax.axvline(val, color="darkorange", linewidth=1.2,
+                           linestyle="--", label=label)
+            if legend:
+                ax.legend(fontsize=8)
+
+    def _break_marks(ax_top, ax_bot, d=0.012):
+        """Diagonal slash marks on shared spines to signal the axis break."""
+        kw = dict(color="k", clip_on=False, linewidth=1.2)
+        ax_top.plot((-d, +d), (-d, +d), transform=ax_top.transAxes, **kw)
+        ax_top.plot((1 - d, 1 + d), (-d, +d), transform=ax_top.transAxes, **kw)
+        ax_bot.plot((-d, +d), (1 - d, 1 + d), transform=ax_bot.transAxes, **kw)
+        ax_bot.plot((1 - d, 1 + d), (1 - d, 1 + d), transform=ax_bot.transAxes, **kw)
+
+    fig, (ax_top, ax_bot) = plt.subplots(
+        2, 1, figsize=(9, 6), sharex=True,
+        gridspec_kw={"height_ratios": [3, 1], "hspace": 0.08},
+    )
+
+    for ax in (ax_top, ax_bot):
+        _draw_bars(ax)
+    _draw_vlines(ax_top, legend=True)
+    _draw_vlines(ax_bot)
+
+    # Top panel: main cluster near zero; bottom panel: very negative outlier.
+    # p_break is a hard boundary so each y-value appears in exactly one panel.
+    ax_top.set_ylim(p_break, p_hi + pad_top)
+    ax_bot.set_ylim(p_lo - pad_bot, p_break)
+
+    ax_top.spines["bottom"].set_visible(False)
+    ax_bot.spines["top"].set_visible(False)
+    ax_top.tick_params(bottom=False)
+
+    _break_marks(ax_top, ax_bot)
+
+    ax_bot.set_xlabel(r"$M_\mathrm{abs}$ bin center")
+    fig.text(0.04, 0.5,
+             r"$\langle\Delta M\rangle_w$  (weighted mean)",
+             va="center", rotation="vertical")
+    ax_top.set_title(
+        f"Weighted mean residual — {run_name}  "
+        f"(N_all={n_all}, N_sel={n_sel}, "
         f"slope={params['slope']:.3f}, "
         f"intercept={params['intercept.1']:.3f})"
     )
-    lo_vals = wt_means[valid] - wt_uncs[valid]
-    hi_vals = wt_means[valid] + wt_uncs[valid]
-    p_lo = float(np.nanpercentile(lo_vals, 2))
-    p_hi = float(np.nanpercentile(hi_vals, 98))
-    pad = 0.15 * max(p_hi - p_lo, 1e-6)
-    ax1.set_ylim(p_lo - pad, p_hi + pad)
 
-    fig.tight_layout()
+    fig.tight_layout(rect=(0.06, 0.0, 1.0, 1.0))
     pull_path = os.path.join(run_dir, filename)
     fig.savefig(pull_path, dpi=150)
     plt.close(fig)

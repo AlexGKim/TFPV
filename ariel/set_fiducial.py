@@ -135,7 +135,6 @@ def main():
         params=params,
         bin_centers=np.array(ps["bin_centers"]),
         bin_widths=np.array(ps["bin_widths"]),
-        pulls=np.array(ps["pulls"]),
         wt_means=np.array(ps["wt_means"]),
         wt_uncs=np.array(ps["wt_uncs"]),
         haty_lines={"haty_min": haty_min, "haty_max": haty_max},
