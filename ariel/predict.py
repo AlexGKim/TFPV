@@ -820,25 +820,43 @@ def ystar_pp_mean_sd_tophat_vectorized(
         alpha = (a - mu) / sig
         beta  = (b - mu) / sig
 
-        # Z = _Phi(beta) - _Phi(alpha)
-        Z = norm.cdf(beta) * (1 - np.exp((norm.logcdf(alpha) - norm.logcdf(beta))))  # alternative for better numerical stability in tails
+        # Compute log(Z) = log(Φ(β) − Φ(α)) in a numerically stable way.
+        # When α ≥ 0 (both tails in the right half), Z = SF(α) − SF(β) and
+        # norm.logsf is accurate.  Otherwise use norm.logcdf which is accurate
+        # in the left tail.  The naive Z = Φ(β)−Φ(α) underflows to 0 for
+        # large positive α, causing φ/Z to overflow and the variance to become
+        # −inf / nan.
+        use_sf    = alpha >= 0.0
+        log_sf_a  = norm.logsf(alpha)
+        log_sf_b  = norm.logsf(beta)
+        log_cdf_a = norm.logcdf(alpha)
+        log_cdf_b = norm.logcdf(beta)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            log_Z_sf  = log_sf_a  + np.log1p(-np.exp(np.clip(log_sf_b  - log_sf_a,  -np.inf, 0.0)))
+            log_Z_cdf = log_cdf_b + np.log1p(-np.exp(np.clip(log_cdf_a - log_cdf_b, -np.inf, 0.0)))
+        log_Z = np.where(use_sf, log_Z_sf, log_Z_cdf)
 
         if on_bad_Z == "raise":
-            if np.any(~np.isfinite(Z)) or np.any(Z <= 0.0):
-                raise ValueError("Truncation normalizer Z is non-finite or non-positive for some (draw, galaxy).")
+            if np.any(~np.isfinite(log_Z)):
+                raise ValueError("log(Z) is non-finite for some (draw, galaxy).")
         elif on_bad_Z == "floor":
-            Z = np.where(np.isfinite(Z), np.maximum(Z, Z_floor), Z_floor)
+            log_Z = np.maximum(log_Z, np.log(Z_floor))
         else:
             raise ValueError("on_bad_Z must be 'raise' or 'floor'.")
 
-        phi_a = _phi(alpha)
-        phi_b = _phi(beta)
+        # Compute la = φ(α)/Z and lb = φ(β)/Z in log-space so the ratio stays
+        # O(α)-scale even when both φ and Z are tiny.
+        log_phi_a = norm.logpdf(alpha)
+        log_phi_b = norm.logpdf(beta)
+        la = np.exp(log_phi_a - log_Z)   # ≈ α for large α
+        lb = np.exp(log_phi_b - log_Z)   # ≈ β for large |β|; ≈ 0 when β >> α
 
-        t = (phi_a - phi_b) / Z
+        t = la - lb
         m = mu + sig * t
 
-        u = (alpha * phi_a - beta * phi_b) / Z
+        u = alpha * la - beta * lb
         v = (sig ** 2) * (1.0 + u - t**2)
+        v = np.maximum(v, 0.0)           # guard against residual floating-point negative values
 
         mean_yTF[nd] = m
         var_yTF[nd]  = v
@@ -2183,21 +2201,29 @@ def ystar_pp_cov_tophat_vectorized(
             alpha = (a - mu) / sig
             beta  = (b - mu) / sig
 
-            Z = norm.cdf(beta) * (1.0 - np.exp(norm.logcdf(alpha) - norm.logcdf(beta)))
+            use_sf    = alpha >= 0.0
+            log_sf_a  = norm.logsf(alpha)
+            log_sf_b  = norm.logsf(beta)
+            log_cdf_a = norm.logcdf(alpha)
+            log_cdf_b = norm.logcdf(beta)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                log_Z_sf  = log_sf_a  + np.log1p(-np.exp(np.clip(log_sf_b  - log_sf_a,  -np.inf, 0.0)))
+                log_Z_cdf = log_cdf_b + np.log1p(-np.exp(np.clip(log_cdf_a - log_cdf_b, -np.inf, 0.0)))
+            log_Z = np.where(use_sf, log_Z_sf, log_Z_cdf)
 
             if on_bad_Z == "raise":
-                if np.any(~np.isfinite(Z)) or np.any(Z <= 0.0):
+                if np.any(~np.isfinite(log_Z)):
                     raise ValueError(
-                        "Truncation normalizer Z is non-finite or non-positive "
-                        "for some (draw, galaxy)."
+                        "log(Z) is non-finite for some (draw, galaxy)."
                     )
             elif on_bad_Z == "floor":
-                Z = np.where(np.isfinite(Z), np.maximum(Z, Z_floor), Z_floor)
+                log_Z = np.maximum(log_Z, np.log(Z_floor))
             else:
                 raise ValueError("on_bad_Z must be 'raise' or 'floor'.")
 
-            t = (_phi(alpha) - _phi(beta)) / Z
-            mu_chunk[nd] = mu + sig * t
+            la = np.exp(norm.logpdf(alpha) - log_Z)
+            lb = np.exp(norm.logpdf(beta)  - log_Z)
+            mu_chunk[nd] = mu + sig * (la - lb)
 
         mu_centered = mu_chunk - mean_y[None, :]
         accum += mu_centered.T @ mu_centered  # (G, G) rank-B update
