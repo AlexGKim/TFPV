@@ -2015,16 +2015,19 @@ def ystar_pp_cov_normal_vectorized(draws, xhat_star, sigma_x_star, chunk_size=20
     s   = draws["slope"].to_numpy(float)        # (M,)
     c   = draws["intercept.1"].to_numpy(float)  # (M,)
     six = draws["sigma_int_x"].to_numpy(float)  # (M,)
+    siy = draws["sigma_int_y"].to_numpy(float)  # (M,)
     mu0 = draws["mu_y_TF"].to_numpy(float)      # (M,)
     tau = draws["tau"].to_numpy(float)          # (M,)
 
-    accum = np.zeros((G, G), dtype=float)
+    accum    = np.zeros((G, G), dtype=float)
+    var_accum = np.zeros(G,     dtype=float)
 
     for start in range(0, M, chunk_size):
         end = min(start + chunk_size, M)
-        sc  = s[start:end][:, None]
-        cc  = c[start:end][:, None]
+        sc    = s[start:end][:, None]
+        cc    = c[start:end][:, None]
         six_c = six[start:end][:, None]
+        siy_c = siy[start:end][:, None]
         mu0_c = mu0[start:end][:, None]
         V0    = tau[start:end][:, None] ** 2
 
@@ -2032,13 +2035,18 @@ def ystar_pp_cov_normal_vectorized(draws, xhat_star, sigma_x_star, chunk_size=20
         mu_L = cc + sc * xhat_star[None, :]                  # (B, G)
         V_L  = sc**2 * sigma_x_tot2                          # (B, G)
 
-        Vp        = 1.0 / (1.0 / V0 + 1.0 / V_L)
-        mu_chunk  = Vp * (mu0_c / V0 + mu_L / V_L)          # (B, G)
+        Vp       = 1.0 / (1.0 / V0 + 1.0 / V_L)
+        mu_chunk = Vp * (mu0_c / V0 + mu_L / V_L)           # (B, G)
 
         mu_centered = mu_chunk - mean_y[None, :]
         accum += mu_centered.T @ mu_centered  # (G, G) rank-B update
 
+        # Accumulate E_theta[Var(y_*|theta)] for diagonal correction
+        V_ystar = Vp + siy_c**2                              # (B, G)
+        var_accum += V_ystar.sum(axis=0)
+
     cov = accum / M
+    np.fill_diagonal(cov, np.diag(cov) + var_accum / M)
     return cov
 
 
@@ -2166,21 +2174,25 @@ def ystar_pp_cov_tophat_vectorized(
     s   = draws["slope"].to_numpy(float)        # (M,)
     c   = draws["intercept.1"].to_numpy(float)  # (M,)
     six = draws["sigma_int_x"].to_numpy(float)  # (M,)
+    siy = draws["sigma_int_y"].to_numpy(float)  # (M,)
 
-    accum = np.zeros((G, G), dtype=float)
+    accum     = np.zeros((G, G), dtype=float)
+    var_accum = np.zeros(G,      dtype=float)
 
     for start in range(0, M, chunk_size):
         end = min(start + chunk_size, M)
         sc    = s[start:end][:, None]
         cc    = c[start:end][:, None]
         six_c = six[start:end][:, None]
+        siy_c = siy[start:end][:, None]
 
         sigma_x_tot2 = six_c**2 + sigma_x_star[None, :]**2  # (B, G)
         mu_L    = cc + sc * xhat_star[None, :]               # (B, G)
-        sigma_L = np.sqrt(sc**2 * sigma_x_tot2)             # (B, G)
+        sigma_L = np.sqrt(sc**2 * sigma_x_tot2)              # (B, G)
 
-        # Truncated-normal conditional mean for each (draw, galaxy)
-        mu_chunk = np.empty_like(mu_L)
+        # Truncated-normal conditional mean and variance for each (draw, galaxy)
+        mu_chunk  = np.empty_like(mu_L)
+        var_chunk = np.empty_like(mu_L)
 
         deg = (sigma_L == 0.0)
         if np.any(deg):
@@ -2191,7 +2203,8 @@ def ystar_pp_cov_tophat_vectorized(
                     "Encountered sigma_L == 0 with mu_L outside [y_min, y_max] "
                     "for at least one (draw, galaxy)."
                 )
-            mu_chunk[deg] = mu_deg
+            mu_chunk[deg]  = mu_deg
+            var_chunk[deg] = 0.0
 
         nd = ~deg
         if np.any(nd):
@@ -2223,12 +2236,20 @@ def ystar_pp_cov_tophat_vectorized(
 
             la = np.exp(norm.logpdf(alpha) - log_Z)
             lb = np.exp(norm.logpdf(beta)  - log_Z)
-            mu_chunk[nd] = mu + sig * (la - lb)
+            t  = la - lb
+            mu_chunk[nd]  = mu + sig * t
+            u = alpha * la - beta * lb
+            v = sig**2 * (1.0 + u - t**2)
+            var_chunk[nd] = np.maximum(v, 0.0)
 
         mu_centered = mu_chunk - mean_y[None, :]
         accum += mu_centered.T @ mu_centered  # (G, G) rank-B update
 
+        # Accumulate E_theta[Var(y_*|theta)] = E[var_yTF + sigma_int_y^2]
+        var_accum += (var_chunk + siy_c**2).sum(axis=0)
+
     cov = accum / M
+    np.fill_diagonal(cov, np.diag(cov) + var_accum / M)
     return cov
 
 
