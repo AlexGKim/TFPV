@@ -612,56 +612,29 @@ $y_{\mathrm{TF},\star}$ are
 \end{equation}
 
 
-The predicted magnitude and its uncertainty for each galaxy are taken as the
-mean and standard deviation of the mixture distribution
-Eq.~\eqref{eq:pred_y_tophat_mcmc}.
-
-The posterior predictive covariance matrix across galaxies is computed
-using the law of total covariance.
-Conditional on $\theta$, the predicted magnitudes $y_i$ for different
-galaxies are independent (each depends only on its own $\hat{x}_i$), so
-cross-galaxy covariance arises solely from the shared uncertainty in
-$\theta$.  By the law of total covariance,
-\begin{equation}
-\operatorname{Cov}(y_i, y_j)
-= \underbrace{\mathbb{E}_\theta\!\left[\operatorname{Cov}(y_i,y_j\mid\theta)\right]}_{=\,0,\; i\neq j}
-+ \operatorname{Cov}_\theta\!\left(\mathbb{E}[y_i\mid\theta],\,\mathbb{E}[y_j\mid\theta]\right).
-\end{equation}
-
-For each MCMC draw $\theta^{(m)}$, define the per-draw conditional moments
-\begin{equation}
-\mu_i^{(m)} = \mathbb{E}\!\left[y_i \mid \hat{x}_i, \sigma_{1,i}^{(m)},
-\theta^{(m)}\right],
-\qquad
-v_i^{(m)} = \operatorname{Var}\!\left[y_i \mid \hat{x}_i, \sigma_{1,i}^{(m)},
-\theta^{(m)}\right],
-\end{equation}
-where $\mu_i^{(m)}$ is the truncated-normal mean of $y_{\mathrm{TF},i}$
-given $\hat{x}_i$ and $\theta^{(m)}$ (Eq.~\eqref{eq:post_yTF_tophat}),
-and $v_i^{(m)} = \operatorname{Var}(y_{\mathrm{TF},i}\mid\hat{x}_i,\theta^{(m)})
-+ \sigma_{\mathrm{int},y}^{(m)2}$ is the per-draw predictive variance
-including intrinsic scatter.
-The posterior predictive covariance matrix is
-\begin{align}
-C_{ij} &= \frac{1}{M}\sum_{m=1}^{M}
-\left(\mu_i^{(m)} - \bar{y}_i\right)\!\left(\mu_j^{(m)} - \bar{y}_j\right),
-\label{eq:cov_off}\\
-C_{ii} &= \frac{1}{M}\sum_{m=1}^{M}
-\left(\mu_i^{(m)} - \bar{y}_i\right)^2
-+ \frac{1}{M}\sum_{m=1}^{M} v_i^{(m)}
-+ \sigma_{y,i}^2,
-\label{eq:cov_diag}
-\end{align}
-where $\bar{y}_i = \frac{1}{M}\sum_m \mu_i^{(m)}$ is the posterior
-predictive mean and $\sigma_{y,i}$ is the measurement uncertainty in
-$\hat{y}_i$.  The first term in Eq.~\eqref{eq:cov_diag} is the
-calibration variance $\operatorname{Cov}_\theta(\mathbb{E}[y_i|\theta],
-\mathbb{E}[y_i|\theta])$; the second is $\mathbb{E}_\theta[\operatorname{Var}(y_i|\theta)]$
-from the law of total variance; and the third accounts for measurement
-noise.  Off-diagonal elements~\eqref{eq:cov_off} are evaluated by the
-same formula as the first term of the diagonal, exploiting conditional
-independence.  The covariance is computed via memory-efficient chunked
-matrix multiplies over the $M$ MCMC draws.
+The predicted magnitude and uncertainty for each galaxy are the mean and
+standard deviation of the mixture distribution
+Eq.~\eqref{eq:pred_y_tophat_mcmc}; the full posterior predictive covariance
+across galaxies is computed via the law of total covariance.
+Conditional on $\theta$, galaxy predictions are independent, so off-diagonal
+covariance arises solely from shared uncertainty in the TFR parameters.
+For each MCMC draw $\theta^{(m)}$, we define the per-draw conditional mean
+$\mu_i^{(m)} = \mathbb{E}[y_i \mid \hat{x}_i, \sigma_{1,i}^{(m)}, \theta^{(m)}]$
+as the truncated-normal mean of $y_{\mathrm{TF},i}$ given $\hat{x}_i$ and
+$\theta^{(m)}$ (Eq.~\eqref{eq:post_yTF_tophat}), and the per-draw predictive
+variance $v_i^{(m)} = \operatorname{Var}(y_{\mathrm{TF},i} \mid \hat{x}_i,
+\theta^{(m)}) + \sigma_{\mathrm{int},y}^{(m)2}$ including intrinsic scatter.
+The diagonal then
+decomposes into three contributions: calibration variance
+($\operatorname{Cov}_\theta$ of the conditional means), expected predictive
+variance ($\mathbb{E}_\theta[v_i^{(m)}]$, encompassing intrinsic scatter and
+truncated-normal variance), and measurement noise $\sigma_{y,i}^2$ in
+$\hat{y}_i$, where $\bar{y}_i = \frac{1}{M}\sum_m \mu_i^{(m)}$ is the
+posterior predictive mean.
+Off-diagonal elements follow from the calibration-variance formula alone,
+exploiting conditional independence.
+The covariance matrix is evaluated via memory-efficient chunked matrix
+multiplies over the $M$ MCMC draws.
 
 \subsection{Diagnostics}
 \label{sec:diagnostics}
