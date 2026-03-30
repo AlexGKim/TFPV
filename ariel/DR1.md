@@ -58,7 +58,13 @@ python set_fiducial.py --run $RUN
 ```
 
 The script prints the 1σ reference values and prompts for `n_sigma_perp`,
-`haty_min`, `haty_max`, and `z_obs_min` (default 0.03).
+`haty_min`, `haty_max`, `z_obs_min`, and `z_obs_max`.
+
+Inspect the pull profile with the cuts:
+
+```bash
+open output/$RUN/select_v2_fiducial_pull.png
+```
 
 ---
 
@@ -101,7 +107,7 @@ cd ../TFPV/ariel
 ## Step 6: Run MCMC sampling
 
 ```bash
-./tophat sample num_warmup=500 num_samples=500 num_chains=4 \
+./tophat sample num_warmup=500 num_samples=1000 num_chains=4 \
     adapt save_metric=1 \
     data file=output/$RUN/input.json \
     init=output/$RUN/init.json \
@@ -120,8 +126,8 @@ cd ../TFPV/ariel
 
 ```bash
 # Convergence diagnostics
-../../cmdstan/bin/stansummary output/$RUN/tophat_?.csv
-../../cmdstan/bin/diagnose    output/$RUN/tophat_?.csv
+../../cmdstan/bin/stansummary output/$RUN/tophat_?.csv > output/$RUN/stansummary.txt
+../../cmdstan/bin/diagnose    output/$RUN/tophat_?.csv > output/$RUN/diagnose.txt
 
 ../../cmdstan/bin/stansummary output/$RUN/normal_?.csv
 ../../cmdstan/bin/diagnose    output/$RUN/normal_?.csv
