@@ -33,6 +33,7 @@
 \date{\today}
 
 \begin{abstract}
+[DRAFT]
 We present a model-based calibration of the Tully-Fisher relation (TFR) using
 the full spiral-galaxy sample from the DESI Data Release 1 (DR1) Peculiar
 Velocity survey.  The DR1 catalog contains 10,278 spiral galaxies drawn from
@@ -57,7 +58,7 @@ predictive covariance matrix (\texttt{tophat\_cov.fits}).
 \maketitle
 
 
-\section{Introduction}
+\section{Introduction [DRAFT]}
 \label{sec:intro}
 Peculiar velocities --- the deviations of galaxy redshifts from pure Hubble flow ---
 encode the gravitational influence of large-scale structure and provide an independent
@@ -111,7 +112,7 @@ the MCMC fit results and diagnostics (\S\ref{sec:results}),
 and the output peculiar velocity catalog (\S\ref{sec:catalog}).
 
 
-\section{Data}
+\section{Data [DRAFT]}
 \label{sec:data}
 The DESI DR1 Peculiar Velocity spiral sample contains 10,278 galaxies drawn from the Siena Galaxy Atlas \citep[SGA;][]{SGA}, which is based on the DESI Legacy Imaging Surveys DR9 data \citep{DESI_Imaging}, covering areas north of $-30^\circ$ declination. The SGA includes galaxies with diameters larger than 20'' at the 25th
 magnitude isophote, denoted as $D(25)$. To be part of the TFR sample, a galaxy must have a Sersic index less than 2, indicating it is likely a spiral galaxy, and an inclination angle greater than $25^\circ$, ensuring a significant portion of the galaxy's rotational velocity is visible and the galaxy's major axis is properly aligned.
@@ -245,30 +246,34 @@ Measurements have Gaussian scatter around the true values:
 \end{align}
 
 For a hierarchical model, the underlying distribution of the latent
-parameter must be specified. We adopt a top-hat (uniform) prior,
+parameter must be specified. We adopt a uniform prior,
 $y_{\mathrm{TF},i} \sim \mathrm{Uniform}(y_{\min},\,y_{\max})$, with
 bounds extending slightly beyond the selection window to accommodate
 scatter at the selection boundary,
 \begin{align}
 y_{\min} &= \hat{y}_{\min} - \Delta y_{\min}, &
-y_{\max} &= \hat{y}_{\max} + \Delta y_{\max}.
+y_{\max} &= \hat{y}_{\max} + \Delta y_{\max},
 \label{eqn:ymin_ymax}
 \end{align}
-This choice is motivated both empirically and analytically. Empirically,
-a top-hat better describes the flat-cuspy distribution of galaxy absolute
-magnitudes and yielded more stable results in mock-catalog tests than a
-normal distribution. Analytically, placing the bounds where the true
-latent density $p(y_{\mathrm{TF}})$ is roughly flat makes the uniform prior a good local
-approximation to the true distribution: in this plateau, the posterior is
-dominated by the data likelihood, the normalisation
-$P(S_i = 1 \mid \theta)$ varies only weakly with small changes to
-$\Delta y_{\min}$ and $\Delta y_{\max}$, and the inferred TFR parameters
-become largely insensitive to the precise edge placements. By contrast,
-placing the edges where $p(y_{\mathrm{TF}})$ has a strong gradient would
-shift substantial prior mass for small $\Delta y$ values, potentially
-biasing the results. Selecting $\hat{y}_{\min}$ and $\hat{y}_{\max}$ in
-the low-gradient regime therefore yields both a better top-hat
-approximation and robust insensitivity to the choice of offsets.
+where we set $\Delta y_{\min}=-0.5$, $\Delta y_{\max}=1.0$.
+The choice of latent prior matters only for objects whose latent
+distribution varies appreciably across the width of the Gaussian
+measurement error; for objects with small uncertainties the posterior is
+likelihood-dominated regardless of the prior. To minimise sensitivity to
+this choice, we place the bounds in a region where $p(y_{\mathrm{TF}})$
+is expected to have a weak gradient, so that the uniform remains a good
+local approximation even for objects with broad likelihoods. In this
+regime the normalisation $P(S_i = 1 \mid \theta)$ varies only weakly
+with small changes to $\Delta y_{\min}$ and $\Delta y_{\max}$, and the
+inferred TFR parameters are insensitive to the precise edge placements.
+By contrast, placing the bounds where $p(y_{\mathrm{TF}})$ drops
+steeply would bias the posteriors of boundary objects toward the
+higher-density region of the prior, and small shifts in edge placement
+would redistribute prior mass enough to bias the inferred slope and zero
+point. This choice is also supported empirically: in mock-catalog tests,
+the uniform prior yielded more stable parameter recovery than a normal
+distribution, consistent with the flat interior of the galaxy
+absolute-magnitude distribution.
 
 
 
@@ -364,45 +369,52 @@ conditional on $y_{\mathrm{TF}}$:
 \end{align}
 
 \section{Tully-Fisher Relation Fit}
+\label{sec:TFRfit}
 \subsection{Training Set Selection}
 \label{sec:training_selection}
-
 In this section we describe the procedure for determining the parameters
 that define the sample selection region $\mathcal{S}$
 (Eq.~\ref{eqn:selection_region}), as introduced in
-\S\ref{sec:sampleselection}. The primary contaminants are dwarf galaxies,
-which are known not to follow the TFR. To excise them, we identify a
-magnitude cut as follows. We adopt a nominal TFR, apply it to all
-galaxies, and examine the residuals between observed and predicted
+\S\ref{sec:sampleselection}. The procedure has three steps: (i) a
+Gaussian Mixture Model (GMM) fit identifies the core spiral population
+and defines a preliminary selection parallelogram; (ii) a nominal TFR is
+fit to the galaxies within that parallelogram; and (iii) a
+residual-profile diagnostic applied to the full catalog determines the
+magnitude limits beyond which contamination is significant.
+
+The primary contaminants are dwarf galaxies, which are known not to
+follow the TFR. To excise them, we identify magnitude limits using the
+residual profile of a nominal TFR. 
+A secondary ``contaminant'' are bright galaxies that lie on the sharp declining tail
+of the true luminosity function, where the top-hat model may
+not lead to accurate measurement probabilities..
+We apply the nominal TFR to all
+galaxies and examine the residuals between predicted and observed
 magnitudes as a function of absolute magnitude. Because the nominal TFR
-need not be accurate, some overall bias in the residuals is expected and
-acceptable; what we look for instead is residual bias that is
-\emph{anomalous}---i.e.\ that deviates beyond the level attributable to
-an imperfect TFR. Galaxies at absolute magnitudes where such anomalous
-residuals appear are excluded from the sample.
+need not be accurate, a smooth linear trend in the residuals is expected
+and acceptable; what we look for instead is deviation from this trend,
+which signals contamination by populations that do not follow the TFR.
+Galaxies at absolute magnitudes where such deviations appear are
+excluded from the sample.
 
+The initial TFR is calculated using a subset of galaxies dominated by
+normal spirals, selected as the core of the distribution. The core is
+determined using a two-component GMM fit to the $(x,\,y)$ distribution
+of galaxies passing a redshift cut $z > 0.03$ (to reduce sensitivity to
+peculiar velocities) and a magnitude pre-filter $-23 < y < -18$ (to
+remove objects with implausible absolute magnitudes). The fit accounts
+for per-galaxy measurement noise and rectangular survey truncation at
+the bright and high-velocity limits of the data. The dominant component
+represents the TFR spiral population; the secondary component captures
+outliers and dwarf galaxies.
 
-
-The first step is to estimate the space occupied by normal galaxies using
-a two-component Gaussian Mixture Model fit 
-to the $(x,\,y)$ distribution of
-galaxies passing a redshift cut $z > 0.03$ (to reduce sensitivity to peculiar
-velocities) and a loose magnitude pre-filter $-23 < y < -18$ (to remove
-unphysical extremes).  The fit accounts for per-galaxy measurement noise and
-rectangular survey truncation at the bright and high-velocity limits of the
-data.  The dominant component is interpreted to represent the TFR spiral population; the
-secondary component captures outliers and dwarf galaxies.  
-
-% based on contents in output/DR1/selection_ellipse.json
+% values in output/DR1/selection_ellipse.json
 The best-fit GMM yields a dominant-component weight of $w = 0.932$.
 The mean of the dominant component is
 $(\bar{x},\,\bar{y}) = (0.185,\,-20.530)$,
 with semi-axes $[0.064,\, 0.930]$ and orientation angle $98.4^\circ$
-measured from the $x$-axis.
-The elongated ellipse with a nearly vertical orientation reflects the
-steep slope of the TFR: the long axis of the component is closely aligned
-with the TFR direction in $(x,\,y)$ space.
-The GMM ellipses overlaid on the phase-space scatter are shown in
+measured from the $x$-axis (note: the complementary angle appears in plots due to magnitude-axis orientation conventions).
+The GMM 1 and 3$\sigma$ ellipses overlaid on the phase-space scatter are shown in
 Fig.~\ref{fig:selection_ellipse}.
 
 \begin{figure}
@@ -410,51 +422,61 @@ Fig.~\ref{fig:selection_ellipse}.
     \includegraphics[width=1\linewidth]{figures/selection_ellipse.png}
     \caption{Distribution of DR1 spiral galaxies in $(x,\,y)$ phase space,
     where $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$.
-    The two GMM ellipses (at $1\sigma$) are overplotted; the dominant component
-    (weight $w = 0.932$) is shown in orange.  The orientation of the dominant
-    ellipse defines the slope of the oblique selection cuts.}
+    The two GMM ellipses (at 1 and $3\sigma$) are overplotted; the dominant component
+    (weight $w = 0.932$) is shown in orange.  The parallelogram defined by the extrema of the
+    3$\sigma$ ellipse bound the sample used to determine the initial TFR estimate. }
     \label{fig:selection_ellipse}
 \end{figure}
 
-A preliminary selection parallelogram is defined by the 3$\sigma$
-ellipse of the dominant GMM ellipse:
+A preliminary selection parallelogram is defined by the $3\sigma$
+ellipse of the dominant GMM component.
 The slope $\bar{s}$ is fixed by the orientation of the ellipse,
-and $\bar{c}_1$, $\bar{c}_2$ are set at $n_{\sigma,\perp} = 3$ perpendicular
-$\sigma$ from the ellipse centre.  Initial values of $\hat{y}_\text{min}$ and
-$\hat{y}_\text{max}$ are taken from the $y$-extent of the $3\sigma$ ellipse
-and subsequently refined by the pull-profile diagnostic described below.
-In addition, the same minimum redshift used in the GMM fit is maintained.
-The selected training region is shown in
-Fig.~\ref{fig:selection_ellipse}.
+and $\bar{c}_1$, $\bar{c}_2$ are set at $n_{\sigma,\perp} = 3$
+perpendicular $\sigma$ from the ellipse centre. Initial values of
+$\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ are taken from the
+$y$-extent of the $3\sigma$ ellipse and subsequently refined by the
+residual-profile diagnostic described below. The same minimum redshift
+used in the GMM fit is maintained. The selected training region is shown
+in Fig.~\ref{fig:selection_ellipse}.
 
+% values in output/DR1/select_v2_mle.json
+The nominal TFR is given by the maximum likelihood estimator of the
+model fit to the data within the parallelogram, yielding a slope of
+$-7.0742$, an intercept of $-19.1962$, an intrinsic scatter in $x$
+of $\sigma_{\mathrm{int},x} = 8.083 \times 10^{-5}$, and an
+intrinsic scatter in $y$ of $\sigma_{\mathrm{int},y} = 0.4675$.
 
-To verify that the fiducial selection does not introduce bias in the TFR
-calibration, we run Stan MLE on the $n_{\sigma,\perp} = 3$ ellipse selection
-and compute the weighted-mean residual $\Delta M = \langle M_\text{pred}\rangle - M_\text{obs}$
-for every object in the full catalog (not only those inside the selection
-region), binned in equal-occupancy bins of $M_R$.  A flat pull profile
-(weighted mean divided by its uncertainty) confirms that the MLE model is
-consistent with the data across the full magnitude range and that the
-selection does not preferentially bias the sample.
-The pull profile for the fiducial selection is shown in
-Fig.~\ref{fig:pull}, and is consistent with zero across the full range.
-The magnitude limits $\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ are
-then set at the values where the pull profile remains flat.
+For the full sample  of galaxies with $z>0.03$, we predict absolute magnitudes using the
+nominal TFR and compute the residual
+$\Delta M = \langle M_\text{pred}\rangle - M_\text{obs}$ for every
+object. We then calculate the weighted mean residual and its uncertainty
+in equal-occupancy bins of $M_R$. Since the nominal TFR slope is only
+approximate, we expect a linear trend in this residual profile: an
+imperfect slope produces a systematic over- or under-prediction that
+varies smoothly with magnitude. Contamination by populations that do not
+follow the TFR --- most notably dwarf galaxies --- produces deviations
+from this linear trend at the affected magnitude ranges. The magnitude
+limits $\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ are set at the
+values beyond which the residual profile departs from the linear trend,
+identified by visual inspection. The residual profile for the fiducial
+selection is shown in Fig.~\ref{fig:pull}; the linear trend is
+consistent with the data across the selected range.
+The fiducial selection parameters for the DR1 run are listed in
+Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\ref{fig:data}.
+
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{figures/select_v2_pull.png}
-    \caption{Weighted-mean residual $\Delta M = \langle M_\text{pred}\rangle - M_\text{obs}$
+    \includegraphics[width=1\linewidth]{figures/select_v2_fiducial_pull.png}
+    \caption{Weighted-mean residual $\Delta M = \langle M_\mathrm{pred}\rangle - M_\mathrm{obs}$
     and pull profile (normalized by bin uncertainty) as a function of $M_R$
-    for all catalog objects evaluated at the MLE parameters.  The profile is
-    consistent with zero across the full magnitude range, confirming that the
-    oblique selection does not bias the TFR calibration.}
+    for all catalog objects evaluated at the MLE parameters. Horizontal lines
+    show the $\hat{y}_\mathrm{min}$ and $\hat{y}_\mathrm{max}$ range chosen
+    to select galaxies with a self-consistent TFR.}
     \label{fig:pull}
 \end{figure}
 
-The fiducial selection parameters for the DR1 run are listed in
-Table~\ref{tab:fiducial}.
-
+% values in output/DR1/select_v2_fiducial.json
 \begin{table}
     \centering
     \caption{Fiducial selection parameters for the DR1 training sample.}
@@ -463,8 +485,8 @@ Table~\ref{tab:fiducial}.
         \hline
         Parameter & Value \\
         \hline
-        $\hat{y}_\text{min}$ & $-22.0$ \\
-        $\hat{y}_\text{max}$ & $-19.25$ \\
+        $\hat{y}_\text{min}$ & $-21.9$ \\
+        $\hat{y}_\text{max}$ & $-19.12$ \\
         $\bar{s}$ & $-6.798$ \\
         $\bar{c}_1$ (lower intercept) & $-20.589$ \\
         $\bar{c}_2$ (upper intercept) & $-17.951$ \\
@@ -476,7 +498,6 @@ Table~\ref{tab:fiducial}.
     \end{tabular}
 \end{table}
 
-This is 
 \begin{figure}
     \centering
     \includegraphics[width=1\linewidth]{figures/data.png}
@@ -486,19 +507,15 @@ This is
     \label{fig:data}
 \end{figure}
 
-\subsection{Fit Results}
-\section{Results}
-\label{sec:results}
-
 \subsection{MCMC Fit}
 \label{sec:mcmc}
-The model is fit to the 5,928-galaxy training sample using Hamiltonian Monte
+% fit assessment in output/DR1/stansummary.txt, output/DR1/diagnoise.txt 
+The model is fit to the training sample using Hamiltonian Monte
 Carlo as implemented in Stan \citep{STAN_html} via the CmdStan interface.
-We run 4 chains, each with 1000 warm-up and 1000 sampling iterations.
-Two chains converge for the DR1 dataset; the combined posterior uses
-2,000 samples.  The mean acceptance rate is $0.938$ and there are no
-divergences.
+We run 4 chains, each with 500 warm-up and 1000 sampling iterations.
+[Provide stansummary, $\hat{r}$, effective number of samples, and diagnose assessment of fits.]
 
+% fit results in  output/DR1/stansummary.txt,
 The posterior 68\% confidence intervals for the global TFR parameters are
 given in Table~\ref{tab:results}.  The full posterior corner plot is shown
 in Fig.~\ref{fig:tophat}.
@@ -528,6 +545,77 @@ in Fig.~\ref{fig:tophat}.
     $1\sigma$ and $2\sigma$ confidence regions.}
     \label{fig:tophat}
 \end{figure*}
+
+\section{Absolute Magnitude Predictions from the TFR}
+
+For any galaxy with a rotation-velocity measurement, the TFR determined in
+\S\ref{sec:TFRfit} is used to infer the absolute magnitude. We consider all
+galaxies satisfying the magnitude--velocity selection criteria of the training
+sample, with no restriction on redshift. Consequently, nearly all galaxies
+in this section were also used in training; however, we treat each as if it
+were out-of-sample. This approximation is justified on two grounds: no single
+galaxy has a significant influence on the TFR fit, and accounting for the
+covariance between the data and the fitted parameters would substantially
+complicate the analysis without a commensurate gain in accuracy.
+
+The predicted absolute magnitude for each galaxy is computed via the
+posterior predictive distribution derived in
+\S\ref{sec:infer_single_galaxy_y}. For a galaxy with measured
+rotation-velocity proxy $\hat x_\star$ and uncertainty $\sigma_{x,\star}$,
+we adopt a uniform (top-hat) prior on the latent Tully--Fisher magnitude
+$y_{\mathrm{TF},\star}$ over the selection interval $[y_{\min}, y_{\max}]$.
+Marginalizing over the model parameters $\theta$ via the MCMC posterior
+yields the posterior predictive distribution
+\begin{equation}
+p\!\left(y_\star \mid \hat x_\star, \sigma_{x,\star}, \{\hat x_i, \hat y_i\}\right)
+\approx
+\frac{1}{M}\sum_{m=1}^{M}
+p\!\left(y_\star \mid \hat x_\star, \sigma_{x,\star}, \theta^{(m)}\right),
+\label{eq:pred_y_tophat_mcmc}
+\end{equation}
+where $\{\theta^{(m)}\}_{m=1}^M$ are draws from the MCMC posterior. Each
+single-draw predictive is given by the closed form
+\begin{equation}
+p\!\left(y_\star \mid \hat x_\star, \sigma_{x,\star}, \theta\right)
+=
+\mathcal{N}\!\left(y_\star \mid \mu_L,\, \sigma_Z^2\right)
+\frac{
+\Phi\!\left(\frac{y_{\max} - \tilde\mu(y_\star)}{\tilde\sigma}\right)
+-
+\Phi\!\left(\frac{y_{\min} - \tilde\mu(y_\star)}{\tilde\sigma}\right)
+}{
+Z_L
+},
+\label{eq:pred_y_tophat_main}
+\end{equation}
+where $\Phi(\cdot)$ is the standard normal CDF,
+\begin{equation}
+\mu_L = \beta + \alpha \hat x_\star,
+\qquad
+\sigma_Z^2 = \sigma_L^2 + \sigma_{\mathrm{int},y}^2,
+\qquad
+\sigma_L = |\alpha|\,\sigma_{x,\mathrm{tot}},
+\qquad
+\sigma_{x,\mathrm{tot}}^2 = \sigma_{\mathrm{int},x}^2 + \sigma_{x,\star}^2,
+\end{equation}
+the truncation normalization is
+\begin{equation}
+Z_L = \Phi\!\left(\frac{y_{\max}-\mu_L}{\sigma_L}\right)
+-
+\Phi\!\left(\frac{y_{\min}-\mu_L}{\sigma_L}\right),
+\end{equation}
+and the convolution quantities arising from marginalizing over
+$y_{\mathrm{TF},\star}$ are
+\begin{equation}
+\tilde\sigma^2 = \left(\frac{1}{\sigma_L^2}+\frac{1}{\sigma_{\mathrm{int},y}^2}\right)^{-1},
+\qquad
+\tilde\mu(y_\star) = \tilde\sigma^2\left(\frac{\mu_L}{\sigma_L^2}
++ \frac{y_\star}{\sigma_{\mathrm{int},y}^2}\right).
+\end{equation}
+The predicted magnitude and its uncertainty for each galaxy are taken as the
+mean and standard deviation of the mixture distribution
+Eq.~\eqref{eq:pred_y_tophat_mcmc}.
+
 
 \subsection{Diagnostics}
 \label{sec:diagnostics}
