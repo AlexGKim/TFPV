@@ -588,15 +588,13 @@ Z_L
 },
 \label{eq:pred_y_tophat_main}
 \end{equation}
-where $\Phi(\cdot)$ is the standard normal CDF,
+where $\Phi(\cdot)$ is the standard normal CDF and $\sigma_{1,\star}^2 = \sigma_{x,\star}^2 + \sigma_{\mathrm{int},x}^2$ as in Eq.~\eqref{eqn:sigma12},
 \begin{equation}
 \mu_L = \beta + \alpha \hat x_\star,
 \qquad
 \sigma_Z^2 = \sigma_L^2 + \sigma_{\mathrm{int},y}^2,
 \qquad
-\sigma_L = |\alpha|\,\sigma_{x,\mathrm{tot}},
-\qquad
-\sigma_{x,\mathrm{tot}}^2 = \sigma_{\mathrm{int},x}^2 + \sigma_{x,\star}^2,
+\sigma_L = |\alpha|\,\sigma_{1,\star},
 \end{equation}
 the truncation normalization is
 \begin{equation}
