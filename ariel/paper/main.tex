@@ -277,6 +277,7 @@ absolute-magnitude distribution.
 
 
 
+
 The likelihood is derived from the above model.
 Given the independence of that galaxy measurements, the total likelihood can be decomposed
 into the product of per-galaxy terms. 
@@ -367,6 +368,7 @@ conditional on $y_{\mathrm{TF}}$:
     &= \frac{\sigma_{2,i}}{\sigma_{u,i}}.
 \label{eqn:shear_params}
 \end{align}
+
 
 \section{Tully-Fisher Relation Fit}
 \label{sec:TFRfit}
@@ -468,7 +470,7 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
 \begin{figure}
     \centering
     \includegraphics[width=1\linewidth]{figures/select_v2_fiducial_pull.png}
-    \caption{Weighted-mean residual $\Delta M = \langle M_\mathrm{pred}\rangle - M_\mathrm{obs}$
+\caption[Weighted-mean residual and pull profile as a function of $M_R$.]{Weighted-mean residual $\Delta M = \langle M_\mathrm{pred}\rangle - M_\mathrm{obs}$
     and pull profile (normalized by bin uncertainty) as a function of $M_R$
     for all catalog objects evaluated at the MLE parameters. Horizontal lines
     show the $\hat{y}_\mathrm{min}$ and $\hat{y}_\mathrm{max}$ range chosen
@@ -507,6 +509,7 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
     \label{fig:data}
 \end{figure}
 
+
 \subsection{MCMC Fit}
 \label{sec:mcmc}
 % fit assessment in output/DR1/stansummary.txt, output/DR1/diagnoise.txt 
@@ -537,14 +540,14 @@ in Fig.~\ref{fig:tophat}.
     \end{tabular}
 \end{table}
 
-\begin{figure*}
+\begin{figure}
     \centering
     \includegraphics[width=1\linewidth]{figures/tophat.png}
     \caption{Corner plot of the posterior distribution for the four global
     TFR parameters from the DR1 tophat model fit.  Contours show the
     $1\sigma$ and $2\sigma$ confidence regions.}
     \label{fig:tophat}
-\end{figure*}
+\end{figure}
 
 \section{Absolute Magnitude Predictions from the TFR}
 
@@ -557,6 +560,8 @@ were out-of-sample. This approximation is justified on two grounds: no single
 galaxy has a significant influence on the TFR fit, and accounting for the
 covariance between the data and the fitted parameters would substantially
 complicate the analysis without a commensurate gain in accuracy.
+
+
 
 The predicted absolute magnitude for each galaxy is computed via the
 posterior predictive distribution derived in
@@ -592,7 +597,8 @@ where $\Phi(\cdot)$ is the standard normal CDF and $\sigma_{1,\star}^2 = \sigma_
 \begin{equation}
 \mu_L = \beta + \alpha \hat x_\star,
 \qquad
-\sigma_Z^2 = \sigma_L^2 + \sigma_{\mathrm{int},y}^2,
+\sigma_Z^2 = \sigma_L^2 + \left(\sigma_{\mathrm{int},y}^{(m)}\right)^2
+,
 \qquad
 \sigma_L = |\alpha|\,\sigma_{1,\star},
 \end{equation}
@@ -612,6 +618,8 @@ $y_{\mathrm{TF},\star}$ are
 \end{equation}
 
 
+
+
 The predicted magnitude and uncertainty for each galaxy are the mean and
 standard deviation of the mixture distribution
 Eq.~\eqref{eq:pred_y_tophat_mcmc}; the full posterior predictive covariance
@@ -623,7 +631,11 @@ $\mu_i^{(m)} = \mathbb{E}[y_i \mid \hat{x}_i, \sigma_{1,i}^{(m)}, \theta^{(m)}]$
 as the truncated-normal mean of $y_{\mathrm{TF},i}$ given $\hat{x}_i$ and
 $\theta^{(m)}$ (Eq.~\eqref{eq:post_yTF_tophat}), and the per-draw predictive
 variance $v_i^{(m)} = \operatorname{Var}(y_{\mathrm{TF},i} \mid \hat{x}_i,
-\theta^{(m)}) + \sigma_{\mathrm{int},y}^{(m)2}$ including intrinsic scatter.
+\theta^{(m)}) + \left(\sigma_{\mathrm{int},y}^{(m)}\right)^2$ including both flavors of
+intrinsic scatter: $\sigma_{\mathrm{int},y}$ enters additively, while
+$\sigma_{\mathrm{int},x}$ enters the truncated-normal spread through
+$\sigma_L = |\alpha|\,\sigma_{1,\star}$ (defined above), where
+$\sigma_{1,\star}^2 = \sigma_{x,\star}^2 + \sigma_{\mathrm{int},x}^2$.
 The diagonal then
 decomposes into three contributions: calibration variance
 ($\operatorname{Cov}_\theta$ of the conditional means), expected predictive
@@ -633,8 +645,8 @@ $\hat{y}_i$, where $\bar{y}_i = \frac{1}{M}\sum_m \mu_i^{(m)}$ is the
 posterior predictive mean.
 Off-diagonal elements follow from the calibration-variance formula alone,
 exploiting conditional independence.
-The covariance matrix is evaluated via memory-efficient chunked matrix
-multiplies over the $M$ MCMC draws.
+
+
 
 \subsection{Diagnostics}
 \label{sec:diagnostics}
@@ -668,6 +680,7 @@ $0.03 < z < 0.1$.
     No significant redshift trend is detected.}
     \label{fig:redshift_tophat}
 \end{figure}
+
 
 
 \section{Peculiar Velocity Catalog}
@@ -747,6 +760,7 @@ Peculiar velocity measurements from the MAIN catalog, including the study
 of large-scale flows and comparison with existing peculiar velocity compilations,
 will be presented in a follow-up paper.
 
+
 \begin{acknowledgments}
     This material is based upon work supported by the U.S. Department of Energy (DOE), Office of Science, Office of High-Energy Physics, under Contract No. DE--AC02--05CH11231, and by the National Energy Research Scientific Computing Center, a DOE Office of Science User Facility under the same contract. Additional support for DESI was provided by the U.S.
     National Science Foundation (NSF), Division of Astronomical Sciences under Contract No. AST-0950945 to the NSF's National Optical-Infrared Astronomy Research Laboratory; the Science and Technology Facilities Council of the United Kingdom; the Gordon and Betty Moore Foundation;
@@ -769,7 +783,7 @@ The authors are honored to be permitted to conduct scientific research on Iolkam
 \bibliographystyle{aasjournal}
 
 \bibliography{references}% Produces the bibliography via BibTeX.
-
 \end{document}
+
 %
 % ****** End of file main.tex ******
