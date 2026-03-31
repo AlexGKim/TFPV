@@ -65,8 +65,8 @@ def load_params(file_pattern):
     # Desired plot parameters (key = label used in corner plot)
     # Values are candidate CSV column names to search for.
     wanted = {
-        "slope":                          ["slope"],
-        "intercept":                      ["intercept.1", "intercept[1]", "intercept"],  # common Stan CSV variants
+        r"$\alpha$":                      ["slope"],
+        r"$\beta$":                       ["intercept.1", "intercept[1]", "intercept"],  # common Stan CSV variants
         r"$\sigma_{\rm int,x}$":          ["sigma_int_x"],
         r"$\sigma_{\rm int,y}$":          ["sigma_int_y"],
         "mu_{y_TF}":                      ["mu_y_TF"],
@@ -154,7 +154,7 @@ def create_corner_plot(file_patterns, output_file='corner_plot.png',
         )
 
     # Keep a nice, stable plotting order
-    preferred_order = ["slope", "intercept", r"$\sigma_{\rm int,x}$", r"$\sigma_{\rm int,y}$", "mu_{y_TF}", "tau"]
+    preferred_order = [r"$\alpha$", r"$\beta$", r"$\sigma_{\rm int,x}$", r"$\sigma_{\rm int,y}$", "mu_{y_TF}", "tau"]
     ordered = [p for p in preferred_order if p in common] + sorted(common - set(preferred_order))
 
     # Reduce each df to the common ordered set
@@ -282,8 +282,8 @@ if __name__ == '__main__':
     else:
 
         truth = {
-            "slope":                    -8.0,
-            "intercept":               -20.0,
+            r"$\alpha$":                -8.0,
+            r"$\beta$":                -20.0,
             r"$\sigma_{\rm int,x}$":    0.03,
             r"$\sigma_{\rm int,y}$":    0.03,
         }

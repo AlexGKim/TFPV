@@ -927,7 +927,7 @@ def DESI_normal():
     fig, ax, img = create_average_grid_image(xhat_star, yhat_star, mean_y, grid_resolution_x=50, grid_resolution_y=50)
     ax.set_xlabel(r'$\log{V/V_0}$')
     ax.set_ylabel(r'$M$')
-    ax.set_title(r'$M_{\text{predicted}} - M$ (Filtered Subset)')
+    # ax.set_title(r'$M_{\text{predicted}} - M$ (Filtered Subset)')
 
     # 4. Add colorbar using the returned 'img' object
     fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
@@ -991,7 +991,7 @@ def DESI_tophat():
     fig, ax, img = create_average_grid_image(xhat_star, yhat_star, mean_y, grid_resolution_x=50, grid_resolution_y=50)
     ax.set_xlabel(r'$\log{V/V_0}$')
     ax.set_ylabel(r'$M$')
-    ax.set_title(r'$M_{\text{predicted}} - M$ (Filtered Subset)')
+    # ax.set_title(r'$M_{\text{predicted}} - M$ (Filtered Subset)')
 
     # 4. Add colorbar using the returned 'img' object
     fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
@@ -1003,7 +1003,7 @@ def DESI_tophat():
     fig, ax, img = create_average_grid_image(xhat_star, yhat_star, zobs_star, grid_resolution_x=50, grid_resolution_y=50)
     ax.set_xlabel(r'$\log{V/V_0}$')
     ax.set_ylabel(r'$M$')
-    ax.set_title(r'Redshift')
+    # ax.set_title(r'Redshift')
 
     # 2. Add the colorbar
     cbar = fig.colorbar(img, ax=ax, label='Average Redshift')
@@ -1215,7 +1215,7 @@ def DESI(kind="normal",
         )
         ax.set_xlabel(r'$\log{V/V_0}$')
         ax.set_ylabel(r'$M$')
-        ax.set_title(r'$M_{\text{predicted}} - M$')
+        # ax.set_title(r'$M_{\text{predicted}} - M$')
         fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
         fig.savefig(_p(f'{kind}_grid.png'), dpi=300)
         plt.close(fig)
@@ -1229,7 +1229,7 @@ def DESI(kind="normal",
         )
         ax.set_xlabel(r'$\log{V/V_0}$')
         ax.set_ylabel(r'$M$')
-        ax.set_title(r'Redshift')
+        # ax.set_title(r'Redshift')
 
         cbar = fig.colorbar(img, ax=ax, label='Average Redshift')
 
@@ -1396,7 +1396,7 @@ def DESI_compare(
         )
         ax.set_xlabel(r"$\log{V/V_0}$")
         ax.set_ylabel(r"$M$")
-        ax.set_title(r"$(M_{\rm pred}^{\rm tophat} - M_{\rm pred}^{\rm normal})$")
+        # ax.set_title(r"$(M_{\rm pred}^{\rm tophat} - M_{\rm pred}^{\rm normal})$")
 
         img.set_cmap(cmap_diff)
         img.set_norm(norm)
@@ -1422,9 +1422,9 @@ def DESI_compare(
         )
         ax.set_xlabel(r"$\log{V/V_0}$")
         ax.set_ylabel(r"$M$")
-        ax.set_title(
-            r"Redshift‑averaged $(M_{\rm pred}^{\rm tophat} - M_{\rm pred}^{\rm normal})$"
-        )
+        # ax.set_title(
+        #     r"Redshift‑averaged $(M_{\rm pred}^{\rm tophat} - M_{\rm pred}^{\rm normal})$"
+        # )
 
         img.set_cmap(cmap_diff)
         img.set_norm(norm)
@@ -1451,7 +1451,7 @@ def DESI_compare(
         plt.xscale("log")
         plt.xlabel(r"$z_{\rm obs}$")
         plt.ylabel(r"$\Delta M_{\rm pred}$ (mag)")
-        plt.title(r"Prediction difference vs. redshift")
+        # plt.title(r"Prediction difference vs. redshift")
         plt.ylim(vmin, vmax)            # respects the fixed range
         plt.legend()
         plt.tight_layout()
@@ -2069,35 +2069,18 @@ def plot_cov(cov, output_path, *, title="Posterior predictive covariance", vmax=
         Colour-scale limit for the covariance panel.  Defaults to the 99th
         percentile of |cov| so a few large outliers don't wash out the image.
     """
-    var = np.diag(cov)
-    with np.errstate(invalid="ignore"):
-        std   = np.sqrt(np.maximum(var, 0.0))
-        denom = np.outer(std, std)
-        corr  = np.where(denom > 0, cov / denom, 0.0)
-    np.fill_diagonal(corr, 1.0)
-
     if vmax is None:
         vmax = float(np.nanpercentile(np.abs(cov), 99))
     vmax = vmax if vmax > 0 else 1.0
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    fig.suptitle(title)
+    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
 
-    im0 = axes[0].imshow(cov, origin="upper", aspect="auto",
-                         cmap="RdBu_r", vmin=-vmax, vmax=vmax,
-                         interpolation="nearest")
-    axes[0].set_title("Covariance")
-    axes[0].set_xlabel("galaxy index")
-    axes[0].set_ylabel("galaxy index")
-    fig.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
-
-    im1 = axes[1].imshow(corr, origin="upper", aspect="auto",
-                         cmap="RdBu_r", vmin=-1, vmax=1,
-                         interpolation="nearest")
-    axes[1].set_title("Correlation")
-    axes[1].set_xlabel("galaxy index")
-    axes[1].set_ylabel("galaxy index")
-    fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
+    im0 = ax.imshow(cov, origin="upper", aspect="auto",
+                    cmap="RdBu_r", vmin=-vmax, vmax=vmax,
+                    interpolation="nearest")
+    ax.set_xlabel("galaxy index")
+    ax.set_ylabel("galaxy index")
+    fig.colorbar(im0, ax=ax, fraction=0.046, pad=0.04)
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
@@ -2267,7 +2250,7 @@ def write_cov(model, run_dir):
 
     fits_path = cfg["source"]
     xhat_star_full, sigma_x_star_full, yhat_star_full, sigma_y_star_full, _ = \
-        load_xy_and_uncertainties_from_desi(fits_path, row=None, sort_by_zobs=False)
+        load_xy_and_uncertainties_from_desi(fits_path, row=None, sort_by_zobs=True)
 
     main = _apply_main_cuts(cfg, xhat_star_full, yhat_star_full)
     xhat_star    = xhat_star_full[main]
@@ -2296,6 +2279,20 @@ def write_cov(model, run_dir):
     else:
         raise ValueError(f"Unknown model {model!r}")
 
+    # Build the subset index before modifying the diagonal so both sub plots
+    # use the same galaxies.
+    G = cov.shape[0]
+    n_sub = min(512, G)
+    rng = np.random.default_rng(0)
+    idx = rng.choice(G, size=n_sub, replace=False)
+    idx.sort()
+
+    # Plot subset without observed magnitude uncertainty on the diagonal.
+    cov_sub_noobs = cov[np.ix_(idx, idx)]
+    run_name = os.path.basename(run_dir)
+    out_path_sub_noobs = os.path.join(run_dir, f"{model}_cov_sub_noobs.png")
+    plot_cov(cov_sub_noobs, out_path_sub_noobs)
+
     np.fill_diagonal(cov, np.diag(cov) + sigma_y_star**2)
 
     fits_out = os.path.join(run_dir, f"{model}_cov.fits")
@@ -2307,18 +2304,12 @@ def write_cov(model, run_dir):
     fits.writeto(fits_out, cov.astype(np.float32), header=hdr, overwrite=True)
     print(f"Saved covariance FITS to {fits_out}")
 
-    run_name = os.path.basename(run_dir)
     out_path = os.path.join(run_dir, f"{model}_cov.png")
-    plot_cov(cov, out_path, title=f"{run_name} {model} model")
+    plot_cov(cov, out_path)
 
-    G = cov.shape[0]
-    n_sub = min(512, G)
-    rng = np.random.default_rng(0)
-    idx = rng.choice(G, size=n_sub, replace=False)
-    idx.sort()
     cov_sub = cov[np.ix_(idx, idx)]
     out_path_sub = os.path.join(run_dir, f"{model}_cov_sub.png")
-    plot_cov(cov_sub, out_path_sub, title=f"{run_name} {model} model (random subset of {n_sub})")
+    plot_cov(cov_sub, out_path_sub)
 
 
 if __name__ == "__main__":
