@@ -145,6 +145,38 @@ First end-to-end run on real DESI data using the
 
 ---
 
+## Claude Code Skills
+
+Three skills are available for use with `/skill-name` in Claude Code from this directory.
+
+### `/sync-numbers`
+
+Updates all hardcoded numeric values in `paper/main.tex` from the current `output/DR1/` result files. Run this after any DR1 re-fit.
+
+- Extracts full-precision MCMC posteriors from `tophat_?.csv` (bypasses truncated `stansummary.txt`)
+- Reads `selection_ellipse.json`, `select_v2_mle.json`, `select_v2_fiducial.json`
+- Reads training-sample N from `tophat_catalog.fits` MAIN column
+- Updates abstract, Table 1 (fiducial cuts), Table 2 (MCMC results), and summary prose
+- Validates LaTeX and reports every changed value
+
+### `/sync-paper [topic]`
+
+Updates `paper/main.tex` prose and equations to match the current code and `doc/` notes for a given topic. Use when an algorithm or parameter changes.
+
+- Reads the relevant code files and `doc/*.tex` formal math
+- Locates the affected section(s) in `paper/main.tex`
+- Edits to match code/doc truth; validates LaTeX
+
+### `/consistency-check [topic]`
+
+Checks that a given parameter, algorithm, or equation is described consistently across code, narrative docs, and paper.
+
+- Searches code, `doc/`, markdown docs, and `paper/main.tex` in parallel
+- Reports discrepancies and identifies which layer is authoritative
+- (`doc/model*.tex` is truth for anything specified there; code is truth for everything else)
+
+---
+
 ## NERSC Batch Jobs
 
 Fitting can also be run as a SLURM batch job on NERSC:
