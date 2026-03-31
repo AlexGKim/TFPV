@@ -12,6 +12,67 @@
 \usepackage{hyperref}% required for \href and \nolinkurl in bibliography
 \usepackage{aas_macros}% AAS journal abbreviations used in references.bib
 
+%% ---------------------------------------------------------------
+%% Synced values — updated automatically by /sync-numbers
+%% Do not edit values by hand; run /sync-numbers after a DR1 re-fit.
+%% ---------------------------------------------------------------
+% config.json
+\newcommand{\Ntrain}{6{,}140}           % n_training
+\newcommand{\Ntotal}{10{,}200}          % n_total_fits
+% selection_ellipse.json
+\newcommand{\GmmW}{0.932}               % weight
+\newcommand{\GmmMeanX}{0.185}           % mean[0]
+\newcommand{\GmmMeanY}{-20.530}         % mean[1]
+\newcommand{\GmmSemiA}{0.064}           % semi_axes[0]
+\newcommand{\GmmSemiB}{0.930}           % semi_axes[1]
+\newcommand{\GmmAngle}{98.4}            % angle_deg
+% select_v2_mle.json
+\newcommand{\MleSlope}{-7.0742}         % slope
+\newcommand{\MleIntercept}{-19.1962}    % intercept.1
+\newcommand{\MleSigIntX}{8.083 \times 10^{-5}}  % sigma_int_x
+\newcommand{\MleSigIntY}{0.4675}        % sigma_int_y
+% select_v2_fiducial.json
+\newcommand{\FidHatyMin}{-21.9}         % haty_min
+\newcommand{\FidHatyMax}{-19.0}         % haty_max
+\newcommand{\FidSlopePlane}{-6.798}     % slope_plane
+\newcommand{\FidCOne}{-20.589}          % intercept_plane
+\newcommand{\FidCTwo}{-17.951}          % intercept_plane2
+\newcommand{\FidNSigPerp}{3.0}          % n_sigma_perp
+\newcommand{\FidZMin}{0.03}             % z_obs_min
+\newcommand{\FidZMax}{0.10}             % z_obs_max
+% tophat_?.csv — slope (α)
+\newcommand{\SlopeMean}{-6.713}         % mean
+\newcommand{\SlopeStd}{0.065}           % std
+\newcommand{\SlopeQlo}{-6.819}          % 5%
+\newcommand{\SlopeQmed}{-6.712}         % 50%
+\newcommand{\SlopeQhi}{-6.605}          % 95%
+\newcommand{\SlopeEss}{1749}            % ESS_bulk (stansummary)
+\newcommand{\SlopeRhat}{1.0}            % R_hat (stansummary)
+% tophat_?.csv — intercept (β)
+\newcommand{\IntMean}{-19.254}          % mean
+\newcommand{\IntStd}{0.015}             % std
+\newcommand{\IntQlo}{-19.279}           % 5%
+\newcommand{\IntQmed}{-19.254}          % 50%
+\newcommand{\IntQhi}{-19.230}           % 95%
+\newcommand{\IntEss}{1830}              % ESS_bulk (stansummary)
+\newcommand{\IntRhat}{1.0}              % R_hat (stansummary)
+% tophat_?.csv — sigma_int_x
+\newcommand{\SigXMean}{0.026}           % mean
+\newcommand{\SigXStd}{0.004}            % std
+\newcommand{\SigXQlo}{0.019}            % 5%
+\newcommand{\SigXQmed}{0.026}           % 50%
+\newcommand{\SigXQhi}{0.033}            % 95%
+\newcommand{\SigXEss}{1632}             % ESS_bulk (stansummary)
+\newcommand{\SigXRhat}{1.0}             % R_hat (stansummary)
+% tophat_?.csv — sigma_int_y
+\newcommand{\SigYMean}{0.417}           % mean
+\newcommand{\SigYStd}{0.014}            % std
+\newcommand{\SigYQlo}{0.393}            % 5%
+\newcommand{\SigYQmed}{0.418}           % 50%
+\newcommand{\SigYQhi}{0.437}            % 95%
+\newcommand{\SigYEss}{1672}             % ESS_bulk (stansummary)
+\newcommand{\SigYRhat}{1.0}             % R_hat (stansummary)
+
 \begin{document}
 
 \preprint{APS/123-QED}
@@ -36,20 +97,20 @@
 [DRAFT]
 We present a model-based calibration of the Tully-Fisher relation (TFR) using
 the full spiral-galaxy sample from the DESI Data Release 1 (DR1) Peculiar
-Velocity survey.  The DR1 catalog contains 10,278 spiral galaxies drawn from
+Velocity survey.  The DR1 catalog contains $\Ntotal$ spiral galaxies drawn from
 the Siena Galaxy Atlas.  We define the TFR phase-space variables
 $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$
 (the $r$-band isophotal absolute magnitude at $SB=26$~mag\,arcsec$^{-2}$),
 and fit a two-component Gaussian mixture model (GMM) to the observed
 $(x,\,y)$ distribution to characterize the spiral population.
-The dominant GMM component (weight $w=0.932$) defines the orientation of
+The dominant GMM component (weight $w=\GmmW$) defines the orientation of
 oblique selection cuts in phase space; galaxies passing these cuts together
 with a redshift window $0.03 < z < 0.1$ constitute the training sample of
-5,928 galaxies.  We calibrate the TFR by fitting a Stan tophat model to
+$\Ntrain$ galaxies.  We calibrate the TFR by fitting a Stan tophat model to
 this sample via Hamiltonian Monte Carlo, obtaining slope
-$\alpha = -6.797 \pm 0.071$, intercept $\beta = -19.236 \pm 0.017$,
-intrinsic scatter along the velocity axis $\sigma_{\mathrm{int},x} = 0.026 \pm 0.003$,
-and intrinsic scatter along the magnitude axis $\sigma_{\mathrm{int},y} = 0.422 \pm 0.012$.
+$\alpha = \SlopeMean \pm \SlopeStd$, intercept $\beta = \IntMean \pm \IntStd$,
+intrinsic scatter along the velocity axis $\sigma_{\mathrm{int},x} = \SigXMean \pm \SigXStd$,
+and intrinsic scatter along the magnitude axis $\sigma_{\mathrm{int},y} = \SigYMean \pm \SigYStd$.
 The calibrated model is applied to the full DR1 spiral sample to produce a
 peculiar velocity catalog (\texttt{tophat\_catalog.fits}) and a full posterior
 predictive covariance matrix (\texttt{tophat\_cov.fits}).
@@ -81,7 +142,7 @@ early-type galaxies (Fundamental Plane), and supernova hosts.
 A first TFR catalog of 1,106 spirals from the DESI Early Data Release
 \citep[EDR;][]{DESI_EDR} was presented in \citet{2024Douglass}, with particular depth
 in the Coma cluster region.
-Data Release 1 (DR1) extends the spiral sample to 10,278 galaxies spanning the full DESI
+Data Release 1 (DR1) extends the spiral sample to $\Ntotal$ galaxies spanning the full DESI
 footprint, forming the dataset analyzed here.
 
 Traditional TFR calibrations fit a line to the data after applying iterative
@@ -114,7 +175,7 @@ and the output peculiar velocity catalog (\S\ref{sec:catalog}).
 
 \section{Data [DRAFT]}
 \label{sec:data}
-The DESI DR1 Peculiar Velocity spiral sample contains 10,278 galaxies drawn from the Siena Galaxy Atlas \citep[SGA;][]{SGA}, which is based on the DESI Legacy Imaging Surveys DR9 data \citep{DESI_Imaging}, covering areas north of $-30^\circ$ declination. The SGA includes galaxies with diameters larger than 20'' at the 25th
+The DESI DR1 Peculiar Velocity spiral sample contains $\Ntotal$ galaxies drawn from the Siena Galaxy Atlas \citep[SGA;][]{SGA}, which is based on the DESI Legacy Imaging Surveys DR9 data \citep{DESI_Imaging}, covering areas north of $-30^\circ$ declination. The SGA includes galaxies with diameters larger than 20'' at the 25th
 magnitude isophote, denoted as $D(25)$. To be part of the TFR sample, a galaxy must have a Sersic index less than 2, indicating it is likely a spiral galaxy, and an inclination angle greater than $25^\circ$, ensuring a significant portion of the galaxy's rotational velocity is visible and the galaxy's major axis is properly aligned.
 
 SGA provides galaxy shape and magnitude information
@@ -441,10 +502,10 @@ represents the TFR spiral population; the secondary component captures
 outliers and dwarf galaxies.
 
 % values in ../output/DR1/selection_ellipse.json
-The best-fit GMM yields a dominant-component weight of $w = 0.932$.
+The best-fit GMM yields a dominant-component weight of $w = \GmmW$.
 The mean of the dominant component is
-$(\bar{x},\,\bar{y}) = (0.185,\,-20.530)$,
-with semi-axes $[0.064,\, 0.930]$ and orientation angle $98.4^\circ$
+$(\bar{x},\,\bar{y}) = (\GmmMeanX,\,\GmmMeanY)$,
+with semi-axes $[\GmmSemiA,\,\GmmSemiB]$ and orientation angle $\GmmAngle^\circ$
 measured from the $x$-axis (note: the complementary angle appears in plots due to magnitude-axis orientation conventions).
 The GMM 1 and 3$\sigma$ ellipses overlaid on the phase-space scatter are shown in
 Fig.~\ref{fig:selection_ellipse}.
@@ -455,7 +516,7 @@ Fig.~\ref{fig:selection_ellipse}.
     \caption{Distribution of DR1 spiral galaxies in $(x,\,y)$ phase space,
     where $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$.
     The two GMM ellipses (at 1 and $3\sigma$) are overplotted; the dominant component
-    (weight $w = 0.932$) is shown in orange.  The parallelogram defined by the extrema of the
+    (weight $w = \GmmW$) is shown in orange.  The parallelogram defined by the extrema of the
     3$\sigma$ ellipse bound the sample used to determine the initial TFR estimate. }
     \label{fig:selection_ellipse}
 \end{figure}
@@ -474,9 +535,9 @@ in Fig.~\ref{fig:selection_ellipse}.
 % values in ../output/DR1/select_v2_mle.json
 The nominal TFR is given by the maximum likelihood estimator of the
 model fit to the data within the parallelogram, yielding a slope of
-$-7.0742$, an intercept of $-19.1962$, an intrinsic scatter in $x$
-of $\sigma_{\mathrm{int},x} = 8.083 \times 10^{-5}$, and an
-intrinsic scatter in $y$ of $\sigma_{\mathrm{int},y} = 0.4675$.
+$\MleSlope$, an intercept of $\MleIntercept$, an intrinsic scatter in $x$
+of $\sigma_{\mathrm{int},x} = \MleSigIntX$, and an
+intrinsic scatter in $y$ of $\sigma_{\mathrm{int},y} = \MleSigIntY$.
 
 For the full sample  of galaxies with $z>0.03$, we predict absolute magnitudes using the
 nominal TFR and compute the residual
@@ -517,15 +578,15 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
         \hline
         Parameter & Value \\
         \hline
-        $\hat{y}_\text{min}$ & $-21.9$ \\
-        $\hat{y}_\text{max}$ & $-19.12$ \\
-        $\bar{s}$ & $-6.798$ \\
-        $\bar{c}_1$ (lower intercept) & $-20.589$ \\
-        $\bar{c}_2$ (upper intercept) & $-17.951$ \\
-        $n_{\sigma,\perp}$ & $3.0$ \\
-        $z_\text{min}$ & $0.03$ \\
-        $z_\text{max}$ & $0.10$ \\
-        Training sample $N$ & $5{,}928$ \\
+        $\hat{y}_\text{min}$ & $\FidHatyMin$ \\
+        $\hat{y}_\text{max}$ & $\FidHatyMax$ \\
+        $\bar{s}$ & $\FidSlopePlane$ \\
+        $\bar{c}_1$ (lower intercept) & $\FidCOne$ \\
+        $\bar{c}_2$ (upper intercept) & $\FidCTwo$ \\
+        $n_{\sigma,\perp}$ & $\FidNSigPerp$ \\
+        $z_\text{min}$ & $\FidZMin$ \\
+        $z_\text{max}$ & $\FidZMax$ \\
+        Training sample $N$ & $\Ntrain$ \\
         \hline
     \end{tabular}
 \end{table}
@@ -535,7 +596,7 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
     \includegraphics[width=1\linewidth]{../output/DR1/data.png}
     \caption{Full DR1 spiral sample (grey) and training sample (colored points)
     in $(x,\,y)$ phase space.  The oblique selection boundaries and magnitude
-    limits are indicated.  The training sample contains 5,928 galaxies.}
+    limits are indicated.  The training sample contains $\Ntrain$ galaxies.}
     \label{fig:data}
 \end{figure}
 
@@ -546,7 +607,10 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
 The model is fit to the training sample using Hamiltonian Monte
 Carlo as implemented in Stan \citep{STAN_html} via the CmdStan interface.
 We run 4 chains, each with 500 warm-up and 1000 sampling iterations.
-[Provide stansummary, $\hat{r}$, effective number of samples, and diagnose assessment of fits.]
+Convergence diagnostics are satisfactory for all model parameters: $\hat{R} = 1.0$ and
+bulk effective sample sizes are reported in Table~\ref{tab:results}.
+Stan's \texttt{diagnose} utility confirms no divergent transitions, no treedepth
+saturation, and satisfactory E-BFMI across all four chains.
 
 % fit results in  ../output/DR1/stansummary.txt,
 The posterior 68\% confidence intervals for the global TFR parameters are
@@ -555,17 +619,19 @@ in Fig.~\ref{fig:tophat}.
 
 \begin{table}
     \centering
-    \caption{Posterior means and $1\sigma$ uncertainties for the DR1 tophat
-    model fit.}
+    \caption{Posterior summary for the DR1 tophat model fit.
+    Mean and StdDev are computed from the full MCMC chains; 5\%, 50\%, and 95\%
+    are posterior quantiles; ESS$_\text{bulk}$ is the bulk effective sample size;
+    $\hat{R}$ is the rank-normalized split potential scale reduction factor.}
     \label{tab:results}
-    \begin{tabular}{lcc}
+    \begin{tabular}{lrrrrrrr}
         \hline
-        Parameter & Posterior mean & $1\sigma$ \\
+        Parameter & Mean & StdDev & 5\% & 50\% & 95\% & ESS$_\text{bulk}$ & $\hat{R}$ \\
         \hline
-        slope $\alpha$ & $-6.797$ & $\pm 0.071$ \\
-        intercept $\beta$ & $-19.236$ & $\pm 0.017$ \\
-        $\sigma_{\mathrm{int},x}$ & $0.026$ & $\pm 0.003$ \\
-        $\sigma_{\mathrm{int},y}$ & $0.422$ & $\pm 0.012$ \\
+        slope $\alpha$         & $\SlopeMean$ & $\SlopeStd$ & $\SlopeQlo$ & $\SlopeQmed$ & $\SlopeQhi$ & $\SlopeEss$ & $\SlopeRhat$ \\
+        intercept $\beta$      & $\IntMean$ & $\IntStd$ & $\IntQlo$ & $\IntQmed$ & $\IntQhi$ & $\IntEss$ & $\IntRhat$ \\
+        $\sigma_{\mathrm{int},x}$ & $\SigXMean$ & $\SigXStd$ & $\SigXQlo$ & $\SigXQmed$ & $\SigXQhi$ & $\SigXEss$ & $\SigXRhat$ \\
+        $\sigma_{\mathrm{int},y}$ & $\SigYMean$ & $\SigYStd$ & $\SigYQlo$ & $\SigYQmed$ & $\SigYQhi$ & $\SigYEss$ & $\SigYRhat$ \\
         \hline
     \end{tabular}
 \end{table}
@@ -584,7 +650,8 @@ in Fig.~\ref{fig:tophat}.
 For any galaxy with a rotation-velocity measurement, the TFR determined in
 \S\ref{sec:TFRfit} is used to infer the absolute magnitude. We consider all
 galaxies satisfying the magnitude--velocity selection criteria of the training
-sample, with no restriction on redshift. Consequently, nearly all galaxies
+sample, with no restriction on redshift: this is refered to as the {\tt MAIN} 
+sample.Consequently, nearly all galaxies
 in this section were also used in training; however, we treat each as if it
 were out-of-sample. This approximation is justified on two grounds: no single
 galaxy has a significant influence on the TFR fit, and accounting for the
@@ -676,7 +743,7 @@ posterior predictive mean.
 Off-diagonal elements follow from the calibration-variance formula alone,
 exploiting conditional independence.
 
-The full posterior predictive covariance and correlation matrices for a subsample of
+The full posterior predictive covariance matrix for a subsample of
 galaxies is visualized in Fig.~\ref{fig:tophat_cov}.  The diagonals of the matrixes for
 the full sample are not clearly visible at the resolution of this plot.
 
@@ -684,19 +751,30 @@ the full sample are not clearly visible at the resolution of this plot.
 \begin{figure}
     \centering
     \includegraphics[width=1\linewidth]{../output/DR1/tophat_cov_sub_noobs.png}
-    \caption{Visualization of the absolute magnitude posterior predictive covariance and correlation
-    matrices
+    \caption{Visualization of the absolute magnitude posterior predictive covariance
+    matrix
     for a subsample of galaxies ordered by redshift.  Off-diagonal
     correlations arise from the shared TFR calibration parameters.}
     \label{fig:tophat_cov}
 \end{figure}
 
+\section{Peculiar Velocities/Magnitudes}
+\label{sec:peculiar_magnitudes}
 
-To check for systematic residuals, we compute the mean prediction residual
-$\hat{y}_\text{pred} - \hat{y}_\text{obs}$ on a grid in $(x,\,y)$ phase
-space.  Fig.~\ref{fig:tophat_grid} shows this residual grid; the residuals
+Peculiar velocities are manifest as peculiar magnitudes, i.e.\ deviations
+between observed and TFR-predicted absolute magnitudes.
+These residuals $\hat{y}_\text{pred} - \hat{y}_\text{obs}$,
+are calculated for all galaxies that satisfy the magnitude and oblique cuts of the training sample, 
+but with no redshift restriction.
+
+To visualize the residuals, we define a grid in $(x,\,y)$ phase space and compute the mean
+residual for each element.
+Figure~\ref{fig:tophat_grid} shows this residual grid; the residuals
 are consistent with zero across the full phase space, with no evidence for
 a non-linear TFR or magnitude-dependent bias.
+There is a slight asymmetry in the residuals, as the sample selection parallelogrom
+is not perfectly centered nor aligned with the TFR trained with the sample and used in
+the selection of the final sample.
 
 \begin{figure}
     \centering
@@ -710,26 +788,21 @@ a non-linear TFR or magnitude-dependent bias.
 
 We also examine the residuals as a function of redshift to check for
 redshift-dependent systematic effects.  Fig.~\ref{fig:redshift_tophat}
-shows the TFR residuals versus $z$ for both the training sample and the
-full MAIN sample.  No significant redshift trend is detected over the range
+shows the TFR residuals versus $z$ for both the input and {\tt MAIN} samples.
+No significant redshift trend is detected over the range
 $0.03 < z < 0.1$.
 
 \begin{figure}
     \centering
     \includegraphics[width=1\linewidth]{../output/DR1/redshift_tophat.png}
     \caption{TFR residuals as a function of observed redshift for the
-    training sample (colored) and the full MAIN sample (grey).
-    No significant redshift trend is detected.}
+     input and {\tt MAIN} samples.}
     \label{fig:redshift_tophat}
 \end{figure}
 
 
 
-\section{Peculiar Velocity Catalog}
-\label{sec:catalog}
-The calibrated tophat model is applied to all galaxies in the MAIN sample
-(those satisfying the magnitude and oblique cuts without the redshift
-restriction) to produce a peculiar velocity catalog.
+
 
 \subsection{Output Files}
 The catalog is provided as \texttt{tophat\_catalog.fits}, which augments the
@@ -753,14 +826,7 @@ TFR calibration parameters and is required for cosmological analyses
 that use the full peculiar velocity field.  The covariance matrix
 structure is visualized in Fig.~\ref{fig:tophat_cov}.
 
-\begin{figure}
-    \centering
-    \includegraphics[width=1\linewidth]{../output/DR1/tophat_cov.png}
-    \caption{Visualization of the posterior predictive covariance matrix
-    for the MAIN-sample peculiar velocity estimates.  Off-diagonal
-    correlations arise from the shared TFR calibration parameters.}
-    \label{fig:tophat_cov}
-\end{figure}
+
 
 
 \section{Conclusions}
@@ -770,18 +836,18 @@ using the full spiral-galaxy sample from the DESI DR1 Peculiar Velocity survey.
 The key results are as follows.
 \begin{itemize}
     \item A two-component GMM fit to the DR1 phase space identifies the
-    dominant spiral TFR population (weight $w = 0.932$) and defines the
+    dominant spiral TFR population (weight $w = \GmmW$) and defines the
     orientation of oblique selection cuts.  The fiducial selection yields
-    a training sample of 5,928 galaxies with a flat pull profile confirming
+    a training sample of $\Ntrain$ galaxies with a flat pull profile confirming
     no selection-induced bias.
     \item The Stan tophat model, which places a uniform prior on the latent
     log-velocity within the observed selection region, correctly accounts for
     the complex oblique selection boundary without the need for explicit
     bias corrections.
-    \item MCMC posterior parameters are slope $\alpha = -6.797 \pm 0.071$,
-    intercept $\beta = -19.236 \pm 0.017$, and intrinsic scatter
-    $\sigma_{\mathrm{int},x} = 0.026 \pm 0.003$,
-    $\sigma_{\mathrm{int},y} = 0.422 \pm 0.012$.
+    \item MCMC posterior parameters are slope $\alpha = \SlopeMean \pm \SlopeStd$,
+    intercept $\beta = \IntMean \pm \IntStd$, and intrinsic scatter
+    $\sigma_{\mathrm{int},x} = \SigXMean \pm \SigXStd$,
+    $\sigma_{\mathrm{int},y} = \SigYMean \pm \SigYStd$.
     Residual diagnostics in both phase space and redshift show no evidence
     for systematic trends.
     \item The calibrated model is applied to produce a peculiar velocity

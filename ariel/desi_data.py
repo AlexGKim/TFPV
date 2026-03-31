@@ -367,6 +367,8 @@ def process_desi_tf_data(
         sigma_x,
         sigma_y,
         z_obs,
+        total_rows,
+        N_total,
     )
 
 
@@ -524,6 +526,9 @@ if __name__ == "__main__":
                         help='Intercept of upper oblique cut (c2)')
     args = parser.parse_args()
 
+    run_dir: str | None = None
+    config: dict = {}
+
     if args.run is not None:
         run_dir = os.path.join('output', args.run)
         os.makedirs(run_dir, exist_ok=True)
@@ -558,9 +563,6 @@ if __name__ == "__main__":
             'intercept_plane': args.intercept_plane,
             'intercept_plane2': args.intercept_plane2,
         }
-        with open(os.path.join(run_dir, 'config.json'), 'w') as f:
-            json.dump(config, f, indent=2)
-        print(f"Config written to {os.path.join(run_dir, 'config.json')}")
     else:
         output_json = args.output or 'DESI_input.json'
         init_json   = args.init   or 'DESI_init.json'
@@ -578,6 +580,8 @@ if __name__ == "__main__":
         sigma_x_sel,
         sigma_y_sel,
         z_sel,
+        n_total_fits,
+        n_training,
     ) = process_desi_tf_data(
         args.input,
         output_json,
@@ -593,6 +597,15 @@ if __name__ == "__main__":
         z_obs_min=args.z_obs_min,
         z_obs_max=args.z_obs_max,
     )
+
+    if run_dir is not None:
+        _rd: str = run_dir
+        config['n_total_fits'] = n_total_fits
+        config['n_training'] = n_training
+        _config_path = os.path.join(_rd, 'config.json')
+        with open(_config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        print(f"Config written to {_config_path}")
 
     # Create plot showing both complete and selected samples
     plot_desi_tf_data(

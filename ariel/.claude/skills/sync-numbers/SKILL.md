@@ -5,7 +5,7 @@ Update all hardcoded numeric values in `paper/main.tex` from the current
 
 ## Steps
 
-### 1. Extract full-precision MCMC posteriors (stansummary.txt is truncated)
+### 1. Extract full-precision MCMC posteriors and quantiles
 
 ```bash
 python3 -c "
@@ -17,83 +17,120 @@ dfs = [pd.read_csv(f, comment='#') for f in files]
 df = pd.concat(dfs, ignore_index=True)
 pairs = [('slope','slope'), ('intercept','intercept.1'),
          ('sigma_int_x','sigma_int_x'), ('sigma_int_y','sigma_int_y')]
-r = {k: {'mean': float(df[v].mean()), 'std': float(df[v].std())}
-     for k,v in pairs}
+r = {}
+for k,v in pairs:
+    col = df[v]
+    r[k] = {'mean': float(col.mean()), 'std': float(col.std()),
+             'p5': float(col.quantile(0.05)), 'p50': float(col.quantile(0.50)),
+             'p95': float(col.quantile(0.95))}
 print(json.dumps(r, indent=2))
 "
 ```
 
-Format each as `mean ± std` with **3 decimal places**.
+Format mean ± std with **3 decimal places**; p5/p50/p95 with **3 decimal places**.
 
-### 2. Extract training sample N
+### 2. Extract ESS_bulk and R_hat from stansummary.txt
+
+Parse `output/DR1/stansummary.txt` for the rows: `slope`, `intercept[1]`, `sigma_int_x`, `sigma_int_y`.
+Extract ESS_bulk (column 8) and R_hat (column 10) for each. Values are integers (ESS) and 1 decimal place (R_hat).
+
+### 3. Extract N counts
 
 ```bash
 python3 -c "
-from astropy.io import fits; import numpy as np
-with fits.open('output/DR1/tophat_catalog.fits') as h:
-    print(int(np.sum(h[1].data['MAIN'])))
+import json
+with open('output/DR1/config.json') as f:
+    cfg = json.load(f)
+print('n_training:', cfg['n_training'])
+print('n_total_fits:', cfg['n_total_fits'])
 "
 ```
 
-Format with LaTeX thousands separator: e.g. `5{,}928`.
+Format both with LaTeX thousands separator: e.g. `7{,}525`.
 
-### 3. Read JSON source files
+### 4. Read JSON source files
 
 - `output/DR1/selection_ellipse.json`
 - `output/DR1/select_v2_mle.json`
 - `output/DR1/select_v2_fiducial.json`
 
-### 4. Compute formatted values
+### 5. Compute formatted values
 
-| Paper quantity | Source | Format |
-|----------------|--------|--------|
-| GMM weight $w$ | `selection_ellipse.json` → `weight` | 3 dp |
-| GMM mean $(\bar x, \bar y)$ | `selection_ellipse.json` → `mean[0]`, `mean[1]` | 3 dp each |
-| GMM semi-axes | `selection_ellipse.json` → `semi_axes[0]`, `semi_axes[1]` | 3 dp each |
-| GMM angle | `selection_ellipse.json` → `angle_deg` | 1 dp |
-| MLE slope | `select_v2_mle.json` → `slope` | 4 dp |
-| MLE intercept | `select_v2_mle.json` → `intercept.1` | 4 dp |
-| MLE $\sigma_{\rm int,x}$ | `select_v2_mle.json` → `sigma_int_x` | sci notation e.g. `8.083 \times 10^{-5}` |
-| MLE $\sigma_{\rm int,y}$ | `select_v2_mle.json` → `sigma_int_y` | 4 dp |
-| $\hat y_{\rm min}$ | `select_v2_fiducial.json` → `haty_min` | 2 dp |
-| $\hat y_{\rm max}$ | `select_v2_fiducial.json` → `haty_max` | 2 dp |
-| Oblique slope $\bar s$ | `select_v2_fiducial.json` → `slope_plane` | 3 dp |
-| Lower intercept $\bar c_1$ | `select_v2_fiducial.json` → `intercept_plane` | 3 dp |
-| Upper intercept $\bar c_2$ | `select_v2_fiducial.json` → `intercept_plane2` | 3 dp |
-| $n_{\sigma,\perp}$ | `select_v2_fiducial.json` → `n_sigma_perp` | 1 dp |
-| $z_{\rm min}$, $z_{\rm max}$ | `select_v2_fiducial.json` → `z_obs_min`, `z_obs_max` | 2 dp |
-| MCMC $\alpha \pm \sigma$ | step 1 → `slope` | 3 dp mean, 3 dp std |
-| MCMC $\beta \pm \sigma$ | step 1 → `intercept` | 3 dp mean, 3 dp std |
-| MCMC $\sigma_{\rm int,x} \pm \sigma$ | step 1 → `sigma_int_x` | 3 dp mean, 3 dp std |
-| MCMC $\sigma_{\rm int,y} \pm \sigma$ | step 1 → `sigma_int_y` | 3 dp mean, 3 dp std |
-| Training $N$ | step 2 | thousands-separated |
+| Command | Source | Format |
+|---------|--------|--------|
+| `\Ntrain` | `config.json` → `n_training` | thousands-separated |
+| `\Ntotal` | `config.json` → `n_total_fits` | thousands-separated |
+| `\GmmW` | `selection_ellipse.json` → `weight` | 3 dp |
+| `\GmmMeanX` | `selection_ellipse.json` → `mean[0]` | 3 dp |
+| `\GmmMeanY` | `selection_ellipse.json` → `mean[1]` | 3 dp |
+| `\GmmSemiA` | `selection_ellipse.json` → `semi_axes[0]` | 3 dp |
+| `\GmmSemiB` | `selection_ellipse.json` → `semi_axes[1]` | 3 dp |
+| `\GmmAngle` | `selection_ellipse.json` → `angle_deg` | 1 dp |
+| `\MleSlope` | `select_v2_mle.json` → `slope` | 4 dp |
+| `\MleIntercept` | `select_v2_mle.json` → `intercept.1` | 4 dp |
+| `\MleSigIntX` | `select_v2_mle.json` → `sigma_int_x` | sci notation e.g. `8.083 \times 10^{-5}` |
+| `\MleSigIntY` | `select_v2_mle.json` → `sigma_int_y` | 4 dp |
+| `\FidHatyMin` | `select_v2_fiducial.json` → `haty_min` | 2 dp |
+| `\FidHatyMax` | `select_v2_fiducial.json` → `haty_max` | 2 dp |
+| `\FidSlopePlane` | `select_v2_fiducial.json` → `slope_plane` | 3 dp |
+| `\FidCOne` | `select_v2_fiducial.json` → `intercept_plane` | 3 dp |
+| `\FidCTwo` | `select_v2_fiducial.json` → `intercept_plane2` | 3 dp |
+| `\FidNSigPerp` | `select_v2_fiducial.json` → `n_sigma_perp` | 1 dp |
+| `\FidZMin` | `select_v2_fiducial.json` → `z_obs_min` | 2 dp |
+| `\FidZMax` | `select_v2_fiducial.json` → `z_obs_max` | 2 dp |
+| `\SlopeMean` | step 1 → `slope.mean` | 3 dp |
+| `\SlopeStd` | step 1 → `slope.std` | 3 dp |
+| `\SlopeQlo` | step 1 → `slope.p5` | 3 dp |
+| `\SlopeQmed` | step 1 → `slope.p50` | 3 dp |
+| `\SlopeQhi` | step 1 → `slope.p95` | 3 dp |
+| `\SlopeEss` | step 2 → slope ESS_bulk | integer |
+| `\SlopeRhat` | step 2 → slope R_hat | 1 dp |
+| `\IntMean` | step 1 → `intercept.mean` | 3 dp |
+| `\IntStd` | step 1 → `intercept.std` | 3 dp |
+| `\IntQlo` | step 1 → `intercept.p5` | 3 dp |
+| `\IntQmed` | step 1 → `intercept.p50` | 3 dp |
+| `\IntQhi` | step 1 → `intercept.p95` | 3 dp |
+| `\IntEss` | step 2 → intercept ESS_bulk | integer |
+| `\IntRhat` | step 2 → intercept R_hat | 1 dp |
+| `\SigXMean` | step 1 → `sigma_int_x.mean` | 3 dp |
+| `\SigXStd` | step 1 → `sigma_int_x.std` | 3 dp |
+| `\SigXQlo` | step 1 → `sigma_int_x.p5` | 3 dp |
+| `\SigXQmed` | step 1 → `sigma_int_x.p50` | 3 dp |
+| `\SigXQhi` | step 1 → `sigma_int_x.p95` | 3 dp |
+| `\SigXEss` | step 2 → sigma_int_x ESS_bulk | integer |
+| `\SigXRhat` | step 2 → sigma_int_x R_hat | 1 dp |
+| `\SigYMean` | step 1 → `sigma_int_y.mean` | 3 dp |
+| `\SigYStd` | step 1 → `sigma_int_y.std` | 3 dp |
+| `\SigYQlo` | step 1 → `sigma_int_y.p5` | 3 dp |
+| `\SigYQmed` | step 1 → `sigma_int_y.p50` | 3 dp |
+| `\SigYQhi` | step 1 → `sigma_int_y.p95` | 3 dp |
+| `\SigYEss` | step 2 → sigma_int_y ESS_bulk | integer |
+| `\SigYRhat` | step 2 → sigma_int_y R_hat | 1 dp |
 
-### 5. Locate and update main.tex
+### 6. Update the \newcommand block in paper/main.tex
 
-Use `mcp__latex-server__get_latex_structure` on `paper/main.tex`, then
-`mcp__latex-server__read_latex_file` to read the relevant sections.
+The `\newcommand` block is at the top of the file, just before `\begin{document}`, between the comment lines:
+```
+%% Synced values — updated automatically by /sync-numbers
+```
+and
+```
+\newcommand{\SigYRhat}{...}
+```
 
-Passages to update (search for the old value strings):
+For each command whose value has changed, use `mcp__latex-server__edit_latex_file` with `replace` to update **only that line**. For example:
+```
+search:  \newcommand{\Ntrain}{6{,}140}
+replace: \newcommand{\Ntrain}{7{,}525}
+```
 
-**Abstract** — MCMC α, β, σ_int_x, σ_int_y with errors; training N
+Do NOT touch any other part of the document — all value propagation is handled automatically by LaTeX.
 
-**Section "Sample Selection" / GMM paragraph** — w, mean, semi-axes, angle
-
-**MLE paragraph** — MLE slope, intercept, σ_int_x (sci notation), σ_int_y
-
-**Table 1 (fiducial parameters)** — all fiducial fields; training N row
-
-**Table 2 (MCMC results)** — α, β, σ_int_x, σ_int_y means and stds
-
-**Summary section** — w, training N, MCMC α, β, σ_int_x, σ_int_y
-
-Use `mcp__latex-server__edit_latex_file` for each replacement.
-
-### 6. Validate
+### 7. Validate
 
 Run `mcp__latex-server__validate_latex` on `paper/main.tex`.
 
-### 7. Report
+### 8. Report
 
-List every value that changed as `quantity: OLD → NEW`.
+List every `\newcommand` value that changed as `\CommandName: OLD → NEW`.
 If a value is unchanged, note it was verified correct.
