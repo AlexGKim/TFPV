@@ -119,7 +119,7 @@ predictive covariance matrix (\texttt{tophat\_cov.fits}).
 \maketitle
 
 
-\section{Introduction [DRAFT]}
+\section{Introduction}
 \label{sec:intro}
 Peculiar velocities --- the deviations of galaxy redshifts from pure Hubble flow ---
 encode the gravitational influence of large-scale structure and provide an independent
@@ -148,7 +148,7 @@ footprint, forming the dataset analyzed here.
 Traditional TFR calibrations fit a line to the data after applying iterative
 bias corrections for selection effects and measurement errors
 \citep{2006ApJ...653..861M, 2012ApJ...749...78T, 1997AJ....113...53G}.
-We adopt instead a forward-modeling approach: we write down a probabilistic galaxy
+We instead adopt a forward-modeling approach: we write down a probabilistic galaxy
 model that contains the TFR as its core relationship, and calibrate it by maximizing
 the likelihood of the observations.
 This has several advantages over the traditional approach.
@@ -157,7 +157,7 @@ intrinsic scatter of the TFR, enter the likelihood directly without the need for
 separate bias corrections.
 The selection function is folded into the likelihood, so no iterative reweighting of
 the sample is required.
-Both the TFR slope and intercept and the intrinsic scatter parameters are determined
+The TFR slope, intercept, and intrinsic scatter parameters are all determined
 in a single joint fit.
 This modeling approach does require specifying the intrinsic distribution of galaxy
 rotation velocities; we address this by fitting a Gaussian mixture model to the
@@ -173,17 +173,15 @@ the MCMC fit results and diagnostics (\S\ref{sec:results}),
 and the output peculiar velocity catalog (\S\ref{sec:catalog}).
 
 
-\section{Data [DRAFT]}
+\section{Data}
 \label{sec:data}
-The DESI DR1 Peculiar Velocity spiral sample contains $\Ntotal$ galaxies drawn from the Siena Galaxy Atlas \citep[SGA;][]{SGA}, which is based on the DESI Legacy Imaging Surveys DR9 data \citep{DESI_Imaging}, covering areas north of $-30^\circ$ declination. The SGA includes galaxies with diameters larger than 20'' at the 25th
+The DESI DR1 Peculiar Velocity spiral sample contains $\Ntotal$ galaxies drawn from the Siena Galaxy Atlas \citep[SGA;][]{SGA}, which is based on the DESI Legacy Imaging Surveys DR9 data \citep{DESI_Imaging} and covers areas north of $-30^\circ$ declination. The SGA includes galaxies with diameters larger than 20'' at the 25th
 magnitude isophote, denoted as $D(25)$. To be part of the TFR sample, a galaxy must have a Sersic index less than 2, indicating it is likely a spiral galaxy, and an inclination angle greater than $25^\circ$, ensuring a significant portion of the galaxy's rotational velocity is visible and the galaxy's major axis is properly aligned.
 
 SGA provides galaxy shape and magnitude information
-at the $r$-band  $SB=26$~$\text{mag}\,\text{arcsec}^{-2}$ isophote, in the form of the photometric axis ratio $b/a$
-(not to be confused with the $a$ and $b$ of the TFR),
+at the $r$-band $SB=26$~$\text{mag}\,\text{arcsec}^{-2}$ isophote, in the form of the photometric axis ratio $b/a$,
 the position angle PA of the semi-major axis,
-and the radius $R_{26}$.  The SGA
-isophotal magnitude is denoted $R$.
+and the radius $R_{26}$. 
 
 The DESI measurements are taken at
 the galactic center and on both sides along the major axis oriented according to the SGA PA.
@@ -200,9 +198,9 @@ The galaxy inclination angle $i$ is derived from
     \cos^2 i = \frac{(b/a)^2 - q_0^2}{1 - q_0^2},
 \end{equation}
 where $q_0 = 0.2$ \citep{Tully2000}.
-This in
-turn is used to convert the observed line-of-sight velocity to the
-the rotation velocity as
+This is in
+turn used to convert the observed line-of-sight velocity to the
+rotation velocity as
 \begin{equation}\label{eqn:Vcorrected}
     V_{\text{rot}} = \frac{V_{\text{obs}}}{\sin i}.
 \end{equation}
@@ -215,26 +213,10 @@ The analysis variables used throughout this paper are
 where $M_R$ is the $r$-band SB26 absolute magnitude computed from
 the apparent magnitude $R$ and the luminosity distance at the observed redshift.
 
-The above equation for $V_\text{rot}$ applies when the fiber is
-positioned on the
-semi-major axis, which
-is perpendicular to the rotation velocity.
-DESI fibers are placed according to the PA's from SGA,
-which are based
-on imaging.  Galaxy velocity maps, however,
-better determine
-the axis where line-of-sight rotation
-velocities are maximized.
-We use the subset of our galaxies also observed by
-SDSS Mapping Nearby Galaxies at APO Survey \citep[MaNGA][]{MaNGA} in SDSS MaNGA DR17 \citep{SDSS_DR17}
-and modeled by
-\cite{Ravi2023} to estimate
-the SGA PA uncertainties.
-
 The intrinsic galaxy distribution is redshift-dependent, as illustrated in
 Figure~\ref{fig:redshift_grid}, which shows the average redshift of DR1
 spiral galaxies in bins of rotation velocity and absolute magnitude.
-Intrinsically faint galaxiesare preferentially observed
+Intrinsically faint galaxies are preferentially observed
 at low redshift, reflecting a genuine property of the local universe rather
 than an observational bias: the SGA catalog is selected on angular size
 ($D(25) > 20''$) and is therefore not subject to apparent-magnitude
@@ -244,10 +226,10 @@ galaxies, which do not follow the TFR and are thus poorly suited for
 calibration.
 We therefore apply a minimum redshift cut for the TFR calibration sample,
 and caution that TFR-inferred distances for low-redshift galaxies may be
-more susceptible to contamination by non-TFR-following dwarfs.
+more susceptible to contamination by dwarfs that do not follow the TFR.
 The specific redshift threshold adopted, and its effect on the calibration
 sample, are discussed in \S\ref{sec:TFRfit}.
-This redshift-dependency of the galaxy population also propagates into
+This redshift dependence of the galaxy population also propagates into
 redshift-dependent covariance in the TFR-inferred peculiar velocities.
 
 \begin{figure}
@@ -350,11 +332,11 @@ where we set $\Delta y_{\min}=-0.5$, $\Delta y_{\max}=1.0$.
 The choice of latent prior matters only for objects whose latent
 distribution varies appreciably across the width of the Gaussian
 measurement error; for objects with small uncertainties the posterior is
-likelihood-dominated regardless of the prior. To minimise sensitivity to
+likelihood-dominated regardless of the prior. To minimize sensitivity to
 this choice, we place the bounds in a region where $p(y_{\mathrm{TF}})$
 is expected to have a weak gradient, so that the uniform remains a good
 local approximation even for objects with broad likelihoods. In this
-regime the normalisation $P(S_i = 1 \mid \theta)$ varies only weakly
+regime the normalization $P(S_i = 1 \mid \theta)$ varies only weakly
 with small changes to $\Delta y_{\min}$ and $\Delta y_{\max}$, and the
 inferred TFR parameters are insensitive to the precise edge placements.
 By contrast, placing the bounds where $p(y_{\mathrm{TF}})$ drops
@@ -362,15 +344,14 @@ steeply would bias the posteriors of boundary objects toward the
 higher-density region of the prior, and small shifts in edge placement
 would redistribute prior mass enough to bias the inferred slope and zero
 point. This choice is also supported empirically: in mock-catalog tests,
-the uniform prior yielded more stable parameter recovery than a normal
-distribution, consistent with the flat interior of the galaxy
-absolute-magnitude distribution.
+the uniform prior yielded more stable parameter recovery than a Gaussian prior,
+consistent with the flat interior of the galaxy absolute-magnitude distribution.
 
 
 
 
 The likelihood is derived from the above model.
-Given the independence of that galaxy measurements, the total likelihood can be decomposed
+Given the independence of the galaxy measurements, the total likelihood can be decomposed
 into the product of per-galaxy terms. 
 \begin{align}
 \mathcal{L}(\theta;\{\hat{x}_i\},\{\hat{y}_i\})
@@ -385,7 +366,7 @@ Convolving intrinsic and measurement scatter defines the combined uncertainties
 \end{align}
 
 Because the sample is restricted to $(\hat{x}_i,\hat{y}_i)\in\mathcal{S}$,
-the per-galaxy density is truncated and renormalised,
+the per-galaxy density is truncated and renormalized,
 \begin{align}
 p(\hat{x}_i,\hat{y}_i \mid \theta, S_i=1)
 &= \frac{\mathcal{L}_i\;
@@ -478,9 +459,9 @@ magnitude limits beyond which contamination is significant.
 The primary contaminants are dwarf galaxies, which are known not to
 follow the TFR. To excise them, we identify magnitude limits using the
 residual profile of a nominal TFR. 
-A secondary ``contaminant'' are bright galaxies that lie on the sharp declining tail
+A secondary contaminant is bright galaxies that lie on the sharp declining tail
 of the true luminosity function, where the top-hat model may
-not lead to accurate measurement probabilities..
+not lead to accurate measurement probabilities.
 We apply the nominal TFR to all
 galaxies and examine the residuals between predicted and observed
 magnitudes as a function of absolute magnitude. Because the nominal TFR
@@ -525,7 +506,7 @@ A preliminary selection parallelogram is defined by the $3\sigma$
 ellipse of the dominant GMM component.
 The slope $\bar{s}$ is fixed by the orientation of the ellipse,
 and $\bar{c}_1$, $\bar{c}_2$ are set at $n_{\sigma,\perp} = 3$
-perpendicular $\sigma$ from the ellipse centre. Initial values of
+perpendicular $\sigma$ from the ellipse center. Initial values of
 $\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ are taken from the
 $y$-extent of the $3\sigma$ ellipse and subsequently refined by the
 residual-profile diagnostic described below. The same minimum redshift
@@ -539,7 +520,7 @@ $\MleSlope$, an intercept of $\MleIntercept$, an intrinsic scatter in $x$
 of $\sigma_{\mathrm{int},x} = \MleSigIntX$, and an
 intrinsic scatter in $y$ of $\sigma_{\mathrm{int},y} = \MleSigIntY$.
 
-For the full sample  of galaxies with $z>0.03$, we predict absolute magnitudes using the
+For the full sample of galaxies with $z>0.03$, we predict absolute magnitudes using the
 nominal TFR and compute the residual
 $\Delta M = \langle M_\text{pred}\rangle - M_\text{obs}$ for every
 object. We then calculate the weighted mean residual and its uncertainty
@@ -650,8 +631,8 @@ in Fig.~\ref{fig:tophat}.
 For any galaxy with a rotation-velocity measurement, the TFR determined in
 \S\ref{sec:TFRfit} is used to infer the absolute magnitude. We consider all
 galaxies satisfying the magnitude--velocity selection criteria of the training
-sample, with no restriction on redshift: this is refered to as the {\tt MAIN} 
-sample.Consequently, nearly all galaxies
+sample, with no restriction on redshift: this is referred to as the {\tt MAIN}
+sample. Consequently, nearly all galaxies
 in this section were also used in training; however, we treat each as if it
 were out-of-sample. This approximation is justified on two grounds: no single
 galaxy has a significant influence on the TFR fit, and accounting for the
@@ -744,7 +725,7 @@ Off-diagonal elements follow from the calibration-variance formula alone,
 exploiting conditional independence.
 
 The full posterior predictive covariance matrix for a subsample of
-galaxies is visualized in Fig.~\ref{fig:tophat_cov}.  The diagonals of the matrixes for
+galaxies is visualized in Fig.~\ref{fig:tophat_cov}.  The diagonals of the matrices for
 the full sample are not clearly visible at the resolution of this plot.
 
 
@@ -763,8 +744,8 @@ the full sample are not clearly visible at the resolution of this plot.
 
 Peculiar velocities are manifest as peculiar magnitudes, i.e.\ deviations
 between observed and TFR-predicted absolute magnitudes.
-These residuals $\hat{y}_\text{pred} - \hat{y}_\text{obs}$,
-are calculated for all galaxies that satisfy the magnitude and oblique cuts of the training sample, 
+These residuals $\hat{y}_\text{pred} - \hat{y}_\text{obs}$
+are calculated for all galaxies that satisfy the magnitude and oblique cuts of the training sample,
 but with no redshift restriction.
 
 To visualize the residuals, we define a grid in $(x,\,y)$ phase space and compute the mean
@@ -772,9 +753,9 @@ residual for each element.
 Figure~\ref{fig:tophat_grid} shows this residual grid; the residuals
 are consistent with zero across the full phase space, with no evidence for
 a non-linear TFR or magnitude-dependent bias.
-There is a slight asymmetry in the residuals, as the sample selection parallelogrom
-is not perfectly centered nor aligned with the TFR trained with the sample and used in
-the selection of the final sample.
+There is a slight asymmetry in the residuals, as the sample selection parallelogram
+is not perfectly centered or aligned with the TFR fit to the training sample and used
+in the selection of the final sample.
 
 \begin{figure}
     \centering
@@ -855,14 +836,14 @@ The key results are as follows.
     covariance matrix (\texttt{tophat\_cov.fits}) for the full MAIN sample.
 \end{itemize}
 
-This work is distinguished from other approaches in that it fits a TFR model
-rather than fitting a TFR to data.  The difference is highlighted in that
-here parameter estimation is based on the model likelihood whereas in other
-work a reasonable yet arbitrary merit function is optimized.  A feature of
-the TFR model is that it must specify the latent parameter distribution, upon
-which we find that the results are sensitive.  An advantage of our approach
-is that the model can be used to analyze independent datasets in a
-self-consistent manner.
+This work is distinguished from other approaches in that it fits a probabilistic
+TFR model rather than fitting a line directly to the data.  The key distinction
+is that parameter estimation is based on the model likelihood, whereas other
+approaches optimize a reasonable but essentially arbitrary merit function.
+A feature of the TFR model is that it must specify the latent parameter
+distribution, and we find that the results are sensitive to this choice.
+An advantage of our approach is that the model can be applied to independent
+datasets in a self-consistent manner.
 
 Peculiar velocity measurements from the MAIN catalog, including the study
 of large-scale flows and comparison with existing peculiar velocity compilations,
