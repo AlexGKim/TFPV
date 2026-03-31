@@ -171,7 +171,7 @@ def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
         if haty_lines:
             for label, val in haty_lines.items():
                 ax.axvline(val, color="darkorange", linewidth=1.2,
-                           linestyle="--", label=label)
+                           linestyle="--", label=f"{label} = {val:.2f}")
             if legend:
                 ax.legend(fontsize=8)
 
