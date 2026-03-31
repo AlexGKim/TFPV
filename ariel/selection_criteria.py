@@ -256,7 +256,7 @@ def plot_selection_criteria(sweep_data, results, run_dir):
                 "insufficient_data":  "insufficient data",
             }
             title += f"\n[{warning_map.get(res['status']) or res['status']}]"
-        ax_top.set_title(title, fontsize=10)
+        # ax_top.set_title(title, fontsize=10)
         ax_top.grid(True, alpha=0.3, which="both")
         ax_top.legend(fontsize=7)
 

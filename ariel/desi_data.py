@@ -470,7 +470,7 @@ def plot_desi_tf_data(
         r"$\hat{y}$ = $R\_ABSMAG\_SB26$ (absolute magnitude)",
         fontsize=12,
     )
-    ax.set_title("DESI DR1 Tully‑Fisher Data", fontsize=14, fontweight="bold")
+    # ax.set_title("DESI DR1 Tully‑Fisher Data", fontsize=14, fontweight="bold")
 
     ax.invert_yaxis()
     ax.grid(True, alpha=0.3, linestyle="--")

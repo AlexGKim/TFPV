@@ -170,6 +170,36 @@ and modeled by
 \cite{Ravi2023} to estimate
 the SGA PA uncertainties.
 
+The intrinsic galaxy distribution is redshift-dependent, as illustrated in
+Figure~\ref{fig:redshift_grid}, which shows the average redshift of DR1
+spiral galaxies in bins of rotation velocity and absolute magnitude.
+Intrinsically faint galaxiesare preferentially observed
+at low redshift, reflecting a genuine property of the local universe rather
+than an observational bias: the SGA catalog is selected on angular size
+($D(25) > 20''$) and is therefore not subject to apparent-magnitude
+selection effects.
+However, the low-redshift sample is more heavily contaminated by dwarf
+galaxies, which do not follow the TFR and are thus poorly suited for
+calibration.
+We therefore apply a minimum redshift cut for the TFR calibration sample,
+and caution that TFR-inferred distances for low-redshift galaxies may be
+more susceptible to contamination by non-TFR-following dwarfs.
+The specific redshift threshold adopted, and its effect on the calibration
+sample, are discussed in \S\ref{sec:TFRfit}.
+This redshift-dependency of the galaxy population also propagates into
+redshift-dependent covariance in the TFR-inferred peculiar velocities.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{../output/DR1/redshift_grid_tophat.png}
+    \caption{Average redshift of DR1 spiral galaxies in bins of
+    $\log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $M_R$.
+    Intrinsically faint, slowly rotating galaxies are preferentially
+    found at low redshift, reflecting the local galaxy population rather
+    than an observational selection effect.}
+    \label{fig:redshift_grid}
+\end{figure}
+
 \section{Sample Selection}
 \label{sec:sampleselection}
 Not all galaxies in the DR1 spiral catalog are suitable for TFR calibration.
@@ -410,7 +440,7 @@ the bright and high-velocity limits of the data. The dominant component
 represents the TFR spiral population; the secondary component captures
 outliers and dwarf galaxies.
 
-% values in output/DR1/selection_ellipse.json
+% values in ../output/DR1/selection_ellipse.json
 The best-fit GMM yields a dominant-component weight of $w = 0.932$.
 The mean of the dominant component is
 $(\bar{x},\,\bar{y}) = (0.185,\,-20.530)$,
@@ -421,7 +451,7 @@ Fig.~\ref{fig:selection_ellipse}.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{figures/selection_ellipse.png}
+    \includegraphics[width=1\linewidth]{../output/DR1/selection_ellipse.png}
     \caption{Distribution of DR1 spiral galaxies in $(x,\,y)$ phase space,
     where $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$.
     The two GMM ellipses (at 1 and $3\sigma$) are overplotted; the dominant component
@@ -441,7 +471,7 @@ residual-profile diagnostic described below. The same minimum redshift
 used in the GMM fit is maintained. The selected training region is shown
 in Fig.~\ref{fig:selection_ellipse}.
 
-% values in output/DR1/select_v2_mle.json
+% values in ../output/DR1/select_v2_mle.json
 The nominal TFR is given by the maximum likelihood estimator of the
 model fit to the data within the parallelogram, yielding a slope of
 $-7.0742$, an intercept of $-19.1962$, an intrinsic scatter in $x$
@@ -469,7 +499,7 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{figures/select_v2_fiducial_pull.png}
+    \includegraphics[width=1\linewidth]{../output/DR1/select_v2_fiducial_pull.png}
 \caption[Weighted-mean residual and pull profile as a function of $M_R$.]{Weighted-mean residual $\Delta M = \langle M_\mathrm{pred}\rangle - M_\mathrm{obs}$
     and pull profile (normalized by bin uncertainty) as a function of $M_R$
     for all catalog objects evaluated at the MLE parameters. Horizontal lines
@@ -478,7 +508,7 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
     \label{fig:pull}
 \end{figure}
 
-% values in output/DR1/select_v2_fiducial.json
+% values in ../output/DR1/select_v2_fiducial.json
 \begin{table}
     \centering
     \caption{Fiducial selection parameters for the DR1 training sample.}
@@ -502,7 +532,7 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{figures/data.png}
+    \includegraphics[width=1\linewidth]{../output/DR1/data.png}
     \caption{Full DR1 spiral sample (grey) and training sample (colored points)
     in $(x,\,y)$ phase space.  The oblique selection boundaries and magnitude
     limits are indicated.  The training sample contains 5,928 galaxies.}
@@ -512,13 +542,13 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
 
 \subsection{MCMC Fit}
 \label{sec:mcmc}
-% fit assessment in output/DR1/stansummary.txt, output/DR1/diagnoise.txt 
+% fit assessment in ../output/DR1/stansummary.txt, ../output/DR1/diagnoise.txt 
 The model is fit to the training sample using Hamiltonian Monte
 Carlo as implemented in Stan \citep{STAN_html} via the CmdStan interface.
 We run 4 chains, each with 500 warm-up and 1000 sampling iterations.
 [Provide stansummary, $\hat{r}$, effective number of samples, and diagnose assessment of fits.]
 
-% fit results in  output/DR1/stansummary.txt,
+% fit results in  ../output/DR1/stansummary.txt,
 The posterior 68\% confidence intervals for the global TFR parameters are
 given in Table~\ref{tab:results}.  The full posterior corner plot is shown
 in Fig.~\ref{fig:tophat}.
@@ -542,7 +572,7 @@ in Fig.~\ref{fig:tophat}.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{figures/tophat.png}
+    \includegraphics[width=1\linewidth]{../output/DR1/tophat.png}
     \caption{Corner plot of the posterior distribution for the four global
     TFR parameters from the DR1 tophat model fit.  Contours show the
     $1\sigma$ and $2\sigma$ confidence regions.}
@@ -646,10 +676,22 @@ posterior predictive mean.
 Off-diagonal elements follow from the calibration-variance formula alone,
 exploiting conditional independence.
 
+The full posterior predictive covariance and correlation matrices for a subsample of
+galaxies is visualized in Fig.~\ref{fig:tophat_cov}.  The diagonals of the matrixes for
+the full sample are not clearly visible at the resolution of this plot.
 
 
-\subsection{Diagnostics}
-\label{sec:diagnostics}
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{../output/DR1/tophat_cov_sub_noobs.png}
+    \caption{Visualization of the absolute magnitude posterior predictive covariance and correlation
+    matrices
+    for a subsample of galaxies ordered by redshift.  Off-diagonal
+    correlations arise from the shared TFR calibration parameters.}
+    \label{fig:tophat_cov}
+\end{figure}
+
+
 To check for systematic residuals, we compute the mean prediction residual
 $\hat{y}_\text{pred} - \hat{y}_\text{obs}$ on a grid in $(x,\,y)$ phase
 space.  Fig.~\ref{fig:tophat_grid} shows this residual grid; the residuals
@@ -658,7 +700,7 @@ a non-linear TFR or magnitude-dependent bias.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{figures/tophat_grid.png}
+    \includegraphics[width=1\linewidth]{../output/DR1/tophat_grid.png}
     \caption{Mean prediction residual $\hat{y}_\text{pred} - \hat{y}_\text{obs}$
     binned on a grid in $(x,\,y)$ phase space for the training sample.
     The residuals are consistent with zero, with no evidence for systematic
@@ -674,7 +716,7 @@ $0.03 < z < 0.1$.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{figures/redshift_tophat.png}
+    \includegraphics[width=1\linewidth]{../output/DR1/redshift_tophat.png}
     \caption{TFR residuals as a function of observed redshift for the
     training sample (colored) and the full MAIN sample (grey).
     No significant redshift trend is detected.}
@@ -713,7 +755,7 @@ structure is visualized in Fig.~\ref{fig:tophat_cov}.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{figures/tophat_cov.png}
+    \includegraphics[width=1\linewidth]{../output/DR1/tophat_cov.png}
     \caption{Visualization of the posterior predictive covariance matrix
     for the MAIN-sample peculiar velocity estimates.  Off-diagonal
     correlations arise from the shared TFR calibration parameters.}
