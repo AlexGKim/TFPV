@@ -211,7 +211,7 @@ The analysis variables used throughout this paper are
     y &= M_R,
 \end{align}
 where $M_R$ is the $r$-band SB26 absolute magnitude computed from
-the apparent magnitude $R$ and the luminosity distance at the observed redshift.
+the apparent magnitude and the luminosity distance at the observed redshift.
 
 The intrinsic galaxy distribution is redshift-dependent, as illustrated in
 Figure~\ref{fig:redshift_grid}, which shows the average redshift of DR1
@@ -227,8 +227,6 @@ calibration.
 We therefore apply a minimum redshift cut for the TFR calibration sample,
 and caution that TFR-inferred distances for low-redshift galaxies may be
 more susceptible to contamination by dwarfs that do not follow the TFR.
-The specific redshift threshold adopted, and its effect on the calibration
-sample, are discussed in \S\ref{sec:TFRfit}.
 This redshift dependence of the galaxy population also propagates into
 redshift-dependent covariance in the TFR-inferred peculiar velocities.
 
@@ -335,9 +333,11 @@ measurement error; for objects with small uncertainties the posterior is
 likelihood-dominated regardless of the prior. To minimize sensitivity to
 this choice, we place the bounds in a region where $p(y_{\mathrm{TF}})$
 is expected to have a weak gradient, so that the uniform remains a good
-local approximation even for objects with broad likelihoods. In this
+local approximation even for objects with broad likelihoods, while also
+removing dwarf spirals. In this
 regime the normalization $P(S_i = 1 \mid \theta)$ varies only weakly
-with small changes to $\Delta y_{\min}$ and $\Delta y_{\max}$, and the
+with small changes to $\Delta y_{\min}$ and $\Delta y_{\max}$ (already signifcantly
+larger than the absolute magnitude measurement uncertainties), and the
 inferred TFR parameters are insensitive to the precise edge placements.
 By contrast, placing the bounds where $p(y_{\mathrm{TF}})$ drops
 steeply would bias the posteriors of boundary objects toward the
@@ -345,7 +345,7 @@ higher-density region of the prior, and small shifts in edge placement
 would redistribute prior mass enough to bias the inferred slope and zero
 point. This choice is also supported empirically: in mock-catalog tests,
 the uniform prior yielded more stable parameter recovery than a Gaussian prior,
-consistent with the flat interior of the galaxy absolute-magnitude distribution.
+consistent with the relatively flat interior of the galaxy absolute-magnitude distribution.
 
 
 
@@ -374,7 +374,7 @@ p(\hat{x}_i,\hat{y}_i \mid \theta, S_i=1)
         {P(S_i=1\mid\theta)}.
 \label{eqn:selected_density}
 \end{align}
-The numerator is
+The numerator is the per-galaxy likelihood if there were no  sample selection,
 \begin{align}
 \mathcal{L}_i
 &= \frac{|\alpha|}{y_{\max}-y_{\min}}\;
@@ -396,13 +396,13 @@ where $\Phi$ is the standard normal CDF and
     &= \frac{\alpha^2\sigma_{1,i}^2\,\sigma_{2,i}^2}{\sigma_{\mathrm{tot},i}^2}.
 \label{eqn:posterior_params}
 \end{align}
-is the per-galaxy likelihood if there were no  sample selection.
+
 
 The denominator, i.e.\ the selection probability, is
 derived by transforming the $\hat{x}$--$\hat{y}$ to a new coordinate system where
 the parallelogram transforms to an axis-aligned rectangle.  The rectangular selection region
 is described by the sums and differences of four half planes.  The selection probability of
-a half plane is the standard bivariate-normal CDF.
+a half plane is the standard bivariate-normal CDF.  The resulting expression is
 \begin{align}
 P(S_i=1\mid\theta)
 &= \frac{1}{y_{\max}-y_{\min}}
@@ -454,33 +454,35 @@ Gaussian Mixture Model (GMM) fit identifies the core spiral population
 and defines a preliminary selection parallelogram; (ii) a nominal TFR is
 fit to the galaxies within that parallelogram; and (iii) a
 residual-profile diagnostic applied to the full catalog determines the
-magnitude limits beyond which contamination is significant.
+magnitude limits beyond which magnitude deviations are significant.
+
+Velocity--magnitude cuts are designed to exclude outliers and sensitivity
+to the modeling of the latent parameter distribution. We also apply a
+minimum redshift cut ($z > 0.03$) to reduce sensitivity to
+peculiar-velocity contamination, which is more severe at low redshift.
 
 The primary contaminants are dwarf galaxies, which are known not to
-follow the TFR. To excise them, we identify magnitude limits using the
-residual profile of a nominal TFR. 
-A secondary contaminant is bright galaxies that lie on the sharp declining tail
-of the true luminosity function, where the top-hat model may
-not lead to accurate measurement probabilities.
-We apply the nominal TFR to all
-galaxies and examine the residuals between predicted and observed
-magnitudes as a function of absolute magnitude. Because the nominal TFR
-need not be accurate, a smooth linear trend in the residuals is expected
-and acceptable; what we look for instead is deviation from this trend,
-which signals contamination by populations that do not follow the TFR.
-Galaxies at absolute magnitudes where such deviations appear are
-excluded from the sample.
+follow the TFR, and bright galaxies lying on the sharp declining tail
+of the true luminosity function, where the top-hat model may not yield
+accurate measurement probabilities. To identify magnitude limits that
+excise these populations, we apply the nominal TFR to all galaxies and
+examine the residuals between predicted and observed magnitudes as a
+function of absolute magnitude. Because the nominal TFR need not be
+accurate, a smooth linear trend in the residuals is expected and
+acceptable; we instead look for deviations from this trend, which signal
+contamination by populations that do not follow the TFR. Galaxies at
+absolute magnitudes where such deviations appear are excluded from the
+sample.
 
 The initial TFR is calculated using a subset of galaxies dominated by
-normal spirals, selected as the core of the distribution. The core is
-determined using a two-component GMM fit to the $(x,\,y)$ distribution
-of galaxies passing a redshift cut $z > 0.03$ (to reduce sensitivity to
-peculiar velocities) and a magnitude pre-filter $-23 < y < -18$ (to
-remove objects with implausible absolute magnitudes). The fit accounts
-for per-galaxy measurement noise and rectangular survey truncation at
-the bright and high-velocity limits of the data. The dominant component
-represents the TFR spiral population; the secondary component captures
-outliers and dwarf galaxies.
+normal spirals, selected as the core of the distribution via a
+two-component GMM fit to the $(x,\,y)$ distribution of galaxies passing
+a magnitude pre-filter $-23 < y < -18$ (to remove objects with
+implausible absolute magnitudes). The fit accounts for per-galaxy
+measurement noise and rectangular survey truncation at the bright and
+high-velocity limits of the data. The dominant component represents the
+TFR spiral population; the secondary component captures outliers and
+dwarf galaxies.
 
 % values in ../output/DR1/selection_ellipse.json
 The best-fit GMM yields a dominant-component weight of $w = \GmmW$.
