@@ -244,6 +244,9 @@ def main():
     parser.add_argument("--z_obs_min",  type=float, default=0.03,
                         help="Minimum redshift for Stan MLE sample (default: 0.03); "
                              "not applied to pull-plot prediction")
+    parser.add_argument("--z_obs_max",  type=float, default=0.1,
+                        help="Maximum redshift for Stan MLE sample (default: 0.1); "
+                             "not applied to pull-plot prediction")
     parser.add_argument("--set_fiducial", action="store_true",
                         help="Write select_v2_fiducial.json from --haty_min/max; skip Stan")
     parser.add_argument("--haty_min",  type=float, default=None,
@@ -329,6 +332,8 @@ def main():
     }
     if args.z_obs_min is not None:
         cuts["z_obs_min"] = args.z_obs_min
+    if args.z_obs_max is not None:
+        cuts["z_obs_max"] = args.z_obs_max
 
     print("Diagnostic cuts (3-sigma):")
     print(f"  haty_min={cuts['haty_min']:.4f}  haty_max={cuts['haty_max']:.4f}")

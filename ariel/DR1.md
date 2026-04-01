@@ -18,7 +18,7 @@ Fit a noise- and truncation-corrected 2-component GMM to the (x, y) phase
 space to estimate the TFR core selection boundary.
 
 ```bash
-python selection_ellipse.py --file $FITS --run $RUN --source DESI --z_obs_min 0.03
+python selection_ellipse.py --file $FITS --run $RUN --source DESI --z_obs_min 0.03 --z_obs_max 0.1
 ```
 
 Inspect the output:

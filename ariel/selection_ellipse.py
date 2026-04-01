@@ -36,7 +36,7 @@ from sklearn.mixture import GaussianMixture
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_data(fits_file, haty_min, haty_max, source="fullmocks", z_obs_min=None):
+def load_data(fits_file, haty_min, haty_max, source="fullmocks", z_obs_min=None, z_obs_max=None):
     print(f"Reading FITS file: {fits_file}")
     with fits.open(fits_file) as hdul:
         data = hdul[1].data  # type: ignore[union-attr]
@@ -101,9 +101,19 @@ def load_data(fits_file, haty_min, haty_max, source="fullmocks", z_obs_min=None)
         & (y_raw <= haty_max)
     )
 
-    if z_obs_min is not None and zobs is not None:
-        valid &= np.isfinite(zobs) & (zobs >= z_obs_min)
-        print(f"  Redshift cut z >= {z_obs_min} applied")
+    if zobs is not None:
+        finite_mask = np.isfinite(zobs)
+        if z_obs_min is not None:
+            valid &= finite_mask & (zobs >= z_obs_min)
+        if z_obs_max is not None:
+            valid &= finite_mask & (zobs <= z_obs_max)
+
+        lo = f"z >= {z_obs_min}" if z_obs_min is not None else None
+        hi = f"z <= {z_obs_max}" if z_obs_max is not None else None
+        bounds = " and ".join(filter(None, [lo, hi]))
+        if bounds:
+            print(f"  Redshift cut {bounds} applied")
+
 
     print(f"  Valid rows after validity + pre-filter: {valid.sum()}")
     return x_raw[valid], y_raw[valid], sigma_x[valid], sigma_y[valid]
@@ -734,6 +744,8 @@ def main():
                         help="GMM random restarts for initialisation (default: 20)")
     parser.add_argument("--z_obs_min", type=float, default=0.03,
                         help="Minimum redshift cut (default: 0.03)")
+    parser.add_argument("--z_obs_max", type=float, default=0.1,
+                        help="Maximum redshift cut (default: 0.1)")    
     parser.add_argument("--exe",      default=None,
                         help="Path to compiled Stan tophat executable; if given, run MLE at --n_sigma")
     parser.add_argument("--n_sigma",  type=float, default=3.0,
@@ -745,7 +757,7 @@ def main():
 
     # Load data (now includes sigma_x, sigma_y)
     x, y, sigma_x, sigma_y = load_data(args.file, args.haty_min, args.haty_max, args.source,
-                                        z_obs_min=args.z_obs_min)
+                                        z_obs_min=args.z_obs_min, z_obs_max=args.z_obs_max)
 
     # Detect truncation from data extremes
     x_hi, y_lo = detect_truncation(x, y)
