@@ -8,6 +8,7 @@ This document records the full command sequence for the DR1 run on the
 ```bash
 export FITS=data/SGA-2020_iron_Vrot_VI_corr.fits
 export RUN=DR1
+export CONFIG=configs/dr1_default.json
 ```
 
 ---
@@ -65,6 +66,22 @@ Inspect the pull profile with the cuts:
 ```bash
 open output/$RUN/select_v2_fiducial_pull.png
 ```
+
+---
+
+## Step 3b: Export run config
+
+After completing the interactive fiducial step, capture all parameter choices
+in a portable config file:
+
+```bash
+python export_config.py --run $RUN --out configs/dr1_default.json
+```
+
+The script reads `output/$RUN/select_v2_fiducial.json` (including the
+interactively chosen cuts) and prompts for the remaining pipeline settings
+(`fits_file`, `exe`, `source`, `model`).  Commit the resulting JSON to git —
+it is the permanent version record for this run.
 
 ---
 
@@ -173,3 +190,49 @@ Per run, the following output files are written:
 
 See [Predict.md](Predict.md) for full argument reference and covariance
 computation details.
+
+---
+
+## Running a parameter variant
+
+To run the pipeline with different parameters (e.g. a wider redshift range),
+copy an existing config, edit the desired values, and run non-interactively:
+
+```bash
+cp configs/dr1_default.json configs/dr1_zmax015.json
+```
+
+Edit `configs/dr1_zmax015.json` — change `"run"` (the output directory name)
+and any parameters you want to vary, e.g.:
+
+```json
+{
+  "run": "dr1_zmax015",
+  "z_obs_max": 0.15,
+  ...
+}
+```
+
+Then run the full pipeline:
+
+```bash
+python run_pipeline.py configs/dr1_zmax015.json
+```
+
+Or run only a subset of steps (e.g. re-do data prep and onwards after
+changing selection cuts):
+
+```bash
+python run_pipeline.py configs/dr1_zmax015.json --steps 1-4
+```
+
+Step 5 (Stan sampling) is not executed automatically — `run_pipeline.py`
+prints the sampling command for you to run manually.  All outputs land in
+`output/<run>/` as usual.
+
+**Workflow summary:**
+
+| Phase | Steps | How |
+|-------|-------|-----|
+| A — Discovery | 1–3 + 3b | Manual (interactive `set_fiducial.py` + `export_config.py`) |
+| B — Variants  | 1–7 | `run_pipeline.py configs/<variant>.json` |
