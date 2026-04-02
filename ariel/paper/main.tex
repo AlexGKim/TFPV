@@ -490,15 +490,15 @@ The mean of the dominant component is
 $(\bar{x},\,\bar{y}) = (\GmmMeanX,\,\GmmMeanY)$,
 with semi-axes $[\GmmSemiA,\,\GmmSemiB]$ and orientation angle $\GmmAngle^\circ$
 measured from the $x$-axis (note: the complementary angle appears in plots due to magnitude-axis orientation conventions).
-The GMM 1 and 3$\sigma$ ellipses overlaid on the phase-space scatter are shown in
+The GMM 1$\sigma$ and 3$\sigma$ ellipses overlaid on the phase-space scatter are shown in
 Fig.~\ref{fig:selection_ellipse}.
 
 \begin{figure}
     \centering
     \includegraphics[width=1\linewidth]{../output/DR1/selection_ellipse.png}
-    \caption{Distribution of DR1 spiral galaxies in $(x,\,y)$ phase space,
+    \caption{Distribution of DR1 spiral galaxies used for the training set selection in $(x,\,y)$ phase space,
     where $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$.
-    The two GMM ellipses (at 1 and $3\sigma$) are overplotted; the dominant component
+    The two GMM ellipses (at 1$\sigma$ and $3\sigma$) are overplotted; the dominant component
     (weight $w = \GmmW$) is shown in orange.  The parallelogram defined by the extrema of the
     3$\sigma$ ellipse bound the sample used to determine the initial TFR estimate. }
     \label{fig:selection_ellipse}
@@ -508,10 +508,9 @@ A preliminary selection parallelogram is defined by the $3\sigma$
 ellipse of the dominant GMM component.
 The slope $\bar{s}$ is fixed by the orientation of the ellipse,
 and $\bar{c}_1$, $\bar{c}_2$ are set at $n_{\sigma,\perp} = 3$
-perpendicular $\sigma$ from the ellipse center. Initial values of
+perpendicular $\sigma$ from the ellipse center. Values of
 $\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ are taken from the
-$y$-extent of the $3\sigma$ ellipse and subsequently refined by the
-residual-profile diagnostic described below. The same minimum redshift
+$y$-extent of the $3\sigma$ ellipse. The same minimum redshift
 used in the GMM fit is maintained. The selected training region is shown
 in Fig.~\ref{fig:selection_ellipse}.
 
