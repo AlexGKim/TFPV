@@ -1220,6 +1220,18 @@ def DESI(kind="normal",
         fig.savefig(_p(f'{kind}_grid.png'), dpi=300)
         plt.close(fig)
 
+        # --- GRID: residuals on (xhat, yhat) — full input sample ---
+        fig, ax, img = create_average_grid_image(
+            xhat_star, yhat_star, mean_y,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r'$\log{V/V_0}$')
+        ax.set_ylabel(r'$M$')
+        fig.colorbar(img, ax=ax, label='Average Magnitude Difference')
+        fig.savefig(_p(f'{kind}_grid_full.png'), dpi=300)
+        plt.close(fig)
+
     # --- GRID: redshift on (xhat, yhat) ---
     if make_redshift_grid:
         fig, ax, img = create_average_grid_image(

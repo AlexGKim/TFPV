@@ -12,65 +12,68 @@
 \usepackage{hyperref}% required for \href and \nolinkurl in bibliography
 \usepackage{aas_macros}% AAS journal abbreviations used in references.bib
 
+\newcommand{\ResultDir}{../output/DR1_zmax008}   % output directory for figures & numbers
+
+
 %% ---------------------------------------------------------------
 %% Synced values — updated automatically by /sync-numbers
 %% Do not edit values by hand; run /sync-numbers after a DR1 re-fit.
 %% ---------------------------------------------------------------
 % config.json
-\newcommand{\Ntrain}{6{,}140}           % n_training
+\newcommand{\Ntrain}{5{,}050}           % n_training
 \newcommand{\Ntotal}{10{,}200}          % n_total_fits
 % selection_ellipse.json
-\newcommand{\GmmW}{0.932}               % weight
-\newcommand{\GmmMeanX}{0.185}           % mean[0]
-\newcommand{\GmmMeanY}{-20.530}         % mean[1]
+\newcommand{\GmmW}{0.935}               % weight
+\newcommand{\GmmMeanX}{0.171}           % mean[0]
+\newcommand{\GmmMeanY}{-20.409}         % mean[1]
 \newcommand{\GmmSemiA}{0.064}           % semi_axes[0]
-\newcommand{\GmmSemiB}{0.930}           % semi_axes[1]
-\newcommand{\GmmAngle}{98.4}            % angle_deg
+\newcommand{\GmmSemiB}{0.729}           % semi_axes[1]
+\newcommand{\GmmAngle}{98.7}            % angle_deg
 % select_v2_mle.json
-\newcommand{\MleSlope}{-7.0742}         % slope
-\newcommand{\MleIntercept}{-19.1962}    % intercept.1
-\newcommand{\MleSigIntX}{8.083 \times 10^{-5}}  % sigma_int_x
-\newcommand{\MleSigIntY}{0.4675}        % sigma_int_y
+\newcommand{\MleSlope}{-6.8346}         % slope
+\newcommand{\MleIntercept}{-19.2215}    % intercept.1
+\newcommand{\MleSigIntX}{6.132 \times 10^{-2}}  % sigma_int_x
+\newcommand{\MleSigIntY}{0.0991}        % sigma_int_y
 % select_v2_fiducial.json
-\newcommand{\FidHatyMin}{-21.9}         % haty_min
-\newcommand{\FidHatyMax}{-19.0}         % haty_max
-\newcommand{\FidSlopePlane}{-6.798}     % slope_plane
-\newcommand{\FidCOne}{-20.589}          % intercept_plane
-\newcommand{\FidCTwo}{-17.951}          % intercept_plane2
+\newcommand{\FidHatyMin}{-21.85}        % haty_min
+\newcommand{\FidHatyMax}{-19.00}        % haty_max
+\newcommand{\FidSlopePlane}{-6.535}     % slope_plane
+\newcommand{\FidCOne}{-20.565}          % intercept_plane
+\newcommand{\FidCTwo}{-18.021}          % intercept_plane2
 \newcommand{\FidNSigPerp}{3.0}          % n_sigma_perp
 \newcommand{\FidZMin}{0.03}             % z_obs_min
-\newcommand{\FidZMax}{0.10}             % z_obs_max
+\newcommand{\FidZMax}{0.08}             % z_obs_max
 % tophat_?.csv — slope (α)
-\newcommand{\SlopeMean}{-6.713}         % mean
-\newcommand{\SlopeStd}{0.065}           % std
-\newcommand{\SlopeQlo}{-6.819}          % 5%
-\newcommand{\SlopeQmed}{-6.712}         % 50%
-\newcommand{\SlopeQhi}{-6.605}          % 95%
-\newcommand{\SlopeEss}{1749}            % ESS_bulk (stansummary)
+\newcommand{\SlopeMean}{-6.691}         % mean
+\newcommand{\SlopeStd}{0.073}           % std
+\newcommand{\SlopeQlo}{-6.816}          % 5%
+\newcommand{\SlopeQmed}{-6.689}         % 50%
+\newcommand{\SlopeQhi}{-6.573}          % 95%
+\newcommand{\SlopeEss}{1178}            % ESS_bulk (stansummary)
 \newcommand{\SlopeRhat}{1.0}            % R_hat (stansummary)
 % tophat_?.csv — intercept (β)
-\newcommand{\IntMean}{-19.254}          % mean
+\newcommand{\IntMean}{-19.245}          % mean
 \newcommand{\IntStd}{0.015}             % std
-\newcommand{\IntQlo}{-19.279}           % 5%
-\newcommand{\IntQmed}{-19.254}          % 50%
-\newcommand{\IntQhi}{-19.230}           % 95%
-\newcommand{\IntEss}{1830}              % ESS_bulk (stansummary)
+\newcommand{\IntQlo}{-19.270}           % 5%
+\newcommand{\IntQmed}{-19.246}          % 50%
+\newcommand{\IntQhi}{-19.219}           % 95%
+\newcommand{\IntEss}{1301}              % ESS_bulk (stansummary)
 \newcommand{\IntRhat}{1.0}              % R_hat (stansummary)
 % tophat_?.csv — sigma_int_x
-\newcommand{\SigXMean}{0.026}           % mean
-\newcommand{\SigXStd}{0.004}            % std
-\newcommand{\SigXQlo}{0.019}            % 5%
-\newcommand{\SigXQmed}{0.026}           % 50%
-\newcommand{\SigXQhi}{0.033}            % 95%
-\newcommand{\SigXEss}{1632}             % ESS_bulk (stansummary)
+\newcommand{\SigXMean}{0.013}           % mean
+\newcommand{\SigXStd}{0.006}            % std
+\newcommand{\SigXQlo}{0.003}            % 5%
+\newcommand{\SigXQmed}{0.014}           % 50%
+\newcommand{\SigXQhi}{0.022}            % 95%
+\newcommand{\SigXEss}{875}              % ESS_bulk (stansummary)
 \newcommand{\SigXRhat}{1.0}             % R_hat (stansummary)
 % tophat_?.csv — sigma_int_y
-\newcommand{\SigYMean}{0.417}           % mean
-\newcommand{\SigYStd}{0.014}            % std
-\newcommand{\SigYQlo}{0.393}            % 5%
-\newcommand{\SigYQmed}{0.418}           % 50%
-\newcommand{\SigYQhi}{0.437}            % 95%
-\newcommand{\SigYEss}{1672}             % ESS_bulk (stansummary)
+\newcommand{\SigYMean}{0.438}           % mean
+\newcommand{\SigYStd}{0.011}            % std
+\newcommand{\SigYQlo}{0.420}            % 5%
+\newcommand{\SigYQmed}{0.439}           % 50%
+\newcommand{\SigYQhi}{0.456}            % 95%
+\newcommand{\SigYEss}{1414}             % ESS_bulk (stansummary)
 \newcommand{\SigYRhat}{1.0}             % R_hat (stansummary)
 
 \begin{document}
@@ -232,7 +235,7 @@ redshift-dependent covariance in the TFR-inferred peculiar velocities.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{../output/DR1/redshift_grid_tophat.png}
+    \includegraphics[width=1\linewidth]{\ResultDir/redshift_grid_tophat.png}
     \caption{Average redshift of DR1 spiral galaxies in bins of
     $\log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $M_R$.
     Intrinsically faint, slowly rotating galaxies are preferentially
@@ -495,7 +498,7 @@ Fig.~\ref{fig:selection_ellipse}.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{../output/DR1/selection_ellipse.png}
+    \includegraphics[width=1\linewidth]{\ResultDir/selection_ellipse.png}
     \caption{Distribution of DR1 spiral galaxies used for the training set selection in $(x,\,y)$ phase space,
     where $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$.
     The two GMM ellipses (at 1$\sigma$ and $3\sigma$) are overplotted; the dominant component
@@ -542,7 +545,7 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{../output/DR1/select_v2_fiducial_pull.png}
+    \includegraphics[width=1\linewidth]{\ResultDir/select_v2_fiducial_pull.png}
 \caption[Weighted-mean residual and pull profile as a function of $M_R$.]{Weighted-mean residual $\Delta M = \langle M_\mathrm{pred}\rangle - M_\mathrm{obs}$
     and pull profile (normalized by bin uncertainty) as a function of $M_R$
     for all catalog objects evaluated at the MLE parameters. Horizontal lines
@@ -575,7 +578,7 @@ Table~\ref{tab:fiducial} and shown with respect to the full sample in Figure~\re
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{../output/DR1/data.png}
+    \includegraphics[width=1\linewidth]{\ResultDir/data.png}
     \caption{Full DR1 spiral sample (grey) and training sample (colored points)
     in $(x,\,y)$ phase space.  The oblique selection boundaries and magnitude
     limits are indicated.  The training sample contains $\Ntrain$ galaxies.}
@@ -620,7 +623,7 @@ in Fig.~\ref{fig:tophat}.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{../output/DR1/tophat.png}
+    \includegraphics[width=1\linewidth]{\ResultDir/tophat.png}
     \caption{Corner plot of the posterior distribution for the four global
     TFR parameters from the DR1 tophat model fit.  Contours show the
     $1\sigma$ and $2\sigma$ confidence regions.}
@@ -732,7 +735,7 @@ the full sample are not clearly visible at the resolution of this plot.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{../output/DR1/tophat_cov_sub_noobs.png}
+    \includegraphics[width=1\linewidth]{\ResultDir/tophat_cov_sub_noobs.png}
     \caption{Visualization of the absolute magnitude posterior predictive covariance
     matrix
     for a subsample of galaxies ordered by redshift.  Off-diagonal
@@ -760,7 +763,7 @@ in the selection of the final sample.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{../output/DR1/tophat_grid.png}
+    \includegraphics[width=1\linewidth]{\ResultDir/tophat_grid.png}
     \caption{Mean prediction residual $\hat{y}_\text{pred} - \hat{y}_\text{obs}$
     binned on a grid in $(x,\,y)$ phase space for the training sample.
     The residuals are consistent with zero, with no evidence for systematic
@@ -776,7 +779,7 @@ $0.03 < z < 0.1$.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{../output/DR1/redshift_tophat.png}
+    \includegraphics[width=1\linewidth]{\ResultDir/redshift_tophat.png}
     \caption{TFR residuals as a function of observed redshift for the
      input and {\tt MAIN} samples.}
     \label{fig:redshift_tophat}

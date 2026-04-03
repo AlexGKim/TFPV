@@ -1,18 +1,38 @@
 # sync-numbers skill
 
-Update all hardcoded numeric values in `paper/main.tex` from the current
-`output/DR1/` result files.  Run this after any DR1 re-fit.
+Update all hardcoded numeric values in `paper/main.tex` from the result files in
+whichever directory `\ResultDir` points to.  Run this after any re-fit.
 
 ## Steps
+
+### 0. Resolve the result directory
+
+Read `\ResultDir` from `paper/main.tex` and derive the project-root-relative path:
+
+```python
+import re, pathlib
+tex = pathlib.Path('paper/main.tex').read_text()
+m = re.search(r'\\newcommand\{\\ResultDir\}\{([^}]+)\}', tex)
+if not m:
+    raise SystemExit('\\ResultDir not found in paper/main.tex')
+# LaTeX path is relative to paper/; strip leading ../ to get project-root path
+result_dir = m.group(1).lstrip('../').rstrip('/')   # e.g. "output/DR1"
+print('Using result directory:', result_dir)
+```
+
+Use `result_dir` in place of `output/DR1` in every subsequent step.
 
 ### 1. Extract full-precision MCMC posteriors and quantiles
 
 ```bash
 python3 -c "
-import glob, pandas as pd, numpy as np, json, sys
-files = sorted(glob.glob('output/DR1/tophat_?.csv'))
+import re, pathlib, glob, pandas as pd, numpy as np, json, sys
+tex = pathlib.Path('paper/main.tex').read_text()
+m = re.search(r'\\\\newcommand\{\\\\ResultDir\}\{([^}]+)\}', tex)
+result_dir = m.group(1).lstrip('../').rstrip('/')
+files = sorted(glob.glob(f'{result_dir}/tophat_?.csv'))
 if not files:
-    sys.exit('No tophat_?.csv files found in output/DR1/')
+    sys.exit(f'No tophat_?.csv files found in {result_dir}/')
 dfs = [pd.read_csv(f, comment='#') for f in files]
 df = pd.concat(dfs, ignore_index=True)
 pairs = [('slope','slope'), ('intercept','intercept.1'),
@@ -31,15 +51,18 @@ Format mean ± std with **3 decimal places**; p5/p50/p95 with **3 decimal places
 
 ### 2. Extract ESS_bulk and R_hat from stansummary.txt
 
-Parse `output/DR1/stansummary.txt` for the rows: `slope`, `intercept[1]`, `sigma_int_x`, `sigma_int_y`.
+Parse `{result_dir}/stansummary.txt` for the rows: `slope`, `intercept[1]`, `sigma_int_x`, `sigma_int_y`.
 Extract ESS_bulk (column 8) and R_hat (column 10) for each. Values are integers (ESS) and 1 decimal place (R_hat).
 
 ### 3. Extract N counts
 
 ```bash
 python3 -c "
-import json
-with open('output/DR1/config.json') as f:
+import re, pathlib, json
+tex = pathlib.Path('paper/main.tex').read_text()
+m = re.search(r'\\\\newcommand\{\\\\ResultDir\}\{([^}]+)\}', tex)
+result_dir = m.group(1).lstrip('../').rstrip('/')
+with open(f'{result_dir}/config.json') as f:
     cfg = json.load(f)
 print('n_training:', cfg['n_training'])
 print('n_total_fits:', cfg['n_total_fits'])
@@ -50,9 +73,9 @@ Format both with LaTeX thousands separator: e.g. `7{,}525`.
 
 ### 4. Read JSON source files
 
-- `output/DR1/selection_ellipse.json`
-- `output/DR1/select_v2_mle.json`
-- `output/DR1/select_v2_fiducial.json`
+- `{result_dir}/selection_ellipse.json`
+- `{result_dir}/select_v2_mle.json`
+- `{result_dir}/select_v2_fiducial.json`
 
 ### 5. Compute formatted values
 
