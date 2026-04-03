@@ -42,15 +42,18 @@ def create_average_grid_image(x_coords, y_coords, values, grid_resolution_x, gri
     # Use CenteredNorm to make 0 the neutral color
     norm = mcolors.CenteredNorm(vcenter=0.0, halfrange=v_lim)
 
+    cmap = plt.colormaps['seismic'].copy()
+    cmap.set_bad(color='lightgrey')
+
     # 3. Create Figure
     fig, ax = plt.subplots(figsize=(8, 6)) # Wide aspect ratio
-    
+
     img = ax.imshow(
-        average_heatmap.T, 
-        extent=[xmin, xmax, ymin, ymax], 
-        origin='lower', 
-        cmap='seismic', 
-        interpolation='nearest', 
+        average_heatmap.T,
+        extent=[xmin, xmax, ymin, ymax],
+        origin='lower',
+        cmap=cmap,
+        interpolation='nearest',
         aspect='auto',
         norm=norm
     )
