@@ -252,6 +252,7 @@ not follow the same TFR as normal spirals, while extreme outliers at either
 end of the phase-space distribution can disproportionately influence the fit.
 We therefore restrict the analysis to a region $\mathcal{S}$ in the observed
 $(\hat{x},\hat{y})$ plane that selects the well-behaved spiral population.
+The selection process has two phases, with the second region a refinement of the first.
 
 The region $\mathcal{S}$ is defined by two types of cut.
 First, upper and lower limits on the observed absolute magnitude $\hat{y}$
@@ -278,11 +279,13 @@ $\bar{c}_1 < \bar{c}_2$ are their intercepts, and $d\equiv \bar{c}_2-\bar{c}_1$ 
 perpendicular band width.
 
 
-The TFR is unknown a priori, so the diagonal band is based on an initial estimate
-of the slope of the distribution.  Variations in the selected slope perturb
-the galaxies that enter the analysis, but otherwise do not bias the fits.
-The procedure for selecting the limits is presented in \S\ref{sec:training_selection}, 
-after the description of the model in the next section.
+The TFR is unknown a priori, so an initial estimate is used to define
+the slope of the distribution.  Variations in the selected slope perturb
+the galaxies that enter the analysis, but otherwise do not bias the fits:
+our pipeline recovers the input slopes of mock surveys generated with a consistent model, independent of the initial estimate.
+The procedures for selecting the selection regions
+are presented in \S\ref{sec:training_selection}, 
+after the description of the model.
 
 \section{Model}
 \label{sec:model}
@@ -290,20 +293,20 @@ We construct a probabilistic forward model for the TFR that accounts for
 measurement uncertainties in both observables and for sample selection within
 a single likelihood.
 The full derivation is given in Appendix~\ref{sec:likelihood};
-here we state the key elements and the expression for the likelihood.
+here we state the elements of the model and the expression for the likelihood.
 
 The sample satisfies the selection criteria
 $(\hat{x}_i,\hat{y}_i) \in \mathcal{S}$.
 The training sample consists of $N$ galaxies.
-For each galaxy $i$, the observables are the measured log-velocity
+For a galaxy indexed by $i$, the observables are the measured log-velocity
 $\hat{x}_i$ with uncertainty $\sigma_{x,i}$ and the observed absolute
-magnitude $\hat{y}_i$ with uncertainty $\sigma_{y,i}$.
-Velocity uncertainties are treated as Gaussian in log-space.
+magnitude $\hat{y}_i$ with uncertainty $\sigma_{y,i}$.  Magnitude
+and log-velocity uncertainties are treated as Gaussian.
 
 The global TFR parameters are the slope $\alpha$, intercept $\beta$, and intrinsic
 scatter amplitudes $\sigma_{\mathrm{int},x}$ and $\sigma_{\mathrm{int},y}$
 along the $x$- and $y$-axes respectively.
-Each galaxy $i$ has a latent on-TFR magnitude $y_{\mathrm{TF},i}$ that
+Each galaxy has a latent on-TFR magnitude $y_{\mathrm{TF},i}$ that
 places it on the relation.   The true absolute magnitude and
 velocities $x_i$ and $y_i$
 have scatter around the TFR,
@@ -320,7 +323,7 @@ Measurements have Gaussian scatter around the true values:
 \end{align}
 
 For a hierarchical model, the underlying distribution of the latent
-parameter must be specified. We adopt a uniform prior,
+parameter must be specified. We adopt a uniform distribution,
 $y_{\mathrm{TF},i} \sim \mathrm{Uniform}(y_{\min},\,y_{\max})$, with
 bounds extending slightly beyond the selection window to accommodate
 scatter at the selection boundary,
@@ -330,35 +333,28 @@ y_{\max} &= \hat{y}_{\max} + \Delta y_{\max},
 \label{eqn:ymin_ymax}
 \end{align}
 where we set $\Delta y_{\min}=-0.5$, $\Delta y_{\max}=1.0$.
-The choice of latent prior matters only for objects whose latent
+The choice of latent model matters only for objects whose latent
 distribution varies appreciably across the width of the Gaussian
-measurement error; for objects with small uncertainties the posterior is
-likelihood-dominated regardless of the prior. To minimize sensitivity to
-this choice, we place the bounds in a region where $p(y_{\mathrm{TF}})$
+measurement error; for objects with small uncertainties the likelihood
+is insensitive to the model choice. To minimize sensitivity to
+this choice, we place the selectrion criteria bounds in a region where $p(y_{\mathrm{TF}})$
 is expected to have a weak gradient, so that the uniform remains a good
-local approximation even for objects with broad likelihoods, while also
-removing dwarf spirals. In this
+local approximation even for objects with broad likelihoods. In this
 regime the normalization $P(S_i = 1 \mid \theta)$ varies only weakly
-with small changes to $\Delta y_{\min}$ and $\Delta y_{\max}$ (already signifcantly
+with small changes to $\Delta y_{\min}$ and $\Delta y_{\max}$ (chosen
+to be signifcantly
 larger than the absolute magnitude measurement uncertainties), and the
 inferred TFR parameters are insensitive to the precise edge placements.
-By contrast, placing the bounds where $p(y_{\mathrm{TF}})$ drops
-steeply would bias the posteriors of boundary objects toward the
-higher-density region of the prior, and small shifts in edge placement
-would redistribute prior mass enough to bias the inferred slope and zero
-point. This choice is also supported empirically: in mock-catalog tests,
+This choice is also supported empirically: in mock-catalog tests,
 the uniform prior yielded more stable parameter recovery than a Gaussian prior,
 consistent with the relatively flat interior of the galaxy absolute-magnitude distribution.
 
-
-
-
-The likelihood is derived from the above model.
+The above model specifies the likelihood.
 Given the independence of the galaxy measurements, the total likelihood can be decomposed
 into the product of per-galaxy terms. 
 \begin{align}
 \mathcal{L}(\theta;\{\hat{x}_i\},\{\hat{y}_i\})
-&= \prod_{i=1}^{N} p(\hat{x}_i,\hat{y}_i \mid \theta, S_i=1).
+&= \prod_{i=1}^{N} p(\hat{x}_i,\hat{y}_i \mid \theta, (\hat{x}_i,\hat{y}_i)\in\mathcal{S}).
 \label{eqn:total_likelihood}
 \end{align}
 Convolving intrinsic and measurement scatter defines the combined uncertainties
@@ -371,7 +367,7 @@ Convolving intrinsic and measurement scatter defines the combined uncertainties
 Because the sample is restricted to $(\hat{x}_i,\hat{y}_i)\in\mathcal{S}$,
 the per-galaxy density is truncated and renormalized,
 \begin{align}
-p(\hat{x}_i,\hat{y}_i \mid \theta, S_i=1)
+p(\hat{x}_i,\hat{y}_i \mid \theta,(\hat{x}_i,\hat{y}_i)\in\mathcal{S})
 &= \frac{\mathcal{L}_i\;
          \mathbf{1}\!\left\{(\hat{x}_i,\hat{y}_i)\in\mathcal{S}\right\}}
         {P(S_i=1\mid\theta)}.
@@ -403,8 +399,7 @@ where $\Phi$ is the standard normal CDF and
 
 The denominator, i.e.\ the selection probability, is
 derived by transforming the $\hat{x}$--$\hat{y}$ to a new coordinate system where
-the parallelogram transforms to an axis-aligned rectangle.  The rectangular selection region
-is described by the sums and differences of four half planes.  The selection probability of
+the parallelogram transforms to an axis-aligned rectangle.  The rectangular region is the intersection of four closed half-planes.  The selection probability of
 a half plane is the standard bivariate-normal CDF.  The resulting expression is
 \begin{align}
 P(S_i=1\mid\theta)
@@ -456,13 +451,13 @@ that define the sample selection region $\mathcal{S}$
 Gaussian Mixture Model (GMM) fit identifies the core spiral population
 and defines a preliminary selection parallelogram; (ii) a nominal TFR is
 fit to the galaxies within that parallelogram; and (iii) a
-residual-profile diagnostic applied to the full catalog determines the
-magnitude limits beyond which magnitude deviations are significant.
+residual-profile diagnostic applied to the full catalog refines the
+magnitude limits to exclude regions where magnitude deviations are significant.
 
 Velocity--magnitude cuts are designed to exclude outliers and sensitivity
-to the modeling of the latent parameter distribution. We also apply a
-minimum redshift cut ($z > 0.03$) to reduce sensitivity to
-peculiar-velocity contamination, which is more severe at low redshift.
+to the modeling of the latent parameter distribution. We apply a
+minimum and maximum redshift cuts ($0.03 < z < 0.08$) to reduce sensitivity to
+peculiar-velocity contamination and potential contamination.
 
 The primary contaminants are dwarf galaxies, which are known not to
 follow the TFR, and bright galaxies lying on the sharp declining tail
@@ -499,10 +494,11 @@ Fig.~\ref{fig:selection_ellipse}.
 \begin{figure}
     \centering
     \includegraphics[width=1\linewidth]{\ResultDir/selection_ellipse.png}
-    \caption{Distribution of DR1 spiral galaxies used for the training set selection in $(x,\,y)$ phase space,
+    \caption{Distribution of DR1 spiral galaxies used for the initial
+    training set selection in $(x,\,y)$ phase space,
     where $x = \log_{10}(V_\text{rot}/100~\text{km\,s}^{-1})$ and $y = M_R$.
     The two GMM ellipses (at 1$\sigma$ and $3\sigma$) are overplotted; the dominant component
-    (weight $w = \GmmW$) is shown in orange.  The parallelogram defined by the extrema of the
+    (weight $w = \GmmW$).  The parallelogram defined by the extrema of the
     3$\sigma$ ellipse bound the sample used to determine the initial TFR estimate. }
     \label{fig:selection_ellipse}
 \end{figure}
@@ -513,8 +509,9 @@ The slope $\bar{s}$ is fixed by the orientation of the ellipse,
 and $\bar{c}_1$, $\bar{c}_2$ are set at $n_{\sigma,\perp} = 3$
 perpendicular $\sigma$ from the ellipse center. Values of
 $\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ are taken from the
-$y$-extent of the $3\sigma$ ellipse. The same minimum redshift
-used in the GMM fit is maintained. The selected training region is shown
+$y$-extent of the $3\sigma$ ellipse. The redshift limits
+used in the GMM fit are maintained. The selected parallelogran defining
+the initial training region is shown
 in Fig.~\ref{fig:selection_ellipse}.
 
 % values in ../output/DR1/select_v2_mle.json
@@ -524,7 +521,7 @@ $\MleSlope$, an intercept of $\MleIntercept$, an intrinsic scatter in $x$
 of $\sigma_{\mathrm{int},x} = \MleSigIntX$, and an
 intrinsic scatter in $y$ of $\sigma_{\mathrm{int},y} = \MleSigIntY$.
 
-For the full sample of galaxies with $z>0.03$, we predict absolute magnitudes using the
+For the full sample of galaxies with $0.03 < z < 0.08$, we predict absolute magnitudes using the
 nominal TFR and compute the residual
 $\Delta M = \langle M_\text{pred}\rangle - M_\text{obs}$ for every
 object. We then calculate the weighted mean residual and its uncertainty
@@ -596,7 +593,6 @@ Convergence diagnostics are satisfactory for all model parameters: $\hat{R} = 1.
 bulk effective sample sizes are reported in Table~\ref{tab:results}.
 Stan's \texttt{diagnose} utility confirms no divergent transitions, no treedepth
 saturation, and satisfactory E-BFMI across all four chains.
-
 % fit results in  ../output/DR1/stansummary.txt,
 The posterior 68\% confidence intervals for the global TFR parameters are
 given in Table~\ref{tab:results}.  The full posterior corner plot is shown
@@ -632,16 +628,17 @@ in Fig.~\ref{fig:tophat}.
 
 \section{Absolute Magnitude Predictions from the TFR}
 
-For any galaxy with a rotation-velocity measurement, the TFR determined in
-\S\ref{sec:TFRfit} is used to infer the absolute magnitude. We consider all
+For all galaxies in the initial DESI DR1 Peculiar Velocity sprial sample,
+the TFR determined in
+\S\ref{sec:TFRfit} is used to infer their absolute magnitudes. The subset of
 galaxies satisfying the magnitude--velocity selection criteria of the training
-sample, with no restriction on redshift: this is referred to as the {\tt MAIN}
-sample. Consequently, nearly all galaxies
-in this section were also used in training; however, we treat each as if it
+sample, with no restriction on redshift is referred to as the {\tt MAIN}
+sample. Nearly all galaxies in the {\tt MAIN} sample are part of the training set;
+nevertheless, we treat each as if it
 were out-of-sample. This approximation is justified on two grounds: no single
 galaxy has a significant influence on the TFR fit, and accounting for the
 covariance between the data and the fitted parameters would substantially
-complicate the analysis without a commensurate gain in accuracy.
+complicate the analysis.
 
 
 
@@ -702,35 +699,38 @@ $y_{\mathrm{TF},\star}$ are
 
 
 
-The predicted magnitude and uncertainty for each galaxy are the mean and
-standard deviation of the mixture distribution
-Eq.~\eqref{eq:pred_y_tophat_mcmc}; the full posterior predictive covariance
-across galaxies is computed via the law of total covariance.
-Conditional on $\theta$, galaxy predictions are independent, so off-diagonal
-covariance arises solely from shared uncertainty in the TFR parameters.
-For each MCMC draw $\theta^{(m)}$, we define the per-draw conditional mean
-$\mu_i^{(m)} = \mathbb{E}[y_i \mid \hat{x}_i, \sigma_{1,i}^{(m)}, \theta^{(m)}]$
-as the truncated-normal mean of $y_{\mathrm{TF},i}$ given $\hat{x}_i$ and
-$\theta^{(m)}$ (Eq.~\eqref{eq:post_yTF_tophat}), and the per-draw predictive
-variance $v_i^{(m)} = \operatorname{Var}(y_{\mathrm{TF},i} \mid \hat{x}_i,
-\theta^{(m)}) + \left(\sigma_{\mathrm{int},y}^{(m)}\right)^2$ including both flavors of
-intrinsic scatter: $\sigma_{\mathrm{int},y}$ enters additively, while
-$\sigma_{\mathrm{int},x}$ enters the truncated-normal spread through
-$\sigma_L = |\alpha|\,\sigma_{1,\star}$ (defined above), where
+The reported magnitude and its uncertainty for each galaxy are the mean and
+standard deviation of the mixture distribution in
+Eq.~\eqref{eq:pred_y_tophat_mcmc}. The full posterior predictive covariance
+across galaxies is obtained via the law of total covariance. Conditional on
+the TFR parameters $\theta$, galaxy predictions are independent, so
+off-diagonal covariance arises solely from the shared uncertainty in $\theta$.
+For each MCMC draw $\theta^{(m)}$, define the per-draw conditional mean
+\begin{equation}
+    \mu_i^{(m)} \;=\; \mathbb{E}\left[y_i \mid \hat{x}_i, \sigma_{1,i}^{(m)},
+    \theta^{(m)}\right],
+\end{equation}
+which is the truncated-normal mean of $y_{\mathrm{TF},i}$ given $\hat{x}_i$
+and $\theta^{(m)}$ (Eq.~\eqref{eq:post_yTF_tophat}), and the per-draw
+predictive variance
+\begin{equation}
+    v_i^{(m)} \;=\; \operatorname{Var}\!\left(y_{\mathrm{TF},i} \mid \hat{x}_i,
+    \theta^{(m)}\right) \;+\; \left(\sigma_{\mathrm{int},y}^{(m)}\right)^2,
+\end{equation}
+including both flavors of intrinsic scatter: $\sigma_{\mathrm{int},y}$ enters
+additively, while $\sigma_{\mathrm{int},x}$ enters the truncated-normal width
+through $\sigma_L = |\alpha|\,\sigma_{1,\star}$, where
 $\sigma_{1,\star}^2 = \sigma_{x,\star}^2 + \sigma_{\mathrm{int},x}^2$.
-The diagonal then
-decomposes into three contributions: calibration variance
-($\operatorname{Cov}_\theta$ of the conditional means), expected predictive
-variance ($\mathbb{E}_\theta[v_i^{(m)}]$, encompassing intrinsic scatter and
+The diagonal of the predictive covariance then decomposes into three
+contributions: calibration variance ($\operatorname{Cov}_\theta$ of the
+conditional means), expected predictive variance
+($\mathbb{E}_\theta[v_i^{(m)}]$, encompassing intrinsic scatter and
 truncated-normal variance), and measurement noise $\sigma_{y,i}^2$ in
 $\hat{y}_i$, where $\bar{y}_i = \frac{1}{M}\sum_m \mu_i^{(m)}$ is the
-posterior predictive mean.
-Off-diagonal elements follow from the calibration-variance formula alone,
-exploiting conditional independence.
-
+posterior predictive mean. Off-diagonal elements follow from the
+calibration-variance term alone, exploiting conditional independence.
 The full posterior predictive covariance matrix for a subsample of
-galaxies is visualized in Fig.~\ref{fig:tophat_cov}.  The diagonals of the matrices for
-the full sample are not clearly visible at the resolution of this plot.
+galaxies ordered by redshift is visualized in Fig.~\ref{fig:tophat_cov}.  
 
 
 \begin{figure}
@@ -739,7 +739,8 @@ the full sample are not clearly visible at the resolution of this plot.
     \caption{Visualization of the absolute magnitude posterior predictive covariance
     matrix
     for a subsample of galaxies ordered by redshift.  Off-diagonal
-    correlations arise from the shared TFR calibration parameters.}
+    correlations arise from the shared TFR calibration parameters.
+    The diagonal for the matrix of the {\tt MAIN} sample is not clearly visible at the resolution of this plot.}
     \label{fig:tophat_cov}
 \end{figure}
 
@@ -749,33 +750,58 @@ the full sample are not clearly visible at the resolution of this plot.
 Peculiar velocities are manifest as peculiar magnitudes, i.e.\ deviations
 between observed and TFR-predicted absolute magnitudes.
 These residuals $\hat{y}_\text{pred} - \hat{y}_\text{obs}$
-are calculated for all galaxies that satisfy the magnitude and oblique cuts of the training sample,
-but with no redshift restriction.
+are calculated for the DR1 PV spiral sample.
 
-To visualize the residuals, we define a grid in $(x,\,y)$ phase space and compute the mean
+We define a grid in $(x,\,y)$ phase space and compute the mean
 residual for each element.
-Figure~\ref{fig:tophat_grid} shows this residual grid; the residuals
-are consistent with zero across the full phase space, with no evidence for
-a non-linear TFR or magnitude-dependent bias.
+Figure~\ref{fig:tophat_grid} shows this residual grid, both for the full sample
+and for the {\tt MAIN} sample.
+
+As discussed in \S\ref{sec:training_selection}, the magnitude limits
+$\hat{y}_\text{min}$ and $\hat{y}_\text{max}$ were chosen to exclude
+regions where the TFR fit is not self-consistent, by examining the combined magnitude
+residuals in slices of redshift.
+The left panel of Fig.~\ref{fig:tophat_grid} illustrates why this is
+necessary: for galaxies brighter than $M_R = -19$, the zero-residual
+locus follows the TFR slope, with residuals increasing monotonically
+with distance from it, consistent with Gaussian scatter and measurement
+uncertainties. For galaxies fainter than $M_R = -19$, however, the
+zero-residual locus deviates from this slope, indicating a population
+--- likely dwarf galaxies --- that does not follow the TFR.
+A similar but more sublte 
+deviation is observed at the bright end, which could be due to galaxy outliers
+or limitations of the top-hat model in this regime.
+The right panel of Fig.~\ref{fig:tophat_grid} shows that for
+the $\tt MAIN$ sample, for which selection criteria are applied (but no redshift restriction),
+the residuals are consistent with zero across the full phase space, with no evidence for a
+non-linear TFR or magnitude-dependent bias.
 There is a slight asymmetry in the residuals, as the sample selection parallelogram
 is not perfectly centered or aligned with the TFR fit to the training sample and used
 in the selection of the final sample.
 
 \begin{figure}
     \centering
-    \includegraphics[width=1\linewidth]{\ResultDir/tophat_grid.png}
+    \includegraphics[width=0.49\linewidth]{\ResultDir/tophat_grid_full.png}
+    \includegraphics[width=0.49\linewidth]{\ResultDir/tophat_grid.png}
     \caption{Mean prediction residual $\hat{y}_\text{pred} - \hat{y}_\text{obs}$
-    binned on a grid in $(x,\,y)$ phase space for the training sample.
+    binned on a grid in $(x,\,y)$ phase space for the training sample.  Left:
+    the DR1 PV spiral, Right: the {\tt MAIN} sample.
     The residuals are consistent with zero, with no evidence for systematic
     trends.}
     \label{fig:tophat_grid}
 \end{figure}
 
-We also examine the residuals as a function of redshift to check for
-redshift-dependent systematic effects.  Fig.~\ref{fig:redshift_tophat}
-shows the TFR residuals versus $z$ for both the input and {\tt MAIN} samples.
-No significant redshift trend is detected over the range
-$0.03 < z < 0.1$.
+The importance of redshift is demonstrated in Fig.~\ref{fig:redshift_tophat}, which shows\
+the residuals as a function of redshift for both the full sample and the {\tt MAIN} sample. 
+For the full sample, there is a clear redshift dependence in the residuals, with a systematic
+trend that deviates from zero at low and high redshifts.
+This indicates that the TFR fit is not self-consistent across the full redshift range,
+likely due to contamination by non-TFR-following populations (e.g., dwarf galaxies) at certain redshifts.
+In contrast, for the {\tt MAIN} sample, which is selected based on the criteria defined
+in \S\ref{sec:training_selection}, the residuals are consistent with zero across the entire redshift range,
+at least to first-order, demonstrating that the selection criteria mitigate
+redshift-dependent systematic effects.
+
 
 \begin{figure}
     \centering
@@ -784,6 +810,8 @@ $0.03 < z < 0.1$.
      input and {\tt MAIN} samples.}
     \label{fig:redshift_tophat}
 \end{figure}
+
+
 
 
 
