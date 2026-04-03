@@ -153,9 +153,9 @@ def _save_pull_plot(run_dir, run_name, n_all, n_sel, params,
     all_vals = np.concatenate([lo_vals, hi_vals])
     p_lo    = float(np.nanpercentile(all_vals, 2))
     p_hi    = float(np.nanpercentile(all_vals, 98))
-    p_break = -0.15  # hard cut: outlier below, main cluster above
-    pad_bot = 0.15 * max(p_break - p_lo, 1e-6)
-    pad_top = 0.15 * max(p_hi - p_break, 1e-6)
+    p_break = -0.22  # hard cut: outlier below, main cluster above
+    pad_bot = 0.22 * max(p_break - p_lo, 1e-6)
+    pad_top = 0.22 * max(p_hi - p_break, 1e-6)
 
     colors_mean = np.where(wt_means[valid] >= 0, "steelblue", "tomato")
 
