@@ -1142,7 +1142,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def DESI(kind="normal",
-         galaxy_fits="data/DESI-DR1_TF_pv_cat_v15.fits",
          grid_resolution_x=50,
          grid_resolution_y=50,
          # tophat-only bounds:
@@ -1159,8 +1158,12 @@ def DESI(kind="normal",
         raise ValueError("kind must be 'normal' or 'tophat'")
     _p = lambda name: os.path.join(run_dir, name) if run_dir else f"DESI_{name}"
 
-    # --- load data ---
+    # --- load config and derive input FITS path ---
+    with open(_p("config.json"), "r") as f:
+        cfg = json.load(f)
+    galaxy_fits = cfg["source"]
 
+    # --- load data ---
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = load_xy_and_uncertainties_from_desi(
         galaxy_fits, row=None, sort_by_zobs=False
     )
@@ -1187,10 +1190,6 @@ def DESI(kind="normal",
 
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
-
-    # --- apply config.json selection to full sample ---
-    with open(_p("config.json"), "r") as f:
-        cfg = json.load(f)
 
     main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star)
 
@@ -1258,7 +1257,7 @@ def DESI(kind="normal",
         plt.close(fig)
 
     # --- redshift residual errorbar plot ---
-    plt.scatter(zobs_star, mean_y, marker=".", alpha=0.2, label="Full Sample")
+    plt.scatter(zobs_star, mean_y, marker=".", alpha=0.2, label="DR2 PV Spirals")
     plt.scatter(zobs_star2, mean_y2, marker=".", alpha=0.2, label="Main Sample")
 
     
