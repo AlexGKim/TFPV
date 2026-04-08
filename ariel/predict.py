@@ -1234,6 +1234,70 @@ def DESI(kind="normal",
         fig.savefig(_p(f'{kind}_grid_full.png'), dpi=300)
         plt.close(fig)
 
+        # --- GRID: prediction variance on (xhat, yhat) ---
+        _var_pred = sd_pred**2
+        _sum, xedges_v, yedges_v = np.histogram2d(
+            xhat_star, yhat_star,
+            bins=[grid_resolution_x, grid_resolution_y],
+            weights=_var_pred,
+        )
+        _cnt, _, _ = np.histogram2d(
+            xhat_star, yhat_star,
+            bins=[grid_resolution_x, grid_resolution_y],
+        )
+        _avg = np.divide(_sum, _cnt, where=_cnt != 0, out=np.full_like(_sum, np.nan))
+        _cmap_var = plt.colormaps['viridis'].copy()
+        _cmap_var.set_bad(color='lightgrey')
+        fig_v, ax_v = plt.subplots(figsize=(8, 6))
+        img_v = ax_v.imshow(
+            _avg.T,
+            extent=[xedges_v[0], xedges_v[-1], yedges_v[0], yedges_v[-1]],
+            origin='lower',
+            cmap=_cmap_var,
+            norm=mcolors.LogNorm(vmin=np.nanpercentile(_avg, 5), vmax=np.nanpercentile(_avg, 95)),
+            interpolation='nearest',
+            aspect='auto',
+        )
+        ax_v.yaxis.set_inverted(True)
+        ax_v.set_xlabel(r'$\log(V/V_0)$')
+        ax_v.set_ylabel(r'$M$')
+        fig_v.colorbar(img_v, ax=ax_v, label=r'Average prediction variance (mag$^2$)')
+        fig_v.savefig(_p(f'{kind}_grid_variance.png'), dpi=300)
+        plt.close(fig_v)
+
+        # --- GRID: mean sigma_x_star on (xhat, yhat) ---
+        _sum_sx, xedges_sx, yedges_sx = np.histogram2d(
+            xhat_star, yhat_star,
+            bins=[grid_resolution_x, grid_resolution_y],
+            weights=sigma_x_star,
+        )
+        _cnt_sx, _, _ = np.histogram2d(
+            xhat_star, yhat_star,
+            bins=[grid_resolution_x, grid_resolution_y],
+        )
+        _avg_sx = np.divide(_sum_sx, _cnt_sx, where=_cnt_sx != 0, out=np.full_like(_sum_sx, np.nan))
+        _cmap_sx = plt.colormaps['viridis'].copy()
+        _cmap_sx.set_bad(color='lightgrey')
+        fig_sx, ax_sx = plt.subplots(figsize=(8, 6))
+        img_sx = ax_sx.imshow(
+            _avg_sx.T,
+            extent=[xedges_sx[0], xedges_sx[-1], yedges_sx[0], yedges_sx[-1]],
+            origin='lower',
+            cmap=_cmap_sx,
+            norm=mcolors.LogNorm(
+                vmin=float(np.nanpercentile(_avg_sx, 5)),
+                vmax=float(np.nanpercentile(_avg_sx, 95)),
+            ),
+            interpolation='nearest',
+            aspect='auto',
+        )
+        ax_sx.yaxis.set_inverted(True)
+        ax_sx.set_xlabel(r'$\log(V/V_0)$')
+        ax_sx.set_ylabel(r'$M$')
+        fig_sx.colorbar(img_sx, ax=ax_sx, label=r'Mean $\sigma_{\hat{x}}$')
+        fig_sx.savefig(_p(f'{kind}_grid_sigma_x.png'), dpi=300)
+        plt.close(fig_sx)
+
     # --- GRID: redshift on (xhat, yhat) ---
     if make_redshift_grid:
         fig, ax, img = create_average_grid_image(
@@ -1268,6 +1332,34 @@ def DESI(kind="normal",
     plt.legend()
     plt.ylim((-8,4))
     plt.savefig(_p(f"redshift_{kind}.png"), dpi=300)
+    plt.clf()
+
+    # --- magnitude variance vs redshift ---
+    var_obs  = sigma_y_star**2
+    var_pred = sd_pred**2
+    var_total = var_obs + var_pred
+
+    # plt.scatter(zobs_star, var_total, marker=".", alpha=0.15, s=4, label="Total")
+    plt.scatter(zobs_star, var_pred,  marker=".", alpha=0.15, s=4, label="Prediction")
+    # plt.scatter(zobs_star, var_obs,   marker=".", alpha=0.15, s=4, label="Obs mag")
+    plt.xscale("log")
+    plt.yscale("log")
+
+    plt.xlabel(r"$z_{\text{obs}}$")
+    plt.ylabel(r"Magnitude variance (mag$^2$)")
+    plt.legend()
+    plt.savefig(_p(f"variance_redshift_{kind}.png"), dpi=300)
+    plt.clf()
+
+    # --- magnitude variance vs xhat ---
+    # plt.scatter(xhat_star, var_total, marker=".", alpha=0.15, s=4, label="Total")
+    plt.scatter(xhat_star, var_pred,  marker=".", alpha=0.15, s=4, label="Prediction")
+    # plt.scatter(xhat_star, var_obs,   marker=".", alpha=0.15, s=4, label="Obs mag")
+    plt.yscale("log")
+    plt.xlabel(r"$\log(V/V_0)$")
+    plt.ylabel(r"Magnitude variance (mag$^2$)")
+    plt.legend()
+    plt.savefig(_p(f"variance_xhat_{kind}.png"), dpi=300)
     plt.clf()
 
     # --- optional: tophat vs normal scatter comparison ---
