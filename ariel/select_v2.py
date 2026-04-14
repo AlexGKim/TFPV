@@ -392,6 +392,8 @@ def main():
             "slope_plane": cuts3["slope_plane"],
             "intercept_plane": cuts3["intercept_plane"],
             "intercept_plane2": cuts3["intercept_plane2"],
+            "z_obs_min": args.z_obs_min,
+            "z_obs_max": args.z_obs_max,
         }
         fiducial_path = os.path.join(run_dir, "select_v2_fiducial.json")
         with open(fiducial_path, "w") as f:
@@ -502,16 +504,26 @@ def main():
         json.dump(params, f, indent=2)
     print(f"Saved MLE parameters → {mle_path}")
 
-    # ── Compute per-galaxy residual and pull profile over full catalog ─────────
+    # ── Compute per-galaxy residual and pull profile over z-restricted catalog ──
     y_min = float(data_dict["y_min"])
     y_max = float(data_dict["y_max"])
 
+    # Filter to the same z window used for the MLE fit so the pull plot reflects
+    # the actual calibration sample, not galaxies outside the redshift range.
+    _z_raw = raw_data.get("z_obs", np.zeros(len(raw_data["x"])))
+    _z_mask = np.ones(len(_z_raw), dtype=bool)
+    if cuts.get("z_obs_min") is not None:
+        _z_mask &= _z_raw > cuts["z_obs_min"]
+    if cuts.get("z_obs_max") is not None:
+        _z_mask &= _z_raw <= cuts["z_obs_max"]
+    raw_data_z = {k: v[_z_mask] for k, v in raw_data.items()}
+
     bin_centers, bin_widths, pulls, wt_means, wt_uncs = _compute_pull_stats(
-        raw_data, params, y_min, y_max, args.n_bins
+        raw_data_z, params, y_min, y_max, args.n_bins
     )
 
     pull_stats = {
-        "n_all": int(len(raw_data["x"])),
+        "n_all": int(len(raw_data_z["x"])),
         "n_sel": int(len(x)),
         "bin_centers": bin_centers.tolist(),
         "bin_widths": bin_widths.tolist(),

@@ -141,7 +141,8 @@ def process_desi_tf_data(
 
     # Track filtering statistics
     y_filtered_rows = 0
-    z_filtered_rows = 0
+    z_min_filtered_rows = 0  # rows surviving z_obs_min cut
+    z_filtered_rows = 0      # rows surviving both z cuts
     plane_pass_rows = 0
 
     for i in range(len(x_all)):
@@ -152,21 +153,22 @@ def process_desi_tf_data(
         if (y_val < haty_max) and (y_val > haty_min):
             y_filtered_rows += 1
 
-            # ---- NEW REDSHIFT CUT ----
+            # ---- REDSHIFT CUTS ----
             if (z_obs_min is not None) and (zobs_all[i] <= z_obs_min):
                 continue
+            z_min_filtered_rows += 1
             if (z_obs_max is not None) and (zobs_all[i] > z_obs_max):
                 continue
             z_filtered_rows += 1
-            # ---------------------------
+            # -----------------------
 
             if plane_cut:
                 lower_bound_oblique = slope_plane * x_val + intercept_plane
                 lower_bound = max(haty_min, lower_bound_oblique)
 
                 if not two_sided:
-                    # One‑sided: lower_bound <= y
-                    if lower_bound <= y_val:
+                    # One‑sided: lower_bound < y
+                    if lower_bound < y_val:
                         x_data.append(x_val)
                         y_data.append(y_val)
                         sigma_x_data.append(sigma_x_all[i])
@@ -174,11 +176,11 @@ def process_desi_tf_data(
                         z_data.append(zobs_all[i])
                         plane_pass_rows += 1
                 else:
-                    # Two‑sided: lower_bound <= y <= min(haty_max, upper_bound_oblique)
+                    # Two‑sided: lower_bound < y < min(haty_max, upper_bound_oblique)
                     upper_bound_oblique = slope_plane * x_val + intercept_plane2
                     upper_bound = min(haty_max, upper_bound_oblique)
 
-                    if (lower_bound <= y_val) and (y_val <= upper_bound):
+                    if (lower_bound < y_val) and (y_val < upper_bound):
                         x_data.append(x_val)
                         y_data.append(y_val)
                         sigma_x_data.append(sigma_x_all[i])
@@ -229,14 +231,6 @@ def process_desi_tf_data(
     # SECTION 3: CREATE STAN DATA DICTIONARY
     # ============================================================================
     N_bins = 1
-
-    # Calculate y_min and y_max based on selected sample
-    if N_total > 0:
-        y_min_data = float(np.min(y) - 0.5)
-        y_max_data = float(np.max(y) + 0.5)
-    else:
-        y_min_data = -23.0
-        y_max_data = -15.0
 
     mu_y_TF = float(np.mean(y)) if N_total > 0 else 0.0
     tau = 1.5 * float(np.std(y, ddof=1)) if N_total > 1 else 1.0
@@ -321,23 +315,23 @@ def process_desi_tf_data(
     print(f"  Rows with {haty_min} < y < {haty_max}: {y_filtered_rows}")
 
     if z_obs_min is not None:
-        print(f"  Rows with z_obs > {z_obs_min}: {z_filtered_rows}")
+        print(f"  Rows with z_obs > {z_obs_min}: {z_min_filtered_rows}")
     if z_obs_max is not None:
         print(f"  Rows with z_obs <= {z_obs_max}: {z_filtered_rows}")
 
     if plane_cut:
         if not two_sided:
             print(
-                f"  Rows passing plane cut (max({haty_min}, bar_s*x+c1) <= y): {plane_pass_rows}"
+                f"  Rows passing plane cut (max({haty_min}, bar_s*x+c1) < y): {plane_pass_rows}"
             )
             print(
-                f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}"
+                f"  Rows filtered out by plane cut: {z_filtered_rows - plane_pass_rows}"
             )
             print(f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}")
         else:
             print(f"  Rows passing two‑sided plane cut: {plane_pass_rows}")
             print(
-                f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}"
+                f"  Rows filtered out by plane cut: {z_filtered_rows - plane_pass_rows}"
             )
             print(
                 f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}, c2 = {intercept_plane2}"

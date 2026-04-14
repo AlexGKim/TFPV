@@ -72,8 +72,8 @@ def main():
 
     # Prompt user
     n_sigma_perp = prompt_float("Enter n_sigma_perp (perpendicular cut width in sigma units) [default 3]: ", default=3.0)
-    haty_min     = prompt_float("Enter haty_min (bright-end magnitude limit) [default -21.9]: ", default=-21.7)
-    haty_max     = prompt_float("Enter haty_max (dim-end   magnitude limit) [default -19.12]: ", default=-19.0)
+    haty_min     = prompt_float("Enter haty_min (bright-end magnitude limit) [default -21.7]: ", default=-21.7)
+    haty_max     = prompt_float("Enter haty_max (dim-end   magnitude limit) [default -19.0]: ", default=-19.0)
     z_obs_min    = prompt_float("Enter z_obs_min (minimum redshift) [default 0.03]: ", default=0.03)
     z_obs_max    = prompt_float("Enter z_obs_max (maximum redshift) [default 0.1]: ", default=0.1)
 
