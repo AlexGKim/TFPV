@@ -54,8 +54,12 @@ def load_data(
 
             logvrot = np.asarray(data_main["LOGVROT"], dtype=float)
             logvrot_err = np.asarray(data_main["LOGVROT_ERR"], dtype=float)
-            absmag = np.asarray(data_main["R_ABSMAG_SB26"], dtype=float)
-            absmag_err = np.asarray(data_main["R_ABSMAG_SB26_ERR"], dtype=float)
+
+            from mag_utils import get_mag_cols
+
+            col_abs, col_abs_err, _ = get_mag_cols(data_main.dtype.names)
+            absmag = np.asarray(data_main[col_abs], dtype=float)
+            absmag_err = np.asarray(data_main[col_abs_err], dtype=float)
 
             x_raw = logvrot - 2.0
             sigma_x = logvrot_err
@@ -74,15 +78,12 @@ def load_data(
 
             V = np.asarray(data["V_0p4R26"], dtype=float)
             V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
-            absmag = np.asarray(data["R_ABSMAG_SB26"], dtype=float)
 
-            if "R_ABSMAG_SB26_ERR" in names:
-                absmag_err = np.asarray(data["R_ABSMAG_SB26_ERR"], dtype=float)
-            else:
-                print(
-                    "  Warning: R_ABSMAG_SB26_ERR absent; falling back to R_MAG_SB26_ERR"
-                )
-                absmag_err = np.asarray(data["R_MAG_SB26_ERR"], dtype=float)
+            from mag_utils import get_mag_cols
+
+            col_abs, col_abs_err, _ = get_mag_cols(names)
+            absmag = np.asarray(data[col_abs], dtype=float)
+            absmag_err = np.asarray(data[col_abs_err], dtype=float)
 
             x_raw = np.log10(np.where(V > 0, V, np.nan) / 100.0)
             sigma_x = V_err / (np.where(V > 0, V, np.nan) * np.log(10.0))

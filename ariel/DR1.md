@@ -1,12 +1,12 @@
 # DR1 Run: SGA-2020
 
 This document records the full command sequence for the DR1 run on the
-`SGA-2020_iron_Vrot_VI_corr.fits` dataset.
+`SGA-2020_iron_Vrot_VI_corr_v3.fits` dataset.
 
 ## Setup
 
 ```bash
-export FITS=data/SGA-2020_iron_Vrot_VI_corr.fits
+export FITS=data/SGA-2020_iron_Vrot_VI_corr_v3.fits
 export RUN=DR1
 export CONFIG=configs/dr1_default.json
 ```
@@ -165,11 +165,11 @@ open output/$RUN/normal.png
 
 ## Step 8: Predict absolute magnitudes
 
+The input FITS file is read from `config.json["source"]`; `--input` is not required.
+
 ```bash
-python predict.py --run $RUN --model tophat --source DESI \
-    --catalog --input $FITS
-python predict.py --run $RUN --model normal  --source DESI \
-    --catalog --input $FITS
+python predict.py --run $RUN --model tophat --source DESI --catalog
+python predict.py --run $RUN --model normal  --source DESI --catalog
 ```
 
 `--catalog` writes an augmented FITS catalog to
@@ -180,9 +180,14 @@ Per run, the following output files are written:
 
 | File | Description |
 |------|-------------|
-| `output/$RUN/{model}_grid.png` | mean_pred − ŷ_obs on (x̂, ŷ) grid |
-| `output/$RUN/redshift_grid_{model}.png` | residual heat-map on (x̂, redshift) grid |
-| `output/$RUN/redshift_{model}.png` | pull vs. redshift scatter |
+| `output/$RUN/{model}_grid.png` | mean residual on (x̂, ŷ) grid — main selection |
+| `output/$RUN/{model}_grid_full.png` | mean residual on (x̂, ŷ) grid — full input sample |
+| `output/$RUN/{model}_grid_variance.png` | average prediction variance per (x̂, ŷ) bin |
+| `output/$RUN/{model}_grid_sigma_x.png` | mean σ_x̂ per (x̂, ŷ) bin |
+| `output/$RUN/redshift_grid_{model}.png` | mean redshift on (x̂, ŷ) grid |
+| `output/$RUN/redshift_{model}.png` | residual vs. redshift scatter |
+| `output/$RUN/variance_redshift_{model}.png` | prediction variance vs. redshift |
+| `output/$RUN/variance_xhat_{model}.png` | prediction variance vs. x̂ |
 | `output/$RUN/{model}_catalog.fits` | augmented FITS catalog with predicted magnitudes |
 | `output/$RUN/{model}_cov.fits` | posterior predictive covariance matrix, float32, (G, G) |
 | `output/$RUN/{model}_cov.png` | covariance + correlation matrix, two panels |
@@ -190,6 +195,35 @@ Per run, the following output files are written:
 
 See [Predict.md](Predict.md) for full argument reference and covariance
 computation details.
+
+---
+
+## Step 9: Explore residual bias
+
+Correlate magnitude residuals with additional galaxy properties from the FITS
+catalogue (morphology, colour, size, inclination, environment).  Results land
+in `output/$RUN/explore_residuals/`.
+
+```bash
+python explore_residuals.py --run-dir output/$RUN --kind tophat
+```
+
+Output plots:
+
+| File | Description |
+|------|-------------|
+| `resid_vs_ba.png` | Residual vs. axis ratio b/a (inclination proxy) |
+| `resid_vs_d26_kpc.png` | Residual vs. physical diameter D₂₆ (kpc) |
+| `resid_vs_g_r.png` | Residual vs. g − r colour |
+| `resid_vs_r_z.png` | Residual vs. r − z colour |
+| `resid_vs_g_z.png` | Residual vs. g − z colour |
+| `resid_vs_sma_sb26.png` | Residual vs. angular semi-major axis at SB26 |
+| `resid_vs_sma_ratio.png` | Residual vs. SMA_SB26 / SMA_SB22 (concentration proxy) |
+| `resid_vs_{g,r,z}_sma50.png` | Residual vs. per-band half-light radius |
+| `resid_by_morphtype.png` | Mean residual per morphological type |
+| `resid_by_photsys.png` | Residual distributions for PHOTSYS N vs. S |
+| `resid_by_group.png` | Isolated (GROUP_MULT=1) vs. group galaxies |
+| `correlation_summary.png` | Pearson r summary for all continuous parameters |
 
 ---
 

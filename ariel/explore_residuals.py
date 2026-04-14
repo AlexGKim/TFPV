@@ -156,14 +156,14 @@ def main():
                     return np.full(len(data), "", dtype=object)
                 return np.full(len(data), np.nan, dtype=dtype)
 
+        from mag_utils import get_mag_cols
+
+        col_abs, col_abs_err, col_app = get_mag_cols(names)
+
         V = _get_col("V_0p4R26")
         V_err = _get_col("V_0p4R26_ERR")
-        yhat_raw = _get_col("R_ABSMAG_SB26")
-        # sigma_y fallback: R_ABSMAG_SB26_ERR → R_MAG_SB26_ERR
-        mag_err_col = (
-            "R_ABSMAG_SB26_ERR" if "R_ABSMAG_SB26_ERR" in names else "R_MAG_SB26_ERR"
-        )
-        sigma_y_raw = _get_col(mag_err_col)
+        yhat_raw = _get_col(col_abs)
+        sigma_y_raw = _get_col(col_abs_err)
         zobs_raw = _get_col("Z_DESI")
 
         # extra columns
@@ -171,7 +171,7 @@ def main():
         morphtype = _get_col("MORPHTYPE", dtype=str)
         d26_kpc = _get_col("D26_kpc")
         g_mag = _get_col("G_MAG_SB26_CORR")
-        r_mag = _get_col("R_MAG_SB26_CORR")
+        r_mag = _get_col(col_app)
         z_mag = _get_col("Z_MAG_SB26_CORR")
         sma_sb26 = _get_col("SMA_SB26")
         sma_sb22 = _get_col("SMA_SB22")

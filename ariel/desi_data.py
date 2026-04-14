@@ -86,12 +86,14 @@ def process_desi_tf_data(
         # Extract velocity, magnitude, and redshift data
         V_0p4R26 = np.asarray(data["V_0p4R26"], dtype=float)
         V_0p4R26_ERR = np.asarray(data["V_0p4R26_ERR"], dtype=float)
-        R_ABSMAG_SB26 = np.asarray(data["R_ABSMAG_SB26"], dtype=float)
-        if "R_ABSMAG_SB26_ERR" in names:
-            R_ABSMAG_SB26_ERR = np.asarray(data["R_ABSMAG_SB26_ERR"], dtype=float)
-        else:
-            print("Warning: R_ABSMAG_SB26_ERR absent; falling back to R_MAG_SB26_ERR")
-            R_ABSMAG_SB26_ERR = np.asarray(data["R_MAG_SB26_ERR"], dtype=float)
+
+        from mag_utils import get_mag_cols
+
+        col_abs, col_abs_err, _ = get_mag_cols(names)
+
+        R_ABSMAG_SB26 = np.asarray(data[col_abs], dtype=float)
+        R_ABSMAG_SB26_ERR = np.asarray(data[col_abs_err], dtype=float)
+
         z_all_raw = np.asarray(data[z_col_use], dtype=float)
 
     total_rows = len(V_0p4R26)
@@ -237,9 +239,7 @@ def process_desi_tf_data(
         y_max_data = -15.0
 
     mu_y_TF = float(np.mean(y)) if N_total > 0 else 0.0
-    tau = (
-        1.5 * float(np.std(y, ddof=1)) if N_total > 1 else 1.0
-    )
+    tau = 1.5 * float(np.std(y, ddof=1)) if N_total > 1 else 1.0
 
     stan_data = {
         "N_bins": N_bins,
@@ -333,9 +333,7 @@ def process_desi_tf_data(
             print(
                 f"  Rows filtered out by plane cut: {y_filtered_rows - plane_pass_rows}"
             )
-            print(
-                f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}"
-            )
+            print(f"  Plane parameters: bar_s = {slope_plane}, c1 = {intercept_plane}")
         else:
             print(f"  Rows passing two‑sided plane cut: {plane_pass_rows}")
             print(
@@ -490,83 +488,122 @@ def plot_desi_tf_data(
         print(f"  Complete x range: [{np.min(x_all):.3f}, {np.max(x_all):.3f}]")
         print(f"  Complete y range: [{np.min(y_all):.3f}, {np.max(y_all):.3f}]")
     if len(x_selected) > 0:
-        print(f"  Selected x range: [{np.min(x_selected):.3f}, {np.max(x_selected):.3f}]")
-        print(f"  Selected y range: [{np.min(y_selected):.3f}, {np.max(y_selected):.3f}]")
+        print(
+            f"  Selected x range: [{np.min(x_selected):.3f}, {np.max(x_selected):.3f}]"
+        )
+        print(
+            f"  Selected y range: [{np.min(y_selected):.3f}, {np.max(y_selected):.3f}]"
+        )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Prepare DESI TF data for Stan.')
-    parser.add_argument('--run', default=None,
-                        help='Run name; outputs go to output/<run>/ with standard filenames')
-    parser.add_argument('--input', default='data/DESI-DR1_TF_pv_cat_v15.fits',
-                        help='Input FITS file')
-    parser.add_argument('--output', default=None,
-                        help='Output data JSON file (default: DESI_input.json or output/<run>/input.json)')
-    parser.add_argument('--init', default=None,
-                        help='Output init JSON file (default: DESI_init.json or output/<run>/init.json)')
-    parser.add_argument('--plot', default=None,
-                        help='Output plot PNG file (default: DESI_input.png or output/<run>/data.png)')
-    parser.add_argument('--haty_max', type=float, default=-19.0,
-                        help='Upper apparent magnitude selection limit')
-    parser.add_argument('--haty_min', type=float, default=-22.0,
-                        help='Lower apparent magnitude selection limit')
-    parser.add_argument('--n_objects', type=int, default=None,
-                        help='Subsample size (None for all)')
-    parser.add_argument('--random_seed', type=int, default=None,
-                        help='Random seed for reproducible subsampling')
-    parser.add_argument('--z_obs_min', type=float, default=0.01,
-                        help='Minimum redshift')
-    parser.add_argument('--z_obs_max', type=float, default=0.1,
-                        help='Maximum redshift')
-    parser.add_argument('--slope_plane', type=float, default=-6.5,
-                        help='Slope of oblique selection cut')
-    parser.add_argument('--intercept_plane', type=float, default=-20.5,
-                        help='Intercept of lower oblique cut (c1)')
-    parser.add_argument('--intercept_plane2', type=float, default=-18.5,
-                        help='Intercept of upper oblique cut (c2)')
+    parser = argparse.ArgumentParser(description="Prepare DESI TF data for Stan.")
+    parser.add_argument(
+        "--run",
+        default=None,
+        help="Run name; outputs go to output/<run>/ with standard filenames",
+    )
+    parser.add_argument(
+        "--input", default="data/DESI-DR1_TF_pv_cat_v15.fits", help="Input FITS file"
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="Output data JSON file (default: DESI_input.json or output/<run>/input.json)",
+    )
+    parser.add_argument(
+        "--init",
+        default=None,
+        help="Output init JSON file (default: DESI_init.json or output/<run>/init.json)",
+    )
+    parser.add_argument(
+        "--plot",
+        default=None,
+        help="Output plot PNG file (default: DESI_input.png or output/<run>/data.png)",
+    )
+    parser.add_argument(
+        "--haty_max",
+        type=float,
+        default=-19.0,
+        help="Upper apparent magnitude selection limit",
+    )
+    parser.add_argument(
+        "--haty_min",
+        type=float,
+        default=-22.0,
+        help="Lower apparent magnitude selection limit",
+    )
+    parser.add_argument(
+        "--n_objects", type=int, default=None, help="Subsample size (None for all)"
+    )
+    parser.add_argument(
+        "--random_seed",
+        type=int,
+        default=None,
+        help="Random seed for reproducible subsampling",
+    )
+    parser.add_argument(
+        "--z_obs_min", type=float, default=0.01, help="Minimum redshift"
+    )
+    parser.add_argument("--z_obs_max", type=float, default=0.1, help="Maximum redshift")
+    parser.add_argument(
+        "--slope_plane", type=float, default=-6.5, help="Slope of oblique selection cut"
+    )
+    parser.add_argument(
+        "--intercept_plane",
+        type=float,
+        default=-20.5,
+        help="Intercept of lower oblique cut (c1)",
+    )
+    parser.add_argument(
+        "--intercept_plane2",
+        type=float,
+        default=-18.5,
+        help="Intercept of upper oblique cut (c2)",
+    )
     args = parser.parse_args()
 
     run_dir: str | None = None
     config: dict = {}
 
     if args.run is not None:
-        run_dir = os.path.join('output', args.run)
+        run_dir = os.path.join("output", args.run)
         os.makedirs(run_dir, exist_ok=True)
-        for _fname in ('select_v2_fiducial.json', 'mag_split_fiducial.json'):
+        for _fname in ("select_v2_fiducial.json", "mag_split_fiducial.json"):
             fiducial_path = os.path.join(run_dir, _fname)
             if os.path.exists(fiducial_path):
                 with open(fiducial_path) as _f:
                     _fid = json.load(_f)
-                args.haty_min         = _fid['haty_min']
-                args.haty_max         = _fid['haty_max']
-                args.slope_plane      = _fid['slope_plane']
-                args.intercept_plane  = _fid['intercept_plane']
-                args.intercept_plane2 = _fid['intercept_plane2']
-                if 'z_obs_min' in _fid:
-                    args.z_obs_min    = _fid['z_obs_min']
-                if 'z_obs_max' in _fid:
-                    args.z_obs_max    = _fid['z_obs_max']
+                args.haty_min = _fid["haty_min"]
+                args.haty_max = _fid["haty_max"]
+                args.slope_plane = _fid["slope_plane"]
+                args.intercept_plane = _fid["intercept_plane"]
+                args.intercept_plane2 = _fid["intercept_plane2"]
+                if "z_obs_min" in _fid:
+                    args.z_obs_min = _fid["z_obs_min"]
+                if "z_obs_max" in _fid:
+                    args.z_obs_max = _fid["z_obs_max"]
                 print(f"Loaded selection parameters from {fiducial_path}")
                 break
-        output_json = args.output or os.path.join(run_dir, 'input.json')
-        init_json   = args.init   or os.path.join(run_dir, 'init.json')
-        plot_file   = args.plot   or os.path.join(run_dir, 'data.png')
+        output_json = args.output or os.path.join(run_dir, "input.json")
+        init_json = args.init or os.path.join(run_dir, "init.json")
+        plot_file = args.plot or os.path.join(run_dir, "data.png")
         config = {
-            'source': args.input,
-            'haty_max': args.haty_max,
-            'haty_min': args.haty_min,
-            'n_objects': args.n_objects,
-            'random_seed': args.random_seed,
-            'z_obs_min': args.z_obs_min,
-            'z_obs_max': args.z_obs_max,
-            'slope_plane': args.slope_plane,
-            'intercept_plane': args.intercept_plane,
-            'intercept_plane2': args.intercept_plane2,
+            "source": args.input,
+            "haty_max": args.haty_max,
+            "haty_min": args.haty_min,
+            "n_objects": args.n_objects,
+            "random_seed": args.random_seed,
+            "z_obs_min": args.z_obs_min,
+            "z_obs_max": args.z_obs_max,
+            "slope_plane": args.slope_plane,
+            "intercept_plane": args.intercept_plane,
+            "intercept_plane2": args.intercept_plane2,
         }
     else:
-        output_json = args.output or 'DESI_input.json'
-        init_json   = args.init   or 'DESI_init.json'
-        plot_file   = args.plot   or 'DESI_input.png'
+        output_json = args.output or "DESI_input.json"
+        init_json = args.init or "DESI_init.json"
+        plot_file = args.plot or "DESI_input.png"
 
     # Process data and get both complete and selected samples
     (
@@ -600,10 +637,10 @@ if __name__ == "__main__":
 
     if run_dir is not None:
         _rd: str = run_dir
-        config['n_total_fits'] = n_total_fits
-        config['n_training'] = n_training
-        _config_path = os.path.join(_rd, 'config.json')
-        with open(_config_path, 'w') as f:
+        config["n_total_fits"] = n_total_fits
+        config["n_training"] = n_training
+        _config_path = os.path.join(_rd, "config.json")
+        with open(_config_path, "w") as f:
             json.dump(config, f, indent=2)
         print(f"Config written to {_config_path}")
 
