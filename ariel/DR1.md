@@ -6,10 +6,14 @@ This document records the full command sequence for the DR1 run on the
 ## Setup
 
 ```bash
-export FITS=data/SGA-2020_iron_Vrot_VI_corr_v3.fits
-export RUN=DR1
-export CONFIG=configs/dr1_v3.json
+export FITS=data/SGA-2020_iron_Vrot_VI_corr_v3.fits   # input FITS catalog
+export RUN=DR1                                         # output directory name: output/$RUN/
+export CONFIG=configs/dr1_v3.json                      # pipeline config (parameters + file paths)
 ```
+
+`FITS` is only needed for the interactive Phase A steps (1–3b) that accept explicit file flags.
+`CONFIG` is the primary input for all pipeline scripts and `run_pipeline.py`.
+`RUN` is still used directly by `set_fiducial.py`, `corner.py`, and diagnostic commands.
 
 ---
 
@@ -19,7 +23,12 @@ Fit a noise- and truncation-corrected 2-component GMM to the (x, y) phase
 space to estimate the TFR core selection boundary.
 
 ```bash
+# via config
 python selection_ellipse.py --config $CONFIG
+
+# via flags
+python selection_ellipse.py --file $FITS --run $RUN --source DESI \
+    --z_obs_min 0.03 --z_obs_max 0.1 --haty_min -23 --haty_max -18
 ```
 
 Inspect the output:
@@ -37,7 +46,12 @@ profile over all catalog objects.  Use the plot to guide the choice of the
 final magnitude window.
 
 ```bash
+# via config
 python select_v2.py --config $CONFIG
+
+# via flags
+python select_v2.py --run $RUN --fits_file $FITS --exe ./tophat \
+    --z_obs_min 0.03 --z_obs_max 0.1
 ```
 
 Inspect the pull profile:
@@ -52,7 +66,7 @@ open output/$RUN/select_v2_pull.png
 
 Based on the pull profile, interactively choose the perpendicular cut width
 (in σ units) and the magnitude window, then write
-`output/$RUN/select_v2_fiducial.json` for use by `desi_data.py`.
+`output/$RUN/select_v2_fiducial.json`.
 
 ```bash
 python set_fiducial.py --run $RUN
@@ -60,6 +74,9 @@ python set_fiducial.py --run $RUN
 
 The script prints the 1σ reference values and prompts for `n_sigma_perp`,
 `haty_min`, `haty_max`, `z_obs_min`, and `z_obs_max`.
+
+> `set_fiducial.py` has no `--config` option: it is the script that
+> *creates* the fiducial parameters that later go into the config.
 
 Inspect the pull profile with the cuts:
 
@@ -75,13 +92,16 @@ After completing the interactive fiducial step, capture all parameter choices
 in a portable config file:
 
 ```bash
-python export_config.py --run $RUN --out configs/dr1_default.json
+python export_config.py --run $RUN --out configs/dr1_v3.json
 ```
 
 The script reads `output/$RUN/select_v2_fiducial.json` (including the
 interactively chosen cuts) and prompts for the remaining pipeline settings
 (`fits_file`, `exe`, `source`, `model`).  Commit the resulting JSON to git —
 it is the permanent version record for this run.
+
+> `export_config.py` has no `--config` option: it is the script that
+> *produces* the config file.
 
 ---
 
@@ -91,11 +111,15 @@ Convert the FITS file to Stan JSON format using the selection parameters
 chosen in Step 3.
 
 ```bash
+# via config
 python desi_data.py --config $CONFIG
-```
 
-Selection parameters (`haty_min`, `haty_max`, `slope_plane`, `intercept_plane`,
-`intercept_plane2`, `z_obs_min`, `z_obs_max`) are read from `$CONFIG`.
+# via flags
+python desi_data.py --input $FITS --run $RUN \
+    --haty_min -21.8 --haty_max -19.2 \
+    --slope_plane -6.52 --intercept_plane -20.71 --intercept_plane2 -18.25 \
+    --z_obs_min 0.03 --z_obs_max 0.08
+```
 
 Inspect the scatter plot to verify the selection looks correct:
 
@@ -122,6 +146,8 @@ cd ../TFPV/ariel
 
 ## Step 6: Run MCMC sampling
 
+Stan is invoked directly; there is no config or flags abstraction here.
+
 ```bash
 ./tophat sample num_warmup=500 num_samples=1000 num_chains=4 \
     adapt save_metric=1 \
@@ -141,14 +167,19 @@ cd ../TFPV/ariel
 ## Step 7: Diagnose and visualize
 
 ```bash
-# Convergence diagnostics
+# Convergence diagnostics (flags only — no config equivalent)
 ../../cmdstan/bin/stansummary output/$RUN/tophat_?.csv > output/$RUN/stansummary.txt
 ../../cmdstan/bin/diagnose    output/$RUN/tophat_?.csv > output/$RUN/diagnose.txt
 
 ../../cmdstan/bin/stansummary output/$RUN/normal_?.csv
 ../../cmdstan/bin/diagnose    output/$RUN/normal_?.csv
 
-# Corner plots — writes output/$RUN/tophat.png and output/$RUN/normal.png
+# Corner plots
+# via config
+python corner.py --config $CONFIG
+python corner.py --config $CONFIG --model normal
+
+# via flags
 python corner.py --run $RUN --model tophat
 python corner.py --run $RUN --model normal
 ```
@@ -164,11 +195,14 @@ open output/$RUN/normal.png
 
 ## Step 8: Predict absolute magnitudes
 
-The input FITS file and model are read from `$CONFIG`; `--input` is not required.
-
 ```bash
+# via config
 python predict.py --config $CONFIG --catalog
 python predict.py --config $CONFIG --model normal --catalog
+
+# via flags
+python predict.py --run $RUN --model tophat --source DESI --input $FITS --catalog
+python predict.py --run $RUN --model normal  --source DESI --input $FITS --catalog
 ```
 
 `--catalog` writes an augmented FITS catalog to
@@ -204,7 +238,11 @@ catalogue (morphology, colour, size, inclination, environment).  Results land
 in `output/$RUN/explore_residuals/`.
 
 ```bash
+# via config
 python explore_residuals.py --config $CONFIG --kind tophat
+
+# via flags
+python explore_residuals.py --run $RUN --kind tophat
 ```
 
 Output plots:

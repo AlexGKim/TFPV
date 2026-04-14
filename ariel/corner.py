@@ -218,6 +218,12 @@ def _build_parser():
              "Not needed when --run is used.",
     )
     p.add_argument(
+        '--config',
+        default=None,
+        metavar='FILE',
+        help="Path to JSON config (e.g. configs/dr1_v3.json); sets run and model.",
+    )
+    p.add_argument(
         '--run',
         default=None,
         metavar='NAME',
@@ -225,7 +231,7 @@ def _build_parser():
     )
     p.add_argument(
         '--model',
-        default='tophat',
+        default=None,
         choices=['tophat', 'normal'],
         help="Model to plot when using --run (default: tophat).",
     )
@@ -264,6 +270,11 @@ if __name__ == '__main__':
 
     if len(sys.argv) > 1:
         args = _build_parser().parse_args()
+        if args.config:
+            from config_utils import apply_config
+            apply_config(args)
+        if args.model is None:
+            args.model = 'tophat'
         if args.run is not None:
             run_dir = os.path.join('output', args.run)
             infiles = [os.path.join(run_dir, f'{args.model}_?.csv')]
