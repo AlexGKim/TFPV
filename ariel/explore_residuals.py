@@ -32,8 +32,6 @@ from predict import (
 
 # ── constants matching DESI() defaults ────────────────────────────────────────
 V0 = 100.0
-Y_MIN = -22.5 - 0.1
-Y_MAX = -18.5 + 0.1
 N_BINS = 15  # equal-count bins for binned plots
 
 
@@ -225,6 +223,12 @@ def main():
     with np.errstate(invalid="ignore", divide="ignore"):
         sma_ratio = np.where(sma_sb22 > 0, sma_sb26 / sma_sb22, np.nan)
 
+    # load bounds from input.json
+    with open(os.path.join(run_dir, "input.json"), "r") as f:
+        input_data = json.load(f)
+    y_min = input_data.get("y_min", -22.6)
+    y_max = input_data.get("y_max", -18.4)
+
     # ── posterior draws → residuals ────────────────────────────────────────────
     if kind == "tophat":
         draws = read_cmdstan_posterior(
@@ -236,8 +240,8 @@ def main():
             draws,
             xhat,
             sigma_x,
-            y_min=Y_MIN,
-            y_max=Y_MAX,
+            y_min=y_min,
+            y_max=y_max,
             on_bad_Z="floor",
             Z_floor=1e-300,
         )
@@ -257,7 +261,7 @@ def main():
         mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat, sigma_x)
 
     mean_y = mean_pred - yhat
-    main_mask = _apply_main_cuts(cfg, xhat, yhat)
+    main_mask = _apply_main_cuts(cfg, xhat, yhat, zobs=zobs)
     print(f"N main-sample: {main_mask.sum()}")
 
     # ── continuous parameter plots ─────────────────────────────────────────────

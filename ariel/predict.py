@@ -1244,9 +1244,6 @@ def DESI(
     kind="normal",
     grid_resolution_x=50,
     grid_resolution_y=50,
-    # tophat-only bounds:
-    y_min=-22.5 - 0.1,
-    y_max=-18.5 + 0.1,
     # grids:
     make_residual_grid=True,
     make_redshift_grid=True,
@@ -1263,6 +1260,12 @@ def DESI(
     with open(_p("config.json"), "r") as f:
         cfg = json.load(f)
     galaxy_fits = cfg["source"]
+
+    # Read y_min and y_max bounds from input.json
+    with open(_p("input.json"), "r") as f:
+        input_data = json.load(f)
+    y_min = input_data.get("y_min")
+    y_max = input_data.get("y_max")
 
     # --- load data ---
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star = (
@@ -1307,7 +1310,7 @@ def DESI(
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
 
-    main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star)
+    main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star, zobs_star)
 
     xhat_star2 = xhat_star[main_mask]
     sigma_x_star2 = sigma_x_star[main_mask]
@@ -1554,8 +1557,8 @@ def DESI_compare(
     galaxy_fits="data/DESI-DR1_TF_pv_cat_v15.fits",
     grid_resolution_x=50,
     grid_resolution_y=50,
-    y_min=-22.5 - 0.1,
-    y_max=-18.5 + 0.1,
+    y_min=None,
+    y_max=None,
     make_residual_grid=True,
     make_redshift_grid=True,
     make_scatter=True,
@@ -1576,6 +1579,13 @@ def DESI_compare(
     (xhat_star, sigma_x_star, yhat_star, sigma_y_star, zobs_star) = (
         load_xy_and_uncertainties_from_desi(galaxy_fits, row=None, sort_by_zobs=False)
     )
+
+    with open("DESI_input.json", "r") as f:
+        input_data = json.load(f)
+    if y_min is None:
+        y_min = input_data.get("y_min", -22.6)
+    if y_max is None:
+        y_max = input_data.get("y_max", -18.4)
 
     # ------------------------------------------------------------------
     # 2️⃣ Read posteriors
@@ -2186,20 +2196,27 @@ def fullmocks(
     return mean_y, sd_pred, zobs_star
 
 
-def _apply_main_cuts(cfg, xhat, yhat):
-    """Return boolean mask for MAIN=True using config.json cuts (no z cuts)."""
+def _apply_main_cuts(cfg, xhat, yhat, zobs=None):
+    """Return boolean mask for MAIN=True using config.json cuts (including z cuts if zobs is provided)."""
     mask = np.ones(len(xhat), dtype=bool)
     if cfg.get("haty_min") is not None:
-        mask &= yhat >= cfg["haty_min"]
+        mask &= yhat > cfg["haty_min"]
     if cfg.get("haty_max") is not None:
-        mask &= yhat <= cfg["haty_max"]
+        mask &= yhat < cfg["haty_max"]
     slope_plane = cfg.get("slope_plane")
     intercept_plane = cfg.get("intercept_plane")
     intercept_plane2 = cfg.get("intercept_plane2")
     if slope_plane is not None and intercept_plane is not None:
-        mask &= yhat >= slope_plane * xhat + intercept_plane
+        mask &= yhat > slope_plane * xhat + intercept_plane
         if intercept_plane2 is not None:
-            mask &= yhat <= slope_plane * xhat + intercept_plane2
+            mask &= yhat < slope_plane * xhat + intercept_plane2
+
+    if zobs is not None:
+        if cfg.get("z_obs_min") is not None:
+            mask &= zobs > cfg["z_obs_min"]
+        if cfg.get("z_obs_max") is not None:
+            mask &= zobs <= cfg["z_obs_max"]
+
     return mask
 
 
@@ -2335,7 +2352,7 @@ def write_desi_catalog(model, run_dir, fits_path):
     with open(_p("config.json"), "r") as f:
         cfg = json.load(f)
 
-    main = valid & _apply_main_cuts(cfg, xhat, abs_mag)
+    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs)
 
     # 9. Write output FITS: original columns + five new columns
     new_cols = [
@@ -2636,11 +2653,15 @@ def write_cov(model, run_dir):
         cfg = json.load(f)
 
     fits_path = cfg["source"]
-    xhat_star_full, sigma_x_star_full, yhat_star_full, sigma_y_star_full, _ = (
-        load_xy_and_uncertainties_from_desi(fits_path, row=None, sort_by_zobs=True)
-    )
+    (
+        xhat_star_full,
+        sigma_x_star_full,
+        yhat_star_full,
+        sigma_y_star_full,
+        zobs_star_full,
+    ) = load_xy_and_uncertainties_from_desi(fits_path, row=None, sort_by_zobs=True)
 
-    main = _apply_main_cuts(cfg, xhat_star_full, yhat_star_full)
+    main = _apply_main_cuts(cfg, xhat_star_full, yhat_star_full, zobs=zobs_star_full)
     xhat_star = xhat_star_full[main]
     sigma_x_star = sigma_x_star_full[main]
     sigma_y_star = sigma_y_star_full[main]
@@ -2808,7 +2829,7 @@ if __name__ == "__main__":
             write_desi_catalog(
                 args.model,
                 run_dir,
-                args.input or "data/SGA-2020_iron_Vrot_VI_corr.fits",
+                args.input or "data/SGA-2020_iron_Vrot_VI_corr_v3.fits",
             )
     elif args.source == "fullmocks":
         fits_id = args.predict_run if args.predict_run else args.run
