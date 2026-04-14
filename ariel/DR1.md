@@ -8,7 +8,7 @@ This document records the full command sequence for the DR1 run on the
 ```bash
 export FITS=data/SGA-2020_iron_Vrot_VI_corr_v3.fits
 export RUN=DR1
-export CONFIG=configs/dr1_default.json
+export CONFIG=configs/dr1_v3.json
 ```
 
 ---
@@ -19,7 +19,7 @@ Fit a noise- and truncation-corrected 2-component GMM to the (x, y) phase
 space to estimate the TFR core selection boundary.
 
 ```bash
-python selection_ellipse.py --file $FITS --run $RUN --source DESI --z_obs_min 0.03 --z_obs_max 0.1
+python selection_ellipse.py --config $CONFIG
 ```
 
 Inspect the output:
@@ -37,7 +37,7 @@ profile over all catalog objects.  Use the plot to guide the choice of the
 final magnitude window.
 
 ```bash
-python select_v2.py --run $RUN --fits_file $FITS --exe ./tophat
+python select_v2.py --config $CONFIG
 ```
 
 Inspect the pull profile:
@@ -91,12 +91,11 @@ Convert the FITS file to Stan JSON format using the selection parameters
 chosen in Step 3.
 
 ```bash
-python desi_data.py --input $FITS --run $RUN
+python desi_data.py --config $CONFIG
 ```
 
 Selection parameters (`haty_min`, `haty_max`, `slope_plane`, `intercept_plane`,
-`intercept_plane2`, `z_obs_min`) are loaded automatically from
-`output/$RUN/select_v2_fiducial.json` written in Step 3.
+`intercept_plane2`, `z_obs_min`, `z_obs_max`) are read from `$CONFIG`.
 
 Inspect the scatter plot to verify the selection looks correct:
 
@@ -165,11 +164,11 @@ open output/$RUN/normal.png
 
 ## Step 8: Predict absolute magnitudes
 
-The input FITS file is read from `config.json["source"]`; `--input` is not required.
+The input FITS file and model are read from `$CONFIG`; `--input` is not required.
 
 ```bash
-python predict.py --run $RUN --model tophat --source DESI --catalog
-python predict.py --run $RUN --model normal  --source DESI --catalog
+python predict.py --config $CONFIG --catalog
+python predict.py --config $CONFIG --model normal --catalog
 ```
 
 `--catalog` writes an augmented FITS catalog to
@@ -205,7 +204,7 @@ catalogue (morphology, colour, size, inclination, environment).  Results land
 in `output/$RUN/explore_residuals/`.
 
 ```bash
-python explore_residuals.py --run-dir output/$RUN --kind tophat
+python explore_residuals.py --config $CONFIG --kind tophat
 ```
 
 Output plots:

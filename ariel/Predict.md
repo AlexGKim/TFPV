@@ -85,6 +85,16 @@ prediction sample.
 ### Usage
 
 ```bash
+# DESI — predictions only (run and model read from config)
+python predict.py --config $CONFIG
+
+# DESI — predictions for both models
+python predict.py --config $CONFIG
+python predict.py --config $CONFIG --model normal
+
+# DESI — predictions + write augmented catalog FITS
+python predict.py --config $CONFIG --catalog
+
 # Fullmocks — reads FITS from --dir, compares predictions to R_ABSMAG_SB26_TRUE
 python predict.py --run $RUN --model tophat --source fullmocks --dir $(dirname $FITS)
 
@@ -103,28 +113,21 @@ python predict.py --run $RUN --model tophat --source fullmocks \
 python predict.py --run $RUN --model tophat --source fullmocks \
   --dir $(dirname $FITS) --predict_run c000_ph000_r002
 
-# DESI — predictions only
-python predict.py --run DESI --model tophat --source DESI
-python predict.py --run DESI --model normal --source DESI
-
-# DESI — predictions + write augmented catalog FITS
-python predict.py --run DESI --model tophat --source DESI \
-  --catalog --input data/SGA-2020_iron_Vrot_VI_corr.fits
-
 # Ariel mock
 python predict.py --run ariel --model tophat --source ariel
 ```
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--run NAME` | required | Run name; reads `output/<NAME>/` for chains and `input.json` |
-| `--model` | `tophat` | Posterior predictive model: `tophat` or `normal` |
-| `--source` | `DESI` | Data source: `DESI`, `ariel`, or `fullmocks` |
+| `--config FILE` | — | Path to JSON config (e.g. `configs/dr1_v3.json`); sets run, model, source, fits_file |
+| `--run NAME` | from config | Run name; reads `output/<NAME>/` for chains and `input.json` |
+| `--model` | from config / `tophat` | Posterior predictive model: `tophat` or `normal` |
+| `--source` | from config / `DESI` | Data source: `DESI`, `ariel`, or `fullmocks` |
 | `--n_objects INT` | all | Subsample size for prediction |
 | `--dir DIR` | `data` | Directory containing FITS files (`fullmocks` only) |
 | `--predict_run NAME` | same as `--run` | Simulation ID for the FITS file to predict on (`fullmocks` only) |
 | `--catalog` | off | Write augmented catalog to `output/<run>/<model>_catalog.fits` (`DESI` only) |
-| `--input PATH` | `data/SGA-2020_iron_Vrot_VI_corr.fits` | Input FITS path used by `--catalog` |
+| `--input PATH` | from config `fits_file` | Input FITS path used by `--catalog` |
 
 **Selection offset flags for `--source fullmocks`** (all default to 0, i.e.
 match the training selection stored in `input.json`):

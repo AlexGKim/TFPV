@@ -64,6 +64,14 @@ OLS on the selected sample initialises `slope` and `intercept` for Stan's
 
 ### Usage
 
+For DESI data (DR1 pipeline):
+
+```bash
+python desi_data.py --config $CONFIG
+```
+
+For AbacusSummit mocks:
+
 ```bash
 python fullmocks_data.py --file $FITS --run $RUN
 ```

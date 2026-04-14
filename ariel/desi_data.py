@@ -493,12 +493,16 @@ def plot_desi_tf_data(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare DESI TF data for Stan.")
     parser.add_argument(
+        "--config", default=None,
+        help="Path to JSON config (e.g. configs/dr1_v3.json)",
+    )
+    parser.add_argument(
         "--run",
         default=None,
         help="Run name; outputs go to output/<run>/ with standard filenames",
     )
     parser.add_argument(
-        "--input", default="data/DESI-DR1_TF_pv_cat_v15.fits", help="Input FITS file"
+        "--input", default=None, help="Input FITS file"
     )
     parser.add_argument(
         "--output",
@@ -518,13 +522,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--haty_max",
         type=float,
-        default=-19.0,
+        default=None,
         help="Upper apparent magnitude selection limit",
     )
     parser.add_argument(
         "--haty_min",
         type=float,
-        default=-22.0,
+        default=None,
         help="Lower apparent magnitude selection limit",
     )
     parser.add_argument(
@@ -537,25 +541,36 @@ if __name__ == "__main__":
         help="Random seed for reproducible subsampling",
     )
     parser.add_argument(
-        "--z_obs_min", type=float, default=0.01, help="Minimum redshift"
+        "--z_obs_min", type=float, default=None, help="Minimum redshift"
     )
-    parser.add_argument("--z_obs_max", type=float, default=0.1, help="Maximum redshift")
+    parser.add_argument("--z_obs_max", type=float, default=None, help="Maximum redshift")
     parser.add_argument(
-        "--slope_plane", type=float, default=-6.5, help="Slope of oblique selection cut"
+        "--slope_plane", type=float, default=None, help="Slope of oblique selection cut"
     )
     parser.add_argument(
         "--intercept_plane",
         type=float,
-        default=-20.5,
+        default=None,
         help="Intercept of lower oblique cut (c1)",
     )
     parser.add_argument(
         "--intercept_plane2",
         type=float,
-        default=-18.5,
+        default=None,
         help="Intercept of upper oblique cut (c2)",
     )
     args = parser.parse_args()
+
+    from config_utils import apply_config
+    cfg = apply_config(args)
+    if cfg.get("fits_file") and not args.input:
+        args.input = cfg["fits_file"]
+    if cfg.get("run") and not args.run:
+        args.run = cfg["run"]
+
+    # Fall back to a safe default for input FITS if nothing was provided
+    if not args.input:
+        args.input = "data/DESI-DR1_TF_pv_cat_v15.fits"
 
     run_dir: str | None = None
     config: dict = {}
@@ -563,27 +578,12 @@ if __name__ == "__main__":
     if args.run is not None:
         run_dir = os.path.join("output", args.run)
         os.makedirs(run_dir, exist_ok=True)
-        for _fname in ("select_v2_fiducial.json", "mag_split_fiducial.json"):
-            fiducial_path = os.path.join(run_dir, _fname)
-            if os.path.exists(fiducial_path):
-                with open(fiducial_path) as _f:
-                    _fid = json.load(_f)
-                args.haty_min = _fid["haty_min"]
-                args.haty_max = _fid["haty_max"]
-                args.slope_plane = _fid["slope_plane"]
-                args.intercept_plane = _fid["intercept_plane"]
-                args.intercept_plane2 = _fid["intercept_plane2"]
-                if "z_obs_min" in _fid:
-                    args.z_obs_min = _fid["z_obs_min"]
-                if "z_obs_max" in _fid:
-                    args.z_obs_max = _fid["z_obs_max"]
-                print(f"Loaded selection parameters from {fiducial_path}")
-                break
         output_json = args.output or os.path.join(run_dir, "input.json")
         init_json = args.init or os.path.join(run_dir, "init.json")
         plot_file = args.plot or os.path.join(run_dir, "data.png")
         config = {
-            "source": args.input,
+            "fits_file": args.input,
+            "source": cfg.get("source", "DESI"),
             "haty_max": args.haty_max,
             "haty_min": args.haty_min,
             "n_objects": args.n_objects,

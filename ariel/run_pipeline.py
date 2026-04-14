@@ -67,9 +67,8 @@ def main():
         sys.exit(1)
 
     steps = parse_steps(args.steps)
-    run_name  = cfg["run"]
-    fits_file = cfg["fits_file"]
-    run_dir   = os.path.join("output", run_name)
+    run_name = cfg["run"]
+    run_dir  = os.path.join("output", run_name)
     os.makedirs(run_dir, exist_ok=True)
 
     print(f"Run: {run_name}  →  {run_dir}")
@@ -85,29 +84,12 @@ def main():
     # ── Step 1: Estimate core distribution ────────────────────────────────────
     if 1 in steps:
         print("\n── Step 1: selection_ellipse.py ──")
-        run([
-            "python", "selection_ellipse.py",
-            "--file",      fits_file,
-            "--run",       run_name,
-            "--source",    cfg["source"],
-            "--z_obs_min", cfg["z_obs_min"],
-            "--z_obs_max", cfg["z_obs_max"],
-            "--haty_min",  cfg["haty_min"],
-            "--haty_max",  cfg["haty_max"],
-            "--n_sigma",   cfg["n_sigma"],
-        ])
+        run(["python", "selection_ellipse.py", "--config", args.config])
 
     # ── Step 2: MLE fit and pull-profile diagnostic ────────────────────────────
     if 2 in steps:
         print("\n── Step 2: select_v2.py (MLE) ──")
-        run([
-            "python", "select_v2.py",
-            "--run",       run_name,
-            "--fits_file", fits_file,
-            "--exe",       cfg["exe"],
-            "--z_obs_min", cfg["z_obs_min"],
-            "--z_obs_max", cfg["z_obs_max"],
-        ])
+        run(["python", "select_v2.py", "--config", args.config])
 
     # ── Step 3: Write fiducial JSON from config ────────────────────────────────
     if 3 in steps:
@@ -156,11 +138,7 @@ def main():
                     print(f"  {k} = {v}")
 
         print("\n── Step 4: desi_data.py ──")
-        run([
-            "python", "desi_data.py",
-            "--input", fits_file,
-            "--run",   run_name,
-        ])
+        run(["python", "desi_data.py", "--config", args.config])
 
     # ── Step 5: Stan sampling (manual) ───────────────────────────────────────
     if 5 in steps:
@@ -178,23 +156,12 @@ def main():
     # ── Step 6: Corner plot ───────────────────────────────────────────────────
     if 6 in steps:
         print("\n── Step 6: corner.py ──")
-        run([
-            "python", "corner.py",
-            "--run",   run_name,
-            "--model", cfg["model"],
-        ])
+        run(["python", "corner.py", "--run", run_name, "--model", cfg["model"]])
 
     # ── Step 7: Predict absolute magnitudes ───────────────────────────────────
     if 7 in steps:
         print("\n── Step 7: predict.py ──")
-        run([
-            "python", "predict.py",
-            "--run",    run_name,
-            "--model",  cfg["model"],
-            "--source", cfg["source"],
-            "--catalog",
-            "--input",  fits_file,
-        ])
+        run(["python", "predict.py", "--config", args.config, "--catalog"])
 
     print(f"\nDone. Outputs in {run_dir}/")
 

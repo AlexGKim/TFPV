@@ -288,30 +288,28 @@ def main():
         "--fits_file", help="Path to DESI FITS file (required if not using config)"
     )
     parser.add_argument(
-        "--exe", default="tophat", help="Path to compiled tophat Stan binary"
+        "--exe", default=None, help="Path to compiled tophat Stan binary (default: tophat)"
     )
     parser.add_argument(
-        "--source", default="DESI", choices=["DESI"], help="Data source"
+        "--source", default=None, choices=["DESI"], help="Data source (default: DESI)"
     )
     parser.add_argument(
         "--n_bins",
         type=int,
-        default=20,
-        help="Number of M_abs bins for pull plot (diagnostic mode only)",
+        default=None,
+        help="Number of M_abs bins for pull plot (default: 20)",
     )
     parser.add_argument(
         "--z_obs_min",
         type=float,
-        default=0.03,
-        help="Minimum redshift for Stan MLE sample (default: 0.03); "
-        "not applied to pull-plot prediction",
+        default=None,
+        help="Minimum redshift for Stan MLE sample (default: 0.03)",
     )
     parser.add_argument(
         "--z_obs_max",
         type=float,
-        default=0.1,
-        help="Maximum redshift for Stan MLE sample (default: 0.1); "
-        "not applied to pull-plot prediction",
+        default=None,
+        help="Maximum redshift for Stan MLE sample (default: 0.1)",
     )
     parser.add_argument(
         "--set_fiducial",
@@ -332,31 +330,12 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.config:
-        import sys
-
-        with open(args.config, "r") as f:
-            cfg = json.load(f)
-        if "run" in cfg and not args.run:
-            args.run = cfg["run"]
-        if "fits_file" in cfg and not args.fits_file:
-            args.fits_file = cfg["fits_file"]
-        if "exe" in cfg and "--exe" not in sys.argv:
-            args.exe = cfg["exe"]
-        if "source" in cfg and "--source" not in sys.argv:
-            args.source = cfg["source"]
-        if "n_bins" in cfg and "--n_bins" not in sys.argv:
-            args.n_bins = cfg.get("n_bins", args.n_bins)
-        if "z_obs_min" in cfg and "--z_obs_min" not in sys.argv:
-            args.z_obs_min = cfg["z_obs_min"]
-        if "z_obs_max" in cfg and "--z_obs_max" not in sys.argv:
-            args.z_obs_max = cfg["z_obs_max"]
-        if "set_fiducial" in cfg and "--set_fiducial" not in sys.argv:
-            args.set_fiducial = cfg["set_fiducial"]
-        if "haty_min" in cfg and "--haty_min" not in sys.argv:
-            args.haty_min = cfg["haty_min"]
-        if "haty_max" in cfg and "--haty_max" not in sys.argv:
-            args.haty_max = cfg["haty_max"]
+    from config_utils import apply_config
+    cfg = apply_config(args)
+    if cfg.get("run") and not args.run:
+        args.run = cfg["run"]
+    if cfg.get("fits_file") and not args.fits_file:
+        args.fits_file = cfg["fits_file"]
 
     if not args.run or not args.fits_file:
         parser.error(

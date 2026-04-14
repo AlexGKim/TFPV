@@ -864,37 +864,37 @@ def main():
     parser.add_argument(
         "--source",
         choices=["fullmocks", "DESI"],
-        default="fullmocks",
-        help="Data source: fullmocks (default) or DESI",
+        default=None,
+        help="Data source: fullmocks or DESI (default: DESI)",
     )
     parser.add_argument(
         "--haty_min",
         type=float,
-        default=-23.0,
+        default=None,
         help="Loose lower magnitude pre-filter (default: -23.0)",
     )
     parser.add_argument(
         "--haty_max",
         type=float,
-        default=-18.0,
+        default=None,
         help="Loose upper magnitude pre-filter (default: -18.0)",
     )
     parser.add_argument(
         "--n_init",
         type=int,
-        default=20,
+        default=None,
         help="GMM random restarts for initialisation (default: 20)",
     )
     parser.add_argument(
         "--z_obs_min",
         type=float,
-        default=0.03,
+        default=None,
         help="Minimum redshift cut (default: 0.03)",
     )
     parser.add_argument(
         "--z_obs_max",
         type=float,
-        default=0.1,
+        default=None,
         help="Maximum redshift cut (default: 0.1)",
     )
     parser.add_argument(
@@ -905,36 +905,17 @@ def main():
     parser.add_argument(
         "--n_sigma",
         type=float,
-        default=3.0,
+        default=None,
         help="Sigma scaling for MLE selection region (default: 3.0)",
     )
     args = parser.parse_args()
 
-    if args.config:
-        import sys
-
-        with open(args.config, "r") as f:
-            cfg = json.load(f)
-        if "fits_file" in cfg and not args.file:
-            args.file = cfg["fits_file"]
-        if "run" in cfg and not args.run:
-            args.run = cfg["run"]
-        if "source" in cfg and "--source" not in sys.argv:
-            args.source = cfg["source"]
-        if "haty_min" in cfg and "--haty_min" not in sys.argv:
-            args.haty_min = cfg["haty_min"]
-        if "haty_max" in cfg and "--haty_max" not in sys.argv:
-            args.haty_max = cfg["haty_max"]
-        if "n_init" in cfg and "--n_init" not in sys.argv:
-            args.n_init = cfg["n_init"]
-        if "z_obs_min" in cfg and "--z_obs_min" not in sys.argv:
-            args.z_obs_min = cfg["z_obs_min"]
-        if "z_obs_max" in cfg and "--z_obs_max" not in sys.argv:
-            args.z_obs_max = cfg["z_obs_max"]
-        if "exe" in cfg and "--exe" not in sys.argv:
-            args.exe = cfg["exe"]
-        if "n_sigma" in cfg and "--n_sigma" not in sys.argv:
-            args.n_sigma = cfg["n_sigma"]
+    from config_utils import apply_config
+    cfg = apply_config(args)
+    if cfg.get("fits_file") and not args.file:
+        args.file = cfg["fits_file"]
+    if cfg.get("run") and not args.run:
+        args.run = cfg["run"]
 
     if not args.file or not args.run:
         parser.error(

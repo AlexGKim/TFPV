@@ -61,7 +61,7 @@ These bounds define the observable region R = {x ≤ x_hi, y ≥ y_lo}.
 ### Usage
 
 ```bash
-python selection_ellipse.py --file $FITS --run $RUN --source DESI --z_obs_min 0.03
+python selection_ellipse.py --config $CONFIG
 ```
 
 ### Output
@@ -169,7 +169,7 @@ the 3σ GMM ellipse (same as the diagnostic step).  No Stan call is made.
 ### Usage
 
 ```bash
-python select_v2.py --run $RUN --fits_file $FITS \
+python select_v2.py --config $CONFIG \
     --set_fiducial --haty_min -22 --haty_max -19.5
 ```
 
@@ -191,25 +191,25 @@ The fiducial JSON contains:
 }
 ```
 
-`desi_data.py` automatically loads `select_v2_fiducial.json` (falling back to
-`mag_split_fiducial.json` from the old pipeline if the v2 file is absent).
+`desi_data.py` reads all selection parameters from the config file passed via `--config`.
 
 ---
 
 ## CLI reference: `select_v2.py`
 
 ```bash
-python select_v2.py --run $RUN --fits_file $FITS --exe ./tophat [options]
+python select_v2.py --config $CONFIG [options]
 ```
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--run RUN` | required | Run name; reads `output/<run>/selection_ellipse.json` |
-| `--fits_file FILE` | required | Path to DESI FITS file |
+| `--config FILE` | — | Path to JSON config (e.g. `configs/dr1_v3.json`) |
+| `--run RUN` | from config | Run name; reads `output/<run>/selection_ellipse.json` |
+| `--fits_file FILE` | from config | Path to DESI FITS file |
 | `--exe EXE` | `tophat` | Path to compiled tophat Stan binary |
 | `--set_fiducial` | off | Write fiducial JSON from `--haty_min`/`--haty_max`; skip Stan |
-| `--haty_min` | required with `--set_fiducial` | Fiducial bright-end magnitude limit |
-| `--haty_max` | required with `--set_fiducial` | Fiducial dim-end magnitude limit |
+| `--haty_min` | from config | Fiducial bright-end magnitude limit |
+| `--haty_max` | from config | Fiducial dim-end magnitude limit |
 | `--n_bins` | 20 | Number of equal-occupancy M_abs bins for pull plot |
 | `--z_obs_min` | 0.03 | Minimum redshift for Stan MLE sample |
 

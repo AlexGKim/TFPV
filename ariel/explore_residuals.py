@@ -93,49 +93,30 @@ def _save(fig, out_dir, name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--run", default=None, help="Run name; sets run_dir to output/<run>/"
+    )
+    parser.add_argument(
         "--run-dir", default=None, help="Path to run directory (e.g. output/DR1_corr)"
     )
     parser.add_argument(
         "--config",
         default=None,
-        help="Path to JSON config file (e.g., configs/dr1_corr.json)",
+        help="Path to JSON config file (e.g., configs/dr1_v3.json)",
     )
     parser.add_argument("--kind", default="tophat", choices=["tophat", "normal"])
     args = parser.parse_args()
 
-    if args.config:
-        with open(args.config) as f:
-            cfg = json.load(f)
-        run_name = cfg.get("run")
-        if args.run_dir:
-            run_dir = args.run_dir
-        else:
-            run_dir = (
-                os.path.join("output", run_name) if run_name else _resolve_run_dir()
-            )
-    else:
-        run_dir = args.run_dir or _resolve_run_dir()
-        config_path = os.path.join(run_dir, "config.json")
-        # Fallback to checking configs/ directory
-        if not os.path.exists(config_path):
-            run_name = os.path.basename(os.path.normpath(run_dir))
-            possible_config = os.path.join("configs", f"{run_name.lower()}.json")
-            if os.path.exists(possible_config):
-                config_path = possible_config
-            else:
-                raise FileNotFoundError(
-                    f"Could not find config in {config_path} or {possible_config}"
-                )
-        with open(config_path) as f:
-            cfg = json.load(f)
+    from config_utils import apply_config
+    cfg = apply_config(args)
+    if args.run and not args.run_dir:
+        args.run_dir = os.path.join("output", args.run)
+    run_dir = args.run_dir or _resolve_run_dir()
 
     kind = args.kind
     out_dir = os.path.join(run_dir, "explore_residuals")
     os.makedirs(out_dir, exist_ok=True)
 
-    # In older output/*/config.json, the FITS file is stored in "source"
-    # In configs/*.json, it is stored in "fits_file" and "source" is "DESI" or "fullmocks"
-    fits_path = cfg.get("fits_file", cfg.get("source"))
+    fits_path = cfg.get("fits_file")
     print(f"run_dir : {run_dir}")
     print(f"kind    : {kind}")
     print(f"FITS    : {fits_path}")

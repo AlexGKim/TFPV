@@ -2740,14 +2740,18 @@ if __name__ == "__main__":
         help="Run name; reads/writes output/<run>/ with standard filenames",
     )
     parser.add_argument(
+        "--config", default=None,
+        help="Path to JSON config (e.g. configs/dr1_v3.json)",
+    )
+    parser.add_argument(
         "--model",
-        default="tophat",
+        default=None,
         choices=["tophat", "normal"],
         help="Model to use (default: tophat)",
     )
     parser.add_argument(
         "--source",
-        default="DESI",
+        default=None,
         choices=["DESI", "ariel", "fullmocks"],
         help="Data source (default: DESI)",
     )
@@ -2820,6 +2824,13 @@ if __name__ == "__main__":
         help="Write augmented catalog FITS to output/<run>/<model>_catalog.fits",
     )
     args = parser.parse_args()
+
+    from config_utils import apply_config
+    cfg = apply_config(args)
+    if cfg.get("fits_file") and not args.input:
+        args.input = cfg["fits_file"]
+    if cfg.get("run") and not args.run:
+        args.run = cfg["run"]
 
     run_dir = os.path.join("output", args.run) if args.run else None
 
