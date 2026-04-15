@@ -7,7 +7,7 @@ This document records the full command sequence for the DR1 run on the
 
 ```bash
 export FITS=data/SGA-2020_iron_Vrot_VI_corr_v3.fits   # input FITS catalog
-export RUN=DR1                                         # output directory name: output/$RUN/
+export RUN=DR1_v3                                         # output directory name: output/$RUN/
 export CONFIG=configs/dr1_v3.json                      # pipeline config (parameters + file paths)
 ```
 
@@ -28,7 +28,7 @@ python selection_ellipse.py --config $CONFIG
 
 # via flags
 python selection_ellipse.py --file $FITS --run $RUN --source DESI \
-    --z_obs_min 0.03 --z_obs_max 0.1 --haty_min -23 --haty_max -18
+    --z_obs_min 0.03 --z_obs_max 0.08 --haty_min -23 --haty_max -18
 ```
 
 Inspect the output:
@@ -46,12 +46,12 @@ profile over all catalog objects.  Use the plot to guide the choice of the
 final magnitude window.
 
 ```bash
-# via config
+# via config DOES NOT WORK ./tophat
 python select_v2.py --config $CONFIG
 
 # via flags
 python select_v2.py --run $RUN --fits_file $FITS --exe ./tophat \
-    --z_obs_min 0.03 --z_obs_max 0.1
+    --z_obs_min 0.03 --z_obs_max 0.08
 ```
 
 Inspect the pull profile:

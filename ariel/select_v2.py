@@ -30,6 +30,7 @@ import tempfile
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -97,6 +98,98 @@ def _stan_mle_params(data_dict, init_dict, exe_file, tmp_dir):
     except (KeyError, ValueError, FileNotFoundError) as exc:
         print(f"Error parsing Stan output: {exc}")
         return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Scatter plot
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _save_scatter_plot(run_dir, run_name, raw_data, cuts, params, ell):
+    """Scatter plot of selected galaxies coloured by GMM core probability.
+
+    Shows the 1σ/2σ/3σ GMM ellipses, the 3σ selection boundary, and the
+    MLE TFR line.  Saves select_v2_scatter.png.
+    """
+    x_all = raw_data["x"]
+    y_all = raw_data["y"]
+
+    # Select only the points that entered the MLE fit
+    haty_min = cuts["haty_min"]
+    haty_max = cuts["haty_max"]
+    slope_p = cuts["slope_plane"]
+    ip = cuts["intercept_plane"]
+    ip2 = cuts["intercept_plane2"]
+    mask = (y_all > haty_min) & (y_all < haty_max)
+    lb = np.maximum(haty_min, slope_p * x_all + ip)
+    ub = np.minimum(haty_max, slope_p * x_all + ip2)
+    mask &= (y_all >= lb) & (y_all <= ub)
+    x_sel = x_all[mask]
+    y_sel = y_all[mask]
+
+    # GMM core ellipse geometry from selection_ellipse.json
+    mu = np.array(ell["mean"])
+    cov = np.array(ell["covariance"])
+    vals, vecs = np.linalg.eigh(cov)
+    semi_axes = np.sqrt(vals)        # [sigma_minor, sigma_major]
+    angle = np.degrees(np.arctan2(vecs[1, -1], vecs[0, -1]))
+
+    # Colour by Mahalanobis distance from the core GMM mean
+    cov_inv = np.linalg.inv(cov)
+    dxy = np.column_stack([x_sel - mu[0], y_sel - mu[1]])
+    mahal = np.sqrt(np.einsum("ni,ij,nj->n", dxy, cov_inv, dxy))
+
+    mle_slope = params["slope"]
+    mle_intercept = params["intercept.1"]
+
+    fig, ax = plt.subplots(figsize=(8, 7))
+
+    sc = ax.scatter(
+        x_sel, y_sel,
+        c=mahal, cmap="viridis_r",
+        s=1, alpha=0.4, vmin=0, vmax=4,
+        rasterized=True,
+    )
+    plt.colorbar(sc, ax=ax, label="Mahalanobis distance from core")
+
+    # 1σ/2σ/3σ GMM ellipses
+    for n, color, ls in zip([1, 2, 3], ["gold", "orange", "red"], ["-", "--", ":"]):
+        ax.add_patch(mpatches.Ellipse(
+            mu,
+            width=2 * n * semi_axes[1],
+            height=2 * n * semi_axes[0],
+            angle=angle,
+            edgecolor=color, facecolor="none",
+            linewidth=1.5, linestyle=ls,
+            label=f"{n}σ ellipse", zorder=5,
+        ))
+
+    # 3σ selection boundary
+    x_line = np.linspace(x_sel.min() - 0.1, x_sel.max() + 0.1, 300)
+    ax.axhline(haty_max, color="white", lw=2.0, ls="--", label=f"haty_max={haty_max:.2f}")
+    ax.axhline(haty_min, color="white", lw=2.0, ls=":",  label=f"haty_min={haty_min:.2f}")
+    ax.plot(x_line, slope_p * x_line + ip,  color="white", lw=2.0, ls="--",
+            label=f"plane1: slope={slope_p:.2f}, b={ip:.2f}")
+    ax.plot(x_line, slope_p * x_line + ip2, color="white", lw=2.0, ls=":",
+            label=f"plane2: slope={slope_p:.2f}, b={ip2:.2f}")
+
+    # MLE TFR line
+    ax.plot(x_line, mle_slope * x_line + mle_intercept,
+            color="red", lw=2.0, label=f"MLE slope={mle_slope:.3f}")
+
+    ax.set_xlabel(r"$x = \log_{10}(V/100\,\mathrm{km\,s}^{-1})$")
+    ax.set_ylabel(r"$y = R$-band absolute magnitude")
+    ax.set_title(f"TFR selection + MLE — {run_name}  (N={mask.sum()})")
+    ax.legend(fontsize=7, loc="upper left")
+    ax.set_xlim(x_sel.min(), x_sel.max())
+    ax.set_ylim(y_sel.min(), y_sel.max())
+    ax.invert_yaxis()
+    fig.tight_layout()
+
+    out_path = os.path.join(run_dir, "select_v2_scatter.png")
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+    print(f"Saved scatter plot → {out_path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -482,6 +575,8 @@ def main():
     with open(mle_path, "w") as f:
         json.dump(params, f, indent=2)
     print(f"Saved MLE parameters → {mle_path}")
+
+    _save_scatter_plot(run_dir, args.run, raw_data, cuts, params, ell)
 
     # ── Compute per-galaxy residual and pull profile over z-restricted catalog ──
     y_min = float(data_dict["y_min"])
