@@ -86,7 +86,6 @@ def main():
     print("Enter additional pipeline settings (press Enter to accept defaults):")
 
     run_name = prompt_str("run name (output directory)", default=args.run)
-    fits_file = prompt_str("fits_file", default=FIELD_DEFAULTS["fits_file"])
     exe       = prompt_str("exe (Stan binary)", default=FIELD_DEFAULTS["exe"])
     source    = prompt_str("source", default=source_default)
     model     = prompt_str("model (tophat or normal)", default=FIELD_DEFAULTS["model"])
@@ -95,7 +94,7 @@ def main():
 
     config = {
         "run":      run_name,
-        "fits_file": fits_file,
+        "fits_file": FIELD_DEFAULTS["fits_file"],
         "exe":      exe,
         "source":   source,
         "model":    model,
