@@ -300,15 +300,18 @@ def _build_stan_dicts(raw_data, cuts):
     if len(x) < _N_MIN:
         return None, None
 
-    mean_x = float(np.mean(x))
     sd_x = float(np.std(x, ddof=1))
     if sd_x < 1e-6:
         return None, None
 
-    x_std = (x - mean_x) / sd_x
-    slope_std, intercept_std = np.polyfit(x_std, y, 1)
-    # Clamp to Stan model's parameter bounds: slope_std ∈ (−9·sd_x, −4·sd_x)
+    # Initialize slope from the GMM ellipse major-axis orientation rather than
+    # OLS on the selection-cut sample, which is truncation-biased and tends to
+    # land at Stan's upper boundary.  intercept passes the line through the
+    # data centroid: y_bar = slope_std * 0 + intercept_std (since Stan works
+    # in mean-centered x_std, mean(x_std) = 0).
+    slope_std = float(cuts["slope_plane"]) * sd_x
     slope_std = float(np.clip(slope_std, -9.0 * sd_x + 1e-4, -4.0 * sd_x - 1e-4))
+    intercept_std = float(np.mean(y))
 
     data_dict = {
         "N_bins": 1,
