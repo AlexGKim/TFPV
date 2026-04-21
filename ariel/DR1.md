@@ -97,8 +97,10 @@ python export_config.py --run $RUN --out configs/dr1_v3.json
 
 The script reads `output/$RUN/select_v2_fiducial.json` (including the
 interactively chosen cuts) and prompts for the remaining pipeline settings
-(`fits_file`, `exe`, `source`, `model`).  Commit the resulting JSON to git —
-it is the permanent version record for this run.
+(`exe`, `source`, `model`, `n_sigma`).  The `fits_file` is taken automatically
+from `output/$RUN/config.json` (written by `desi_data.py`) so it matches the
+file actually used.  Commit the resulting JSON to git — it is the permanent
+version record for this run.
 
 > `export_config.py` has no `--config` option: it is the script that
 > *produces* the config file.
@@ -116,8 +118,8 @@ python desi_data.py --config $CONFIG
 
 # via flags
 python desi_data.py --input $FITS --run $RUN \
-    --haty_min -21.8 --haty_max -19.2 \
-    --slope_plane -6.52 --intercept_plane -20.71 --intercept_plane2 -18.25 \
+    --haty_min -21.75 --haty_max -19.0 \
+    --slope_plane -6.5200819017710625 --intercept_plane -20.74848531790116 --intercept_plane2 -18.288025043566957 \
     --z_obs_min 0.03 --z_obs_max 0.08
 ```
 
@@ -128,6 +130,10 @@ open output/$RUN/data.png
 ```
 
 Iterate: adjust parameters and rerun until satisfied, then proceed.
+
+`desi_data.py` writes `output/$RUN/config.json` recording the selection cuts
+and `fits_file` used.  This file is read by `export_config.py` (Step 3b) and
+as a fallback by `predict.py` (Step 8).
 
 ---
 
