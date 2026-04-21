@@ -46,8 +46,8 @@ profile over all catalog objects.  Use the plot to guide the choice of the
 final magnitude window.
 
 ```bash
-# via config DOES NOT WORK ./tophat
-python select_v2.py --config $CONFIG
+# via config (--exe must still be passed explicitly)
+python select_v2.py --config $CONFIG --exe ./tophat
 
 # via flags
 python select_v2.py --run $RUN --fits_file $FITS --exe ./tophat \

@@ -69,12 +69,16 @@ def main():
     with open(fiducial_path) as f:
         fiducial = json.load(f)
 
-    # Read source from config.json if available
+    # Read fits_file and source from config.json if available (written by desi_data.py
+    # with the actual FITS path used, which is more reliable than the hardcoded default).
     config_path = os.path.join(run_dir, "config.json")
+    fits_file_default = FIELD_DEFAULTS["fits_file"]
     source_default = FIELD_DEFAULTS["source"]
     if os.path.exists(config_path):
         with open(config_path) as f:
             cfg = json.load(f)
+        if "fits_file" in cfg:
+            fits_file_default = cfg["fits_file"]
         if "source" in cfg:
             source_default = cfg["source"]
 
@@ -94,7 +98,7 @@ def main():
 
     config = {
         "run":      run_name,
-        "fits_file": FIELD_DEFAULTS["fits_file"],
+        "fits_file": fits_file_default,
         "exe":      exe,
         "source":   source,
         "model":    model,

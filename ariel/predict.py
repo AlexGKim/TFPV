@@ -1259,7 +1259,7 @@ def DESI(
     # --- load config and derive input FITS path ---
     with open(_p("config.json"), "r") as f:
         cfg = json.load(f)
-    galaxy_fits = cfg["source"]
+    galaxy_fits = cfg["fits_file"]
 
     # Read y_min and y_max bounds from input.json
     with open(_p("input.json"), "r") as f:
@@ -2220,7 +2220,7 @@ def _apply_main_cuts(cfg, xhat, yhat, zobs=None):
     return mask
 
 
-def write_desi_catalog(model, run_dir, fits_path):
+def write_desi_catalog(model, run_dir, fits_path, cfg=None):
     """
     Augment a DESI FITS catalog with TFR-derived quantities and write to
     output/<run>/<model>_catalog.fits.
@@ -2348,9 +2348,12 @@ def write_desi_catalog(model, run_dir, fits_path):
     LOGDIST = 0.2 * (MU_ZCMB - MU_TF)
     LOGDIST_ERR = 0.2 * MU_ERR
 
-    # 8. Compute MAIN flag using config.json selection cuts
-    with open(_p("config.json"), "r") as f:
-        cfg = json.load(f)
+    # 8. Compute MAIN flag using selection cuts from the pipeline config.
+    # cfg may be passed from the call site (preferred); fall back to reading
+    # the run-local config.json written by desi_data.py.
+    if cfg is None:
+        with open(_p("config.json"), "r") as f:
+            cfg = json.load(f)
 
     main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs)
 
@@ -2640,26 +2643,25 @@ def ystar_pp_cov_tophat_vectorized(
     return cov
 
 
-def write_cov(model, run_dir):
+def write_cov(model, run_dir, fits_path, cfg=None):
     """
     Compute and save the posterior predictive covariance matrix for model
     ('normal' or 'tophat') using draws from output/<run>/<model>_?.csv and
-    the MAIN sample from the FITS catalog (as defined by config.json cuts).
+    the MAIN sample from the FITS catalog (as defined by the pipeline config cuts).
 
     Output: output/<run>/<model>_cov.png
     """
-    config_json = os.path.join(run_dir, "config.json")
-    with open(config_json) as f:
-        cfg = json.load(f)
-
-    fits_path = cfg["source"]
+    if cfg is None:
+        config_json = os.path.join(run_dir, "config.json")
+        with open(config_json) as f:
+            cfg = json.load(f)
     (
         xhat_star_full,
         sigma_x_star_full,
         yhat_star_full,
         sigma_y_star_full,
         zobs_star_full,
-    ) = load_xy_and_uncertainties_from_desi(fits_path, row=None, sort_by_zobs=True)
+    ) = load_xy_and_uncertainties_from_desi(fits_path, row=None, sort_by_zobs=False)
 
     main = _apply_main_cuts(cfg, xhat_star_full, yhat_star_full, zobs=zobs_star_full)
     xhat_star = xhat_star_full[main]
@@ -2841,6 +2843,7 @@ if __name__ == "__main__":
                 args.model,
                 run_dir,
                 args.input or "data/SGA-2020_iron_Vrot_VI_corr_v3.fits",
+                cfg=cfg,
             )
     elif args.source == "fullmocks":
         fits_id = args.predict_run if args.predict_run else args.run
@@ -2867,4 +2870,5 @@ if __name__ == "__main__":
     else:
         ariel(args.model, run_dir=run_dir)
 
-    write_cov(args.model, run_dir)
+    fits_path = args.input or "data/SGA-2020_iron_Vrot_VI_corr_v3.fits"
+    write_cov(args.model, run_dir, fits_path, cfg=cfg)
