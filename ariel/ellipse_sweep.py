@@ -323,7 +323,7 @@ def _build_stan_dicts(raw_data, cuts):
         "haty_min": float(haty_min),
         "haty_max": float(haty_max),
         "y_min": float(haty_min) - 0.5,
-        "y_max": float(haty_max) + 1.0,
+        "y_max": float(haty_max) + 0.5,
         "slope_plane": float(cuts["slope_plane"]),
         "intercept_plane": float(ip),
         "intercept_plane2": float(ip2),

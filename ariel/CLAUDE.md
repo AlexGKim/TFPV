@@ -21,8 +21,8 @@ These are ground-truth values derived from `doc/*.tex`. File:line pointers show 
 
 | Parameter | Value | Authoritative Location(s) |
 |-----------|-------|--------------------------|
-| `y_min` offset below `haty_min` | −0.5 mag | `selection_ellipse.py:507`, `ellipse_sweep.py:310` |
-| `y_max` offset above `haty_max` | +1.0 mag | `selection_ellipse.py:508`, `ellipse_sweep.py:311` |
+| `y_min` offset below `haty_min` | −0.5 mag | `desi_data.py:247`, `ellipse_sweep.py:325` |
+| `y_max` offset above `haty_max` | +0.5 mag | `desi_data.py:248`, `ellipse_sweep.py:326` |
 | `z_obs_min` default | 0.03 | `select_v2.py:223` (CLI default) |
 | `z_obs_max` default | 0.1 | `set_fiducial.py:78` (CLI default) |
 | `haty_min` loose pre-filter default | −23.0 | `selection_ellipse.py:729` |

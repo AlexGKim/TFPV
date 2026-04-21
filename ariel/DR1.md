@@ -118,8 +118,8 @@ python desi_data.py --config $CONFIG
 
 # via flags
 python desi_data.py --input $FITS --run $RUN \
-    --haty_min -21.75 --haty_max -19.0 \
-    --slope_plane -6.5200819017710625 --intercept_plane -20.74848531790116 --intercept_plane2 -18.288025043566957 \
+    --haty_min -21.5 --haty_max -19.0 \
+    --slope_plane -6.386925076468424 --intercept_plane -20.74814050932727 --intercept_plane2 -18.31309635087515 \
     --z_obs_min 0.03 --z_obs_max 0.08
 ```
 

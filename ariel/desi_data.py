@@ -245,7 +245,7 @@ def process_desi_tf_data(
         "haty_max": float(haty_max),
         "haty_min": float(haty_min),
         "y_min": float(haty_min) - 0.5,
-        "y_max": float(haty_max) + 1,
+        "y_max": float(haty_max) + 0.5,
         "mu_y_TF": mu_y_TF,
         "tau": tau,
         "z_obs": z_obs_data,  # now defined, aligned, and JSON‑serializable
