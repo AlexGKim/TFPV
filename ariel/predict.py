@@ -2351,7 +2351,7 @@ def write_desi_catalog(model, run_dir, fits_path, cfg=None):
     # 8. Compute MAIN flag using selection cuts from the pipeline config.
     # cfg may be passed from the call site (preferred); fall back to reading
     # the run-local config.json written by desi_data.py.
-    if cfg is None:
+    if not cfg:
         with open(_p("config.json"), "r") as f:
             cfg = json.load(f)
 
@@ -2651,7 +2651,7 @@ def write_cov(model, run_dir, fits_path, cfg=None):
 
     Output: output/<run>/<model>_cov.png
     """
-    if cfg is None:
+    if not cfg:
         config_json = os.path.join(run_dir, "config.json")
         with open(config_json) as f:
             cfg = json.load(f)
