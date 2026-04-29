@@ -27,7 +27,7 @@ from astropy.io import fits
 # ---------------------------------------------------------------------------
 PLOT_WAVE_MIN = 4000.0
 PLOT_WAVE_MAX = 8000.0
-REDSHIFTS = [0.00, 0.02, 0.04, 0.06, 0.08, 0.10]
+REDSHIFTS = [0.00, 0.05, 0.10, 0.15]
 HA_REST = 6563.0
 CMAP_NAME = "plasma"
 FILTER_URL = (
@@ -143,20 +143,11 @@ def make_plot(
     ax.set_xlabel(r"Observed Wavelength ($\AA$)", fontsize=12)
     ax.set_ylabel("Normalized Flux / Throughput", fontsize=12)
     ax.set_title(
-        "DECam $r$-band throughput with Kinney+1996 Sc SED at $z = 0$–$0.10$",
+        "DECam $r$-band throughput with Kinney+1996 Sc SED at $z = 0$–$0.15$",
         fontsize=12,
     )
 
-    sm = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm_z)
-    sm.set_array([])
-    cbar = fig.colorbar(sm, ax=ax, pad=0.02, fraction=0.03)
-    cbar.set_label("Redshift $z$", fontsize=11)
-
-    handles, labels_leg = ax.get_legend_handles_labels()
-    filter_handle = [h for h, l in zip(handles, labels_leg) if "DECam" in l]
-    if filter_handle:
-        ax.legend(handles=filter_handle, labels=["DECam $r$ throughput"],
-                  loc="upper left", fontsize=10)
+    ax.legend(loc="upper left", fontsize=10)
 
     ax.grid(True, alpha=0.25, lw=0.6)
     plt.tight_layout()
