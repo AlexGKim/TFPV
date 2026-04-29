@@ -1,14 +1,14 @@
 # DR1 Run: SGA-2020
 
 This document records the full command sequence for the DR1 run on the
-`SGA-2020_iron_Vrot_VI_corr_v3.fits` dataset.
+`SGA-2020_iron_Vrot_VI_corr_v5.fits` dataset.
 
 ## Setup
 
 ```bash
-export FITS=data/SGA-2020_iron_Vrot_VI_corr_v3.fits   # input FITS catalog
-export RUN=DR1_v3                                         # output directory name: output/$RUN/
-export CONFIG=configs/dr1_v3.json                      # pipeline config (parameters + file paths)
+export FITS=data/SGA-2020_iron_Vrot_VI_corr_v5.fits   # input FITS catalog
+export RUN=DR1_v5                                         # output directory name: output/$RUN/
+export CONFIG=configs/dr1_v5.json                      # pipeline config (parameters + file paths)
 ```
 
 `FITS` is only needed for the interactive Phase A steps (1–3b) that accept explicit file flags.
@@ -92,7 +92,7 @@ After completing the interactive fiducial step, capture all parameter choices
 in a portable config file:
 
 ```bash
-python export_config.py --run $RUN --out configs/dr1_v3.json
+python export_config.py --run $RUN --out configs/dr1_v5.json
 ```
 
 The script reads `output/$RUN/select_v2_fiducial.json` (including the
