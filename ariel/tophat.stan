@@ -693,7 +693,7 @@ transformed data {
 }
 parameters {
   // Common slope across all redshift bins
-  real<lower=-9 * sd_x, upper=-4 * sd_x> slope_std;
+  real<lower=-9 * sd_x, upper=-3.5 * sd_x> slope_std;
   
   // Intercept for each redshift bin
   

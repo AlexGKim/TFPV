@@ -36,7 +36,7 @@ import numpy as np
 import pandas as pd
 
 from ellipse_sweep import load_desi, apply_cuts, _build_stan_dicts, _cuts_at_nsigma
-from predict import ystar_pp_mean_sd_tophat_vectorized
+from predict import ystar_pp_mean_sd_tophat_vectorized, create_average_grid_image
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -131,7 +131,7 @@ def _save_scatter_plot(run_dir, run_name, raw_data, cuts, params, ell):
     mu = np.array(ell["mean"])
     cov = np.array(ell["covariance"])
     vals, vecs = np.linalg.eigh(cov)
-    semi_axes = np.sqrt(vals)        # [sigma_minor, sigma_major]
+    semi_axes = np.sqrt(vals)  # [sigma_minor, sigma_major]
     angle = np.degrees(np.arctan2(vecs[1, -1], vecs[0, -1]))
 
     # Colour by Mahalanobis distance from the core GMM mean
@@ -145,37 +145,68 @@ def _save_scatter_plot(run_dir, run_name, raw_data, cuts, params, ell):
     fig, ax = plt.subplots(figsize=(8, 7))
 
     sc = ax.scatter(
-        x_sel, y_sel,
-        c=mahal, cmap="viridis_r",
-        s=1, alpha=0.4, vmin=0, vmax=4,
+        x_sel,
+        y_sel,
+        c=mahal,
+        cmap="viridis_r",
+        s=1,
+        alpha=0.4,
+        vmin=0,
+        vmax=4,
         rasterized=True,
     )
     plt.colorbar(sc, ax=ax, label="Mahalanobis distance from core")
 
     # 1σ/2σ/3σ GMM ellipses
     for n, color, ls in zip([1, 2, 3], ["gold", "orange", "red"], ["-", "--", ":"]):
-        ax.add_patch(mpatches.Ellipse(
-            mu,
-            width=2 * n * semi_axes[1],
-            height=2 * n * semi_axes[0],
-            angle=angle,
-            edgecolor=color, facecolor="none",
-            linewidth=1.5, linestyle=ls,
-            label=f"{n}σ ellipse", zorder=5,
-        ))
+        ax.add_patch(
+            mpatches.Ellipse(
+                mu,
+                width=2 * n * semi_axes[1],
+                height=2 * n * semi_axes[0],
+                angle=angle,
+                edgecolor=color,
+                facecolor="none",
+                linewidth=1.5,
+                linestyle=ls,
+                label=f"{n}σ ellipse",
+                zorder=5,
+            )
+        )
 
     # 3σ selection boundary
     x_line = np.linspace(x_sel.min() - 0.1, x_sel.max() + 0.1, 300)
-    ax.axhline(haty_max, color="white", lw=2.0, ls="--", label=f"haty_max={haty_max:.2f}")
-    ax.axhline(haty_min, color="white", lw=2.0, ls=":",  label=f"haty_min={haty_min:.2f}")
-    ax.plot(x_line, slope_p * x_line + ip,  color="white", lw=2.0, ls="--",
-            label=f"plane1: slope={slope_p:.2f}, b={ip:.2f}")
-    ax.plot(x_line, slope_p * x_line + ip2, color="white", lw=2.0, ls=":",
-            label=f"plane2: slope={slope_p:.2f}, b={ip2:.2f}")
+    ax.axhline(
+        haty_max, color="white", lw=2.0, ls="--", label=f"haty_max={haty_max:.2f}"
+    )
+    ax.axhline(
+        haty_min, color="white", lw=2.0, ls=":", label=f"haty_min={haty_min:.2f}"
+    )
+    ax.plot(
+        x_line,
+        slope_p * x_line + ip,
+        color="white",
+        lw=2.0,
+        ls="--",
+        label=f"plane1: slope={slope_p:.2f}, b={ip:.2f}",
+    )
+    ax.plot(
+        x_line,
+        slope_p * x_line + ip2,
+        color="white",
+        lw=2.0,
+        ls=":",
+        label=f"plane2: slope={slope_p:.2f}, b={ip2:.2f}",
+    )
 
     # MLE TFR line
-    ax.plot(x_line, mle_slope * x_line + mle_intercept,
-            color="red", lw=2.0, label=f"MLE slope={mle_slope:.3f}")
+    ax.plot(
+        x_line,
+        mle_slope * x_line + mle_intercept,
+        color="red",
+        lw=2.0,
+        label=f"MLE slope={mle_slope:.3f}",
+    )
 
     ax.set_xlabel(r"$x = \log_{10}(V/100\,\mathrm{km\,s}^{-1})$")
     ax.set_ylabel(r"$y = R$-band absolute magnitude")
@@ -247,7 +278,44 @@ def _compute_pull_stats(raw_data, params, y_min, y_max, n_bins):
         wt_uncs[i] = 1.0 / np.sqrt(np.sum(w))
         pulls[i] = wt_means[i] / wt_uncs[i]
 
-    return bin_centers, bin_widths, pulls, wt_means, wt_uncs
+    return bin_centers, bin_widths, pulls, wt_means, wt_uncs, delta
+
+
+def _save_grid_plot(
+    run_dir, run_name, x, y, delta, haty_lines=None, filename="select_v2_grid.png"
+):
+    """Draw and save a phase-space residual grid plot.
+
+    Analogous to the grid plots generated in predict.py.
+    """
+    fig, ax, img = create_average_grid_image(
+        x,
+        y,
+        delta,
+        grid_resolution_x=50,
+        grid_resolution_y=50,
+    )
+    ax.set_xlabel(r"$\log_{10}(V/100\,\mathrm{km\,s}^{-1})$")
+    ax.set_ylabel(r"$R$-band absolute magnitude")
+    ax.set_title(f"Average Magnitude Difference — {run_name}")
+    fig.colorbar(img, ax=ax, label="Average Magnitude Difference")
+
+    if haty_lines:
+        for label, val in haty_lines.items():
+            ax.axhline(
+                val,
+                color="darkorange",
+                linewidth=1.2,
+                linestyle="--",
+                label=f"{label} = {val:.2f}",
+            )
+        ax.legend(fontsize=8)
+
+    out_path = os.path.join(run_dir, filename)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+    print(f"Saved grid plot → {out_path}")
 
 
 def _save_pull_plot(
@@ -341,7 +409,9 @@ def main():
         "--fits_file", help="Path to DESI FITS file (required if not using config)"
     )
     parser.add_argument(
-        "--exe", default=None, help="Path to compiled tophat Stan binary (default: tophat)"
+        "--exe",
+        default=None,
+        help="Path to compiled tophat Stan binary (default: tophat)",
     )
     parser.add_argument(
         "--source", default=None, choices=["DESI"], help="Data source (default: DESI)"
@@ -384,6 +454,7 @@ def main():
     args = parser.parse_args()
 
     from config_utils import apply_config
+
     cfg = apply_config(args)
     if cfg.get("run") and not args.run:
         args.run = cfg["run"]
@@ -461,7 +532,7 @@ def main():
         y_min = float(data_dict["y_min"])
         y_max = float(data_dict["y_max"])
 
-        bin_centers, bin_widths, pulls, wt_means, wt_uncs = _compute_pull_stats(
+        bin_centers, bin_widths, pulls, wt_means, wt_uncs, delta = _compute_pull_stats(
             raw_data, params, y_min, y_max, args.n_bins
         )
         _save_pull_plot(
@@ -477,6 +548,17 @@ def main():
             haty_lines={"haty_min": args.haty_min, "haty_max": args.haty_max},
             filename="select_v2_fiducial_pull.png",
         )
+
+        _save_grid_plot(
+            run_dir,
+            args.run,
+            raw_data["x"],
+            raw_data["y"],
+            delta,
+            haty_lines={"haty_min": args.haty_min, "haty_max": args.haty_max},
+            filename="select_v2_fiducial_grid.png",
+        )
+
         return
 
     # ── Diagnostic mode: 3-sigma cuts for MLE ────────────────────────────────
@@ -552,7 +634,7 @@ def main():
         _z_mask &= _z_raw <= cuts["z_obs_max"]
     raw_data_z = {k: v[_z_mask] for k, v in raw_data.items()}
 
-    bin_centers, bin_widths, pulls, wt_means, wt_uncs = _compute_pull_stats(
+    bin_centers, bin_widths, pulls, wt_means, wt_uncs, delta = _compute_pull_stats(
         raw_data_z, params, y_min, y_max, args.n_bins
     )
 
@@ -564,6 +646,9 @@ def main():
         "pulls": pulls.tolist(),
         "wt_means": wt_means.tolist(),
         "wt_uncs": wt_uncs.tolist(),
+        "x": raw_data_z["x"].tolist(),
+        "y": raw_data_z["y"].tolist(),
+        "delta": delta.tolist(),
     }
     pull_stats_path = os.path.join(run_dir, "select_v2_pull_stats.json")
     with open(pull_stats_path, "w") as f:
@@ -580,6 +665,15 @@ def main():
         bin_widths=bin_widths,
         wt_means=wt_means,
         wt_uncs=wt_uncs,
+    )
+
+    _save_grid_plot(
+        run_dir,
+        args.run,
+        raw_data_z["x"],
+        raw_data_z["y"],
+        delta,
+        filename="select_v2_mle_grid.png",
     )
 
 

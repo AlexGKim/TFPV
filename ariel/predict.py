@@ -2197,7 +2197,7 @@ def fullmocks(
 
 
 def _apply_main_cuts(cfg, xhat, yhat, zobs=None):
-    """Return boolean mask for MAIN=True using config.json cuts (including z cuts if zobs is provided)."""
+    """Return boolean mask for MAIN=True using config.json cuts (z cuts intentionally excluded for the MAIN sample)."""
     mask = np.ones(len(xhat), dtype=bool)
     if cfg.get("haty_min") is not None:
         mask &= yhat > cfg["haty_min"]
@@ -2211,11 +2211,9 @@ def _apply_main_cuts(cfg, xhat, yhat, zobs=None):
         if intercept_plane2 is not None:
             mask &= yhat < slope_plane * xhat + intercept_plane2
 
-    if zobs is not None:
-        if cfg.get("z_obs_min") is not None:
-            mask &= zobs > cfg["z_obs_min"]
-        if cfg.get("z_obs_max") is not None:
-            mask &= zobs <= cfg["z_obs_max"]
+    # Redshift cuts are used for TF fitting but the MAIN sample defines
+    # the target selection window in phase space regardless of redshift.
+    # Therefore, no zobs cut is applied here.
 
     return mask
 
@@ -2742,7 +2740,8 @@ if __name__ == "__main__":
         help="Run name; reads/writes output/<run>/ with standard filenames",
     )
     parser.add_argument(
-        "--config", default=None,
+        "--config",
+        default=None,
         help="Path to JSON config (e.g. configs/dr1_v3.json)",
     )
     parser.add_argument(
@@ -2828,6 +2827,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     from config_utils import apply_config
+
     cfg = apply_config(args)
     if cfg.get("fits_file") and not args.input:
         args.input = cfg["fits_file"]

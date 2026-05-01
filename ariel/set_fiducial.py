@@ -21,7 +21,7 @@ import os
 import numpy as np
 
 from ellipse_sweep import _cuts_at_nsigma
-from select_v2 import _save_pull_plot
+from select_v2 import _save_pull_plot, _save_grid_plot
 
 
 def main():
@@ -29,8 +29,9 @@ def main():
         description="Interactively set fiducial selection criteria.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--run", required=True,
-                        help="Run name (reads/writes output/<run>/)")
+    parser.add_argument(
+        "--run", required=True, help="Run name (reads/writes output/<run>/)"
+    )
     args = parser.parse_args()
 
     run_dir = os.path.join("output", args.run)
@@ -39,11 +40,12 @@ def main():
     ellipse_path = os.path.join(run_dir, "selection_ellipse.json")
     if not os.path.exists(ellipse_path):
         raise FileNotFoundError(
-            f"{ellipse_path} not found — run selection_ellipse.py first.")
+            f"{ellipse_path} not found — run selection_ellipse.py first."
+        )
     with open(ellipse_path) as f:
         ell = json.load(f)
 
-    mu    = np.array(ell["mean"])
+    mu = np.array(ell["mean"])
     sigma = np.array(ell["covariance"])
 
     # Show reference values from the 1-sigma ellipse
@@ -71,33 +73,48 @@ def main():
                 print("  Please enter a number.")
 
     # Prompt user
-    n_sigma_perp = prompt_float("Enter n_sigma_perp (perpendicular cut width in sigma units) [default 3]: ", default=3.0)
-    haty_min     = prompt_float("Enter haty_min (bright-end magnitude limit) [default -21.7]: ", default=-21.7)
-    haty_max     = prompt_float("Enter haty_max (dim-end   magnitude limit) [default -19.0]: ", default=-19.0)
-    z_obs_min    = prompt_float("Enter z_obs_min (minimum redshift) [default 0.03]: ", default=0.03)
-    z_obs_max    = prompt_float("Enter z_obs_max (maximum redshift) [default 0.1]: ", default=0.1)
+    n_sigma_perp = prompt_float(
+        "Enter n_sigma_perp (perpendicular cut width in sigma units) [default 3]: ",
+        default=3.0,
+    )
+    haty_min = prompt_float(
+        "Enter haty_min (bright-end magnitude limit) [default -21.7]: ", default=-21.7
+    )
+    haty_max = prompt_float(
+        "Enter haty_max (dim-end   magnitude limit) [default -19.0]: ", default=-19.0
+    )
+    z_obs_min = prompt_float(
+        "Enter z_obs_min (minimum redshift) [default 0.03]: ", default=0.03
+    )
+    z_obs_max = prompt_float(
+        "Enter z_obs_max (maximum redshift) [default 0.1]: ", default=0.1
+    )
 
     if haty_min >= haty_max:
-        raise ValueError(f"haty_min ({haty_min}) must be less than haty_max ({haty_max}).")
+        raise ValueError(
+            f"haty_min ({haty_min}) must be less than haty_max ({haty_max})."
+        )
     if n_sigma_perp <= 0:
         raise ValueError(f"n_sigma_perp must be positive, got {n_sigma_perp}.")
     if z_obs_min < 0:
         raise ValueError(f"z_obs_min must be non-negative, got {z_obs_min}.")
     if z_obs_max <= z_obs_min:
-        raise ValueError(f"z_obs_max ({z_obs_max}) must be greater than z_obs_min ({z_obs_min}).")
+        raise ValueError(
+            f"z_obs_max ({z_obs_max}) must be greater than z_obs_min ({z_obs_min})."
+        )
 
     # Compute oblique intercepts at the requested n_sigma_perp
     cuts = _cuts_at_nsigma(mu, sigma, n_sigma_perp)
 
     fiducial = {
-        "haty_min":         haty_min,
-        "haty_max":         haty_max,
-        "slope_plane":      cuts["slope_plane"],
-        "intercept_plane":  cuts["intercept_plane"],
+        "haty_min": haty_min,
+        "haty_max": haty_max,
+        "slope_plane": cuts["slope_plane"],
+        "intercept_plane": cuts["intercept_plane"],
         "intercept_plane2": cuts["intercept_plane2"],
-        "n_sigma_perp":     n_sigma_perp,
-        "z_obs_min":        z_obs_min,
-        "z_obs_max":        z_obs_max,
+        "n_sigma_perp": n_sigma_perp,
+        "z_obs_min": z_obs_min,
+        "z_obs_max": z_obs_max,
     }
 
     print()
@@ -119,10 +136,12 @@ def main():
 
     # Generate pull plot with fiducial cut lines
     pull_stats_path = os.path.join(run_dir, "select_v2_pull_stats.json")
-    mle_path        = os.path.join(run_dir, "select_v2_mle.json")
+    mle_path = os.path.join(run_dir, "select_v2_mle.json")
     if not os.path.exists(pull_stats_path) or not os.path.exists(mle_path):
-        print(f"Warning: {pull_stats_path} or {mle_path} not found — "
-              "run select_v2.py first to generate pull stats.")
+        print(
+            f"Warning: {pull_stats_path} or {mle_path} not found — "
+            "run select_v2.py first to generate pull stats."
+        )
         return
     with open(pull_stats_path) as f:
         ps = json.load(f)
@@ -130,8 +149,10 @@ def main():
         params = json.load(f)
 
     _save_pull_plot(
-        run_dir, args.run,
-        n_all=ps["n_all"], n_sel=ps["n_sel"],
+        run_dir,
+        args.run,
+        n_all=ps["n_all"],
+        n_sel=ps["n_sel"],
         params=params,
         bin_centers=np.array(ps["bin_centers"]),
         bin_widths=np.array(ps["bin_widths"]),
@@ -140,6 +161,17 @@ def main():
         haty_lines={"haty_min": haty_min, "haty_max": haty_max},
         filename="select_v2_fiducial_pull.png",
     )
+
+    if "x" in ps and "y" in ps and "delta" in ps:
+        _save_grid_plot(
+            run_dir,
+            args.run,
+            x=np.array(ps["x"]),
+            y=np.array(ps["y"]),
+            delta=np.array(ps["delta"]),
+            haty_lines={"haty_min": haty_min, "haty_max": haty_max},
+            filename="select_v2_fiducial_grid.png",
+        )
 
 
 if __name__ == "__main__":

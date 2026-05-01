@@ -244,6 +244,38 @@ redshift-dependent covariance in the TFR-inferred peculiar velocities.
     \label{fig:redshift_grid}
 \end{figure}
 
+\section*{H$\alpha$ Redshift Range in DECam $r$-band}
+
+The H$\alpha$ emission line has a rest-frame wavelength of $\lambda_{\rm H\alpha} = 656.3$ nm. 
+The DECam $r$-band spans approximately $\lambda_{\rm blue} = 562$ nm to $\lambda_{\rm red} = 698$ nm 
+at the 50\% transmission points.
+
+The observed wavelength of a spectral line is related to its rest-frame wavelength by:
+\begin{equation}
+    \lambda_{\rm obs} = \lambda_{\rm emit} \,(1 + z),
+\end{equation}
+so the corresponding redshift is:
+\begin{equation}
+    z = \frac{\lambda_{\rm obs}}{\lambda_{\rm emit}} - 1.
+\end{equation}
+
+At the blue edge of the $r$-band:
+\begin{equation}
+    z_{\rm blue} = \frac{562}{656.3} - 1 \approx -0.14,
+\end{equation}
+which corresponds to a blueshift and is not physical in a cosmological context.
+
+At the red edge of the $r$-band:
+\begin{equation}
+    z_{\rm red} = \frac{698}{656.3} - 1 \approx 0.064.
+\end{equation}
+
+Since H$\alpha$ at rest ($z = 0$) falls at 656.3 nm, which is already within the $r$-band, 
+the H$\alpha$ line is observable in the DECam $r$-band over the redshift range:
+\begin{equation}
+    0 \lesssim z \lesssim 0.06.
+\end{equation}
+
 \section{Sample Selection}
 \label{sec:sampleselection}
 Not all galaxies in the DR2 spiral catalog are suitable for TFR calibration.

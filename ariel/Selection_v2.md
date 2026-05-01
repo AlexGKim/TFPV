@@ -223,4 +223,7 @@ python select_v2.py --config $CONFIG [options]
 | `output/<run>/selection_ellipse.png` | `selection_ellipse.py` | Phase-space scatter coloured by P(core component) with GMM ellipses |
 | `output/<run>/select_v2_mle.json` | `select_v2.py` | MLE TFR parameters from 3σ selection: slope, intercept, sigma_int_x, sigma_int_y |
 | `output/<run>/select_v2_pull.png` | `select_v2.py` | Pull profile and weighted-mean residual vs M_abs for all catalog objects |
+| `output/<run>/select_v2_mle_grid.png` | `select_v2.py` | Phase-space residual grid plot for all catalog objects |
 | `output/<run>/select_v2_fiducial.json` | `select_v2.py --set_fiducial` | Fiducial selection cuts chosen in Step 4: haty_min, haty_max, slope_plane, intercept_plane, intercept_plane2 |
+| `output/<run>/select_v2_fiducial_pull.png` | `select_v2.py --set_fiducial` | Pull profile and weighted-mean residual with fiducial cuts drawn |
+| `output/<run>/select_v2_fiducial_grid.png` | `select_v2.py --set_fiducial` | Phase-space residual grid plot for fiducial cuts |
