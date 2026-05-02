@@ -107,6 +107,7 @@ def main():
     args = parser.parse_args()
 
     from config_utils import apply_config
+
     cfg = apply_config(args)
     if args.run and not args.run_dir:
         args.run_dir = os.path.join("output", args.run)
@@ -152,6 +153,9 @@ def main():
         g_mag = _get_col("G_MAG_SB26_CORR")
         r_mag = _get_col(col_app)
         z_mag = _get_col("Z_MAG_SB26_CORR")
+        g_mag_obs = _get_col("G_MAG_SB26")
+        r_mag_obs = _get_col("R_MAG_SB26")
+        z_mag_obs = _get_col("Z_MAG_SB26")
         sma_sb26 = _get_col("SMA_SB26")
         sma_sb22 = _get_col("SMA_SB22")
         g_sma50 = _get_col("G_SMA50")
@@ -187,6 +191,9 @@ def main():
     g_mag = _m(g_mag)
     r_mag = _m(r_mag)
     z_mag = _m(z_mag)
+    g_mag_obs = _m(g_mag_obs)
+    r_mag_obs = _m(r_mag_obs)
+    z_mag_obs = _m(z_mag_obs)
     sma_sb26 = _m(sma_sb26)
     sma_sb22 = _m(sma_sb22)
     g_sma50 = _m(g_sma50)
@@ -201,6 +208,9 @@ def main():
     g_r = g_mag - r_mag
     r_z = r_mag - z_mag
     g_z = g_mag - z_mag
+    g_r_obs = g_mag_obs - r_mag_obs
+    r_z_obs = r_mag_obs - z_mag_obs
+    g_z_obs = g_mag_obs - z_mag_obs
     with np.errstate(invalid="ignore", divide="ignore"):
         sma_ratio = np.where(sma_sb22 > 0, sma_sb26 / sma_sb22, np.nan)
 
@@ -249,9 +259,12 @@ def main():
     cont_params = [
         ("ba", ba, r"$b/a$ (axis ratio)"),
         ("d26_kpc", d26_kpc, r"$D_{26}$ (kpc)"),
-        ("g_r", g_r, r"$g - r$"),
-        ("r_z", r_z, r"$r - z$"),
-        ("g_z", g_z, r"$g - z$"),
+        ("g_r", g_r, r"$(g - r)_{\rm corr}$"),
+        ("r_z", r_z, r"$(r - z)_{\rm corr}$"),
+        ("g_z", g_z, r"$(g - z)_{\rm corr}$"),
+        ("g_r_obs", g_r_obs, r"$(g - r)_{\rm obs}$"),
+        ("r_z_obs", r_z_obs, r"$(r - z)_{\rm obs}$"),
+        ("g_z_obs", g_z_obs, r"$(g - z)_{\rm obs}$"),
         ("sma_sb26", sma_sb26, r"SMA$_{\rm SB26}$ (arcsec)"),
         ("sma_ratio", sma_ratio, r"SMA$_{\rm SB26}$/SMA$_{\rm SB22}$"),
         ("g_sma50", g_sma50, r"$g$-band $r_{50}$ (arcsec)"),
