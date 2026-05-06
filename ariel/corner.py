@@ -69,6 +69,7 @@ def load_params(file_pattern):
         r"$\beta$":                       ["intercept.1", "intercept[1]", "intercept"],  # common Stan CSV variants
         r"$\sigma_{\rm int,x}$":          ["sigma_int_x"],
         r"$\sigma_{\rm int,y}$":          ["sigma_int_y"],
+        r"$\gamma$":                      ["gamma"],
         "mu_{y_TF}":                      ["mu_y_TF"],
         "tau":                            ["tau"],
         # Add more here if you like; they will be included only if present.

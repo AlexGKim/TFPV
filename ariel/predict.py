@@ -989,8 +989,13 @@ def ystar_pp_mean_sd_tophat_vectorized(
         var_yTF[nd] = v
 
     # ---- y_* adds effective y-scatter (incorporating gamma color correction)
-    mean_ystar = mean_yTF
-    var_ystar = var_yTF + sigma_y_eff_sq_MG
+    mean_ystar_eff = mean_yTF
+    var_ystar_eff = var_yTF + sigma_y_eff_sq_MG
+
+    # ---- Back-transform from effective-y space to observed r-band space
+    # y_obs = (1 + gamma) * y_eff - gamma * zhat
+    mean_ystar = one_plus_gamma * mean_ystar_eff - gamma_MG * zhat_arr[None, :]
+    var_ystar = (one_plus_gamma ** 2) * var_ystar_eff
 
     # ---- Mixture moments over draws
     mean_y = mean_ystar.mean(axis=0)  # (G,)

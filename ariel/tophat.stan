@@ -773,8 +773,8 @@ model {
       // vector[N_total] sigma2 = sqrt(sigmasq2_eff);
       vector[N_total] sigma2 = sqrt(square(sigma_int_y) + sigma_y_eff_sq);
 
-      term_lb = (haty_max_eff - y_min_eff) / sigma2;
-      term_ub = (haty_max_eff - y_max_eff) / sigma2;
+      term_lb = (haty_max_eff - y_min_eff) ./ sigma2;
+      term_ub = (haty_max_eff - y_max_eff) ./ sigma2;
 
       vector[N_total] logsigma2 = 0.5 * log(square(sigma_int_y) + sigma_y_eff_sq);
 
