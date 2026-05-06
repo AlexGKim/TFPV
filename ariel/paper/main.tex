@@ -975,6 +975,7 @@ color-correction parameter $\gamma$.
 Let $\hat{z}_i$ be the observed $z$-band SB26 absolute magnitude
 (\texttt{Z\_ABSMAG\_SB26}) with uncertainty $\sigma_{z,i}$,
 and let $z_i$ be the corresponding latent true value.
+To break the degeneracy between $\gamma$ and the TFR slope $\alpha$ that arises from the correlation of $z$-band magnitude with rotation velocity, $\hat{z}_i$ is replaced by its residual after an OLS regression of $\hat{z}$ on $\hat{x}$ over the training sample, so that $\operatorname{Cov}(\tilde{z},\,\hat{x})=0$ by construction.
 The extended observation equations are
 \begin{align}
 \hat{y}_i \mid y_i, z_i &\sim \mathcal{N}\!\left(y_i + \gamma(y_i - z_i),\;\sigma_{y,i}^2\right), \label{eq:cc:yobs}\\

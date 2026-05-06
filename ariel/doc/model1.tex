@@ -615,6 +615,7 @@ for galaxy $i$, with measurement uncertainty $\sigma_{z,i}$, and let $z_i$
 be the corresponding latent (true) $z$-band magnitude.
 We introduce a new global parameter $\gamma$ that shifts the effective
 $r$-band observable by an amount proportional to the observed $r-i$ color.
+To break the degeneracy between $\gamma$ and the TFR slope $\alpha$ that arises from the correlation of $z$-band magnitude with rotation velocity, $\hat{z}_i$ is replaced by its residual after an OLS regression of $\hat{z}$ on $\hat{x}$ over the training sample, so that $\operatorname{Cov}(\tilde{z},\,\hat{x})=0$ by construction.
 
 \paragraph{Generative model.}
 The extended observation equations are

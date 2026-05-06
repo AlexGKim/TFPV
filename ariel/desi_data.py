@@ -245,6 +245,13 @@ def process_desi_tf_data(
     sigma_x_data = sigma_x.tolist()
     sigma_y_data = sigma_y.tolist()
     z_obs_data = z_obs.tolist()
+    # Orthogonalize zhat w.r.t. x to break alpha-gamma degeneracy.
+    # gamma can only trade off against alpha because z correlates with x;
+    # replacing zhat with its OLS residual enforces Cov(zhat, x) = 0.
+    _b = np.cov(x, zhat)[0, 1] / np.var(x)
+    _a = np.mean(zhat) - _b * np.mean(x)
+    zhat = zhat - (_a + _b * x)
+
     zhat_list = zhat.tolist()
     sigma_z_list = sigma_z.tolist()
 
