@@ -604,6 +604,85 @@ with $P(S_i=1\mid\theta)$ given by Eq.~\eqref{eq:Psel_normal}. (Equivalently,
 one may evaluate the numerator in $(\hat u,\hat y)$ coordinates using
 $\mathcal N_2(\hat{\boldsymbol z}_i;\,[\mu_{u,i},\mu_{y,i}]^T,\boldsymbol\Sigma^{(uy)}_i)$ and the corresponding Jacobian.)
 
+
+\subsection{Color-Correction Extension}
+\label{sec:app1:color}
+
+We extend the baseline model to account for a global color-dependent
+bias in the observed $r$-band absolute magnitude.
+Let $\hat{z}_i$ denote the observed $z$-band SB26 absolute magnitude
+for galaxy $i$, with measurement uncertainty $\sigma_{z,i}$, and let $z_i$
+be the corresponding latent (true) $z$-band magnitude.
+We introduce a new global parameter $\gamma$ that shifts the effective
+$r$-band observable by an amount proportional to the observed $r-i$ color.
+
+\paragraph{Generative model.}
+The extended observation equations are
+\begin{align}
+\hat{y}_i \mid y_i, z_i &\sim \mathcal{N}\!\left(y_i + \gamma(y_i - z_i),\;\sigma_{y,i}^2\right), \label{eq:color:yobs}\\
+\hat{z}_i \mid z_i &\sim \mathcal{N}\!\left(z_i,\;\sigma_{z,i}^2\right), \label{eq:color:zobs}\\
+z_i &\sim \text{flat prior},\\
+\gamma &\sim \text{flat prior}.
+\end{align}
+Equation~\eqref{eq:color:yobs} states that the observed $r$-band magnitude
+is shifted from the true magnitude $y_i$ by $\gamma$ times the intrinsic
+$r-i$ color $(y_i - z_i)$.
+
+\paragraph{Marginalization over $z_i$.}
+With a flat prior on $z_i$ and conditioned on the $i$-band observation
+$\hat{z}_i$, the posterior for $z_i$ is
+\begin{equation}
+z_i \mid \hat{z}_i \sim \mathcal{N}\!\left(\hat{z}_i,\;\sigma_{z,i}^2\right).
+\end{equation}
+Substituting the conditional mean $z_i = \hat{z}_i$ into
+Eq.~\eqref{eq:color:yobs} and propagating its uncertainty
+(with the $z_i$--$y_i$ independence), we obtain the marginalized distribution
+\begin{equation}
+\hat{y}_i \mid y_{\mathrm{TF},i},\hat{z}_i
+\;\sim\;
+\mathcal{N}\!\Bigl((1+\gamma)\,y_{\mathrm{TF},i} - \gamma\,\hat{z}_i,\;
+(1+\gamma)^2\sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 + \gamma^2\sigma_{z,i}^2\Bigr),
+\label{eq:color:marg}
+\end{equation}
+where we have used $y_i \mid y_{\mathrm{TF},i} \sim \mathcal{N}(y_{\mathrm{TF},i},\sigma_{\mathrm{int},y}^2)$.
+
+\paragraph{Effective substitution.}
+Define the per-galaxy effective observable and variance
+\begin{align}
+y_{\mathrm{eff},i} &\equiv \frac{\hat{y}_i + \gamma\,\hat{z}_i}{1+\gamma},
+\label{eq:color:yeff}\\
+\sigma_{2,\mathrm{eff},i}^2 &\equiv \sigma_{\mathrm{int},y}^2
+  + \frac{\sigma_{y,i}^2 + \gamma^2\sigma_{z,i}^2}{(1+\gamma)^2}.
+\label{eq:color:s2eff}
+\end{align}
+Then Eq.~\eqref{eq:color:marg} can be rewritten as
+\begin{equation}
+y_{\mathrm{eff},i} \mid y_{\mathrm{TF},i}
+\;\sim\;
+\mathcal{N}\!\left(y_{\mathrm{TF},i},\;\sigma_{2,\mathrm{eff},i}^2\right),
+\label{eq:color:reduced}
+\end{equation}
+which is \emph{identical in structure} to the original model
+(cf.\ Eq.~\ref{sec:app1:model}) with $\hat{y}_i \to y_{\mathrm{eff},i}$
+and $\sigma_{2,i}^2 \to \sigma_{2,\mathrm{eff},i}^2$.
+Consequently, all likelihood expressions and selection-probability
+integrals derived in \S\ref{sec:app1:selection} remain valid under this
+substitution.
+
+\paragraph{Effective selection boundaries.}
+The original selection cuts are stated in terms of the observed $\hat{y}_i$.
+Under the reparameterization, these translate to per-galaxy effective
+boundaries on $y_{\mathrm{eff},i}$:
+\begin{align}
+\hat{y}_{\min,\mathrm{eff},i} &= \frac{\hat{y}_{\min} + \gamma\,\hat{z}_i}{1+\gamma}, &
+\hat{y}_{\max,\mathrm{eff},i} &= \frac{\hat{y}_{\max} + \gamma\,\hat{z}_i}{1+\gamma}.
+\label{eq:color:bounds}
+\end{align}
+These galaxy-dependent limits replace the global $\hat{y}_{\min}$ and
+$\hat{y}_{\max}$ when evaluating the selection probability
+$P(S_i=1\mid\theta,\gamma)$ for each galaxy.
+
+
 \subsection{Priors}
 Use flat priors for $(\alpha,\beta)$ and weakly informative priors for the intrinsic scatters:
 \begin{align}

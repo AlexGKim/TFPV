@@ -788,6 +788,8 @@ def ystar_pp_mean_sd_tophat_vectorized(
     xhat_star,
     sigma_x_star,
     *,
+    zhat=None,
+    sigma_z=None,
     bounds_json="DESI_input.json",
     y_min_key="y_min",
     y_max_key="y_max",
@@ -841,6 +843,20 @@ def ystar_pp_mean_sd_tophat_vectorized(
     sigma_x_star = np.asarray(sigma_x_star, dtype=float)  # (G,)
     G = xhat_star.size
 
+    # ---- Handle zhat / sigma_z (color correction inputs)
+    if zhat is None:
+        zhat_arr = np.zeros(G, dtype=float)
+    else:
+        zhat_arr = np.asarray(zhat, dtype=float)
+        if zhat_arr.shape != (G,):
+            raise ValueError(f"zhat must have shape ({G},), got {zhat_arr.shape}.")
+    if sigma_z is None:
+        sigma_z_arr = np.ones(G, dtype=float) * 99.0
+    else:
+        sigma_z_arr = np.asarray(sigma_z, dtype=float)
+        if sigma_z_arr.shape != (G,):
+            raise ValueError(f"sigma_z must have shape ({G},), got {sigma_z_arr.shape}.")
+
     # ---- Load scalar bounds if not provided
     if y_min is None or y_max is None:
         if bounds_json is None:
@@ -870,11 +886,29 @@ def ystar_pp_mean_sd_tophat_vectorized(
     c = draws["intercept.1"].to_numpy(float)  # (M,)
     six = draws["sigma_int_x"].to_numpy(float)  # (M,)
     siy = draws["sigma_int_y"].to_numpy(float)  # (M,)
+    # gamma: default 0 if not present in posterior (old runs without color correction)
+    if "gamma" in draws.columns:
+        gamma = draws["gamma"].to_numpy(float)  # (M,)
+    else:
+        gamma = np.zeros(len(s), dtype=float)  # (M,)
 
     if np.any(s == 0):
         raise ValueError("Found slope == 0 in draws; model requires s != 0.")
     if np.any(sigma_x_star < 0) or np.any(six < 0) or np.any(siy < 0):
         raise ValueError("Negative SD encountered.")
+
+    # ---- Apply color correction: per-draw effective observables (M,G)
+    # y_eff[m,g]         = (yhat[g] + gamma[m] * zhat[g]) / (1 + gamma[m])
+    # sigma_y_eff_sq[m,g] = (sigma_y[g]^2 + gamma[m]^2 * sigma_z[g]^2) / (1 + gamma[m])^2
+    # Here yhat_star is not available in this function (it's the latent prediction target),
+    # so color correction is applied to the xhat-based likelihood only via the effective
+    # sigma_y that enters sigma_x_tot2 through the joint scatter.
+    # The effective sigma_int_y scatter for prediction accounts for sigma_z through gamma:
+    gamma_MG = gamma[:, None]  # (M,1) -> broadcasts to (M,G)
+    one_plus_gamma = 1.0 + gamma_MG  # (M,G)
+    sigma_y_eff_sq_MG = (
+        (siy[:, None] ** 2) + (gamma_MG ** 2) * (sigma_z_arr[None, :] ** 2)
+    ) / (one_plus_gamma ** 2)  # (M,G)
 
     # ---- Broadcast to (M,G)
     sMG = s[:, None]
@@ -954,9 +988,9 @@ def ystar_pp_mean_sd_tophat_vectorized(
         mean_yTF[nd] = m
         var_yTF[nd] = v
 
-    # ---- y_* adds intrinsic y-scatter
+    # ---- y_* adds effective y-scatter (incorporating gamma color correction)
     mean_ystar = mean_yTF
-    var_ystar = var_yTF + (siy[:, None] ** 2)
+    var_ystar = var_yTF + sigma_y_eff_sq_MG
 
     # ---- Mixture moments over draws
     mean_y = mean_ystar.mean(axis=0)  # (G,)

@@ -94,6 +94,14 @@ def process_desi_tf_data(
         R_ABSMAG_SB26 = np.asarray(data[col_abs], dtype=float)
         R_ABSMAG_SB26_ERR = np.asarray(data[col_abs_err], dtype=float)
 
+        # z-band absolute magnitude (stub zeros/99 if column absent)
+        if "Z_ABSMAG_SB26" in names and "Z_ABSMAG_SB26_ERR" in names:
+            Z_ABSMAG_SB26 = np.asarray(data["Z_ABSMAG_SB26"], dtype=float)
+            Z_ABSMAG_SB26_ERR = np.asarray(data["Z_ABSMAG_SB26_ERR"], dtype=float)
+        else:
+            Z_ABSMAG_SB26 = np.zeros(len(R_ABSMAG_SB26), dtype=float)
+            Z_ABSMAG_SB26_ERR = np.ones(len(R_ABSMAG_SB26), dtype=float) * 99.0
+
         z_all_raw = np.asarray(data[z_col_use], dtype=float)
 
     total_rows = len(V_0p4R26)
@@ -117,6 +125,8 @@ def process_desi_tf_data(
     V_0p4R26_ERR = V_0p4R26_ERR[valid_mask]
     R_ABSMAG_SB26 = R_ABSMAG_SB26[valid_mask]
     R_ABSMAG_SB26_ERR = R_ABSMAG_SB26_ERR[valid_mask]
+    Z_ABSMAG_SB26 = Z_ABSMAG_SB26[valid_mask]
+    Z_ABSMAG_SB26_ERR = Z_ABSMAG_SB26_ERR[valid_mask]
     z_all_raw = z_all_raw[valid_mask]
 
     valid_rows = len(V_0p4R26)
@@ -138,6 +148,7 @@ def process_desi_tf_data(
     # SECTION 2: APPLY SELECTION CUTS (NOW INCLUDES haty_min AND z_obs_min)
     # ============================================================================
     x_data, y_data, sigma_x_data, sigma_y_data, z_data = [], [], [], [], []
+    zhat_data, sigma_z_data = [], []
 
     # Track filtering statistics
     y_filtered_rows = 0
@@ -174,6 +185,8 @@ def process_desi_tf_data(
                         sigma_x_data.append(sigma_x_all[i])
                         sigma_y_data.append(sigma_y_all[i])
                         z_data.append(zobs_all[i])
+                        zhat_data.append(float(Z_ABSMAG_SB26[i]))
+                        sigma_z_data.append(float(Z_ABSMAG_SB26_ERR[i]))
                         plane_pass_rows += 1
                 else:
                     # Two‑sided: lower_bound < y < min(haty_max, upper_bound_oblique)
@@ -186,6 +199,8 @@ def process_desi_tf_data(
                         sigma_x_data.append(sigma_x_all[i])
                         sigma_y_data.append(sigma_y_all[i])
                         z_data.append(zobs_all[i])
+                        zhat_data.append(float(Z_ABSMAG_SB26[i]))
+                        sigma_z_data.append(float(Z_ABSMAG_SB26_ERR[i]))
                         plane_pass_rows += 1
             else:
                 # No plane cut (just the y‑range and optional redshift cut)
@@ -194,6 +209,8 @@ def process_desi_tf_data(
                 sigma_x_data.append(sigma_x_all[i])
                 sigma_y_data.append(sigma_y_all[i])
                 z_data.append(zobs_all[i])
+                zhat_data.append(float(Z_ABSMAG_SB26[i]))
+                sigma_z_data.append(float(Z_ABSMAG_SB26_ERR[i]))
 
     # Convert to numpy arrays for calculations
     x = np.array(x_data, dtype=float)
@@ -201,6 +218,8 @@ def process_desi_tf_data(
     sigma_x = np.array(sigma_x_data, dtype=float)
     sigma_y = np.array(sigma_y_data, dtype=float)
     z_obs = np.array(z_data, dtype=float)
+    zhat = np.array(zhat_data, dtype=float)
+    sigma_z = np.array(sigma_z_data, dtype=float)
 
     N_after_cuts = len(x)
 
@@ -214,6 +233,8 @@ def process_desi_tf_data(
         sigma_x = sigma_x[idx]
         sigma_y = sigma_y[idx]
         z_obs = z_obs[idx]
+        zhat = zhat[idx]
+        sigma_z = sigma_z[idx]
         print(
             f"  Subsampled from {N_after_cuts} to {n_objects} objects (random_seed={random_seed})"
         )
@@ -224,6 +245,8 @@ def process_desi_tf_data(
     sigma_x_data = sigma_x.tolist()
     sigma_y_data = sigma_y.tolist()
     z_obs_data = z_obs.tolist()
+    zhat_list = zhat.tolist()
+    sigma_z_list = sigma_z.tolist()
 
     N_total = len(x)
 
@@ -248,6 +271,8 @@ def process_desi_tf_data(
         "y_max": float(haty_max) + 0.5,
         "mu_y_TF": mu_y_TF,
         "tau": tau,
+        "zhat": zhat_list,
+        "sigma_z": sigma_z_list,
         "z_obs": z_obs_data,  # now defined, aligned, and JSON‑serializable
         "z_obs_min": float(z_obs_min) if z_obs_min is not None else None,
         "z_obs_max": float(z_obs_max) if z_obs_max is not None else None,

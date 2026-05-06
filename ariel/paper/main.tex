@@ -215,6 +215,10 @@ The analysis variables used throughout this paper are
 \end{align}
 where $M_R$ is the $r$-band SB26 absolute magnitude computed from
 the apparent magnitude and the luminosity distance at the observed redshift.
+We additionally define $\hat{z}_i \equiv \texttt{Z\_ABSMAG\_SB26}$, the $z$-band
+SB26 absolute magnitude for galaxy $i$ with measurement uncertainty $\sigma_{z,i}$,
+which is used in the color-correction extension of the model
+(Appendix~\ref{sec:color_correction}).
 
 The intrinsic galaxy distribution is redshift-dependent, as illustrated in
 Figure~\ref{fig:redshift_grid}, which shows the average redshift of DR2
@@ -951,6 +955,90 @@ The authors are honored to be permitted to conduct scientific research on Iolkam
 \input{../doc/model1}
 
 \input{../doc/model2}
+
+
+\section{Color-Correction Model}
+\label{sec:color_correction}
+
+\subsection{Motivation}
+
+Empirical diagnostics of the TFR fit reveal color-dependent residuals:
+galaxies with redder (bluer) $r-i$ colors show systematically positive
+(negative) deviations from the predicted $r$-band absolute magnitude.
+This suggests that the $r$-band magnitude is not a perfectly color-neutral
+distance indicator, and that a global color term can reduce this systematic.
+We therefore extend the baseline model by introducing a single global
+color-correction parameter $\gamma$.
+
+\subsection{Generative Model}
+
+Let $\hat{z}_i$ be the observed $z$-band SB26 absolute magnitude
+(\texttt{Z\_ABSMAG\_SB26}) with uncertainty $\sigma_{z,i}$,
+and let $z_i$ be the corresponding latent true value.
+The extended observation equations are
+\begin{align}
+\hat{y}_i \mid y_i, z_i &\sim \mathcal{N}\!\left(y_i + \gamma(y_i - z_i),\;\sigma_{y,i}^2\right), \label{eq:cc:yobs}\\
+\hat{z}_i \mid z_i       &\sim \mathcal{N}\!\left(z_i,\;\sigma_{z,i}^2\right),                   \label{eq:cc:zobs}
+\end{align}
+with flat priors on both $z_i$ and $\gamma$.
+Equation~\eqref{eq:cc:yobs} states that the observed $r$-band magnitude
+is shifted from the true $r$-band magnitude $y_i$ by $\gamma$ times the
+intrinsic $r-i$ color $(y_i - z_i)$.
+
+\subsection{Marginalization over the Latent \texorpdfstring{$i$}{i}-band Magnitude}
+
+With a flat prior on $z_i$, the posterior given $\hat{z}_i$ is
+$z_i \mid \hat{z}_i \sim \mathcal{N}(\hat{z}_i, \sigma_{z,i}^2)$.
+Marginalizing $z_i$ and using
+$y_i \mid y_{\mathrm{TF},i} \sim \mathcal{N}(y_{\mathrm{TF},i}, \sigma_{\mathrm{int},y}^2)$,
+the joint marginal becomes
+\begin{equation}
+\hat{y}_i \mid y_{\mathrm{TF},i}, \hat{z}_i
+\;\sim\;
+\mathcal{N}\!\Bigl(
+  (1+\gamma)\,y_{\mathrm{TF},i} - \gamma\,\hat{z}_i,\;
+  (1+\gamma)^2\sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 + \gamma^2\sigma_{z,i}^2
+\Bigr).
+\label{eq:cc:marg}
+\end{equation}
+
+\subsection{Reduction to the Baseline Form}
+
+Define the per-galaxy \emph{effective observable} and \emph{effective variance},
+\begin{align}
+y_{\mathrm{eff},i}       &\equiv \frac{\hat{y}_i + \gamma\,\hat{z}_i}{1+\gamma},
+\label{eq:cc:yeff}\\[4pt]
+\sigma_{2,\mathrm{eff},i}^2 &\equiv \sigma_{\mathrm{int},y}^2
+  + \frac{\sigma_{y,i}^2 + \gamma^2\sigma_{z,i}^2}{(1+\gamma)^2}.
+\label{eq:cc:s2eff}
+\end{align}
+With these definitions, Eq.~\eqref{eq:cc:marg} becomes
+\begin{equation}
+y_{\mathrm{eff},i} \mid y_{\mathrm{TF},i}
+\;\sim\;
+\mathcal{N}\!\left(y_{\mathrm{TF},i},\;\sigma_{2,\mathrm{eff},i}^2\right),
+\label{eq:cc:reduced}
+\end{equation}
+which is identical in structure to the baseline model with the substitution
+$\hat{y}_i \to y_{\mathrm{eff},i}$ and $\sigma_{2,i}^2 \to \sigma_{2,\mathrm{eff},i}^2$.
+All likelihood expressions and selection-probability integrals of the
+baseline model (Appendix~\ref{sec:likelihood}) therefore remain valid under
+this substitution.
+
+\subsection{Effective Selection Boundaries}
+
+The sample selection cuts are defined in terms of the observed $\hat{y}_i$
+(Eq.~\ref{eqn:selection_region}).  Under the reparameterization, these
+translate to per-galaxy effective boundaries on $y_{\mathrm{eff},i}$:
+\begin{align}
+\hat{y}_{\min,\mathrm{eff},i} &= \frac{\hat{y}_{\min} + \gamma\,\hat{z}_i}{1+\gamma}, &
+\hat{y}_{\max,\mathrm{eff},i} &= \frac{\hat{y}_{\max} + \gamma\,\hat{z}_i}{1+\gamma}.
+\label{eq:cc:bounds}
+\end{align}
+These galaxy-dependent limits replace the global $\hat{y}_{\min}$ and
+$\hat{y}_{\max}$ when evaluating the selection probability
+$P(S_i=1\mid\theta,\gamma)$ for each galaxy.
+
 
 
 \bibliographystyle{aasjournal}

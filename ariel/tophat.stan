@@ -574,7 +574,12 @@ data {
   
   // log(Vrot/V0) uncertainties (optional, set to zero if not available)
   vector<lower=0>[N_total] sigma_x;
-  
+
+  // i-band absolute magnitude (stub zeros if unavailable)
+  vector[N_total] zhat;
+  // i-band uncertainty (stub 99 if unavailable)
+  vector<lower=0>[N_total] sigma_z;
+
   // Selection function parameter
   real haty_min;
   real haty_max;
@@ -602,7 +607,8 @@ transformed data {
   real log_minus_ub = log(y_max - haty_max);
   vector[N_total] sigma_x_std_sq = square(sigma_x_std);
   vector[N_total] sigma_y_sq = square(sigma_y);
-  
+  vector[N_total] sigma_z_sq = square(sigma_z);
+
   int bin_idx = 1;
   
   // run configuration parameters
@@ -703,6 +709,7 @@ parameters {
   // Intrinsic scatter in x-direction (absolute magnitude)
   real<lower=0, upper=1> sigma_int_x; // in x-units
   real<lower=0, upper=1> sigma_int_y; // in y-units
+  real gamma;  // color correction coefficient
 }
 transformed parameters {
   // real sigma_int_y;
@@ -714,52 +721,63 @@ transformed parameters {
   }
 }
 model {
+  // Color-correction: effective observables after marginalizing z_i
+  vector[N_total] y_eff = (y + gamma * zhat) / (1 + gamma);
+  vector[N_total] sigma_y_eff_sq = (sigma_y_sq + square(gamma) * sigma_z_sq) / square(1 + gamma);
+  real slope_eff = slope_std / (1 + gamma);
+  vector[N_total] haty_min_eff = (haty_min + gamma * zhat) / (1 + gamma);
+  vector[N_total] haty_max_eff = (haty_max + gamma * zhat) / (1 + gamma);
+  vector[N_total] iplane_eff   = (intercept_plane_std  + gamma * zhat) / (1 + gamma);
+  vector[N_total] iplane2_eff  = (intercept_plane2_std + gamma * zhat) / (1 + gamma);
+  vector[N_total] y_min_eff    = (y_min + gamma * zhat) / (1 + gamma);
+  vector[N_total] y_max_eff    = (y_max + gamma * zhat) / (1 + gamma);
+
   // likelihood given flat prior in y_TF
   vector[N_total] yfromxstd = intercept_std[bin_idx] + slope_std * x_std;
   vector[N_total] sigmasq1_std = square(sigma_int_x_std) + sigma_x_std_sq;
-  vector[N_total] sigmasq2 = square(sigma_int_y) + sigma_y_sq;
-  // vector[N_total] sigmasq_tot = square(slope_std) * sigmasq1_std + sigmasq2;
+  vector[N_total] sigmasq2_eff = square(sigma_int_y) + sigma_y_eff_sq;
+  // vector[N_total] sigmasq_tot = square(slope_std) * sigmasq1_std + sigmasq2_eff;
   vector[N_total] sigmasq_tot = square(slope_std)
                                 * (square(sigma_int_x_std) + sigma_x_std_sq)
-                                + (square(sigma_int_y) + sigma_y_sq);
-  
+                                + (square(sigma_int_y) + sigma_y_eff_sq);
+
   //  term that applies to all cases
-  y ~ normal(yfromxstd, sqrt(sigmasq_tot));
+  y_eff ~ normal(yfromxstd, sqrt(sigmasq_tot));
   target += log(abs(slope_std)) * N_total;
-  
+
   // if there is a non-zero range of y values allowed by the TFR limits, then we need to apply the selection function
   if (y_TF_limits != 0) {
-    vector[N_total] mu_star = (yfromxstd .* sigmasq2
-                               + y * square(slope_std) .* sigmasq1_std)
+    vector[N_total] mu_star = (yfromxstd .* sigmasq2_eff
+                               + y_eff * square(slope_std) .* sigmasq1_std)
                               ./ sigmasq_tot;
-    
+
     vector[N_total] sqrt_sigmasq_star = abs(slope_std)
                                         * sqrt(
-                                               (sigmasq1_std .* sigmasq2)
+                                               (sigmasq1_std .* sigmasq2_eff)
                                                ./ sigmasq_tot);
-    
+
     // containers used for multiple purposes
     vector[N_total] term_lb;
     vector[N_total] term_ub;
     // // Term for the TFR limits
     for (n in 1 : N_total) {
       // log(Phi_approx) lacks precision for this step
-      term_lb[n] = normal_lcdf(y_min | mu_star[n], sqrt_sigmasq_star[n]);
-      term_ub[n] = normal_lcdf(y_max | mu_star[n], sqrt_sigmasq_star[n]);
+      term_lb[n] = normal_lcdf(y_min_eff[n] | mu_star[n], sqrt_sigmasq_star[n]);
+      term_ub[n] = normal_lcdf(y_max_eff[n] | mu_star[n], sqrt_sigmasq_star[n]);
     }
     
     target += log_diff_exp(term_ub, term_lb); // done with this use of term_lb/ub
     
     // Term for the selection function
     if (y_selection != 0 && plane_cut == 0) {
-      // vector[N_total] sigma2 = sqrt(sigmasq2);
-      vector[N_total] sigma2 = sqrt(square(sigma_int_y) + sigma_y_sq);
-      
-      term_lb = (haty_max - y_min) / sigma2;
-      term_ub = (haty_max - y_max) / sigma2;
-      
-      vector[N_total] logsigma2 = 0.5 * log(square(sigma_int_y) + sigma_y_sq);
-      
+      // vector[N_total] sigma2 = sqrt(sigmasq2_eff);
+      vector[N_total] sigma2 = sqrt(square(sigma_int_y) + sigma_y_eff_sq);
+
+      term_lb = (haty_max_eff - y_min_eff) / sigma2;
+      term_ub = (haty_max_eff - y_max_eff) / sigma2;
+
+      vector[N_total] logsigma2 = 0.5 * log(square(sigma_int_y) + sigma_y_eff_sq);
+
       // standard‑normal arguments for the lower‑ and upper‑bound CDFs
       vector[3] lse_terms;
       for (n in 1 : N_total) {
@@ -769,22 +787,22 @@ model {
         term_lb[n] = log_sum_exp(lse_terms);
         term_ub[n] = logsigma2[n] + std_normal_lpdf(term_ub[n]);
       }
-      
+
       target += -log_diff_exp(term_lb, term_ub);
     } else if (y_selection != 0 && plane_cut == 1) {
       for (n in 1 : N_total) {
         //   target += -log(
-        //                  integrate_binormal_strip_trapez(y_min, y_max,
-        //                    haty_max, slope_std, intercept_std[bin_idx],
-        //                    slope_plane_std, intercept_plane_std,
-        //                    intercept_plane2_std, sqrt(sigmasq1_std[1]),
-        //                    sqrt(sigmasq2[1]), 32));
+        //                  integrate_binormal_strip_trapez(y_min_eff[n], y_max_eff[n],
+        //                    haty_max_eff[n], slope_eff, intercept_std[bin_idx],
+        //                    slope_plane_std, iplane_eff[n],
+        //                    iplane2_eff[n], sqrt(sigmasq1_std[1]),
+        //                    sqrt(sigmasq2_eff[1]), 32));
         target += -log(
-                       integrate_binormal_strip_sinh2_gl(y_min, y_max,
-                         haty_min, haty_max, slope_std,
+                       integrate_binormal_strip_sinh2_gl(y_min_eff[n], y_max_eff[n],
+                         haty_min_eff[n], haty_max_eff[n], slope_eff,
                          intercept_std[bin_idx], slope_plane_std,
-                         intercept_plane_std, intercept_plane2_std,
-                         sqrt(sigmasq1_std[n]), sqrt(sigmasq2[n]), gl_x_8,
+                         iplane_eff[n], iplane2_eff[n],
+                         sqrt(sigmasq1_std[n]), sqrt(sigmasq2_eff[n]), gl_x_8,
                          gl_w_8));
       }
       
@@ -799,6 +817,7 @@ model {
   // Priors
   sigma_int_x ~ cauchy(0, 1);
   sigma_int_y ~ cauchy(0, 1);
+  // gamma has a flat prior (no explicit statement needed)
 }
 generated quantities {
   real slope = slope_std / sd_x;
