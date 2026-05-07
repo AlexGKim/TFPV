@@ -1052,6 +1052,81 @@ and the oblique-plane intercepts transform analogously:
 These galaxy-dependent limits replace the global $\hat{y}_{\min}$, $\hat{y}_{\max}$,
 and $\bar{c}_{1,2}$ when evaluating the selection probability $P(S_i=1\mid\theta,\gamma)$.
 
+\subsection{Predicting Absolute Magnitudes with Color Correction}
+\label{sec:cc:predict}
+
+Given posterior draws $\{(\theta^{(m)},\gamma^{(m)})\}_{m=1}^{M}$ from the
+color-corrected fit, we wish to predict the $r$-band absolute magnitude
+$\hat{y}_\star$ of a new galaxy with measured rotation-velocity proxy $\hat{x}_\star$
+(uncertainty $\sigma_{x,\star}$) and OLS-residual $z$-band magnitude $\tilde{z}_\star$
+(uncertainty $\sigma_{z,\star}$).
+
+\paragraph{Posterior for $y_{\mathrm{TF},\star}$.}
+Because $\tilde{z}$ has been orthogonalized with respect to $\hat{x}$ over the
+training sample, it carries no information about $y_{\mathrm{TF},\star}$ beyond what
+$\hat{x}_\star$ already provides.
+The posterior for $y_{\mathrm{TF},\star}$ at fixed $\theta$ is therefore the same
+truncated-normal derived in Appendix~\ref{sec:infer_single_galaxy_y} (top-hat model)
+or the clipped Gaussian (normal model), depending on the prior used for $y_\mathrm{TF}$.
+Specifically, with the top-hat prior,
+\begin{equation}
+p(y_{\mathrm{TF},\star} \mid \hat{x}_\star, \theta)
+=
+\mathcal{N}_{\mathrm{trunc}}\!\left(y_{\mathrm{TF},\star}\;\middle|\;
+  \mu_L,\,\sigma_L^2;\;[y_{\min},y_{\max}]\right),
+\end{equation}
+where $\mu_L = \beta + \alpha\hat{x}_\star$ and
+$\sigma_L^2 = \alpha^2(\sigma_{\mathrm{int},x}^2+\sigma_{x,\star}^2)$
+as in Eq.~\eqref{eq:muL_sigmaL_defs}.
+Let $\mu_\star(\theta)$ and $V_\star(\theta)$ denote the mean and variance of this
+truncated normal (Eq.~\ref{eq:post_yTF_tophat}).
+
+\paragraph{Back-transform to observed $r$-band.}
+From the generative model (Eq.~\ref{eq:cc:yobs}), the observed $r$-band magnitude
+of the new galaxy is
+\begin{equation}
+\hat{y}_\star = (1+\gamma)\,y_\star - \gamma\,z_\star,
+\label{eq:cc:ystar_obs}
+\end{equation}
+where $y_\star \mid y_{\mathrm{TF},\star} \sim \mathcal{N}(y_{\mathrm{TF},\star},\sigma_{\mathrm{int},y}^2)$
+and $z_\star \mid \tilde{z}_\star \sim \mathcal{N}(\tilde{z}_\star,\sigma_{z,\star}^2)$.
+Taking the conditional mean and variance at fixed $(\theta,\gamma)$,
+\begin{align}
+\mathrm{E}[\hat{y}_\star \mid \hat{x}_\star, \tilde{z}_\star, \theta, \gamma]
+&=
+(1+\gamma)\,\mu_\star(\theta) - \gamma\,\tilde{z}_\star,
+\label{eq:cc:mean_ystar}\\[4pt]
+\mathrm{Var}[\hat{y}_\star \mid \hat{x}_\star, \tilde{z}_\star, \theta, \gamma]
+&=
+(1+\gamma)^2\!\left[V_\star(\theta) + \sigma_{\mathrm{int},y}^2\right]
++ \gamma^2\,\sigma_{z,\star}^2.
+\label{eq:cc:var_ystar}
+\end{align}
+The two terms in Eq.~\eqref{eq:cc:var_ystar} represent, respectively, the uncertainty
+propagated through the TFR (including $r$-band intrinsic scatter scaled by $1+\gamma$)
+and the uncertainty in the $z$-band measurement scaled by $\gamma$.
+
+\paragraph{Marginalization over posterior draws.}
+The posterior predictive mean and variance are obtained by the law of total
+expectation and total variance:
+\begin{align}
+\overline{y}_\star
+&= \frac{1}{M}\sum_{m=1}^{M}
+   \left[(1+\gamma^{(m)})\,\mu_\star(\theta^{(m)}) - \gamma^{(m)}\,\tilde{z}_\star\right],
+\label{eq:cc:pp_mean}\\[4pt]
+\mathrm{Var}_{pp}(\hat{y}_\star)
+&= \frac{1}{M}\sum_{m=1}^{M}
+   \mathrm{Var}\!\left[\hat{y}_\star\mid\hat{x}_\star,\tilde{z}_\star,\theta^{(m)},\gamma^{(m)}\right]
+   +
+   \frac{1}{M}\sum_{m=1}^{M}
+   \left(\mathrm{E}^{(m)} - \overline{y}_\star\right)^2,
+\label{eq:cc:pp_var}
+\end{align}
+where $\mathrm{E}^{(m)}$ denotes the per-draw conditional mean
+(Eq.~\ref{eq:cc:mean_ystar}) and the second term captures the spread across
+posterior draws.
+The posterior predictive standard deviation is $\sigma_{pp} = \sqrt{\mathrm{Var}_{pp}}$.
+
 \subsection{Model Limitations}
 
 The flat prior on $z_i$ is improper, but the posterior $z_i\mid\hat{z}_i$ is proper
