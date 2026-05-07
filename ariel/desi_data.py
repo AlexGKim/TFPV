@@ -89,18 +89,21 @@ def process_desi_tf_data(
 
         from mag_utils import get_mag_cols
 
-        col_abs, col_abs_err, _ = get_mag_cols(names)
+        col_abs, col_abs_err, col_app_r = get_mag_cols(names)
 
         R_ABSMAG_SB26 = np.asarray(data[col_abs], dtype=float)
         R_ABSMAG_SB26_ERR = np.asarray(data[col_abs_err], dtype=float)
+        R_MAG_SB26 = np.asarray(data[col_app_r], dtype=float)
 
         # z-band absolute magnitude (stub zeros/99 if column absent)
         if "Z_ABSMAG_SB26" in names and "Z_ABSMAG_SB26_ERR" in names:
             Z_ABSMAG_SB26 = np.asarray(data["Z_ABSMAG_SB26"], dtype=float)
             Z_ABSMAG_SB26_ERR = np.asarray(data["Z_ABSMAG_SB26_ERR"], dtype=float)
+            Z_MAG_SB26 = np.asarray(data["Z_MAG_SB26"], dtype=float)
         else:
             Z_ABSMAG_SB26 = np.zeros(len(R_ABSMAG_SB26), dtype=float)
             Z_ABSMAG_SB26_ERR = np.ones(len(R_ABSMAG_SB26), dtype=float) * 99.0
+            Z_MAG_SB26 = np.zeros(len(R_ABSMAG_SB26), dtype=float)
 
         z_all_raw = np.asarray(data[z_col_use], dtype=float)
 
@@ -122,6 +125,8 @@ def process_desi_tf_data(
         & np.isfinite(Z_ABSMAG_SB26)
         & np.isfinite(Z_ABSMAG_SB26_ERR)
         & (Z_ABSMAG_SB26_ERR > 0)
+        & (R_MAG_SB26 != -1)
+        & (Z_MAG_SB26 != -1)
     )
 
     V_0p4R26 = V_0p4R26[valid_mask]
