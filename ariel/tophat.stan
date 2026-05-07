@@ -709,7 +709,7 @@ parameters {
   // Intrinsic scatter in x-direction (absolute magnitude)
   real<lower=0, upper=1> sigma_int_x; // in x-units
   real<lower=0, upper=1> sigma_int_y; // in y-units
-  real gamma;  // color correction coefficient
+  real<lower=-0.9> gamma;  // color correction coefficient; lower bound avoids singularity at gamma=-1
 }
 transformed parameters {
   // real sigma_int_y;
@@ -742,6 +742,8 @@ model {
                                 + (square(sigma_int_y) + sigma_y_eff_sq);
 
   //  term that applies to all cases
+  // Jacobian for change of variables ŷ → y_eff = (ŷ + γẑ)/(1+γ): p(ŷ) = p(y_eff)/|1+γ|
+  target += -N_total * log(abs(1.0 + gamma));
   y_eff ~ normal(yfromxstd, sqrt(sigmasq_tot));
   target += log(abs(slope_std)) * N_total;
 

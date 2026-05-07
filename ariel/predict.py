@@ -897,18 +897,8 @@ def ystar_pp_mean_sd_tophat_vectorized(
     if np.any(sigma_x_star < 0) or np.any(six < 0) or np.any(siy < 0):
         raise ValueError("Negative SD encountered.")
 
-    # ---- Apply color correction: per-draw effective observables (M,G)
-    # y_eff[m,g]         = (yhat[g] + gamma[m] * zhat[g]) / (1 + gamma[m])
-    # sigma_y_eff_sq[m,g] = (sigma_y[g]^2 + gamma[m]^2 * sigma_z[g]^2) / (1 + gamma[m])^2
-    # Here yhat_star is not available in this function (it's the latent prediction target),
-    # so color correction is applied to the xhat-based likelihood only via the effective
-    # sigma_y that enters sigma_x_tot2 through the joint scatter.
-    # The effective sigma_int_y scatter for prediction accounts for sigma_z through gamma:
-    gamma_MG = gamma[:, None]  # (M,1) -> broadcasts to (M,G)
-    one_plus_gamma = 1.0 + gamma_MG  # (M,G)
-    sigma_y_eff_sq_MG = (
-        (siy[:, None] ** 2) + (gamma_MG ** 2) * (sigma_z_arr[None, :] ** 2)
-    ) / (one_plus_gamma ** 2)  # (M,G)
+    gamma_MG = gamma[:, None]          # (M,1) broadcasts to (M,G)
+    one_plus_gamma = 1.0 + gamma_MG   # (M,G)
 
     # ---- Broadcast to (M,G)
     sMG = s[:, None]
@@ -988,14 +978,14 @@ def ystar_pp_mean_sd_tophat_vectorized(
         mean_yTF[nd] = m
         var_yTF[nd] = v
 
-    # ---- y_* adds effective y-scatter (incorporating gamma color correction)
-    mean_ystar_eff = mean_yTF
-    var_ystar_eff = var_yTF + sigma_y_eff_sq_MG
-
-    # ---- Back-transform from effective-y space to observed r-band space
-    # y_obs = (1 + gamma) * y_eff - gamma * zhat
-    mean_ystar = one_plus_gamma * mean_ystar_eff - gamma_MG * zhat_arr[None, :]
-    var_ystar = (one_plus_gamma ** 2) * var_ystar_eff
+    # ---- Back-transform: predict observed r-band ŷ★ = (1+γ)·y_TF − γ·ẑ★
+    # The catalog computes MU_TF = m_app − M_abs_pred using the uncorrected
+    # apparent magnitude, so M_abs_pred must be in the same frame as ŷ★_obs.
+    # Mean: E[ŷ★ | x̂★, ẑ★] = (1+γ)·mean_yTF − γ·ẑ★
+    # Var:  Var[ŷ★ | x̂★, ẑ★] = (1+γ)²·(var_yTF + σ²_int,y) + γ²·σ²_z
+    mean_ystar = one_plus_gamma * mean_yTF - gamma_MG * zhat_arr[None, :]
+    var_ystar = (one_plus_gamma ** 2) * (var_yTF + (siy[:, None] ** 2)) \
+                + (gamma_MG ** 2) * (sigma_z_arr[None, :] ** 2)
 
     # ---- Mixture moments over draws
     mean_y = mean_ystar.mean(axis=0)  # (G,)

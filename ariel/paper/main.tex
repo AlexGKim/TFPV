@@ -963,7 +963,7 @@ The authors are honored to be permitted to conduct scientific research on Iolkam
 \subsection{Motivation}
 
 Empirical diagnostics of the TFR fit reveal color-dependent residuals:
-galaxies with redder (bluer) $r-i$ colors show systematically positive
+galaxies with redder (bluer) $r-z$ colors show systematically positive
 (negative) deviations from the predicted $r$-band absolute magnitude.
 This suggests that the $r$-band magnitude is not a perfectly color-neutral
 distance indicator, and that a global color term can reduce this systematic.
@@ -975,7 +975,9 @@ color-correction parameter $\gamma$.
 Let $\hat{z}_i$ be the observed $z$-band SB26 absolute magnitude
 (\texttt{Z\_ABSMAG\_SB26}) with uncertainty $\sigma_{z,i}$,
 and let $z_i$ be the corresponding latent true value.
-To break the degeneracy between $\gamma$ and the TFR slope $\alpha$ that arises from the correlation of $z$-band magnitude with rotation velocity, $\hat{z}_i$ is replaced by its residual after an OLS regression of $\hat{z}$ on $\hat{x}$ over the training sample, so that $\operatorname{Cov}(\tilde{z},\,\hat{x})=0$ by construction.
+To break the degeneracy between $\gamma$ and the TFR slope $\alpha$ that arises from the correlation of $z$-band magnitude with rotation velocity, $\hat{z}_i$ is replaced by its OLS residual $\tilde{z}_i \equiv \hat{z}_i - (\hat{a} + \hat{b}\,\hat{x}_i)$, where $(\hat{a},\hat{b})$ are estimated from OLS regression of $\hat{z}$ on $\hat{x}$ over the training sample, so that $\operatorname{Cov}(\tilde{z},\,\hat{x})=0$ by construction.
+Throughout this section $\hat{z}_i$ denotes this residual $\tilde{z}_i$; the measurement uncertainty $\sigma_{z,i}$ is unchanged because the OLS slope uncertainty is negligible for $N\sim 5000$.
+The prior on $\gamma$ is flat with support $\gamma > -1$.
 The extended observation equations are
 \begin{align}
 \hat{y}_i \mid y_i, z_i &\sim \mathcal{N}\!\left(y_i + \gamma(y_i - z_i),\;\sigma_{y,i}^2\right), \label{eq:cc:yobs}\\
@@ -984,9 +986,9 @@ The extended observation equations are
 with flat priors on both $z_i$ and $\gamma$.
 Equation~\eqref{eq:cc:yobs} states that the observed $r$-band magnitude
 is shifted from the true $r$-band magnitude $y_i$ by $\gamma$ times the
-intrinsic $r-i$ color $(y_i - z_i)$.
+intrinsic $r-z$ color $(y_i - z_i)$.
 
-\subsection{Marginalization over the Latent \texorpdfstring{$i$}{i}-band Magnitude}
+\subsection{Marginalization over the Latent \texorpdfstring{$z$}{z}-band Magnitude}
 
 With a flat prior on $z_i$, the posterior given $\hat{z}_i$ is
 $z_i \mid \hat{z}_i \sim \mathcal{N}(\hat{z}_i, \sigma_{z,i}^2)$.
@@ -1024,7 +1026,12 @@ which is identical in structure to the baseline model with the substitution
 $\hat{y}_i \to y_{\mathrm{eff},i}$ and $\sigma_{2,i}^2 \to \sigma_{2,\mathrm{eff},i}^2$.
 All likelihood expressions and selection-probability integrals of the
 baseline model (Appendix~\ref{sec:likelihood}) therefore remain valid under
-this substitution.
+this substitution, provided a Jacobian correction is included.
+Because $y_{\mathrm{eff},i} = (\hat{y}_i+\gamma\hat{z}_i)/(1+\gamma)$ is a linear
+rescaling of the observed $\hat{y}_i$, evaluating the Gaussian density in
+$y_{\mathrm{eff}}$-space rather than $\hat{y}$-space introduces a factor
+$(1+\gamma)^{-1}$ per galaxy.  The log-likelihood therefore receives the
+additive correction $-N\log|1+\gamma|$, which is implemented in the Stan model.
 
 \subsection{Effective Selection Boundaries}
 
@@ -1033,12 +1040,27 @@ The sample selection cuts are defined in terms of the observed $\hat{y}_i$
 translate to per-galaxy effective boundaries on $y_{\mathrm{eff},i}$:
 \begin{align}
 \hat{y}_{\min,\mathrm{eff},i} &= \frac{\hat{y}_{\min} + \gamma\,\hat{z}_i}{1+\gamma}, &
-\hat{y}_{\max,\mathrm{eff},i} &= \frac{\hat{y}_{\max} + \gamma\,\hat{z}_i}{1+\gamma}.
+\hat{y}_{\max,\mathrm{eff},i} &= \frac{\hat{y}_{\max} + \gamma\,\hat{z}_i}{1+\gamma},
 \label{eq:cc:bounds}
 \end{align}
-These galaxy-dependent limits replace the global $\hat{y}_{\min}$ and
-$\hat{y}_{\max}$ when evaluating the selection probability
-$P(S_i=1\mid\theta,\gamma)$ for each galaxy.
+and the oblique-plane intercepts transform analogously:
+\begin{align}
+\bar{c}_{1,\mathrm{eff},i} &= \frac{\bar{c}_1 + \gamma\,\hat{z}_i}{1+\gamma}, &
+\bar{c}_{2,\mathrm{eff},i} &= \frac{\bar{c}_2 + \gamma\,\hat{z}_i}{1+\gamma}.
+\label{eq:cc:plane_bounds}
+\end{align}
+These galaxy-dependent limits replace the global $\hat{y}_{\min}$, $\hat{y}_{\max}$,
+and $\bar{c}_{1,2}$ when evaluating the selection probability $P(S_i=1\mid\theta,\gamma)$.
+
+\subsection{Model Limitations}
+
+The flat prior on $z_i$ is improper, but the posterior $z_i\mid\hat{z}_i$ is proper
+whenever $\sigma_{z,i}>0$.
+A fully consistent treatment would model $y_i$ and $z_i$ jointly with a correlated
+prior (since both bands share distance and dust), rather than assuming conditional
+independence given $y_{\mathrm{TF},i}$.
+The present model may therefore underestimate the color-correction uncertainty and
+bias $\gamma$ toward zero; this is left to future work.
 
 
 
