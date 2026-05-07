@@ -119,6 +119,9 @@ def process_desi_tf_data(
         & (V_0p4R26 > 0)
         & (V_0p4R26_ERR > 0)
         & (R_ABSMAG_SB26_ERR >= 0)
+        & np.isfinite(Z_ABSMAG_SB26)
+        & np.isfinite(Z_ABSMAG_SB26_ERR)
+        & (Z_ABSMAG_SB26_ERR > 0)
     )
 
     V_0p4R26 = V_0p4R26[valid_mask]
