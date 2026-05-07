@@ -819,7 +819,10 @@ model {
   // Priors
   sigma_int_x ~ cauchy(0, 1);
   sigma_int_y ~ cauchy(0, 1);
-  // gamma has a flat prior (no explicit statement needed)
+  // Weakly informative prior on gamma regularizes the beta-gamma degeneracy
+  // (a constant shift in zhat is absorbed by beta; mean(zhat)=0 by construction
+  // but this prior prevents the sampler drifting along the residual ridge).
+  gamma ~ normal(0, 1);
 }
 generated quantities {
   real slope = slope_std / sd_x;

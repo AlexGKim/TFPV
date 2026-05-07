@@ -618,7 +618,8 @@ $r$-band observable by an amount proportional to the observed $r-z$ color.
 To break the degeneracy between $\gamma$ and the TFR slope $\alpha$ that arises from the correlation of $z$-band magnitude with rotation velocity, $\hat{z}_i$ is replaced by its OLS residual $\tilde{z}_i \equiv \hat{z}_i - (\hat{a} + \hat{b}\,\hat{x}_i)$, where $(\hat{a},\hat{b})$ are estimated by OLS regression of $\hat{z}$ on $\hat{x}$ over the training sample, so that $\operatorname{Cov}(\tilde{z},\,\hat{x})=0$ by construction.
 Without residualization, the model mean $(1+\gamma)(\alpha\hat{x}+\beta)-\gamma\hat{z}$ contains a term $[(1+\gamma)\alpha - \gamma\hat{b}]\hat{x}$ that is degenerate in $(\alpha,\gamma)$ along the ridge $(1+\gamma)\alpha = \mathrm{const} + \gamma\hat{b}$; replacing $\hat{z}$ with $\tilde{z}$ removes the $\hat{x}$-correlated component from the color term and eliminates this ridge.
 Throughout this section $\hat{z}_i$ denotes this residual $\tilde{z}_i$; the measurement uncertainty $\sigma_{z,i}$ is unchanged because the OLS slope uncertainty is negligible for $N\sim 5000$.
-The prior on $\gamma$ is taken flat with support $\gamma > -1$ to avoid the singularity at $\gamma=-1$ where the reparameterization below diverges.
+The prior on $\gamma$ is $\mathcal{N}(0,1)$, which is weakly informative and regularizes the residual $\beta$--$\gamma$ degeneracy: a uniform shift of $\tilde{z}_i$ by a constant $c$ is absorbed by $\beta \to \beta - \gamma c/(1+\gamma)$, leaving predictions unchanged; the normal prior prevents the sampler drifting along this ridge.
+The constraint $\gamma > -1$ (enforced in the sampler) avoids the singularity at $\gamma=-1$ where the reparameterization diverges.
 
 \paragraph{Generative model.}
 The extended observation equations are
@@ -626,7 +627,7 @@ The extended observation equations are
 \hat{y}_i \mid y_i, z_i &\sim \mathcal{N}\!\left(y_i + \gamma(y_i - z_i),\;\sigma_{y,i}^2\right), \label{eq:color:yobs}\\
 \hat{z}_i \mid z_i &\sim \mathcal{N}\!\left(z_i,\;\sigma_{z,i}^2\right), \label{eq:color:zobs}\\
 z_i &\sim \text{flat prior},\\
-\gamma &\sim \text{flat prior}.
+\gamma &\sim \mathcal{N}(0, 1).
 \end{align}
 Equation~\eqref{eq:color:yobs} states that the observed $r$-band magnitude
 is shifted from the true magnitude $y_i$ by $\gamma$ times the residual
@@ -727,3 +728,8 @@ Use flat priors for $(\alpha,\beta)$ and weakly informative priors for the intri
 \sigma_{\text{int},x} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right),\\
 \sigma_{\text{int},y} &\sim \text{Half-Cauchy}\!\left(0, 0.3\right).
 \end{align}
+For the color-correction model, an additional weakly informative prior is placed on $\gamma$:
+\begin{equation}
+\gamma \sim \mathcal{N}(0, 1).
+\end{equation}
+This regularizes the $\beta$--$\gamma$ degeneracy described in \S\ref{sec:app1:color}.

@@ -978,13 +978,14 @@ and let $z_i$ be the corresponding latent true value.
 To break the degeneracy between $\gamma$ and the TFR slope $\alpha$ that arises from the correlation of $z$-band magnitude with rotation velocity, $\hat{z}_i$ is replaced by its OLS residual $\tilde{z}_i \equiv \hat{z}_i - (\hat{a} + \hat{b}\,\hat{x}_i)$, where $(\hat{a},\hat{b})$ are estimated from OLS regression of $\hat{z}$ on $\hat{x}$ over the training sample, so that $\operatorname{Cov}(\tilde{z},\,\hat{x})=0$ by construction.
 Without residualization, the model mean $(1+\gamma)(\alpha\hat{x}+\beta)-\gamma\hat{z}$ contains a term $[(1+\gamma)\alpha - \gamma\hat{b}]\hat{x}$ that is degenerate in $(\alpha,\gamma)$ along the ridge $(1+\gamma)\alpha = \mathrm{const} + \gamma\hat{b}$; replacing $\hat{z}$ with $\tilde{z}$ removes the $\hat{x}$-correlated component and eliminates this ridge.
 Throughout this section $\hat{z}_i$ denotes this residual $\tilde{z}_i$; the measurement uncertainty $\sigma_{z,i}$ is unchanged because the OLS slope uncertainty is negligible for $N\sim 5000$.
-The prior on $\gamma$ is flat with support $\gamma > -1$.
+The prior on $\gamma$ is $\mathcal{N}(0,1)$, which is weakly informative and regularizes the residual $\beta$--$\gamma$ degeneracy: a uniform shift of $\tilde{z}_i$ by a constant $c$ is absorbed by $\beta\to\beta-\gamma c/(1+\gamma)$, leaving predictions unchanged; the normal prior prevents the sampler drifting along this ridge.
+The constraint $\gamma > -1$ (enforced in the sampler) avoids the singularity where the reparameterization diverges.
 The extended observation equations are
 \begin{align}
 \hat{y}_i \mid y_i, z_i &\sim \mathcal{N}\!\left(y_i + \gamma(y_i - z_i),\;\sigma_{y,i}^2\right), \label{eq:cc:yobs}\\
 \hat{z}_i \mid z_i       &\sim \mathcal{N}\!\left(z_i,\;\sigma_{z,i}^2\right),                   \label{eq:cc:zobs}
 \end{align}
-with flat priors on both $z_i$ and $\gamma$.
+with a flat prior on $z_i$ and $\gamma\sim\mathcal{N}(0,1)$.
 Equation~\eqref{eq:cc:yobs} states that the observed $r$-band magnitude
 is shifted from the true $r$-band magnitude $y_i$ by $\gamma$ times the
 residual $r-z$ color $(y_i - z_i)$, i.e.\ the $r-z$ color deviation not
