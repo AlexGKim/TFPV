@@ -616,6 +616,7 @@ be the corresponding latent (true) $z$-band magnitude.
 We introduce a new global parameter $\gamma$ that shifts the effective
 $r$-band observable by an amount proportional to the observed $r-z$ color.
 To break the degeneracy between $\gamma$ and the TFR slope $\alpha$ that arises from the correlation of $z$-band magnitude with rotation velocity, $\hat{z}_i$ is replaced by its OLS residual $\tilde{z}_i \equiv \hat{z}_i - (\hat{a} + \hat{b}\,\hat{x}_i)$, where $(\hat{a},\hat{b})$ are estimated by OLS regression of $\hat{z}$ on $\hat{x}$ over the training sample, so that $\operatorname{Cov}(\tilde{z},\,\hat{x})=0$ by construction.
+Without residualization, the model mean $(1+\gamma)(\alpha\hat{x}+\beta)-\gamma\hat{z}$ contains a term $[(1+\gamma)\alpha - \gamma\hat{b}]\hat{x}$ that is degenerate in $(\alpha,\gamma)$ along the ridge $(1+\gamma)\alpha = \mathrm{const} + \gamma\hat{b}$; replacing $\hat{z}$ with $\tilde{z}$ removes the $\hat{x}$-correlated component from the color term and eliminates this ridge.
 Throughout this section $\hat{z}_i$ denotes this residual $\tilde{z}_i$; the measurement uncertainty $\sigma_{z,i}$ is unchanged because the OLS slope uncertainty is negligible for $N\sim 5000$.
 The prior on $\gamma$ is taken flat with support $\gamma > -1$ to avoid the singularity at $\gamma=-1$ where the reparameterization below diverges.
 
@@ -628,8 +629,10 @@ z_i &\sim \text{flat prior},\\
 \gamma &\sim \text{flat prior}.
 \end{align}
 Equation~\eqref{eq:color:yobs} states that the observed $r$-band magnitude
-is shifted from the true magnitude $y_i$ by $\gamma$ times the intrinsic
-$r-z$ color $(y_i - z_i)$.
+is shifted from the true magnitude $y_i$ by $\gamma$ times the residual
+$r-z$ color $(y_i - z_i)$, i.e.\ the $r-z$ color deviation not explained
+by rotation velocity (because $\hat{z}_i$ here denotes the OLS residual
+$\tilde{z}_i$, not the raw $z$-band magnitude).
 
 \paragraph{Marginalization over $z_i$.}
 With a flat prior on $z_i$ and conditioned on the $z$-band observation
@@ -702,6 +705,11 @@ and the oblique-plane intercepts (when the plane cut is active) transform analog
 These galaxy-dependent limits replace the global $\hat{y}_{\min}$, $\hat{y}_{\max}$,
 and $\bar{c}_{1,2}$ when evaluating the selection probability
 $P(S_i=1\mid\theta,\gamma)$ for each galaxy.
+Note that no additional Jacobian factor arises here: the selection probability
+is an integral of $p(\hat{y}_i\mid\cdot)$ over $\hat{y}_i$, and the substitution
+$d\hat{y}_i = |1+\gamma|\,dy_{\mathrm{eff},i}$ together with
+$p(\hat{y}_i\mid\cdot) = p(y_{\mathrm{eff},i}\mid\cdot)/|1+\gamma|$
+leave the probability integral unchanged.
 
 \paragraph{Model limitations.}
 The flat prior on $z_i$ is improper, but the posterior $z_i\mid\hat{z}_i$ is proper
