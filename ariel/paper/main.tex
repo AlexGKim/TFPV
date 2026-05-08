@@ -1011,27 +1011,39 @@ the joint marginal becomes
 
 \subsection{Reduction to the Baseline Form}
 
+Because $\hat{z}_i$ denotes the OLS residual $\tilde{z}_i = \hat{z}_i^{\rm raw} - (\hat{a}+\hat{b}\hat{x}_i)$,
+substituting into Eq.~\eqref{eq:cc:marg} gives
+\begin{equation}
+\hat{y}_i + \gamma\tilde{z}_i
+\;\sim\;
+\mathcal{N}\!\Bigl((1{+}\gamma)\,y_{\mathrm{TF},i} - \gamma(\hat{a}+\hat{b}\hat{x}_i),\;
+(1{+}\gamma)^2\sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 + \gamma^2\sigma_{z,i}^2\Bigr).
+\end{equation}
 Define the per-galaxy \emph{effective observable} and \emph{effective variance},
 \begin{align}
-y_{\mathrm{eff},i}       &\equiv \frac{\hat{y}_i + \gamma\,\hat{z}_i}{1+\gamma},
+y_{\mathrm{eff},i}       &\equiv \frac{\hat{y}_i + \gamma\,\tilde{z}_i}{1+\gamma},
 \label{eq:cc:yeff}\\[4pt]
 \sigma_{2,\mathrm{eff},i}^2 &\equiv \sigma_{\mathrm{int},y}^2
   + \frac{\sigma_{y,i}^2 + \gamma^2\sigma_{z,i}^2}{(1+\gamma)^2}.
 \label{eq:cc:s2eff}
 \end{align}
-With these definitions, Eq.~\eqref{eq:cc:marg} becomes
+With these definitions, the marginalized likelihood becomes
 \begin{equation}
 y_{\mathrm{eff},i} \mid y_{\mathrm{TF},i}
 \;\sim\;
-\mathcal{N}\!\left(y_{\mathrm{TF},i},\;\sigma_{2,\mathrm{eff},i}^2\right),
+\mathcal{N}\!\left(y_{\mathrm{TF},i} - \frac{\gamma(\hat{a}+\hat{b}\hat{x}_i)}{1+\gamma},\;\sigma_{2,\mathrm{eff},i}^2\right),
 \label{eq:cc:reduced}
 \end{equation}
-which is identical in structure to the baseline model with the substitution
-$\hat{y}_i \to y_{\mathrm{eff},i}$ and $\sigma_{2,i}^2 \to \sigma_{2,\mathrm{eff},i}^2$.
-All likelihood expressions and selection-probability integrals of the
-baseline model (Appendix~\ref{sec:likelihood}) therefore remain valid under
-this substitution, provided a Jacobian correction is included.
-Because $y_{\mathrm{eff},i} = (\hat{y}_i+\gamma\hat{z}_i)/(1+\gamma)$ is a linear
+where the OLS correction $\gamma(\hat{a}+\hat{b}\hat{x}_i)/(1+\gamma)$ is a known,
+data-dependent shift.  The posterior mean of $y_{\mathrm{TF},i}$ given the data
+is accordingly
+\begin{equation}
+\mu_{*,i} = \frac{(\alpha\hat{x}_i+\beta)\,\sigma_{2,\mathrm{eff},i}^2
+  + \bigl(y_{\mathrm{eff},i} + \tfrac{\gamma(\hat{a}+\hat{b}\hat{x}_i)}{1+\gamma}\bigr)\,\alpha^2\sigma_{1,i}^2}
+  {\sigma_{\mathrm{tot},i}^2}.
+\label{eq:cc:mustar}
+\end{equation}
+Because $y_{\mathrm{eff},i} = (\hat{y}_i+\gamma\tilde{z}_i)/(1+\gamma)$ is a linear
 rescaling of the observed $\hat{y}_i$, evaluating the Gaussian density in
 $y_{\mathrm{eff}}$-space rather than $\hat{y}$-space introduces a factor
 $(1+\gamma)^{-1}$ per galaxy.  The log-likelihood therefore receives the
@@ -1041,20 +1053,26 @@ additive correction $-N\log|1+\gamma|$, which is implemented in the Stan model.
 
 The sample selection cuts are defined in terms of the observed $\hat{y}_i$
 (Eq.~\ref{eqn:selection_region}).  Under the reparameterization, these
-translate to per-galaxy effective boundaries on $y_{\mathrm{eff},i}$:
+translate to per-galaxy effective boundaries on $y_{\mathrm{eff},i}$.
+Because the boundaries are on the original observable $\hat{y}_i$ (not on the
+residual $\tilde{z}_i$), they use the \emph{reconstructed} full $z$-band
+magnitude $\hat{z}_i^{\rm raw} = \tilde{z}_i + \hat{a} + \hat{b}\hat{x}_i$:
 \begin{align}
-\hat{y}_{\min,\mathrm{eff},i} &= \frac{\hat{y}_{\min} + \gamma\,\hat{z}_i}{1+\gamma}, &
-\hat{y}_{\max,\mathrm{eff},i} &= \frac{\hat{y}_{\max} + \gamma\,\hat{z}_i}{1+\gamma},
+\hat{y}_{\min,\mathrm{eff},i} &= \frac{\hat{y}_{\min} + \gamma\,\hat{z}_i^{\rm raw}}{1+\gamma}, &
+\hat{y}_{\max,\mathrm{eff},i} &= \frac{\hat{y}_{\max} + \gamma\,\hat{z}_i^{\rm raw}}{1+\gamma},
 \label{eq:cc:bounds}
 \end{align}
-and the oblique-plane intercepts transform analogously:
+and the oblique-plane intercepts and slope transform analogously:
 \begin{align}
-\bar{c}_{1,\mathrm{eff},i} &= \frac{\bar{c}_1 + \gamma\,\hat{z}_i}{1+\gamma}, &
-\bar{c}_{2,\mathrm{eff},i} &= \frac{\bar{c}_2 + \gamma\,\hat{z}_i}{1+\gamma}.
-\label{eq:cc:plane_bounds}
+\bar{c}_{1,\mathrm{eff},i} &= \frac{\bar{c}_1 + \gamma\,\hat{z}_i^{\rm raw}}{1+\gamma}, &
+\bar{c}_{2,\mathrm{eff},i} &= \frac{\bar{c}_2 + \gamma\,\hat{z}_i^{\rm raw}}{1+\gamma},
+\label{eq:cc:plane_bounds}\\[4pt]
+\bar{s}_{\mathrm{eff}} &= \frac{\bar{s}}{1+\gamma}.
 \end{align}
 These galaxy-dependent limits replace the global $\hat{y}_{\min}$, $\hat{y}_{\max}$,
 and $\bar{c}_{1,2}$ when evaluating the selection probability $P(S_i=1\mid\theta,\gamma)$.
+The tophat prior bounds $y_{\min}$, $y_{\max}$ on the latent $y_{\mathrm{TF}}$ are
+\emph{not} transformed---they remain global scalars.
 Note that no additional Jacobian factor arises here: the selection probability
 is an integral of $p(\hat{y}_i\mid\cdot)$ over $\hat{y}_i$, and the substitution
 $d\hat{y}_i = |1+\gamma|\,dy_{\mathrm{eff},i}$ together with

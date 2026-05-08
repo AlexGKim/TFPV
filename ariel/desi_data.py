@@ -254,13 +254,11 @@ def process_desi_tf_data(
     sigma_y_data = sigma_y.tolist()
     z_obs_data = z_obs.tolist()
     # Orthogonalize zhat w.r.t. x to break alpha-gamma degeneracy.
-    # gamma can only trade off against alpha because z correlates with x;
-    # replacing zhat with its OLS residual enforces Cov(zhat, x) = 0.
-    _b = np.cov(x, zhat)[0, 1] / np.var(x)
-    _a = np.mean(zhat) - _b * np.mean(x)
-    zhat = zhat - (_a + _b * x)
-
-    zhat_list = zhat.tolist()
+    # Store OLS parameters so Stan can reconstruct full zhat for selection boundaries.
+    _b_ols = np.cov(x, zhat)[0, 1] / np.var(x)
+    _a_ols = np.mean(zhat) - _b_ols * np.mean(x)
+    ztilde = zhat - (_a_ols + _b_ols * x)
+    zhat_list = ztilde.tolist()
     sigma_z_list = sigma_z.tolist()
 
     N_total = len(x)
@@ -286,8 +284,10 @@ def process_desi_tf_data(
         "y_max": float(haty_max) + 0.5,
         "mu_y_TF": mu_y_TF,
         "tau": tau,
-        "zhat": zhat_list,
+        "ztilde": zhat_list,
         "sigma_z": sigma_z_list,
+        "a_ols": float(_a_ols),
+        "b_ols": float(_b_ols),
         "z_obs": z_obs_data,  # now defined, aligned, and JSON‑serializable
         "z_obs_min": float(z_obs_min) if z_obs_min is not None else None,
         "z_obs_max": float(z_obs_max) if z_obs_max is not None else None,
@@ -328,13 +328,17 @@ def process_desi_tf_data(
     # ============================================================================
     # SECTION 5: CREATE INITIAL CONDITIONS DICTIONARY
     # ============================================================================
+    # OLS slope is biased toward zero by selection effects (Malmquist bias).
+    # Scale by 1.5 as a rough correction toward the intrinsic TFR slope,
+    # and start gamma=0 to avoid the degenerate (high-gamma, shallow-slope) mode.
     init_data = {
-        "slope_std": float(slope_std),
+        "slope_std": float(slope_std * 1.5),
         "intercept_std": intercept_std_vec,
-        "slope_orig": float(slope_orig),
+        "slope_orig": float(slope_orig * 1.5),
         "intercept_orig": float(intercept_orig),
-        "sigma_int_x": 0.1,
-        "sigma_int_y": 0.1,
+        "sigma_int_x": 0.05,
+        "sigma_int_y": 0.4,
+        "gamma": 0.0,
         "mean_x": float(mean_x),
         "sd_x": float(sd_x),
     }
