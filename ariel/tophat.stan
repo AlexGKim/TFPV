@@ -709,10 +709,10 @@ transformed data {
 }
 parameters {
   // Common slope across all redshift bins
-  real<lower=-9 * sd_x, upper=-3.5 * sd_x> slope_std;
-  
+  real<lower=-9 * sd_x, upper=-4 * sd_x> slope_std;
+
   // Intercept for each redshift bin
-  
+
   vector[N_bins] intercept_std;
   
   // Intrinsic scatter in x-direction (absolute magnitude)
@@ -832,7 +832,7 @@ model {
   // Weakly informative prior on gamma regularizes the beta-gamma degeneracy
   // (a constant shift in zhat is absorbed by beta; mean(zhat)=0 by construction
   // but this prior prevents the sampler drifting along the residual ridge).
-  gamma ~ normal(0, 1);
+  gamma ~ normal(0, 0.3);
 }
 generated quantities {
   real slope = slope_std / sd_x;
