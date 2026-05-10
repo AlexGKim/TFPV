@@ -967,22 +967,6 @@ with $r-z$ color $c_i$ redder than the population mean $\mu_c$ has
 $r$-band absolute magnitude shifted by $\gamma\eta_i$, where $\eta_i$ is the
 component of color that is independent of velocity.
 
-The previous version of this appendix encoded the identifying constraints on
-$\gamma$ through a preprocessing step (OLS residualization of the observed color
-$\hat c_i \equiv \hat y_i - \hat z_i$ on $\hat x_i$).
-That approach has three deficiencies.
-First, attenuation bias: the regression uses the noisy proxy $\hat x_i$ rather
-than the latent $x_i$, so the residualized color retains an
-$O(\sigma_{x,i}^2/\operatorname{Var}(\hat x_i))$ correlation with $x_i$, leaving
-a residual $\alpha$--$\gamma$ coupling of roughly 10\% at the present noise level.
-Second, selection-induced bias: the regression is performed on the truncated
-training sample, so the OLS coefficients absorb selection effects rather than
-the true population slope.
-Third, propagation: uncertainty in the OLS coefficients is not propagated into
-the posterior for $\gamma$.
-The model below encodes the identifying constraints in the prior structure,
-eliminating all three problems.
-
 \subsection{Generative Model}
 \label{sec:cc:generative}
 
