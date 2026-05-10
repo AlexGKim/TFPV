@@ -952,6 +952,256 @@ The authors are honored to be permitted to conduct scientific research on Iolkam
 
 \input{../doc/model2}
 
+\section{Color-Correction Model}
+\label{sec:color_correction}
+
+\subsection{Motivation}
+
+Empirical diagnostics of the TFR fit reveal color-dependent residuals:
+galaxies with redder (bluer) $r-z$ colors show systematically positive
+(negative) deviations from the predicted $r$-band absolute magnitude.
+This suggests that the $r$-band magnitude is not a perfectly color-neutral
+distance indicator, and that a global color term can reduce this systematic.
+We therefore extend the baseline model by introducing a single global
+color-correction parameter $\gamma$, representing the slope of the
+luminosity-color relation at fixed rotation velocity.
+
+\subsection{Generative Model}
+\label{sec:cc:generative}
+
+We introduce the latent intrinsic color $c_i$ of galaxy $i$ as a
+primitive latent variable with a Gaussian population prior, and
+the latent $z$-band magnitude $z_i$ as derived from $y_i$ and $c_i$.
+
+\paragraph{Latent structure.}
+\begin{align}
+c_i &\sim \mathcal{N}(\mu_c,\, \tau_c^2), \label{eq:cc:c_prior}\\
+y_i \mid y_{\mathrm{TF},i},\,c_i
+  &\sim \mathcal{N}\!\left(y_{\mathrm{TF},i} + \gamma(c_i - \bar{c}),\;
+    \sigma_{\mathrm{int},y}^2\right), \label{eq:cc:y_given_ytf_c}\\
+z_i &\equiv y_i - c_i. \label{eq:cc:z_def}
+\end{align}
+Here $\gamma$ is the slope of the luminosity-color relation at fixed
+rotation velocity: a galaxy with color $c_i$ redder than the pivot $\bar{c}$
+is $\gamma(c_i-\bar{c})$ magnitudes brighter (more negative) than a
+color-neutral galaxy on the TFR.
+The pivot $\bar{c}$ is fixed to the sample mean observed color, so that
+$\beta$ retains its meaning as the TFR intercept at the mean color.
+The hyperparameters $\mu_c$ and $\tau_c$ describe the population color
+distribution; in practice they are estimated from the observed colors
+before fitting and held fixed, but can be treated as hyperparameters
+with weakly informative priors.
+
+\paragraph{Measurement equations.}
+Each observed quantity depends only on its own latent variable:
+\begin{align}
+\hat{x}_i \mid x_i &\sim \mathcal{N}(x_i,\, \sigma_{x,i}^2), \label{eq:cc:xhat}\\
+\hat{y}_i \mid y_i &\sim \mathcal{N}(y_i,\, \sigma_{y,i}^2), \label{eq:cc:yhat}\\
+\hat{z}_i \mid z_i &\sim \mathcal{N}(z_i,\, \sigma_{z,i}^2). \label{eq:cc:zhat}
+\end{align}
+The prior on $\gamma$ is $\mathcal{N}(0,1)$.
+
+\paragraph{Decorrelation of latent color.}
+The model has two exact, prediction-invariant degeneracies.
+If $c_i$ carries a component that is a linear function of $(1,\hat{x}_i)$,
+that component can be absorbed into $(\alpha,\beta)$ without changing
+any observable: specifically, the transformations
+$c_i \to c_i + d\hat{x}_i$, $\alpha\to\alpha-\gamma d$
+and
+$c_i \to c_i + e$, $\beta\to\beta-\gamma e$
+both leave the likelihood and predictions unchanged.
+
+Following \citet{Leget2020}, we break both degeneracies by preprocessing:
+compute the observed color $\hat{c}_i \equiv \hat{y}_i - \hat{z}_i$ and
+its OLS residual
+\begin{equation}
+\tilde{c}_i \equiv \hat{c}_i - (\hat{a} + \hat{b}\,\hat{x}_i),
+\label{eq:cc:ctilde_def}
+\end{equation}
+where $(\hat{a},\hat{b})$ are coefficients from regressing $\hat{c}$ on
+$(1,\hat{x})$ over the training sample.
+The OLS normal equations guarantee
+\begin{align}
+\overline{\tilde{c}} &= 0, \label{eq:cc:ctilde_mean}\\
+\operatorname{Cov}(\tilde{c},\,\hat{x}) &= 0. \label{eq:cc:ctilde_cov}
+\end{align}
+We set $c_i \equiv \tilde{c}_i$ as the color input to the model.
+With these conditions the $\beta$--$\gamma$ and $\alpha$--$\gamma$
+degeneracies are eliminated by construction, and $\gamma$ is identified
+solely from the color variation that is orthogonal to the TFR predictors.
+
+The prior $\gamma\sim\mathcal{N}(0,1)$ provides additional regularization
+for approximate degeneracies (e.g.\ the $\sigma_{\mathrm{int},y}$--$\gamma$
+variance trade-off) that are broken by the data through the mean-structure
+dependence on $\gamma$.
+
+\subsection{Marginalization over Latent Color and \texorpdfstring{$z$}{z}-band}
+\label{sec:cc:marginalization}
+
+Because $z_i = y_i - c_i$, the observed $z$-band constrains the
+$y_i - c_i$ combination.  With the Gaussian prior
+$c_i \sim \mathcal{N}(\mu_c, \tau_c^2)$ and
+$y_i \mid y_{\mathrm{TF},i}, c_i \sim \mathcal{N}(y_{\mathrm{TF},i}+\gamma(c_i-\bar{c}),\sigma_{\mathrm{int},y}^2)$,
+the joint distribution of $(y_i, c_i)$ given $y_{\mathrm{TF},i}$ is bivariate Gaussian.
+Marginalizing over both $y_i$ and $c_i$ and combining with the $z$-band
+measurement $\hat{z}_i \mid z_i \sim \mathcal{N}(z_i, \sigma_{z,i}^2)$, the
+marginal likelihood of the observations $(\hat{y}_i, \hat{z}_i)$ given
+$y_{\mathrm{TF},i}$ is
+\begin{equation}
+\begin{pmatrix}\hat{y}_i \\ \hat{z}_i\end{pmatrix}
+\;\Bigg|\; y_{\mathrm{TF},i}
+\;\sim\;
+\mathcal{N}\!\left(
+\begin{pmatrix}
+  y_{\mathrm{TF},i} + \gamma(\mu_c - \bar{c})\\
+  y_{\mathrm{TF},i} + (\mu_c - \bar{c}) - \mu_c
+\end{pmatrix},\;
+\Sigma_i
+\right),
+\label{eq:cc:bivariate_marg}
+\end{equation}
+where the covariance matrix is
+\begin{equation}
+\Sigma_i =
+\begin{pmatrix}
+  (1+\gamma)^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 &
+  (1+\gamma)\tau_c^2 + \sigma_{\mathrm{int},y}^2 \\
+  (1+\gamma)\tau_c^2 + \sigma_{\mathrm{int},y}^2 &
+  \tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{z,i}^2
+\end{pmatrix}.
+\label{eq:cc:Sigma}
+\end{equation}
+For the decorrelated case ($\mu_c = \bar{c} = 0$ after centering), the
+mean simplifies to $(y_{\mathrm{TF},i},\, y_{\mathrm{TF},i})^T$.
+Conditioning on the observed $\hat{z}_i$ gives a univariate marginal
+for $\hat{y}_i \mid \hat{z}_i, y_{\mathrm{TF},i}$:
+\begin{equation}
+\hat{y}_i \mid \hat{z}_i,\, y_{\mathrm{TF},i}
+\;\sim\;
+\mathcal{N}\!\Bigl(
+  y_{\mathrm{TF},i} + \kappa_i\bigl(\hat{z}_i - y_{\mathrm{TF},i}\bigr),\;
+  \sigma_{\mathrm{eff},i}^2
+\Bigr),
+\label{eq:cc:cond_marg}
+\end{equation}
+where the color-weight and effective variance are
+\begin{align}
+\kappa_i &\equiv
+  \frac{(1+\gamma)\tau_c^2 + \sigma_{\mathrm{int},y}^2}
+       {\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{z,i}^2},
+\label{eq:cc:kappa}\\[4pt]
+\sigma_{\mathrm{eff},i}^2 &\equiv
+  \Bigl[(1+\gamma)^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2\Bigr]
+  - \kappa_i\Bigl[(1+\gamma)\tau_c^2 + \sigma_{\mathrm{int},y}^2\Bigr].
+\label{eq:cc:sigma_eff}
+\end{align}
+Equation~\eqref{eq:cc:cond_marg} is a single Gaussian in $\hat{y}_i$
+with a mean that is a weighted combination of the TFR prediction
+$y_{\mathrm{TF},i}$ and the $z$-band observation $\hat{z}_i$.
+The weight $\kappa_i$ reflects how much information about color
+(hence about the offset $\gamma c_i$) is carried by $\hat{z}_i$
+rather than by $y_{\mathrm{TF},i}$.
+
+\subsection{Effective Selection Boundaries}
+\label{sec:cc:selection}
+
+The sample selection cuts are defined in terms of the observed $\hat{y}_i$.
+Under the hierarchical model these boundaries are unaffected by $\gamma$:
+the selection is a cut on the observable $\hat{y}_i$ (Eq.~\ref{eq:cc:yhat}),
+whose distribution conditional on $y_{\mathrm{TF},i}$ and the color is
+given by Eq.~\eqref{eq:cc:cond_marg}.
+The selection probability
+\begin{equation}
+P(S_i=1 \mid \theta, \gamma) =
+\int_{\hat{y}_{\min}}^{\hat{y}_{\max}}
+p(\hat{y}_i \mid y_{\mathrm{TF},i},\, \hat{z}_i,\, \theta,\, \gamma)\,
+d\hat{y}_i
+\label{eq:cc:sel_prob}
+\end{equation}
+uses the conditional marginal (Eq.~\ref{eq:cc:cond_marg}) integrated over
+the \emph{observed} boundaries $\hat{y}_{\min}$, $\hat{y}_{\max}$, which are
+fixed scalars.
+No per-galaxy boundary transformation is needed; the $\gamma$-dependence
+enters only through the mean and variance of the integrand.
+
+\subsection{Predicting Absolute Magnitudes with Color Correction}
+\label{sec:cc:predict}
+
+Given posterior draws $\{(\theta^{(m)},\gamma^{(m)})\}_{m=1}^M$ from the
+color-corrected fit, we predict the $r$-band absolute magnitude $\hat{y}_\star$
+of a new galaxy with observed quantities $(\hat{x}_\star, \hat{z}_\star)$ and
+uncertainties $(\sigma_{x,\star}, \sigma_{z,\star})$.
+
+\paragraph{Posterior for $y_{\mathrm{TF},\star}$.}
+Because $\tilde{c}$ has been decorrelated from $\hat{x}$ over the training
+sample, the $z$-band residual carries no information about $y_{\mathrm{TF},\star}$
+beyond $\hat{x}_\star$.
+The posterior for $y_{\mathrm{TF},\star}$ at fixed $\theta$ is therefore the
+same truncated normal derived in the baseline model:
+\begin{equation}
+p(y_{\mathrm{TF},\star} \mid \hat{x}_\star, \theta)
+= \mathcal{N}_{\mathrm{trunc}}\!\left(y_{\mathrm{TF},\star}\;\middle|\;
+  \mu_L,\,\sigma_L^2;\;[y_{\min},y_{\max}]\right),
+\end{equation}
+with $\mu_L = \beta + \alpha\hat{x}_\star$ and
+$\sigma_L^2 = \alpha^2(\sigma_{\mathrm{int},x}^2+\sigma_{x,\star}^2)$
+as in Eq.~\eqref{eq:muL_sigmaL_defs}.
+Let $\mu_\star(\theta)$ and $V_\star(\theta)$ be the mean and variance of
+this distribution.
+
+\paragraph{Predicted observed magnitude.}
+From the generative model,
+$\hat{y}_\star = y_\star + \epsilon_{y,\star}$ with
+$y_\star = y_{\mathrm{TF},\star} + \gamma(c_\star - \bar{c}) + \epsilon_{\mathrm{int},\star}$.
+Given $y_{\mathrm{TF},\star}$ and the new galaxy's color
+$c_\star = \hat{z}_\star^{\mathrm{raw}} - y_\star$ (treated via its
+posterior), the conditional moments are
+\begin{align}
+\mathrm{E}[\hat{y}_\star \mid \hat{x}_\star,\,\hat{z}_\star,\,\theta,\,\gamma]
+&= \mu_\star(\theta) + \kappa_\star\bigl(\hat{z}_\star - \mu_\star(\theta)\bigr),
+\label{eq:cc:mean_ystar}\\[4pt]
+\mathrm{Var}[\hat{y}_\star \mid \hat{x}_\star,\,\hat{z}_\star,\,\theta,\,\gamma]
+&= \sigma_{\mathrm{eff},\star}^2 + V_\star(\theta)\,\bigl(1 - \kappa_\star\bigr)^2,
+\label{eq:cc:var_ystar}
+\end{align}
+where $\kappa_\star$ and $\sigma_{\mathrm{eff},\star}^2$ are evaluated with
+$\sigma_{z,\star}$ in place of $\sigma_{z,i}$
+(Eqs.~\ref{eq:cc:kappa}--\ref{eq:cc:sigma_eff}).
+
+\paragraph{Posterior predictive.}
+The posterior predictive mean and variance over draws are
+\begin{align}
+\overline{y}_\star
+&= \frac{1}{M}\sum_{m=1}^M
+   \mathrm{E}^{(m)}[\hat{y}_\star \mid \hat{x}_\star,\hat{z}_\star,\theta^{(m)},\gamma^{(m)}],
+\label{eq:cc:pp_mean}\\[4pt]
+\mathrm{Var}_{pp}(\hat{y}_\star)
+&= \frac{1}{M}\sum_{m=1}^M
+   \mathrm{Var}^{(m)} +
+   \frac{1}{M}\sum_{m=1}^M
+   \!\left(\mathrm{E}^{(m)} - \overline{y}_\star\right)^2.
+\label{eq:cc:pp_var}
+\end{align}
+The posterior predictive standard deviation is $\sigma_{pp} = \sqrt{\mathrm{Var}_{pp}}$.
+
+\subsection{Model Limitations}
+\label{sec:cc:limitations}
+
+The decorrelation conditions (Eqs.~\ref{eq:cc:ctilde_mean}--\ref{eq:cc:ctilde_cov})
+are computed from the observed $\hat{x}$ rather than the latent $x$.
+Measurement error in $\hat{x}$ causes attenuation bias in the OLS slope $\hat{b}$,
+leaving a residual
+$\operatorname{Cov}(\tilde{c},\,x_{\mathrm{true}}) =
+O\!\left(\sigma_x^2/\mathrm{var}(\hat{x})\right)$
+that reintroduces a small $\alpha$--$\gamma$ coupling; for the present
+sample ($\sigma_x/\mathrm{sd}(\hat{x})\approx 0.3$) this is a ${\sim}10\%$
+second-order effect.
+
+The population color distribution is modeled as a single Gaussian
+$\mathcal{N}(\mu_c,\tau_c^2)$.
+Non-Gaussian tails (e.g.\ from dust, AGN contamination, or galaxy-type
+mixing) are not captured; a mixture model or nonparametric prior on $c_i$
+could be adopted in future work.
 
 \bibliographystyle{aasjournal}
 
