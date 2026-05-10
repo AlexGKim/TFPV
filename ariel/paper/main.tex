@@ -1196,12 +1196,12 @@ Schur complement gives
 \begin{equation}
 \hat{y}_\star \mid \hat{x}_\star,\,\hat{z}_\star,\,y_{\mathrm{TF},\star}
 \;\sim\;
-\mathcal{N}\!\bigl(\mu_{y|\xz}(y_{\mathrm{TF},\star}),\;\sigma_{y|\xz}^2\bigr),
+\mathcal{N}\!\bigl(\mu_{y|\hat{x}\hat{z}}(y_{\mathrm{TF},\star}),\;\sigma_{y|\hat{x}\hat{z}}^2\bigr),
 \label{eq:cc:y_given_xz_yTF}
 \end{equation}
 where
 \begin{align}
-\mu_{y|\xz}(y_{\mathrm{TF},\star})
+\mu_{y|\hat{x}\hat{z}}(y_{\mathrm{TF},\star})
 &= y_{\mathrm{TF},\star}
   + \boldsymbol{b}^T
     \begin{pmatrix}
@@ -1209,7 +1209,7 @@ where
       \hat{z}_\star - [y_{\mathrm{TF},\star} - \mu_c - \delta(\mu_{x,\star}(y_{\mathrm{TF},\star})-\bar{x})]
     \end{pmatrix},
 \label{eq:cc:mu_ygivenxz}\\
-\sigma_{y|\xz}^2
+\sigma_{y|\hat{x}\hat{z}}^2
 &= A_{11} - \boldsymbol{b}^T \boldsymbol{D}_\star \boldsymbol{b},
 \label{eq:cc:sigma_ygivenxz}
 \end{align}
@@ -1225,7 +1225,7 @@ with the regression coefficient vector
 \end{pmatrix}.
 \label{eq:cc:b_D}
 \end{equation}
-The variance $\sigma_{y|\xz}^2$ is independent of $y_{\mathrm{TF},\star}$.
+The variance $\sigma_{y|\hat{x}\hat{z}}^2$ is independent of $y_{\mathrm{TF},\star}$.
 
 \paragraph{Marginalizing $y_{\mathrm{TF},\star}$.}
 The remaining integral over $y_{\mathrm{TF},\star}$ under the posterior
@@ -1236,18 +1236,18 @@ Let $\mu_\star(\theta)$ and $V_\star(\theta)$ denote its mean and variance.
 The conditional moments at fixed $(\theta, \gamma)$ are then
 \begin{align}
 \mathrm{E}[\hat{y}_\star \mid \hat{x}_\star,\,\hat{z}_\star,\,\theta,\,\gamma]
-&= \mu_{y|\xz}(\mu_\star(\theta))
-   + \frac{\partial \mu_{y|\xz}}{\partial y_{\mathrm{TF},\star}} \cdot 0
-   \;\approx\; \mu_{y|\xz}(\mu_\star(\theta)),
+&= \mu_{y|\hat{x}\hat{z}}(\mu_\star(\theta))
+   + \frac{\partial \mu_{y|\hat{x}\hat{z}}}{\partial y_{\mathrm{TF},\star}} \cdot 0
+   \;\approx\; \mu_{y|\hat{x}\hat{z}}(\mu_\star(\theta)),
 \label{eq:cc:mean_ystar}\\[4pt]
 \mathrm{Var}[\hat{y}_\star \mid \hat{x}_\star,\,\hat{z}_\star,\,\theta,\,\gamma]
-&= \sigma_{y|\xz}^2
-   + \left(\frac{\partial \mu_{y|\xz}}{\partial y_{\mathrm{TF},\star}}\right)^2 V_\star(\theta).
+&= \sigma_{y|\hat{x}\hat{z}}^2
+   + \left(\frac{\partial \mu_{y|\hat{x}\hat{z}}}{\partial y_{\mathrm{TF},\star}}\right)^2 V_\star(\theta).
 \label{eq:cc:var_ystar}
 \end{align}
 In Eq.~\eqref{eq:cc:mean_ystar}, the approximation holds because
-$\mu_{y|\xz}$ is linear in $y_{\mathrm{TF},\star}$ and the law of total expectation
-gives $\mathrm{E}[\mu_{y|\xz}(y_{\mathrm{TF},\star})] = \mu_{y|\xz}(\mu_\star(\theta))$
+$\mu_{y|\hat{x}\hat{z}}$ is linear in $y_{\mathrm{TF},\star}$ and the law of total expectation
+gives $\mathrm{E}[\mu_{y|\hat{x}\hat{z}}(y_{\mathrm{TF},\star})] = \mu_{y|\hat{x}\hat{z}}(\mu_\star(\theta))$
 exactly.
 
 \paragraph{Posterior predictive.}
@@ -1275,7 +1275,7 @@ the $\hat{z}$ measurement enters the covariance matrix only through $A_{12}$
 and $A_{22}$.
 The regression coefficient in Eq.~\eqref{eq:cc:b_D} gives
 $b_y = A_{12} / (A_{22}|_{\gamma=0} + \delta^2\sigma_{1,i}^2)$.
-As $\tau_c \to 0$ (no color scatter), $b_y \to 0$, $\sigma_{y|\xz}^2 \to \sigma_{2,i}^2$,
+As $\tau_c \to 0$ (no color scatter), $b_y \to 0$, $\sigma_{y|\hat{x}\hat{z}}^2 \to \sigma_{2,i}^2$,
 and $\hat{z}_\star$ drops out of the prediction entirely, recovering the
 baseline model of Appendix~\ref{sec:likelihood}.
 The likelihood at each galaxy reduces to the product
