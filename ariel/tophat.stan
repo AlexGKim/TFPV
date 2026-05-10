@@ -723,35 +723,36 @@ transformed parameters {
 }
 model {
   // Additive color correction: y_add = y + gamma * ztilde
-  // No division by (1+gamma), no Jacobian singularity, no beta-gamma degeneracy.
-  // Since ztilde is orthogonal to x by construction, gamma does not enter the mean.
+  // Selection was on ŷ (original observable), not on y_add.
+  // Therefore: data likelihood uses y_add with full variance (includes gamma term),
+  // but selection function uses fixed boundaries with ŷ variance (no gamma term).
   vector[N_total] y_add = y + gamma * ztilde;
   vector[N_total] sigma_y_add_sq = sigma_y_sq + square(gamma) * sigma_z_sq;
 
-  // Per-galaxy selection boundaries shifted by gamma * ztilde
-  vector[N_total] haty_min_add = haty_min + gamma * ztilde;
-  vector[N_total] haty_max_add = haty_max + gamma * ztilde;
-  vector[N_total] iplane_add   = intercept_plane_std  + gamma * ztilde;
-  vector[N_total] iplane2_add  = intercept_plane2_std + gamma * ztilde;
-
-  // TFR prediction (gamma-free — no degeneracy)
+  // TFR prediction (gamma-free)
   vector[N_total] mu_TF = intercept_std[bin_idx] + slope_std * x_std;
   vector[N_total] sigmasq1_std = square(sigma_int_x_std) + sigma_x_std_sq;
-  vector[N_total] sigmasq2 = square(sigma_int_y) + sigma_y_add_sq;
-  vector[N_total] sigmasq_tot = square(slope_std) * sigmasq1_std + sigmasq2;
 
-  // Data likelihood (no Jacobian needed — additive shift)
+  // Data variance (includes gamma contribution from ztilde)
+  vector[N_total] sigmasq2_data = square(sigma_int_y) + sigma_y_add_sq;
+  vector[N_total] sigmasq_tot = square(slope_std) * sigmasq1_std + sigmasq2_data;
+
+  // Selection variance (on original ŷ, no gamma term — selection was gamma-independent)
+  vector[N_total] sigmasq2_sel = square(sigma_int_y) + sigma_y_sq;
+
+  // Data likelihood
   y_add ~ normal(mu_TF, sqrt(sigmasq_tot));
   target += log(abs(slope_std)) * N_total;
 
   if (y_TF_limits != 0) {
     // mu_star: posterior mean of y_TF given (x_std, y_add)
-    vector[N_total] mu_star = (mu_TF .* sigmasq2
+    // Uses data variance (includes gamma term)
+    vector[N_total] mu_star = (mu_TF .* sigmasq2_data
                                + y_add * square(slope_std) .* sigmasq1_std)
                               ./ sigmasq_tot;
 
     vector[N_total] sqrt_sigmasq_star = abs(slope_std)
-                                        * sqrt(sigmasq1_std .* sigmasq2 ./ sigmasq_tot);
+                                        * sqrt(sigmasq1_std .* sigmasq2_data ./ sigmasq_tot);
 
     vector[N_total] term_lb;
     vector[N_total] term_ub;
@@ -763,22 +764,22 @@ model {
 
     target += log_diff_exp(term_ub, term_lb);
 
-    // Selection function
+    // Selection function (on original ŷ — scalar boundaries, gamma-independent)
     if (y_selection != 0 && plane_cut == 0) {
-      vector[N_total] sigma2 = sqrt(sigmasq2);
+      vector[N_total] sigma2_sel_vec = sqrt(sigmasq2_sel);
 
-      term_lb = (haty_max_add - y_min) ./ sigma2;
-      term_ub = (haty_max_add - y_max) ./ sigma2;
+      term_lb = (haty_max - y_min) ./ sigma2_sel_vec;
+      term_ub = (haty_max - y_max) ./ sigma2_sel_vec;
 
-      vector[N_total] logsigma2 = 0.5 * log(sigmasq2);
+      vector[N_total] logsigma2_sel = 0.5 * log(sigmasq2_sel);
 
       vector[3] lse_terms;
       for (n in 1 : N_total) {
-        lse_terms[1] = log(haty_max_add[n] - y_min) + std_normal_lcdf(term_lb[n]);
-        lse_terms[2] = logsigma2[n] + std_normal_lpdf(term_lb[n]);
-        lse_terms[3] = log(y_max - haty_max_add[n]) + std_normal_lcdf(term_ub[n]);
+        lse_terms[1] = log_lb + std_normal_lcdf(term_lb[n]);
+        lse_terms[2] = logsigma2_sel[n] + std_normal_lpdf(term_lb[n]);
+        lse_terms[3] = log_minus_ub + std_normal_lcdf(term_ub[n]);
         term_lb[n] = log_sum_exp(lse_terms);
-        term_ub[n] = logsigma2[n] + std_normal_lpdf(term_ub[n]);
+        term_ub[n] = logsigma2_sel[n] + std_normal_lpdf(term_ub[n]);
       }
 
       target += -log_diff_exp(term_lb, term_ub);
@@ -786,10 +787,10 @@ model {
       for (n in 1 : N_total) {
         target += -log(
                        integrate_binormal_strip_sinh2_gl(y_min, y_max,
-                         haty_min_add[n], haty_max_add[n], slope_std,
+                         haty_min, haty_max, slope_std,
                          intercept_std[bin_idx], slope_plane_std,
-                         iplane_add[n], iplane2_add[n],
-                         sqrt(sigmasq1_std[n]), sqrt(sigmasq2[n]), gl_x_8,
+                         intercept_plane_std, intercept_plane2_std,
+                         sqrt(sigmasq1_std[n]), sqrt(sigmasq2_sel[n]), gl_x_8,
                          gl_w_8));
       }
     }
