@@ -579,9 +579,6 @@ data {
   vector[N_total] ztilde;
   // z-band measurement uncertainty
   vector<lower=0>[N_total] sigma_z;
-  // OLS parameters for reconstructing full zhat = ztilde + a_ols + b_ols * x
-  real a_ols;
-  real b_ols;
 
   // Selection function parameter
   real haty_min;
@@ -612,12 +609,7 @@ transformed data {
   vector[N_total] sigma_y_sq = square(sigma_y);
   vector[N_total] sigma_z_sq = square(sigma_z);
 
-  // Reconstruct full zhat for selection boundary transformations
-  // zhat_full_i = ztilde_i + a_ols + b_ols * x_i
-  // In standardized coords: a_ols_std = a_ols + b_ols * mean_x, b_ols_std = b_ols * sd_x
-  real a_ols_std = a_ols + b_ols * mean_x;
-  real b_ols_std = b_ols * sd_x;
-  vector[N_total] zhat_full = ztilde + a_ols_std + b_ols_std * x_std;
+  // ztilde is OLS-residualized: Cov(ztilde, x) = 0 by construction.
 
   int bin_idx = 1;
   
@@ -718,7 +710,7 @@ parameters {
   // Intrinsic scatter in x-direction (absolute magnitude)
   real<lower=0, upper=1> sigma_int_x; // in x-units
   real<lower=0, upper=1> sigma_int_y; // in y-units
-  real<lower=-0.9> gamma;  // color correction coefficient; lower bound avoids singularity at gamma=-1
+  real gamma;  // additive color correction coefficient
 }
 transformed parameters {
   // real sigma_int_y;
@@ -730,78 +722,61 @@ transformed parameters {
   }
 }
 model {
-  // Color-correction: effective observables using OLS residual ztilde.
-  // y_eff = (y + gamma * ztilde) / (1 + gamma)
-  // Model mean correction: yfromxstd must subtract gamma*(a_ols_std + b_ols_std*x_std)/(1+gamma)
-  // Selection boundaries use full zhat (reconstructed) since they are on observable yhat.
-  vector[N_total] y_eff = (y + gamma * ztilde) / (1 + gamma);
-  vector[N_total] sigma_y_eff_sq = (sigma_y_sq + square(gamma) * sigma_z_sq) / square(1 + gamma);
-  real slope_plane_eff = slope_plane_std / (1 + gamma);
-  vector[N_total] haty_min_eff = (haty_min + gamma * zhat_full) / (1 + gamma);
-  vector[N_total] haty_max_eff = (haty_max + gamma * zhat_full) / (1 + gamma);
-  vector[N_total] iplane_eff   = (intercept_plane_std  + gamma * zhat_full) / (1 + gamma);
-  vector[N_total] iplane2_eff  = (intercept_plane2_std + gamma * zhat_full) / (1 + gamma);
+  // Additive color correction: y_add = y + gamma * ztilde
+  // No division by (1+gamma), no Jacobian singularity, no beta-gamma degeneracy.
+  // Since ztilde is orthogonal to x by construction, gamma does not enter the mean.
+  vector[N_total] y_add = y + gamma * ztilde;
+  vector[N_total] sigma_y_add_sq = sigma_y_sq + square(gamma) * sigma_z_sq;
 
-  // likelihood given flat prior in y_TF
-  // TFR prediction for y_TF (unchanged from baseline)
+  // Per-galaxy selection boundaries shifted by gamma * ztilde
+  vector[N_total] haty_min_add = haty_min + gamma * ztilde;
+  vector[N_total] haty_max_add = haty_max + gamma * ztilde;
+  vector[N_total] iplane_add   = intercept_plane_std  + gamma * ztilde;
+  vector[N_total] iplane2_add  = intercept_plane2_std + gamma * ztilde;
+
+  // TFR prediction (gamma-free — no degeneracy)
   vector[N_total] mu_TF = intercept_std[bin_idx] + slope_std * x_std;
-  // OLS correction: with ztilde = zhat - (a_ols + b_ols*x), the model mean in y_eff space
-  // is y_TF - gamma*(a_ols_std + b_ols_std*x_std)/(1+gamma)
-  vector[N_total] ols_correction = gamma * (a_ols_std + b_ols_std * x_std) / (1 + gamma);
-  vector[N_total] yfromxstd = mu_TF - ols_correction;
   vector[N_total] sigmasq1_std = square(sigma_int_x_std) + sigma_x_std_sq;
-  vector[N_total] sigmasq2_eff = square(sigma_int_y) + sigma_y_eff_sq;
-  vector[N_total] sigmasq_tot = square(slope_std)
-                                * (square(sigma_int_x_std) + sigma_x_std_sq)
-                                + (square(sigma_int_y) + sigma_y_eff_sq);
+  vector[N_total] sigmasq2 = square(sigma_int_y) + sigma_y_add_sq;
+  vector[N_total] sigmasq_tot = square(slope_std) * sigmasq1_std + sigmasq2;
 
-  //  term that applies to all cases
-  // Jacobian for change of variables ŷ → y_eff = (ŷ + γz̃)/(1+γ): p(ŷ) = p(y_eff)/|1+γ|
-  target += -N_total * log(abs(1.0 + gamma));
-  y_eff ~ normal(yfromxstd, sqrt(sigmasq_tot));
+  // Data likelihood (no Jacobian needed — additive shift)
+  y_add ~ normal(mu_TF, sqrt(sigmasq_tot));
   target += log(abs(slope_std)) * N_total;
 
-  // if there is a non-zero range of y values allowed by the TFR limits, then we need to apply the selection function
   if (y_TF_limits != 0) {
-    // mu_star: posterior mean of y_TF given (x_std, y_eff)
-    // From x: y_TF ~ mu_TF with variance slope_std^2 * sigmasq1
-    // From y_eff: y_TF ~ y_eff + ols_correction with variance sigmasq2_eff
-    vector[N_total] mu_star = (mu_TF .* sigmasq2_eff
-                               + (y_eff + ols_correction) * square(slope_std) .* sigmasq1_std)
+    // mu_star: posterior mean of y_TF given (x_std, y_add)
+    vector[N_total] mu_star = (mu_TF .* sigmasq2
+                               + y_add * square(slope_std) .* sigmasq1_std)
                               ./ sigmasq_tot;
 
     vector[N_total] sqrt_sigmasq_star = abs(slope_std)
-                                        * sqrt(
-                                               (sigmasq1_std .* sigmasq2_eff)
-                                               ./ sigmasq_tot);
+                                        * sqrt(sigmasq1_std .* sigmasq2 ./ sigmasq_tot);
 
-    // containers used for multiple purposes
     vector[N_total] term_lb;
     vector[N_total] term_ub;
-    // Term for the TFR limits (y_min/y_max are tophat bounds on y_TF, not per-galaxy)
+    // Tophat bounds on y_TF (scalar, not per-galaxy)
     for (n in 1 : N_total) {
       term_lb[n] = normal_lcdf(y_min | mu_star[n], sqrt_sigmasq_star[n]);
       term_ub[n] = normal_lcdf(y_max | mu_star[n], sqrt_sigmasq_star[n]);
     }
-    
-    target += log_diff_exp(term_ub, term_lb); // done with this use of term_lb/ub
-    
-    // Term for the selection function
+
+    target += log_diff_exp(term_ub, term_lb);
+
+    // Selection function
     if (y_selection != 0 && plane_cut == 0) {
-      // vector[N_total] sigma2 = sqrt(sigmasq2_eff);
-      vector[N_total] sigma2 = sqrt(square(sigma_int_y) + sigma_y_eff_sq);
+      vector[N_total] sigma2 = sqrt(sigmasq2);
 
-      term_lb = (haty_max_eff - y_min) ./ sigma2;
-      term_ub = (haty_max_eff - y_max) ./ sigma2;
+      term_lb = (haty_max_add - y_min) ./ sigma2;
+      term_ub = (haty_max_add - y_max) ./ sigma2;
 
-      vector[N_total] logsigma2 = 0.5 * log(square(sigma_int_y) + sigma_y_eff_sq);
+      vector[N_total] logsigma2 = 0.5 * log(sigmasq2);
 
-      // standard‑normal arguments for the lower‑ and upper‑bound CDFs
       vector[3] lse_terms;
       for (n in 1 : N_total) {
-        lse_terms[1] = log(haty_max_eff[n] - y_min) + std_normal_lcdf(term_lb[n]);
+        lse_terms[1] = log(haty_max_add[n] - y_min) + std_normal_lcdf(term_lb[n]);
         lse_terms[2] = logsigma2[n] + std_normal_lpdf(term_lb[n]);
-        lse_terms[3] = log(y_max - haty_max_eff[n]) + std_normal_lcdf(term_ub[n]);
+        lse_terms[3] = log(y_max - haty_max_add[n]) + std_normal_lcdf(term_ub[n]);
         term_lb[n] = log_sum_exp(lse_terms);
         term_ub[n] = logsigma2[n] + std_normal_lpdf(term_ub[n]);
       }
@@ -811,28 +786,19 @@ model {
       for (n in 1 : N_total) {
         target += -log(
                        integrate_binormal_strip_sinh2_gl(y_min, y_max,
-                         haty_min_eff[n], haty_max_eff[n], slope_std,
-                         intercept_std[bin_idx], slope_plane_eff,
-                         iplane_eff[n], iplane2_eff[n],
-                         sqrt(sigmasq1_std[n]), sqrt(sigmasq2_eff[n]), gl_x_8,
+                         haty_min_add[n], haty_max_add[n], slope_std,
+                         intercept_std[bin_idx], slope_plane_std,
+                         iplane_add[n], iplane2_add[n],
+                         sqrt(sigmasq1_std[n]), sqrt(sigmasq2[n]), gl_x_8,
                          gl_w_8));
       }
-      
-      // target += - N_total *log( integrate_binormal_strip_sinh2_gl(y_min, y_max, haty_min,
-      //    haty_max, slope_std, intercept_std[bin_idx],
-      //    slope_plane_std, intercept_plane_std,
-      //    intercept_plane2_std, sqrt(sigmasq1_std[1]),
-      //    sqrt(sigmasq2[1]), gl_x, gl_w));
     }
   }
-  
+
   // Priors
   sigma_int_x ~ cauchy(0, 1);
   sigma_int_y ~ cauchy(0, 1);
-  // Weakly informative prior on gamma regularizes the beta-gamma degeneracy
-  // (a constant shift in zhat is absorbed by beta; mean(zhat)=0 by construction
-  // but this prior prevents the sampler drifting along the residual ridge).
-  gamma ~ normal(0, 0.3);
+  gamma ~ normal(0, 1);
 }
 generated quantities {
   real slope = slope_std / sd_x;

@@ -253,8 +253,7 @@ def process_desi_tf_data(
     sigma_x_data = sigma_x.tolist()
     sigma_y_data = sigma_y.tolist()
     z_obs_data = z_obs.tolist()
-    # Orthogonalize zhat w.r.t. x to break alpha-gamma degeneracy.
-    # Store OLS parameters so Stan can reconstruct full zhat for selection boundaries.
+    # Orthogonalize zhat w.r.t. x so gamma cannot trade off against slope.
     _b_ols = np.cov(x, zhat)[0, 1] / np.var(x)
     _a_ols = np.mean(zhat) - _b_ols * np.mean(x)
     ztilde = zhat - (_a_ols + _b_ols * x)
@@ -286,8 +285,6 @@ def process_desi_tf_data(
         "tau": tau,
         "ztilde": zhat_list,
         "sigma_z": sigma_z_list,
-        "a_ols": float(_a_ols),
-        "b_ols": float(_b_ols),
         "z_obs": z_obs_data,  # now defined, aligned, and JSON‑serializable
         "z_obs_min": float(z_obs_min) if z_obs_min is not None else None,
         "z_obs_max": float(z_obs_max) if z_obs_max is not None else None,
