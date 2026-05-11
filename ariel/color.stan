@@ -619,6 +619,7 @@ parameters {
          upper=-14 + slope_std * mean_x / sd_x>[N_bins] intercept_std;
   real<lower=0, upper=1> sigma_int_x;
   real<lower=0, upper=1> sigma_int_y;
+  real<lower=0, upper=1> sigma_int_z;
 
   // [COLOR] color-correction parameters (Eqs. C29-C32)
   real gamma;            // luminosity-color slope at fixed velocity          (Eq. C29)
@@ -638,6 +639,7 @@ model {
   // Priors — baseline
   sigma_int_x ~ cauchy(0, 1);
   sigma_int_y ~ cauchy(0, 1);
+  sigma_int_z ~ cauchy(0, 1);
 
   // [COLOR] Priors for color-correction parameters (Eqs. C29-C32)
   gamma   ~ std_normal();
@@ -651,8 +653,8 @@ model {
 
   // [COLOR] A_i matrix scalar entries that don't depend on per-galaxy noise (Eq. C17)
   real A11_base = square(gamma) * square(tau_c) + square(sigma_int_y);
-  real A12      = gamma * (gamma - 1.0) * square(tau_c) + square(sigma_int_y);  // Eq. C17 off-diag
-  real A22_base = square(gamma - 1.0) * square(tau_c) + square(sigma_int_y);
+  real A12      = gamma * (gamma - 1.0) * square(tau_c);
+  real A22_base = square(gamma - 1.0) * square(tau_c) + square(sigma_int_z);
 
   if (y_TF_limits != 0) {
     int K = 8;

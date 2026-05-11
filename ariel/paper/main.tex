@@ -972,7 +972,7 @@ component of color that is independent of velocity.
 
 \paragraph{Latent variables.}
 Each galaxy $i$ has latent variables $y_{\mathrm{TF},i}$, $x_i$, and $c_i$
-(intrinsic color), with $z_i \equiv y_i - c_i$ derived.
+(intrinsic color).
 The generative model is
 \begin{align}
 y_{\mathrm{TF},i} &\sim \mathrm{Uniform}(y_{\min},\,y_{\max}), \label{eq:cc:yTF_prior}\\
@@ -980,7 +980,7 @@ x_i \mid y_{\mathrm{TF},i} &\sim \mathcal{N}\!\left(\frac{y_{\mathrm{TF},i}-\bet
 c_i \mid x_i &\sim \mathcal{N}\!\left(\mu_c + \delta(x_i - \bar{x}),\;\tau_c^2\right), \label{eq:cc:c_given_x}\\
 \eta_i &\equiv c_i - \mu_c - \delta(x_i - \bar{x}), \label{eq:cc:eta_def}\\
 y_i \mid y_{\mathrm{TF},i},\,\eta_i &\sim \mathcal{N}\!\left(y_{\mathrm{TF},i} + \gamma\eta_i,\;\sigma_{\mathrm{int},y}^2\right), \label{eq:cc:y_given_yTF_eta}\\
-z_i &\equiv y_i - c_i, \label{eq:cc:z_def}
+z_i \mid y_{\mathrm{TF},i},\,\eta_i,\,x_i &\sim \mathcal{N}\!\left(y_{\mathrm{TF},i} + (\gamma-1)\eta_i - \mu_c - \delta(x_i-\bar{x}),\;\sigma_{\mathrm{int},z}^2\right), \label{eq:cc:z_given_yTF_eta}
 \end{align}
 with measurement equations
 \begin{align}
@@ -1040,14 +1040,15 @@ the sample mean observed color.
 \paragraph{Marginalizing $\eta_i$.}
 For fixed $(y_{\mathrm{TF},i}, x_i)$, the residual color
 $\eta_i \sim \mathcal{N}(0,\tau_c^2)$ is independent of $x_i$.
-Since $y_i = y_{\mathrm{TF},i} + \gamma\eta_i + \epsilon_y$ and
-$z_i = y_i - c_i = y_{\mathrm{TF},i} + \gamma\eta_i + \epsilon_y - \mu_c - \delta(x_i-\bar{x}) - \eta_i$, we have
+Since $y_i = y_{\mathrm{TF},i} + \gamma\eta_i + \epsilon_y$ (with $\epsilon_y \sim \mathcal{N}(0,\sigma_{\mathrm{int},y}^2)$)
+and $z_i = y_{\mathrm{TF},i} + (\gamma-1)\eta_i - \mu_c - \delta(x_i-\bar{x}) + \epsilon_z$
+(with $\epsilon_z \sim \mathcal{N}(0,\sigma_{\mathrm{int},z}^2)$ independent of $\epsilon_y$), we have
 \begin{align}
 \tilde{y}_i &\equiv y_i - y_{\mathrm{TF},i} = \gamma\eta_i + \epsilon_y,\\
-\tilde{z}_i &\equiv z_i - [y_{\mathrm{TF},i} - \mu_c - \delta(x_i-\bar{x})] = (\gamma-1)\eta_i + \epsilon_y.
+\tilde{z}_i &\equiv z_i - [y_{\mathrm{TF},i} - \mu_c - \delta(x_i-\bar{x})] = (\gamma-1)\eta_i + \epsilon_z.
 \end{align}
 Marginalizing $\eta_i \sim \mathcal{N}(0,\tau_c^2)$ and adding measurement noise
-$(\delta_y, \delta_z)$ gives the joint marginal of $(\hat{y}_i, \hat{z}_i)$
+gives the joint marginal of $(\hat{y}_i, \hat{z}_i)$
 given $(y_{\mathrm{TF},i}, x_i)$:
 \begin{equation}
 \begin{pmatrix}\hat{y}_i \\ \hat{z}_i\end{pmatrix}
@@ -1067,20 +1068,21 @@ where the covariance matrix is
 \boldsymbol{A}_i =
 \begin{pmatrix}
   \gamma^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 &
-  \gamma(\gamma-1)\tau_c^2 + \sigma_{\mathrm{int},y}^2 \\[4pt]
-  \gamma(\gamma-1)\tau_c^2 + \sigma_{\mathrm{int},y}^2 &
-  (\gamma-1)^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{z,i}^2
+  \gamma(\gamma-1)\tau_c^2 \\[4pt]
+  \gamma(\gamma-1)\tau_c^2 &
+  (\gamma-1)^2\tau_c^2 + \sigma_{\mathrm{int},z}^2 + \sigma_{z,i}^2
 \end{pmatrix}.
 \label{eq:cc:A}
 \end{equation}
-The off-diagonal $\gamma(\gamma-1)\tau_c^2 + \sigma_{\mathrm{int},y}^2$ arises
-because $\hat{y}$ and $\hat{z}$ share both the intrinsic scatter $\epsilon_y$
-and the color residual $\eta_i$ (with coefficients $\gamma$ and $\gamma-1$).
+The off-diagonal $\gamma(\gamma-1)\tau_c^2$ arises
+because $\hat{y}$ and $\hat{z}$ share the color residual $\eta_i$
+(with coefficients $\gamma$ and $\gamma-1$); the intrinsic scatters
+$\epsilon_y$ and $\epsilon_z$ are independent and do not contribute.
 
 \paragraph{Sanity check: $\gamma = 0$.}
-Setting $\gamma = 0$: $\boldsymbol{A}_i = \mathrm{diag}(\sigma_{\mathrm{int},y}^2+\sigma_{y,i}^2,\; \tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{z,i}^2)$
-and the off-diagonal becomes $\sigma_{\mathrm{int},y}^2$, i.e., $\hat{y}$ and
-$\hat{z}$ are correlated only through $\epsilon_y$ as expected when color has no
+Setting $\gamma = 0$: $\boldsymbol{A}_i = \mathrm{diag}(\sigma_{\mathrm{int},y}^2+\sigma_{y,i}^2,\; \sigma_{\mathrm{int},z}^2 + \sigma_{z,i}^2)$
+and the off-diagonal vanishes, i.e., $\hat{y}$ and
+$\hat{z}$ are independent when color has no
 effect on $r$-band luminosity.
 The marginal for $\hat{y}_i$ reduces to
 $\mathcal{N}(y_{\mathrm{TF},i}, \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2)$,
@@ -1254,18 +1256,17 @@ $\{(\theta^{(m)},\gamma^{(m)})\}_{m=1}^M$ are
 \label{sec:cc:reduction}
 
 Setting $\gamma = 0$: $A_{11} = \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 \equiv \sigma_{2,i}^2$,
-$A_{12} = A_{22}|_{\gamma=0} - \tau_c^2 = \sigma_{\mathrm{int},y}^2$, and
-the $\hat{z}$ measurement enters the covariance matrix only through $A_{12}$
-and $A_{22}$.
-The regression coefficient in Eq.~\eqref{eq:cc:b_D} gives
-$b_y = A_{12} / (A_{22}|_{\gamma=0} + \delta^2\sigma_{1,i}^2)$.
-As $\tau_c \to 0$ (no color scatter), $b_y \to 0$, $\sigma_{y|\hat{x}\hat{z}}^2 \to \sigma_{2,i}^2$,
-and $\hat{z}_\star$ drops out of the prediction entirely, recovering the
+$A_{12} = 0$, and $\boldsymbol{b} = \boldsymbol{0}$.
+The $\hat{z}$ measurement drops out of the prediction entirely:
+$\sigma_{y|\hat{x}\hat{z}}^2 = A_{11} = \sigma_{2,i}^2$, recovering the
 baseline model of Appendix~\ref{sec:likelihood}.
 The likelihood at each galaxy reduces to the product
 $\mathcal{N}(\hat x_i; (y_{\mathrm{TF},i}-\beta)/\alpha, \sigma_{1,i}^2)\,
- \mathcal{N}(\hat y_i; y_{\mathrm{TF},i}, \sigma_{2,i}^2)$
-of Eq.~\eqref{eqn:likelihood_pg}, matching Appendix~\ref{sec:likelihood} exactly.
+ \mathcal{N}(\hat y_i; y_{\mathrm{TF},i}, \sigma_{2,i}^2)\,
+ \mathcal{N}(\hat z_i; y_{\mathrm{TF},i} - \mu_c - \delta(\mu_{x,i}-\bar{x}), \sigma_{\mathrm{int},z}^2 + \sigma_{z,i}^2)$
+where the $\hat{z}$ factor is independent of $\hat{y}$ and contributes only
+to the estimation of $(\mu_c, \delta, \sigma_{\mathrm{int},z})$, not to the
+$r$-band prediction.
 
 \subsection{Model Limitations}
 \label{sec:cc:limitations}

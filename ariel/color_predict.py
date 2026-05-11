@@ -245,6 +245,7 @@ def ystar_pp_mean_sd_color_vectorized(
     beta = draws["intercept.1"].to_numpy(float)
     six = draws["sigma_int_x"].to_numpy(float)
     siy = draws["sigma_int_y"].to_numpy(float)
+    siz = draws["sigma_int_z"].to_numpy(float)
     gamma = draws["gamma"].to_numpy(float)
     delta = draws["delta_c"].to_numpy(float)
     mu_c = draws["mu_c"].to_numpy(float)
@@ -258,6 +259,7 @@ def ystar_pp_mean_sd_color_vectorized(
     bMG = beta[:, None]
     sixMG = six[:, None]
     siyMG = siy[:, None]
+    sizMG = siz[:, None]
     gMG = gamma[:, None]
     dMG = delta[:, None]
     mcMG = mu_c[:, None]
@@ -268,8 +270,8 @@ def ystar_pp_mean_sd_color_vectorized(
 
     # A matrix entries (Eq. C.17); A₁₁ includes σ²_{y,★} (measurement noise)
     A11 = gMG**2 * tcMG**2 + siyMG**2 + sigma_y_star[None, :] ** 2  # (M, G)
-    A12 = gMG * (gMG - 1) * tcMG**2 + siyMG**2  # (M, G)
-    A22 = (gMG - 1) ** 2 * tcMG**2 + siyMG**2 + sigma_z_star[None, :] ** 2  # (M, G)
+    A12 = gMG * (gMG - 1) * tcMG**2  # (M, G)
+    A22 = (gMG - 1) ** 2 * tcMG**2 + sizMG**2 + sigma_z_star[None, :] ** 2  # (M, G)
 
     # b vector from D^{-1} [0, A12]^T (Eq. C.28)
     # D = [[σ1², -δσ1²], [-δσ1², A22 + δ²σ1²]]
@@ -375,7 +377,7 @@ def ystar_pp_mean_sd_color_vectorized(
     # ∂res0/∂y_TF = -1/α
     # ∂res1/∂y_TF = -(1 - δ·(-1/α)) = -(1 + δ/α)
     dres0_dyTF = -1.0 / aMG  # (M, G)
-    dres1_dyTF = -(1.0 + dMG / aMG)  # (M, G)
+    dres1_dyTF = -(1.0 - dMG / aMG)  # (M, G)
 
     dmu_dyTF = 1.0 + b0 * dres0_dyTF + b1 * dres1_dyTF  # (M, G)
 
@@ -431,6 +433,7 @@ def DESI_color(
             "intercept.1",
             "sigma_int_x",
             "sigma_int_y",
+            "sigma_int_z",
             "gamma",
             "delta_c",
             "mu_c",
@@ -662,7 +665,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "gamma", "delta_c", "mu_c", "tau_c"],
+              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c"],
         drop_diagnostics=True,
     )
 
@@ -777,6 +780,7 @@ def ystar_pp_cov_color_vectorized(
     beta_d = draws["intercept.1"].to_numpy(float)
     six_d = draws["sigma_int_x"].to_numpy(float)
     siy_d = draws["sigma_int_y"].to_numpy(float)
+    siz_d = draws["sigma_int_z"].to_numpy(float)
     gamma_d = draws["gamma"].to_numpy(float)
     delta_d = draws["delta_c"].to_numpy(float)
     mu_c_d = draws["mu_c"].to_numpy(float)
@@ -793,6 +797,7 @@ def ystar_pp_cov_color_vectorized(
         bMG = beta_d[start:end, None]
         sixMG = six_d[start:end, None]
         siyMG = siy_d[start:end, None]
+        sizMG = siz_d[start:end, None]
         gMG = gamma_d[start:end, None]
         dMG = delta_d[start:end, None]
         mcMG = mu_c_d[start:end, None]
@@ -800,8 +805,8 @@ def ystar_pp_cov_color_vectorized(
 
         sigma1_sq = sixMG**2 + sigma_x_star[None, :]**2
         A11 = gMG**2 * tcMG**2 + siyMG**2 + sigma_y_star[None, :]**2
-        A12 = gMG * (gMG - 1) * tcMG**2 + siyMG**2
-        A22 = (gMG - 1)**2 * tcMG**2 + siyMG**2 + sigma_z_star[None, :]**2
+        A12 = gMG * (gMG - 1) * tcMG**2
+        A22 = (gMG - 1)**2 * tcMG**2 + sizMG**2 + sigma_z_star[None, :]**2
 
         b0 = dMG * A12 / A22
         b1 = A12 / A22
@@ -857,7 +862,7 @@ def ystar_pp_cov_color_vectorized(
 
         # Conditional variance contribution at fixed θ
         dres0_dyTF = -1.0 / aMG
-        dres1_dyTF = -(1.0 + dMG / aMG)
+        dres1_dyTF = -(1.0 - dMG / aMG)
         dmu_dyTF = 1.0 + b0 * dres0_dyTF + b1 * dres1_dyTF
         cond_var_chunk = sigma_y_given_xz_sq + dmu_dyTF**2 * var_chunk  # (B, G)
 
@@ -912,7 +917,7 @@ def write_cov_color(run_dir, fits_path, cfg=None):
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "gamma", "delta_c", "mu_c", "tau_c"],
+              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c"],
         drop_diagnostics=True,
     )
 

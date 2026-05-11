@@ -69,10 +69,13 @@ def load_params(file_pattern):
         r"$\beta$":                       ["intercept.1", "intercept[1]", "intercept"],  # common Stan CSV variants
         r"$\sigma_{\rm int,x}$":          ["sigma_int_x"],
         r"$\sigma_{\rm int,y}$":          ["sigma_int_y"],
+        r"$\sigma_{\rm int,z}$":          ["sigma_int_z"],
         "mu_{y_TF}":                      ["mu_y_TF"],
         "tau":                            ["tau"],
-        # Add more here if you like; they will be included only if present.
-        # "theta_int":  ["theta_int"],
+        r"$\gamma$":                      ["gamma"],
+        r"$\delta_c$":                    ["delta_c"],
+        r"$\mu_c$":                       ["mu_c"],
+        r"$\tau_c$":                      ["tau_c"],
     }
 
     params = {}
@@ -154,7 +157,7 @@ def create_corner_plot(file_patterns, output_file='corner_plot.png',
         )
 
     # Keep a nice, stable plotting order
-    preferred_order = [r"$\alpha$", r"$\beta$", r"$\sigma_{\rm int,x}$", r"$\sigma_{\rm int,y}$", "mu_{y_TF}", "tau"]
+    preferred_order = [r"$\alpha$", r"$\beta$", r"$\sigma_{\rm int,x}$", r"$\sigma_{\rm int,y}$", r"$\sigma_{\rm int,z}$", "mu_{y_TF}", "tau", r"$\gamma$", r"$\delta_c$", r"$\mu_c$", r"$\tau_c$"]
     ordered = [p for p in preferred_order if p in common] + sorted(common - set(preferred_order))
 
     # Reduce each df to the common ordered set
@@ -232,7 +235,7 @@ def _build_parser():
     p.add_argument(
         '--model',
         default=None,
-        choices=['tophat', 'normal'],
+        choices=['tophat', 'normal', 'color'],
         help="Model to plot when using --run (default: tophat).",
     )
     p.add_argument(
