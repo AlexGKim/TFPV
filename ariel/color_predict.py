@@ -196,6 +196,7 @@ def ystar_pp_mean_sd_color_vectorized(
     zhat_star,
     sigma_z_star,
     *,
+    sigma_y_star,
     x_bar,
     y_min,
     y_max,
@@ -217,6 +218,7 @@ def ystar_pp_mean_sd_color_vectorized(
     sigma_x_star : (G,) array — uncertainty on x̂
     zhat_star : (G,) array — observed z-band absolute magnitude
     sigma_z_star : (G,) array — uncertainty on ẑ
+    sigma_y_star : (G,) array — measurement uncertainty on ŷ (enters A₁₁)
     x_bar : float — sample mean of x̂ (from training data)
     y_min, y_max : float — tophat prior bounds on y_TF
     on_bad_Z : {"raise", "floor"}
@@ -231,6 +233,7 @@ def ystar_pp_mean_sd_color_vectorized(
     sigma_x_star = np.asarray(sigma_x_star, dtype=float)
     zhat_star = np.asarray(zhat_star, dtype=float)
     sigma_z_star = np.asarray(sigma_z_star, dtype=float)
+    sigma_y_star = np.asarray(sigma_y_star, dtype=float)
 
     a = float(y_min)
     b = float(y_max)
@@ -263,8 +266,8 @@ def ystar_pp_mean_sd_color_vectorized(
     # Per-galaxy, per-draw quantities
     sigma1_sq = sixMG**2 + sigma_x_star[None, :] ** 2  # (M, G)
 
-    # A matrix entries (Eq. C.17) — at prediction time, σ_{y,*} = 0
-    A11 = gMG**2 * tcMG**2 + siyMG**2  # (M, G) scalar broadcast
+    # A matrix entries (Eq. C.17); A₁₁ includes σ²_{y,★} (measurement noise)
+    A11 = gMG**2 * tcMG**2 + siyMG**2 + sigma_y_star[None, :] ** 2  # (M, G)
     A12 = gMG * (gMG - 1) * tcMG**2 + siyMG**2  # (M, G)
     A22 = (gMG - 1) ** 2 * tcMG**2 + siyMG**2 + sigma_z_star[None, :] ** 2  # (M, G)
 
@@ -412,7 +415,7 @@ def DESI_color(
     x_bar = input_data.get("mean_x", None)
 
     # Load galaxy data
-    xhat_star, sigma_x_star, yhat_star, _sigma_y_star, zhat_star, sigma_z_star, zobs_star = (
+    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zhat_star, sigma_z_star, zobs_star = (
         load_xyz_and_uncertainties_from_desi(galaxy_fits)
     )
 
@@ -443,6 +446,7 @@ def DESI_color(
         sigma_x_star,
         zhat_star,
         sigma_z_star,
+        sigma_y_star=sigma_y_star,
         x_bar=x_bar,
         y_min=y_min,
         y_max=y_max,
@@ -460,6 +464,7 @@ def DESI_color(
     xhat_main = xhat_star[main_mask]
     sigma_x_main = sigma_x_star[main_mask]
     yhat_main = yhat_star[main_mask]
+    sigma_y_main = sigma_y_star[main_mask]
     zhat_main = zhat_star[main_mask]
     sigma_z_main = sigma_z_star[main_mask]
     zobs_main = zobs_star[main_mask]
@@ -470,6 +475,7 @@ def DESI_color(
         sigma_x_main,
         zhat_main,
         sigma_z_main,
+        sigma_y_star=sigma_y_main,
         x_bar=x_bar,
         y_min=y_min,
         y_max=y_max,
@@ -672,6 +678,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
         sigma_x[valid],
         zhat_full[valid],
         sigma_z_full[valid],
+        sigma_y_star=app_err[valid],
         x_bar=x_bar,
         y_min=y_min,
         y_max=y_max,
@@ -721,6 +728,7 @@ def ystar_pp_cov_color_vectorized(
     zhat_star,
     sigma_z_star,
     *,
+    sigma_y_star,
     x_bar,
     y_min,
     y_max,
@@ -739,6 +747,7 @@ def ystar_pp_cov_color_vectorized(
     draws : DataFrame with columns slope, intercept.1, sigma_int_x, sigma_int_y,
             gamma, delta_c, mu_c, tau_c
     xhat_star, sigma_x_star, zhat_star, sigma_z_star : (G,) arrays
+    sigma_y_star : (G,) array — measurement uncertainty on ŷ (enters A₁₁)
     x_bar : float — sample mean of x̂ (from training data)
     y_min, y_max : float — tophat prior bounds
     chunk_size : int — draws per chunk to limit memory
@@ -751,10 +760,12 @@ def ystar_pp_cov_color_vectorized(
     sigma_x_star = np.asarray(sigma_x_star, dtype=float)
     zhat_star = np.asarray(zhat_star, dtype=float)
     sigma_z_star = np.asarray(sigma_z_star, dtype=float)
+    sigma_y_star = np.asarray(sigma_y_star, dtype=float)
     G = xhat_star.size
 
     mean_y, _ = ystar_pp_mean_sd_color_vectorized(
         draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
+        sigma_y_star=sigma_y_star,
         x_bar=x_bar, y_min=y_min, y_max=y_max,
         on_bad_Z=on_bad_Z, Z_floor=Z_floor,
     )
@@ -788,7 +799,7 @@ def ystar_pp_cov_color_vectorized(
         tcMG = tau_c_d[start:end, None]
 
         sigma1_sq = sixMG**2 + sigma_x_star[None, :]**2
-        A11 = gMG**2 * tcMG**2 + siyMG**2
+        A11 = gMG**2 * tcMG**2 + siyMG**2 + sigma_y_star[None, :]**2
         A12 = gMG * (gMG - 1) * tcMG**2 + siyMG**2
         A22 = (gMG - 1)**2 * tcMG**2 + siyMG**2 + sigma_z_star[None, :]**2
 
@@ -907,6 +918,7 @@ def write_cov_color(run_dir, fits_path, cfg=None):
 
     cov = ystar_pp_cov_color_vectorized(
         draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
+        sigma_y_star=sigma_y_star,
         x_bar=x_bar, y_min=y_min, y_max=y_max,
     )
 
