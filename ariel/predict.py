@@ -1310,7 +1310,8 @@ def DESI(
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
 
-    main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star, zobs_star)
+    rz_color_desi = _load_rz_color_from_desi(galaxy_fits)
+    main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star, zobs_star, rz_color=rz_color_desi)
 
     xhat_star2 = xhat_star[main_mask]
     sigma_x_star2 = sigma_x_star[main_mask]
@@ -2196,7 +2197,51 @@ def fullmocks(
     return mean_y, sd_pred, zobs_star
 
 
-def _apply_main_cuts(cfg, xhat, yhat, zobs=None):
+def _load_rz_color_from_desi(fits_path):
+    """
+    Load r-z apparent color from a DESI FITS catalog.
+
+    Returns a float64 array aligned with the validity mask applied by
+    load_xy_and_uncertainties_from_desi (finite V, V_err>0, finite yhat,
+    sigma_y>=0, finite zobs).  Returns None if z-band columns are absent.
+    """
+    from mag_utils import get_mag_cols
+
+    z_col_candidates = ("Z_DESI", "zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE")
+    with fits.open(fits_path) as hdul:
+        data = hdul[1].data  # type: ignore[union-attr]
+        names = set(data.dtype.names or ())
+
+        if "R_MAG_SB26_CORR" in names and "Z_MAG_SB26_CORR" in names:
+            rz_raw = (
+                np.asarray(data["R_MAG_SB26_CORR"], dtype=float)
+                - np.asarray(data["Z_MAG_SB26_CORR"], dtype=float)
+            )
+        elif "R_MAG_SB26" in names and "Z_MAG_SB26" in names:
+            rz_raw = (
+                np.asarray(data["R_MAG_SB26"], dtype=float)
+                - np.asarray(data["Z_MAG_SB26"], dtype=float)
+            )
+        else:
+            return None
+
+        V = np.asarray(data["V_0p4R26"], dtype=float)
+        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        col_abs, col_abs_err, _ = get_mag_cols(names)
+        yhat_raw = np.asarray(data[col_abs], dtype=float)
+        sigma_y_raw = np.asarray(data[col_abs_err], dtype=float)
+        z_col_use = next((c for c in z_col_candidates if c in names), None)
+        zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(V))
+
+    mask = (
+        np.isfinite(V) & np.isfinite(V_err) & (V > 0) & (V_err > 0)
+        & np.isfinite(yhat_raw) & np.isfinite(sigma_y_raw) & (sigma_y_raw >= 0)
+        & np.isfinite(zobs_raw)
+    )
+    return rz_raw[mask]
+
+
+def _apply_main_cuts(cfg, xhat, yhat, zobs=None, rz_color=None):
     """Return boolean mask for MAIN=True using config.json cuts (z cuts intentionally excluded for the MAIN sample)."""
     mask = np.ones(len(xhat), dtype=bool)
     if cfg.get("haty_min") is not None:
@@ -2214,6 +2259,10 @@ def _apply_main_cuts(cfg, xhat, yhat, zobs=None):
     # Redshift cuts are used for TF fitting but the MAIN sample defines
     # the target selection window in phase space regardless of redshift.
     # Therefore, no zobs cut is applied here.
+
+    rz_color_max = cfg.get("rz_color_max")
+    if rz_color_max is not None and rz_color is not None:
+        mask &= np.asarray(rz_color, dtype=float) < rz_color_max
 
     return mask
 
@@ -2273,6 +2322,20 @@ def write_desi_catalog(model, run_dir, fits_path, cfg=None):
         app_err = np.asarray(data[col_abs_err], dtype=float)
         abs_mag = np.asarray(data[col_abs], dtype=float)
         zobs = np.asarray(data[z_col_use], dtype=float)
+
+        # r-z color for color cut (None if z-band columns unavailable)
+        if "R_MAG_SB26_CORR" in names and "Z_MAG_SB26_CORR" in names:
+            rz_color: np.ndarray | None = (
+                np.asarray(data["R_MAG_SB26_CORR"], dtype=float)
+                - np.asarray(data["Z_MAG_SB26_CORR"], dtype=float)
+            )
+        elif "R_MAG_SB26" in names and "Z_MAG_SB26" in names:
+            rz_color = (
+                np.asarray(data["R_MAG_SB26"], dtype=float)
+                - np.asarray(data["Z_MAG_SB26"], dtype=float)
+            )
+        else:
+            rz_color = None
 
     with np.errstate(invalid="ignore", divide="ignore"):
         xhat = np.where(V > 0, np.log10(V / 100.0), np.nan)
@@ -2353,7 +2416,7 @@ def write_desi_catalog(model, run_dir, fits_path, cfg=None):
         with open(_p("config.json"), "r") as f:
             cfg = json.load(f)
 
-    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs)
+    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
 
     # 9. Write output FITS: original columns + five new columns
     new_cols = [
@@ -2661,7 +2724,9 @@ def write_cov(model, run_dir, fits_path, cfg=None):
         zobs_star_full,
     ) = load_xy_and_uncertainties_from_desi(fits_path, row=None, sort_by_zobs=False)
 
-    main = _apply_main_cuts(cfg, xhat_star_full, yhat_star_full, zobs=zobs_star_full)
+    rz_color_full = _load_rz_color_from_desi(fits_path)
+
+    main = _apply_main_cuts(cfg, xhat_star_full, yhat_star_full, zobs=zobs_star_full, rz_color=rz_color_full)
     xhat_star = xhat_star_full[main]
     sigma_x_star = sigma_x_star_full[main]
     sigma_y_star = sigma_y_star_full[main]

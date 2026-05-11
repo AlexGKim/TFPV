@@ -19,6 +19,7 @@ from predict import (
     read_cmdstan_posterior,
     create_average_grid_image,
     _apply_main_cuts,
+    _load_rz_color_from_desi,
 )
 from mag_utils import get_mag_cols
 
@@ -453,7 +454,8 @@ def DESI_color(
     sigma_y = sd_pred
 
     # MAIN sample mask
-    main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star)
+    rz_color_desi = _load_rz_color_from_desi(galaxy_fits)
+    main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star, rz_color=rz_color_desi)
 
     xhat_main = xhat_star[main_mask]
     sigma_x_main = sigma_x_star[main_mask]
@@ -528,7 +530,11 @@ def DESI_color(
     plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*, \hat{z}_*] - \hat{y}_{\text{obs}}$ (mag)")
     plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
     plt.legend()
-    plt.ylim((-8, 4))
+    # Set y-limits based on MAIN sample range with 10% padding
+    y_min_main, y_max_main = np.min(mean_y_main), np.max(mean_y_main)
+    y_range = y_max_main - y_min_main
+    y_pad = 0.1 * y_range if y_range > 0 else 1.0
+    plt.ylim((y_min_main - y_pad, y_max_main + y_pad))
     plt.savefig(_p("redshift_color.png"), dpi=300)
     plt.clf()
 
@@ -616,6 +622,20 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
         else:
             raise ValueError("No z-band magnitude column found for color model.")
 
+        # r-z apparent color for the MAIN selection cut
+        if "R_MAG_SB26_CORR" in names and "Z_MAG_SB26_CORR" in names:
+            rz_color: np.ndarray | None = (
+                np.asarray(data["R_MAG_SB26_CORR"], dtype=float)
+                - np.asarray(data["Z_MAG_SB26_CORR"], dtype=float)
+            )
+        elif "R_MAG_SB26" in names and "Z_MAG_SB26" in names:
+            rz_color = (
+                np.asarray(data["R_MAG_SB26"], dtype=float)
+                - np.asarray(data["Z_MAG_SB26"], dtype=float)
+            )
+        else:
+            rz_color = None
+
     with np.errstate(invalid="ignore", divide="ignore"):
         xhat = np.where(V > 0, np.log10(V / 100.0), np.nan)
         sigma_x = np.where(V > 0, V_err / (V * np.log(10.0)), np.nan)
@@ -674,7 +694,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
         with open(_p("config.json"), "r") as f:
             cfg = json.load(f)
 
-    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs)
+    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
 
     new_cols = [
         fits.Column(name="MU_TF", format="E", array=MU_TF.astype(np.float32)),
@@ -870,7 +890,8 @@ def write_cov_color(run_dir, fits_path, cfg=None):
      zhat_full, sigma_z_full, _zobs) = load_xyz_and_uncertainties_from_desi(fits_path)
     x_bar = input_data.get("mean_x", float(np.mean(xhat_full)))
 
-    main = _apply_main_cuts(cfg, xhat_full, yhat_full)
+    rz_color_full = _load_rz_color_from_desi(fits_path)
+    main = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
     xhat_star = xhat_full[main]
     sigma_x_star = sigma_x_full[main]
     sigma_y_star = sigma_y_full[main]
@@ -933,16 +954,16 @@ if __name__ == "__main__":
         help="Grid resolution for diagnostic plots (default: 50)",
     )
     parser.add_argument(
-        "--catalog",
+        "--no-catalog",
         action="store_true",
         default=False,
-        help="Write color_catalog.fits augmented with MU_TF, MU_ERR, LOGDIST, LOGDIST_ERR, MAIN",
+        help="Skip writing color_catalog.fits",
     )
     parser.add_argument(
-        "--cov",
+        "--no-cov",
         action="store_true",
         default=False,
-        help="Compute and write color_cov.fits posterior predictive covariance matrix",
+        help="Skip computing and writing color_cov.fits posterior predictive covariance matrix",
     )
     args = parser.parse_args()
 
@@ -958,8 +979,8 @@ if __name__ == "__main__":
         grid_resolution_y=args.grid_resolution,
     )
 
-    if args.catalog:
+    if not args.no_catalog:
         write_desi_catalog_color(_run_dir, _fits_path, cfg=_cfg)
 
-    if args.cov:
+    if not args.no_cov:
         write_cov_color(_run_dir, _fits_path, cfg=_cfg)

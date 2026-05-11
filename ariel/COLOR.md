@@ -27,20 +27,19 @@ Convert the FITS file to Stan JSON format, including z-band magnitudes and color
 
 ```bash
 # via config
-python desi_data.py --config $CONFIG --color
+python desi_data.py --config $CONFIG
 
 # via flags
 python desi_data.py --input $FITS --run $RUN \
     --haty_min -21.5 --haty_max -19.0 \
     --slope_plane -6.386925076468424 --intercept_plane -20.74814050932727 --intercept_plane2 -18.31309635087515 \
-    --z_obs_min 0.03 --z_obs_max 0.08 \
-    --color
+    --z_obs_min 0.03 --z_obs_max 0.08
 ```
 
-The `--color` flag causes `desi_data.py` to:
-- Load z-band magnitudes from the FITS catalog (columns Z_MAG_SB26 or Z_ABSMAG_SB26)
-- Compute z-band absolute magnitudes and uncertainties
-- Write z-band data and sample mean color c_bar_obs to `output/$RUN/input.json`
+`desi_data.py` always loads z-band data when available:
+- Loads z-band magnitudes from the FITS catalog (columns Z_MAG_SB26_CORR or Z_MAG_SB26)
+- Computes z-band absolute magnitudes and uncertainties
+- Writes z-band data and sample mean color c_bar_obs to `output/$RUN/input.json`
 
 Inspect the scatter plot to verify the selection looks correct:
 
