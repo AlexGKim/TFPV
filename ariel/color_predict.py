@@ -574,7 +574,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
 
     New columns added (matching predict.py write_desi_catalog):
       MU_TF        = R_MAG_SB26_CORR - mean_pred
-      MU_ERR       = sqrt(R_MAG_SB26_CORR_ERR^2 + sd_pred^2)
+      MU_ERR       = sd_pred  (sd_pred already includes σ_{y,★} via A₁₁)
       LOGDIST      = 0.2 * ((R_MAG_SB26 - R_ABSMAG_SB26) - MU_TF)
       LOGDIST_ERR  = 0.2 * MU_ERR
       MAIN         = bool (True if passes selection cuts from config.json)
@@ -692,7 +692,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
     sd_pred_full[valid] = sd_pred_valid
 
     MU_TF = app - mean_pred_full
-    MU_ERR = np.sqrt(app_err**2 + sd_pred_full**2)
+    MU_ERR = sd_pred_full  # sd_pred already includes σ_{y,★} via A₁₁
     MU_ZCMB = app - abs_mag
     LOGDIST = 0.2 * (MU_ZCMB - MU_TF)
     LOGDIST_ERR = 0.2 * MU_ERR
@@ -928,12 +928,9 @@ def write_cov_color(run_dir, fits_path, cfg=None):
     idx = rng.choice(G, size=n_sub, replace=False)
     idx.sort()
 
-    # Subset plot without obs-magnitude uncertainty on diagonal
+    # σ²_{y,★} is already included in the diagonal via A₁₁; no further addition needed.
     cov_sub_noobs = cov[np.ix_(idx, idx)]
     plot_cov(cov_sub_noobs, _p("color_cov_sub_noobs.png"))
-
-    # Add obs-magnitude variance to diagonal before saving
-    np.fill_diagonal(cov, np.diag(cov) + sigma_y_star**2)
 
     fits_out = _p("color_cov.fits")
     hdr = fits.Header()
