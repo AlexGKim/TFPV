@@ -1034,13 +1034,11 @@ Additional priors:
 \end{align}
 where $\bar{c}_{\mathrm{obs}} \equiv N^{-1}\sum_i (\hat{y}_i - \hat{z}_i)$ is
 the sample mean observed color.
-The prior on $\gamma$ is restricted to $\gamma < 0$, encoding the physical
-expectation that redder galaxies are brighter at fixed rotation velocity
-(i.e., dust reddening makes them appear fainter in $r$-band, so the
-intrinsically brighter ones are redder).
+The prior on $\gamma$ is restricted to $\gamma < 0$.
 Without this constraint, the likelihood admits a near-degenerate solution
 at $\gamma > 0$ in which the roles of $\sigma_{\mathrm{int},y}$ and
-$\sigma_{\mathrm{int},z}$ are exchanged, with comparable posterior density.
+$\sigma_{\mathrm{int},z}$ are exchanged; fits to the data show that
+the $\gamma < 0$ mode has substantially higher posterior probability.
 
 \subsection{Marginalization over Latent Variables}
 \label{sec:cc:marginalization}
