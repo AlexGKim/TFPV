@@ -622,7 +622,7 @@ parameters {
   real<lower=0, upper=1> sigma_int_z;
 
   // [COLOR] color-correction parameters (Eqs. C29-C32)
-  real gamma;            // luminosity-color slope at fixed velocity          (Eq. C29)
+  real<upper=0>  gamma;            // luminosity-color slope at fixed velocity          (Eq. C29)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
   real mu_c;             // mean color at x = x_bar                          (Eq. C31)
   real<lower=0> tau_c;   // intrinsic color scatter; lower=0 -> half-Cauchy  (Eq. C32)

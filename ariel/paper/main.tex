@@ -1026,13 +1026,21 @@ The parameters $\alpha$, $\beta$, $\sigma_{\mathrm{int},x}$, $\sigma_{\mathrm{in
 inherit the priors of the baseline model (Appendix~\ref{sec:likelihood}).
 Additional priors:
 \begin{align}
-\gamma &\sim \mathcal{N}(0,\,1), \label{eq:cc:gamma_prior}\\
+\gamma &\sim \mathcal{N}(0,\,1)\;\text{truncated to }\gamma < 0, \label{eq:cc:gamma_prior}\\
 \delta &\sim \mathcal{N}(0,\,1), \label{eq:cc:delta_prior}\\
 \mu_c  &\sim \mathcal{N}(\bar{c}_{\mathrm{obs}},\,1), \label{eq:cc:muc_prior}\\
-\tau_c &\sim \mathrm{Half\text{-}Cauchy}(0,\,0.3), \label{eq:cc:tauc_prior}
+\tau_c &\sim \mathrm{Half\text{-}Cauchy}(0,\,0.3), \label{eq:cc:tauc_prior}\\
+\sigma_{\mathrm{int},z} &\sim \mathrm{Half\text{-}Cauchy}(0,\,1), \label{eq:cc:sigz_prior}
 \end{align}
 where $\bar{c}_{\mathrm{obs}} \equiv N^{-1}\sum_i (\hat{y}_i - \hat{z}_i)$ is
 the sample mean observed color.
+The prior on $\gamma$ is restricted to $\gamma < 0$, encoding the physical
+expectation that redder galaxies are brighter at fixed rotation velocity
+(i.e., dust reddening makes them appear fainter in $r$-band, so the
+intrinsically brighter ones are redder).
+Without this constraint, the likelihood admits a near-degenerate solution
+at $\gamma > 0$ in which the roles of $\sigma_{\mathrm{int},y}$ and
+$\sigma_{\mathrm{int},z}$ are exchanged, with comparable posterior density.
 
 \subsection{Marginalization over Latent Variables}
 \label{sec:cc:marginalization}
