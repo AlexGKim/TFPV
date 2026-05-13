@@ -392,6 +392,151 @@ def ystar_pp_mean_sd_color_vectorized(
     return mean_y, sd_y
 
 
+def ystar_pp_mean_sd_color_xonly_vectorized(
+    draws,
+    xhat_star,
+    sigma_x_star,
+    *,
+    sigma_y_star,
+    y_min,
+    y_max,
+    on_bad_Z="raise",
+    Z_floor=1e-300,
+):
+    """
+    Posterior predictive mean and SD of ŷ_* using only x̂_* (no z-band).
+
+    Marginalizes ẑ out of the trivariate distribution (Eq. C.trivariate).
+    Since B[1,2]=0, ŷ ⊥ x̂ | y_TF, giving:
+
+        ŷ_* | y_TF ~ N(y_TF, A₁₁)
+
+    where A₁₁ = γ²τ_c² + σ²_{int,y} + σ²_{y,*}.
+    This is the baseline tophat structure with σ²_{2,*} replaced by A₁₁.
+    See paper/main.tex §sec:cc:x_only.
+
+    Parameters
+    ----------
+    draws : DataFrame
+        MCMC posterior with columns: "slope", "intercept.1", "sigma_int_x",
+        "sigma_int_y", "gamma", "tau_c".
+    xhat_star : (G,) array — observed log-velocity
+    sigma_x_star : (G,) array — uncertainty on x̂
+    sigma_y_star : (G,) array — measurement uncertainty on ŷ (enters A₁₁)
+    y_min, y_max : float — tophat prior bounds on y_TF
+    on_bad_Z : {"raise", "floor"}
+    Z_floor : float
+
+    Returns
+    -------
+    mean_y : (G,) array — posterior predictive mean of ŷ_*
+    sd_y : (G,) array — posterior predictive SD of ŷ_*
+    """
+    xhat_star = np.asarray(xhat_star, dtype=float)
+    sigma_x_star = np.asarray(sigma_x_star, dtype=float)
+    sigma_y_star = np.asarray(sigma_y_star, dtype=float)
+
+    a = float(y_min)
+    b = float(y_max)
+    if not (a < b):
+        raise ValueError(f"Require y_min < y_max; got y_min={a}, y_max={b}.")
+
+    # Extract draws (M,)
+    alpha = draws["slope"].to_numpy(float)
+    beta = draws["intercept.1"].to_numpy(float)
+    six = draws["sigma_int_x"].to_numpy(float)
+    siy = draws["sigma_int_y"].to_numpy(float)
+    gamma = draws["gamma"].to_numpy(float)
+    tau_c = draws["tau_c"].to_numpy(float)
+
+    if np.any(alpha == 0):
+        raise ValueError("Found slope == 0 in draws; model requires α ≠ 0.")
+
+    # Broadcast to (M, G)
+    aMG = alpha[:, None]
+    bMG = beta[:, None]
+    sixMG = six[:, None]
+    siyMG = siy[:, None]
+    gMG = gamma[:, None]
+    tcMG = tau_c[:, None]
+
+    # A₁₁ = γ²τ_c² + σ²_{int,y} + σ²_{y,*}  (Eq. C.A, marginalizing ẑ)
+    A11 = gMG**2 * tcMG**2 + siyMG**2 + sigma_y_star[None, :] ** 2  # (M, G)
+
+    # Truncated normal posterior for y_TF | x̂  (identical to baseline)
+    sigma1_sq = sixMG**2 + sigma_x_star[None, :] ** 2  # (M, G)
+    mu_L = bMG + aMG * xhat_star[None, :]  # (M, G)
+    sigma_L_sq = aMG**2 * sigma1_sq  # (M, G)
+    sigma_L = np.sqrt(sigma_L_sq)  # (M, G)
+
+    mean_yTF = np.empty_like(mu_L)
+    var_yTF = np.empty_like(mu_L)
+
+    deg = sigma_L == 0.0
+    if np.any(deg):
+        mu_deg = mu_L[deg]
+        ok = (mu_deg >= a) & (mu_deg <= b)
+        if not np.all(ok):
+            raise ValueError("Encountered sigma_L == 0 with mu_L outside [y_min,y_max].")
+        mean_yTF[deg] = mu_deg
+        var_yTF[deg] = 0.0
+
+    nd = ~deg
+    if np.any(nd):
+        mu = mu_L[nd]
+        sig = sigma_L[nd]
+
+        alpha_tn = (a - mu) / sig
+        beta_tn = (b - mu) / sig
+
+        use_sf = alpha_tn >= 0.0
+        log_sf_a = norm.logsf(alpha_tn)
+        log_sf_b = norm.logsf(beta_tn)
+        log_cdf_a = norm.logcdf(alpha_tn)
+        log_cdf_b = norm.logcdf(beta_tn)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            log_Z_sf = log_sf_a + np.log1p(
+                -np.exp(np.clip(log_sf_b - log_sf_a, -np.inf, 0.0))
+            )
+            log_Z_cdf = log_cdf_b + np.log1p(
+                -np.exp(np.clip(log_cdf_a - log_cdf_b, -np.inf, 0.0))
+            )
+        log_Z = np.where(use_sf, log_Z_sf, log_Z_cdf)
+
+        if on_bad_Z == "raise":
+            if np.any(~np.isfinite(log_Z)):
+                raise ValueError("log(Z) is non-finite for some (draw, galaxy).")
+        elif on_bad_Z == "floor":
+            log_Z = np.maximum(log_Z, np.log(Z_floor))
+        else:
+            raise ValueError("on_bad_Z must be 'raise' or 'floor'.")
+
+        log_phi_a = norm.logpdf(alpha_tn)
+        log_phi_b = norm.logpdf(beta_tn)
+        la = np.exp(log_phi_a - log_Z)
+        lb = np.exp(log_phi_b - log_Z)
+
+        t = la - lb
+        m = mu + sig * t
+        u = alpha_tn * la - beta_tn * lb
+        v = (sig**2) * (1.0 + u - t**2)
+        v = np.maximum(v, 0.0)
+
+        mean_yTF[nd] = m
+        var_yTF[nd] = v
+
+    # Var[ŷ | x̂, θ] = A₁₁ + V_*(θ)  (Eq. cc:var_xonly)
+    cond_mean = mean_yTF  # (M, G)
+    cond_var = A11 + var_yTF  # (M, G)
+
+    # Mix over draws
+    mean_y = cond_mean.mean(axis=0)  # (G,)
+    var_y = cond_var.mean(axis=0) + (cond_mean**2).mean(axis=0) - mean_y**2
+    sd_y = np.sqrt(np.maximum(var_y, 0.0))
+
+    return mean_y, sd_y
+
+
 def DESI_color(
     run_dir=None,
     grid_resolution_x=50,
@@ -724,6 +869,134 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
     print(f"  MU_TF finite: {np.isfinite(MU_TF).sum()} objects")
 
 
+def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None):
+    """
+    Augment a DESI FITS catalog with color-model TFR predictions using x̂ only
+    (no z-band), writing to output/<run>/color_xonly_catalog.fits.
+
+    Uses ystar_pp_mean_sd_color_xonly_vectorized: ŷ conditioned on x̂ alone,
+    with A₁₁ = γ²τ_c² + σ²_{int,y} + σ²_{y,★} replacing σ²_{2,★}.
+    See paper/main.tex §sec:cc:x_only.
+
+    New columns (same as color_catalog.fits):
+      MU_TF, MU_ERR, LOGDIST, LOGDIST_ERR, MAIN
+    """
+    _p = lambda name: os.path.join(run_dir, name)
+
+    z_col_candidates = ("Z_DESI", "zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE")
+
+    with fits.open(fits_path) as hdul:
+        primary_hdu = hdul[0].copy()
+        table_hdu = hdul[1].copy()
+        data = hdul[1].data  # type: ignore[union-attr]
+        names = set(data.dtype.names or ())
+        n_rows = len(data)
+
+        z_col_use = None
+        for cand in z_col_candidates:
+            if cand in names:
+                z_col_use = cand
+                break
+        if z_col_use is None:
+            raise ValueError(
+                f"Could not find redshift column. Tried: {z_col_candidates}. "
+                f"Available: {sorted(list(names))[:30]} ..."
+            )
+
+        col_abs, col_abs_err, col_app = get_mag_cols(names)
+
+        V = np.asarray(data["V_0p4R26"], dtype=float)
+        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        app = np.asarray(data[col_app], dtype=float)
+        app_err = np.asarray(data[col_abs_err], dtype=float)
+        abs_mag = np.asarray(data[col_abs], dtype=float)
+        zobs = np.asarray(data[z_col_use], dtype=float)
+
+        if "R_MAG_SB26_CORR" in names and "Z_MAG_SB26_CORR" in names:
+            rz_color: np.ndarray | None = (
+                np.asarray(data["R_MAG_SB26_CORR"], dtype=float)
+                - np.asarray(data["Z_MAG_SB26_CORR"], dtype=float)
+            )
+        elif "R_MAG_SB26" in names and "Z_MAG_SB26" in names:
+            rz_color = (
+                np.asarray(data["R_MAG_SB26"], dtype=float)
+                - np.asarray(data["Z_MAG_SB26"], dtype=float)
+            )
+        else:
+            rz_color = None
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        xhat = np.where(V > 0, np.log10(V / 100.0), np.nan)
+        sigma_x = np.where(V > 0, V_err / (V * np.log(10.0)), np.nan)
+
+    valid = (
+        np.isfinite(V)
+        & (V > 0)
+        & np.isfinite(V_err)
+        & (V_err > 0)
+        & np.isfinite(xhat)
+        & np.isfinite(sigma_x)
+        & (sigma_x > 0)
+    )
+
+    draws = read_cmdstan_posterior(
+        _p("color_?.csv"),
+        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+              "gamma", "tau_c"],
+        drop_diagnostics=True,
+    )
+
+    with open(_p("input.json"), "r") as f:
+        input_data = json.load(f)
+    y_min = input_data["y_min"]
+    y_max = input_data["y_max"]
+
+    mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_color_xonly_vectorized(
+        draws,
+        xhat[valid],
+        sigma_x[valid],
+        sigma_y_star=app_err[valid],
+        y_min=y_min,
+        y_max=y_max,
+        on_bad_Z="floor",
+        Z_floor=1e-300,
+    )
+
+    mean_pred_full = np.full(n_rows, np.nan)
+    sd_pred_full = np.full(n_rows, np.nan)
+    mean_pred_full[valid] = mean_pred_valid
+    sd_pred_full[valid] = sd_pred_valid
+
+    MU_TF = app - mean_pred_full
+    MU_ERR = sd_pred_full  # sd_pred includes σ_{y,★} via A₁₁
+    MU_ZCMB = app - abs_mag
+    LOGDIST = 0.2 * (MU_ZCMB - MU_TF)
+    LOGDIST_ERR = 0.2 * MU_ERR
+
+    if not cfg:
+        with open(_p("config.json"), "r") as f:
+            cfg = json.load(f)
+
+    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+
+    new_cols = [
+        fits.Column(name="MU_TF", format="E", array=MU_TF.astype(np.float32)),
+        fits.Column(name="MU_ERR", format="E", array=MU_ERR.astype(np.float32)),
+        fits.Column(name="LOGDIST", format="E", array=LOGDIST.astype(np.float32)),
+        fits.Column(name="LOGDIST_ERR", format="E", array=LOGDIST_ERR.astype(np.float32)),
+        fits.Column(name="MAIN", format="L", array=main),
+    ]
+    all_cols = fits.ColDefs(list(table_hdu.columns) + new_cols)
+    new_table_hdu = fits.BinTableHDU.from_columns(all_cols)
+    out_hdul = fits.HDUList([primary_hdu, new_table_hdu])
+    out_path = _p("color_xonly_catalog.fits")
+    out_hdul.writeto(out_path, overwrite=True)
+
+    print(f"Written {n_rows} rows to {out_path}")
+    print(f"  MAIN: {main.sum()} objects pass selection cuts")
+    print(f"  MU_TF finite: {np.isfinite(MU_TF).sum()} objects")
+
+
 def ystar_pp_cov_color_vectorized(
     draws,
     xhat_star,
@@ -979,6 +1252,12 @@ if __name__ == "__main__":
         default=False,
         help="Skip computing and writing color_cov.fits posterior predictive covariance matrix",
     )
+    parser.add_argument(
+        "--xonly",
+        action="store_true",
+        default=False,
+        help="Also write color_xonly_catalog.fits using x̂ only (no z-band)",
+    )
     args = parser.parse_args()
 
     import json as _json
@@ -998,3 +1277,6 @@ if __name__ == "__main__":
 
     if not args.no_cov:
         write_cov_color(_run_dir, _fits_path, cfg=_cfg)
+
+    if args.xonly:
+        write_desi_catalog_color_xonly(_run_dir, _fits_path, cfg=_cfg)

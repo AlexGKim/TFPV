@@ -1274,6 +1274,48 @@ where the $\hat{z}$ factor is independent of $\hat{y}$ and contributes only
 to the estimation of $(\mu_c, \delta, \sigma_{\mathrm{int},z})$, not to the
 $r$-band prediction.
 
+\subsection{Prediction from Rotation Velocity Alone}
+\label{sec:cc:x_only}
+
+When the $z$-band observation $\hat{z}_\star$ is not used in the prediction,
+one marginalizes the trivariate distribution
+(Eq.~\eqref{eq:cc:trivariate}) over $\hat{z}_\star$.
+The marginal of $(\hat{x}_\star, \hat{y}_\star)$ given $y_{\mathrm{TF},\star}$
+is obtained by taking the upper-left $2\times 2$ block of $\boldsymbol{B}_\star$
+(Eq.~\eqref{eq:cc:B}).
+Since $B_{12} = 0$, the two components are independent at fixed
+$y_{\mathrm{TF},\star}$:
+\begin{equation}
+\hat{y}_\star \mid y_{\mathrm{TF},\star}
+\;\sim\;
+\mathcal{N}\!\bigl(y_{\mathrm{TF},\star},\;A_{11}\bigr),
+\label{eq:cc:y_given_yTF_xonly}
+\end{equation}
+with $A_{11} = \gamma^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{y,\star}^2$
+as before.
+The posterior of $y_{\mathrm{TF},\star}$ given $\hat{x}_\star$ is the same
+truncated normal as in the baseline model (Eq.~\eqref{eq:post_yTF_tophat}),
+with mean $\mu_\star(\theta)$ and variance $V_\star(\theta)$.
+By the law of total expectation and variance,
+\begin{align}
+\mathrm{E}[\hat{y}_\star \mid \hat{x}_\star,\,\theta,\,\gamma]
+&= \mu_\star(\theta),
+\label{eq:cc:mean_xonly}\\[4pt]
+\mathrm{Var}[\hat{y}_\star \mid \hat{x}_\star,\,\theta,\,\gamma]
+&= A_{11} + V_\star(\theta).
+\label{eq:cc:var_xonly}
+\end{align}
+The posterior predictive mean and variance over draws follow
+Eqs.~\eqref{eq:cc:pp_mean}--\eqref{eq:cc:pp_var} with
+$\mathrm{E}^{(m)}$ and $\mathrm{Var}^{(m)}$ replaced by the above.
+This is structurally identical to the baseline model
+(Appendix~\ref{sec:infer_single_galaxy_y}) with $\sigma_{2,\star}^2$
+replaced by $A_{11}$.
+The $x$-only prediction yields larger uncertainties than the full
+prediction (Section~\ref{sec:cc:predict}) because it does not exploit the
+information in $\hat{z}_\star$, but it avoids amplifying $z$-band
+photometric errors through the regression coefficient $b_1 = A_{12}/A_{22}$.
+
 \subsection{Model Limitations}
 \label{sec:cc:limitations}
 
