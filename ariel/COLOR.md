@@ -106,10 +106,10 @@ Key parameters to check:
 
 ```bash
 # via config
-python color_predict.py --run-dir output/$RUN
+python color_predict.py --run-dir output/$RUN --xonly
 
 # via flags (if no config available)
-python color_predict.py --run-dir output/$RUN
+python color_predict.py --run-dir output/$RUN --xonly
 ```
 
 The script reads:
