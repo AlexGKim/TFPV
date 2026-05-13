@@ -1151,6 +1151,181 @@ def ystar_pp_cov_color_vectorized(
     return cov
 
 
+def ystar_pp_cov_color_xonly_vectorized(
+    draws,
+    xhat_star,
+    sigma_x_star,
+    *,
+    sigma_y_star,
+    y_min,
+    y_max,
+    on_bad_Z="floor",
+    Z_floor=1e-300,
+    chunk_size=200,
+):
+    """
+    Posterior predictive covariance Cov(ŷ*[g1], ŷ*[g2]) — color model, x̂ only.
+
+    Marginalizes ẑ out (§sec:cc:x_only). Since B[1,2]=0, ŷ ⊥ x̂ | y_TF, so
+    the conditional mean is just mean_yTF and the conditional variance is A₁₁ + V_★.
+    Off-diagonal elements arise from shared uncertainty in θ (same as full model).
+    """
+    xhat_star = np.asarray(xhat_star, dtype=float)
+    sigma_x_star = np.asarray(sigma_x_star, dtype=float)
+    sigma_y_star = np.asarray(sigma_y_star, dtype=float)
+    G = xhat_star.size
+
+    mean_y, _ = ystar_pp_mean_sd_color_xonly_vectorized(
+        draws, xhat_star, sigma_x_star,
+        sigma_y_star=sigma_y_star,
+        y_min=y_min, y_max=y_max,
+        on_bad_Z=on_bad_Z, Z_floor=Z_floor,
+    )
+
+    a = float(y_min)
+    b = float(y_max)
+
+    alpha_d = draws["slope"].to_numpy(float)
+    beta_d = draws["intercept.1"].to_numpy(float)
+    six_d = draws["sigma_int_x"].to_numpy(float)
+    siy_d = draws["sigma_int_y"].to_numpy(float)
+    gamma_d = draws["gamma"].to_numpy(float)
+    tau_c_d = draws["tau_c"].to_numpy(float)
+    M = len(draws)
+
+    accum = np.zeros((G, G), dtype=float)
+    var_accum = np.zeros(G, dtype=float)
+
+    for start in range(0, M, chunk_size):
+        end = min(start + chunk_size, M)
+
+        aMG = alpha_d[start:end, None]
+        bMG = beta_d[start:end, None]
+        sixMG = six_d[start:end, None]
+        siyMG = siy_d[start:end, None]
+        gMG = gamma_d[start:end, None]
+        tcMG = tau_c_d[start:end, None]
+
+        A11 = gMG**2 * tcMG**2 + siyMG**2 + sigma_y_star[None, :]**2
+
+        sigma1_sq = sixMG**2 + sigma_x_star[None, :]**2
+        mu_L = bMG + aMG * xhat_star[None, :]
+        sigma_L_sq = aMG**2 * sigma1_sq
+        sigma_L = np.sqrt(sigma_L_sq)
+
+        mu_chunk = np.empty_like(mu_L)
+        var_chunk = np.empty_like(mu_L)
+
+        deg = sigma_L == 0.0
+        if np.any(deg):
+            mu_chunk[deg] = mu_L[deg]
+            var_chunk[deg] = 0.0
+
+        nd = ~deg
+        if np.any(nd):
+            mu = mu_L[nd]
+            sig = sigma_L[nd]
+            alpha_tn = (a - mu) / sig
+            beta_tn = (b - mu) / sig
+
+            use_sf = alpha_tn >= 0.0
+            log_sf_a = norm.logsf(alpha_tn)
+            log_sf_b = norm.logsf(beta_tn)
+            log_cdf_a = norm.logcdf(alpha_tn)
+            log_cdf_b = norm.logcdf(beta_tn)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                log_Z_sf = log_sf_a + np.log1p(
+                    -np.exp(np.clip(log_sf_b - log_sf_a, -np.inf, 0.0))
+                )
+                log_Z_cdf = log_cdf_b + np.log1p(
+                    -np.exp(np.clip(log_cdf_a - log_cdf_b, -np.inf, 0.0))
+                )
+            log_Z = np.where(use_sf, log_Z_sf, log_Z_cdf)
+            log_Z = np.maximum(log_Z, np.log(Z_floor))
+
+            la = np.exp(norm.logpdf(alpha_tn) - log_Z)
+            lb = np.exp(norm.logpdf(beta_tn) - log_Z)
+            t = la - lb
+            u = alpha_tn * la - beta_tn * lb
+            mu_chunk[nd] = mu + sig * t
+            var_chunk[nd] = np.maximum(sig**2 * (1.0 + u - t**2), 0.0)
+
+        # Conditional mean = mean_yTF (no color correction, ẑ marginalized out)
+        cond_mean_chunk = mu_chunk  # (B, G)
+
+        # Conditional variance = A₁₁ + V_★ (dmu_dyTF = 1)
+        cond_var_chunk = A11 + var_chunk  # (B, G)
+
+        mu_centered = cond_mean_chunk - mean_y[None, :]
+        accum += mu_centered.T @ mu_centered
+        var_accum += cond_var_chunk.sum(axis=0)
+
+    cov = accum / M
+    np.fill_diagonal(cov, np.diag(cov) + var_accum / M)
+    return cov
+
+
+def write_cov_color_xonly(run_dir, fits_path, cfg=None):
+    """
+    Compute and save the posterior predictive covariance matrix for the color
+    model using x̂ only (no z-band).
+
+    Outputs:
+      output/<run>/color_xonly_cov.fits  — full (G, G) float32 covariance matrix
+    """
+    from predict import plot_cov
+
+    _p = lambda name: os.path.join(run_dir, name)
+
+    if not cfg:
+        with open(_p("config.json")) as f:
+            cfg = json.load(f)
+
+    with open(_p("input.json")) as f:
+        input_data = json.load(f)
+    y_min = input_data["y_min"]
+    y_max = input_data["y_max"]
+
+    (xhat_full, sigma_x_full, yhat_full, sigma_y_full,
+     _zhat_full, _sigma_z_full, _zobs) = load_xyz_and_uncertainties_from_desi(fits_path)
+
+    rz_color_full = _load_rz_color_from_desi(fits_path)
+    main = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
+    xhat_star = xhat_full[main]
+    sigma_x_star = sigma_x_full[main]
+    sigma_y_star = sigma_y_full[main]
+
+    draws = read_cmdstan_posterior(
+        _p("color_?.csv"),
+        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+              "gamma", "tau_c"],
+        drop_diagnostics=True,
+    )
+
+    cov = ystar_pp_cov_color_xonly_vectorized(
+        draws, xhat_star, sigma_x_star,
+        sigma_y_star=sigma_y_star,
+        y_min=y_min, y_max=y_max,
+    )
+
+    fits_out = _p("color_xonly_cov.fits")
+    hdr = fits.Header()
+    hdr["COMMENT"] = "Posterior predictive covariance matrix (float32), x-hat only"
+    hdr["COMMENT"] = f"Row/col order: MAIN=True rows of color_xonly_catalog.fits"
+    hdr["MODEL"] = "color_xonly"
+    hdr["RUN"] = os.path.basename(run_dir)
+    fits.writeto(fits_out, cov.astype(np.float32), header=hdr, overwrite=True)
+    print(f"Saved xonly covariance FITS to {fits_out}")
+
+    G = cov.shape[0]
+    n_sub = min(512, G)
+    rng = np.random.default_rng(0)
+    idx = rng.choice(G, size=n_sub, replace=False)
+    idx.sort()
+    cov_sub = cov[np.ix_(idx, idx)]
+    plot_cov(cov_sub, _p("color_xonly_cov_sub.png"))
+
+
 def write_cov_color(run_dir, fits_path, cfg=None):
     """
     Compute and save the posterior predictive covariance matrix for the color model.
@@ -1280,3 +1455,4 @@ if __name__ == "__main__":
 
     if args.xonly:
         write_desi_catalog_color_xonly(_run_dir, _fits_path, cfg=_cfg)
+        write_cov_color_xonly(_run_dir, _fits_path, cfg=_cfg)
