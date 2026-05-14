@@ -512,6 +512,9 @@ data {
 
   // [COLOR] sample-mean observed color = mean(y - z); used as prior mean for mu_c (Eq. C31)
   real c_bar_obs;
+
+  // [KCORR] per-galaxy redshift, used by the latent k-correction term
+  vector<lower=0>[N_total] z_obs;
 }
 transformed data {
   real mean_x = mean(x);
@@ -626,6 +629,10 @@ parameters {
   real delta_c;          // population color-velocity slope                   (Eq. C30)
   real mu_c;             // mean color at x = x_bar                          (Eq. C31)
   real<lower=0> tau_c;   // intrinsic color scatter; lower=0 -> half-Cauchy  (Eq. C32)
+
+  // [KCORR] latent k-correction parameter
+  // Augments ŷ_obs by ΔM = alpha_kcorr * z_obs[n] (color-independent redshift trend).
+  real<upper=0> alpha_kcorr;
 }
 transformed parameters {
   real sigma_int_x_std;
@@ -647,20 +654,27 @@ model {
   mu_c    ~ normal(c_bar_obs, 1);
   tau_c   ~ cauchy(0, 0.3);            // half-Cauchy because tau_c has lower=0
 
+  // [KCORR] Prior for latent k-correction parameter
+  // |k-corr error| at z=0.1 is plausibly < 0.5 mag, so |alpha|*z_max ~ 0.5 -> scale 5 is wide.
+  alpha_kcorr ~ normal(0, 5);
+
   // Per-galaxy variances in standardized x-coordinates
   vector[N_total] sigmasq1_std = square(sigma_int_x_std) + sigma_x_std_sq;
   vector[N_total] sigma1_std   = sqrt(sigmasq1_std);
-
-  // [COLOR] A_i matrix scalar entries that don't depend on per-galaxy noise (Eq. C17)
-  real A11_base = square(gamma) * square(tau_c) + square(sigma_int_y);
-  real A12      = gamma * (gamma - 1.0) * square(tau_c);
-  real A22_base = square(gamma - 1.0) * square(tau_c) + square(sigma_int_z);
 
   if (y_TF_limits != 0) {
     int K = 8;
     real y_star = fmin(y_max, fmax(y_min, 0.5 * (haty_min + haty_max)));
 
+    // [COLOR] A_i matrix scalar entries that don't depend on per-galaxy noise (Eq. C17)
+    real A11_base = square(gamma) * square(tau_c) + square(sigma_int_y);
+    real A12      = gamma * (gamma - 1.0) * square(tau_c);
+    real A22_base = square(gamma - 1.0) * square(tau_c) + square(sigma_int_z);
+
     for (n in 1 : N_total) {
+      // [KCORR] Per-galaxy k-correction mean shift (Eq. C17)
+      real alpha_zn = alpha_kcorr * z_obs[n];
+
       // [COLOR] Per-galaxy A_i diagonal entries (Eq. C17)
       real A11 = A11_base + sigma_y_sq[n];
       real A22 = A22_base + sigma_z_sq[n];
@@ -703,9 +717,10 @@ model {
           real u_k  = mid1 + half1 * gl_x_8[k];
           real y_tf = haty_min + sigma_eff * sinh(u_k);
           real mu_x = (y_tf - intercept_std[bin_idx]) / slope_std;   // Eq. C21 mean[1]
+          // [KCORR] alpha_zn shifts both y_obs and z_obs means (since z = y - c, shift carries through)
           vector[3] mu = [mu_x,
-                          y_tf,
-                          y_tf - mu_c - delta_c * mu_x]';             // Eq. C21 mean[2,3]
+                          y_tf + alpha_zn,
+                          y_tf + alpha_zn - mu_c - delta_c * mu_x]'; // Eq. C21 mean[2,3]
           real log_w = log(gl_w_8[k]) + log(sigma_eff) + log(cosh(u_k)) + log(half1);
           lterms[k] = log_w + multi_normal_cholesky_lpdf(obs | mu, L_B);
         }
@@ -723,9 +738,10 @@ model {
           real u_k  = mid2 + half2 * gl_x_8[k];
           real y_tf = haty_max - sigma_eff * sinh(u_k);
           real mu_x = (y_tf - intercept_std[bin_idx]) / slope_std;
+          // [KCORR] alpha_zn shifts both y_obs and z_obs means
           vector[3] mu = [mu_x,
-                          y_tf,
-                          y_tf - mu_c - delta_c * mu_x]';
+                          y_tf + alpha_zn,
+                          y_tf + alpha_zn - mu_c - delta_c * mu_x]';
           real log_w = log(gl_w_8[k]) + log(sigma_eff) + log(cosh(u_k)) + log(half2);
           lterms[k] = log_w + multi_normal_cholesky_lpdf(obs | mu, L_B);
         }
@@ -737,12 +753,18 @@ model {
 
       // [COLOR] Selection probability: same sinh-GL machinery as tophat.stan,
       // but sigma2 -> sqrt(A11) (Appendix C §C.3; hat_z does not enter selection cuts)
+      // [KCORR] Selection acts on the observed y_obs which the model now says is
+      // y_TF + alpha_zn + noise. To translate the y_obs cuts (haty_min, haty_max,
+      // and the plane intercepts) into y_TF-space cuts, subtract alpha_zn from each.
       if (y_selection != 0 && plane_cut == 1) {
         target += -log(
           integrate_binormal_strip_sinh2_gl(
-            y_min, y_max, haty_min, haty_max,
+            y_min, y_max,
+            haty_min - alpha_zn, haty_max - alpha_zn,
             slope_std, intercept_std[bin_idx],
-            slope_plane_std, intercept_plane_std, intercept_plane2_std,
+            slope_plane_std,
+            intercept_plane_std  - alpha_zn,
+            intercept_plane2_std - alpha_zn,
             sigma1_std[n],
             sigma_eff,       // [COLOR] sqrt(A11) replaces sqrt(sigmasq2)
             gl_x_8, gl_w_8

@@ -200,6 +200,7 @@ def ystar_pp_mean_sd_color_vectorized(
     x_bar,
     y_min,
     y_max,
+    zobs_star,
     on_bad_Z="raise",
     Z_floor=1e-300,
 ):
@@ -213,7 +214,7 @@ def ystar_pp_mean_sd_color_vectorized(
     ----------
     draws : DataFrame
         MCMC posterior with columns: "slope", "intercept.1", "sigma_int_x",
-        "sigma_int_y", "gamma", "delta_c", "mu_c", "tau_c".
+        "sigma_int_y", "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c", "alpha_kcorr".
     xhat_star : (G,) array — observed log-velocity
     sigma_x_star : (G,) array — uncertainty on x̂
     zhat_star : (G,) array — observed z-band absolute magnitude
@@ -250,6 +251,9 @@ def ystar_pp_mean_sd_color_vectorized(
     delta = draws["delta_c"].to_numpy(float)
     mu_c = draws["mu_c"].to_numpy(float)
     tau_c = draws["tau_c"].to_numpy(float)
+    alpha_k = draws["alpha_kcorr"].to_numpy(float)  # (M,) k-correction slope, upper=0
+
+    zobs_star = np.asarray(zobs_star, dtype=float)
 
     if np.any(alpha == 0):
         raise ValueError("Found slope == 0 in draws; model requires α ≠ 0.")
@@ -369,8 +373,8 @@ def ystar_pp_mean_sd_color_vectorized(
         mean_yTF - mcMG - dMG * (mu_x_at_mean - x_bar)
     )  # (M, G)
 
-    # E[ŷ | x̂, ẑ, θ] = mean_yTF + b0*res0 + b1*res1
-    cond_mean = mean_yTF + b0 * res0 + b1 * res1  # (M, G)
+    # E[ŷ | x̂, ẑ, θ] = mean_yTF + b0*res0 + b1*res1 + alpha_kcorr*z_obs
+    cond_mean = mean_yTF + b0 * res0 + b1 * res1 + alpha_k[:, None] * zobs_star[None, :]  # (M, G)
 
     # ---- Step 6: Conditional variance Var[ŷ | x̂, ẑ, θ] ----
     # ∂μ_{y|x̂ẑ}/∂y_TF = 1 + b^T · ∂residuals/∂y_TF
@@ -583,6 +587,7 @@ def DESI_color(
             "delta_c",
             "mu_c",
             "tau_c",
+            "alpha_kcorr",
         ],
         drop_diagnostics=True,
     )
@@ -598,6 +603,7 @@ def DESI_color(
         x_bar=x_bar,
         y_min=y_min,
         y_max=y_max,
+        zobs_star=zobs_star,
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -627,6 +633,7 @@ def DESI_color(
         x_bar=x_bar,
         y_min=y_min,
         y_max=y_max,
+        zobs_star=zobs_main,
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -810,7 +817,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c"],
+              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c", "alpha_kcorr"],
         drop_diagnostics=True,
     )
 
@@ -830,6 +837,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
         x_bar=x_bar,
         y_min=y_min,
         y_max=y_max,
+        zobs_star=zobs[valid],
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -1008,6 +1016,7 @@ def ystar_pp_cov_color_vectorized(
     x_bar,
     y_min,
     y_max,
+    zobs_star,
     on_bad_Z="floor",
     Z_floor=1e-300,
     chunk_size=200,
@@ -1021,11 +1030,12 @@ def ystar_pp_cov_color_vectorized(
     Parameters
     ----------
     draws : DataFrame with columns slope, intercept.1, sigma_int_x, sigma_int_y,
-            gamma, delta_c, mu_c, tau_c
+            sigma_int_z, gamma, delta_c, mu_c, tau_c, alpha_kcorr
     xhat_star, sigma_x_star, zhat_star, sigma_z_star : (G,) arrays
     sigma_y_star : (G,) array — measurement uncertainty on ŷ (enters A₁₁)
     x_bar : float — sample mean of x̂ (from training data)
     y_min, y_max : float — tophat prior bounds
+    zobs_star : (G,) array — observed redshifts (for k-correction shift)
     chunk_size : int — draws per chunk to limit memory
 
     Returns
@@ -1043,6 +1053,7 @@ def ystar_pp_cov_color_vectorized(
         draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
         sigma_y_star=sigma_y_star,
         x_bar=x_bar, y_min=y_min, y_max=y_max,
+        zobs_star=zobs_star,
         on_bad_Z=on_bad_Z, Z_floor=Z_floor,
     )
 
@@ -1351,7 +1362,7 @@ def write_cov_color(run_dir, fits_path, cfg=None):
 
     # Load MAIN-sample galaxies
     (xhat_full, sigma_x_full, yhat_full, sigma_y_full,
-     zhat_full, sigma_z_full, _zobs) = load_xyz_and_uncertainties_from_desi(fits_path)
+     zhat_full, sigma_z_full, zobs_full) = load_xyz_and_uncertainties_from_desi(fits_path)
     x_bar = input_data.get("mean_x", float(np.mean(xhat_full)))
 
     rz_color_full = _load_rz_color_from_desi(fits_path)
@@ -1361,11 +1372,12 @@ def write_cov_color(run_dir, fits_path, cfg=None):
     sigma_y_star = sigma_y_full[main]
     zhat_star = zhat_full[main]
     sigma_z_star = sigma_z_full[main]
+    zobs_star = zobs_full[main]
 
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c"],
+              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c", "alpha_kcorr"],
         drop_diagnostics=True,
     )
 
@@ -1373,6 +1385,7 @@ def write_cov_color(run_dir, fits_path, cfg=None):
         draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
         sigma_y_star=sigma_y_star,
         x_bar=x_bar, y_min=y_min, y_max=y_max,
+        zobs_star=zobs_star,
     )
 
     G = cov.shape[0]
