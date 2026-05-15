@@ -673,7 +673,7 @@ model {
 
     for (n in 1 : N_total) {
       // [KCORR] Per-galaxy k-correction mean shift (Eq. C17)
-      real alpha_zn = alpha_kcorr * z_obs[n];
+      real alpha_zn = alpha_kcorr * log1p(z_obs[n]);
 
       // [COLOR] Per-galaxy A_i diagonal entries (Eq. C17)
       real A11 = A11_base + sigma_y_sq[n];

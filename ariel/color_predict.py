@@ -374,7 +374,7 @@ def ystar_pp_mean_sd_color_vectorized(
     )  # (M, G)
 
     # E[ŷ | x̂, ẑ, θ] = mean_yTF + b0*res0 + b1*res1 + alpha_kcorr*z_obs
-    cond_mean = mean_yTF + b0 * res0 + b1 * res1 + alpha_k[:, None] * zobs_star[None, :]  # (M, G)
+    cond_mean = mean_yTF + b0 * res0 + b1 * res1 + alpha_k[:, None] * np.log1p(zobs_star[None, :])  # (M, G)
 
     # ---- Step 6: Conditional variance Var[ŷ | x̂, ẑ, θ] ----
     # ∂μ_{y|x̂ẑ}/∂y_TF = 1 + b^T · ∂residuals/∂y_TF
