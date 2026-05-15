@@ -84,7 +84,7 @@ color parameters (γ, δ, μ_c, τ_c).
 ../../cmdstan/bin/diagnose    output/$RUN/color_?.csv > output/$RUN/diagnose_color.txt
 
 # Corner plots
-python corner.py --run $RUN --model color
+python corner.py --run $RUN
 ```
 
 Inspect:
