@@ -359,8 +359,8 @@ def ystar_pp_mean_sd_color_vectorized(
         var_yTF[nd] = v
 
     # ---- Step 5: Conditional mean E[ŷ_* | x̂, ẑ, θ] ----
-    # μ_{y|x̂ẑ}(y_TF) = y_TF + b^T · [x̂ - μ_x(y_TF), ẑ - (y_TF - μ_c - δ(μ_x(y_TF) - x̄))]
-    # where μ_x(y_TF) = (y_TF - β) / α
+    # μ_{y|x̂ẑ}(y_TF) = y_TF + Δ + b^T · [x̂ - μ_x(y_TF), ẑ - (y_TF + Δ - μ_c - δ(μ_x(y_TF) - x̄))]
+    # where μ_x(y_TF) = (y_TF - β) / α, Δ = α_k·ln(1+z_obs)
     #
     # This is linear in y_TF, so E[μ_{y|x̂ẑ}(y_TF)] = μ_{y|x̂ẑ}(E[y_TF]) exactly.
     #
@@ -368,18 +368,18 @@ def ystar_pp_mean_sd_color_vectorized(
     mu_x_at_mean = (mean_yTF - bMG) / aMG  # (M, G)
 
     # Residual vector at y_TF = mean_yTF:
+    alpha_zn = alpha_k[:, None] * np.log1p(zobs_star[None, :])  # (M, G)
     res0 = xhat_star[None, :] - mu_x_at_mean  # (M, G)
     res1 = zhat_star[None, :] - (
-        mean_yTF - mcMG - dMG * (mu_x_at_mean - x_bar)
+        mean_yTF + alpha_zn - mcMG - dMG * (mu_x_at_mean - x_bar)
     )  # (M, G)
 
-    # E[ŷ | x̂, ẑ, θ] = mean_yTF + b0*res0 + b1*res1 + alpha_kcorr*z_obs
-    cond_mean = mean_yTF + b0 * res0 + b1 * res1 + alpha_k[:, None] * np.log1p(zobs_star[None, :])  # (M, G)
+    cond_mean = mean_yTF + alpha_zn + b0 * res0 + b1 * res1  # (M, G)
 
     # ---- Step 6: Conditional variance Var[ŷ | x̂, ẑ, θ] ----
     # ∂μ_{y|x̂ẑ}/∂y_TF = 1 + b^T · ∂residuals/∂y_TF
     # ∂res0/∂y_TF = -1/α
-    # ∂res1/∂y_TF = -(1 - δ·(-1/α)) = -(1 + δ/α)
+    # ∂res1/∂y_TF = -(1 - δ/α)
     dres0_dyTF = -1.0 / aMG  # (M, G)
     dres1_dyTF = -(1.0 - dMG / aMG)  # (M, G)
 
@@ -404,30 +404,31 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     sigma_y_star,
     y_min,
     y_max,
+    zobs_star,
     on_bad_Z="raise",
     Z_floor=1e-300,
 ):
     """
-    Posterior predictive mean and SD of ŷ_* using only x̂_* (no z-band).
+    Posterior predictive mean and SD of ŷ_* using x̂ and redshift (no z-band).
 
     Marginalizes ẑ out of the trivariate distribution (Eq. C.trivariate).
     Since B[1,2]=0, ŷ ⊥ x̂ | y_TF, giving:
 
-        ŷ_* | y_TF ~ N(y_TF, A₁₁)
+        ŷ_* | y_TF ~ N(y_TF + α_kcorr·log(1+z), A₁₁)
 
     where A₁₁ = γ²τ_c² + σ²_{int,y} + σ²_{y,*}.
-    This is the baseline tophat structure with σ²_{2,*} replaced by A₁₁.
     See paper/main.tex §sec:cc:x_only.
 
     Parameters
     ----------
     draws : DataFrame
         MCMC posterior with columns: "slope", "intercept.1", "sigma_int_x",
-        "sigma_int_y", "gamma", "tau_c".
+        "sigma_int_y", "gamma", "tau_c", "alpha_kcorr".
     xhat_star : (G,) array — observed log-velocity
     sigma_x_star : (G,) array — uncertainty on x̂
     sigma_y_star : (G,) array — measurement uncertainty on ŷ (enters A₁₁)
     y_min, y_max : float — tophat prior bounds on y_TF
+    zobs_star : (G,) array — observed redshift (for k-correction)
     on_bad_Z : {"raise", "floor"}
     Z_floor : float
 
@@ -439,6 +440,7 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     xhat_star = np.asarray(xhat_star, dtype=float)
     sigma_x_star = np.asarray(sigma_x_star, dtype=float)
     sigma_y_star = np.asarray(sigma_y_star, dtype=float)
+    zobs_star = np.asarray(zobs_star, dtype=float)
 
     a = float(y_min)
     b = float(y_max)
@@ -452,6 +454,7 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     siy = draws["sigma_int_y"].to_numpy(float)
     gamma = draws["gamma"].to_numpy(float)
     tau_c = draws["tau_c"].to_numpy(float)
+    alpha_k = draws["alpha_kcorr"].to_numpy(float)
 
     if np.any(alpha == 0):
         raise ValueError("Found slope == 0 in draws; model requires α ≠ 0.")
@@ -529,8 +532,9 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
         mean_yTF[nd] = m
         var_yTF[nd] = v
 
-    # Var[ŷ | x̂, θ] = A₁₁ + V_*(θ)  (Eq. cc:var_xonly)
-    cond_mean = mean_yTF  # (M, G)
+    # E[ŷ | x̂, z_obs, θ] = mean_yTF + α_kcorr·log(1+z)
+    # Var[ŷ | x̂, z_obs, θ] = A₁₁ + V_*(θ)
+    cond_mean = mean_yTF + alpha_k[:, None] * np.log1p(zobs_star[None, :])  # (M, G)
     cond_var = A11 + var_yTF  # (M, G)
 
     # Mix over draws
@@ -564,7 +568,6 @@ def DESI_color(
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
     x_bar = input_data.get("mean_x", None)
-
     # Load galaxy data
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zhat_star, sigma_z_star, zobs_star = (
         load_xyz_and_uncertainties_from_desi(galaxy_fits)
@@ -879,11 +882,11 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
 
 def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None):
     """
-    Augment a DESI FITS catalog with color-model TFR predictions using x̂ only
-    (no z-band), writing to output/<run>/color_xonly_catalog.fits.
+    Augment a DESI FITS catalog with color-model TFR predictions using x̂ and
+    redshift (no z-band), writing to output/<run>/color_xonly_catalog.fits.
 
-    Uses ystar_pp_mean_sd_color_xonly_vectorized: ŷ conditioned on x̂ alone,
-    with A₁₁ = γ²τ_c² + σ²_{int,y} + σ²_{y,★} replacing σ²_{2,★}.
+    Uses ystar_pp_mean_sd_color_xonly_vectorized: ŷ conditioned on x̂ and z_obs
+    (k-correction), with A₁₁ = γ²τ_c² + σ²_{int,y} + σ²_{y,★} replacing σ²_{2,★}.
     See paper/main.tex §sec:cc:x_only.
 
     New columns (same as color_catalog.fits):
@@ -950,7 +953,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None):
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "gamma", "tau_c"],
+              "gamma", "tau_c", "alpha_kcorr"],
         drop_diagnostics=True,
     )
 
@@ -966,6 +969,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None):
         sigma_y_star=app_err[valid],
         y_min=y_min,
         y_max=y_max,
+        zobs_star=zobs[valid],
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -1170,26 +1174,29 @@ def ystar_pp_cov_color_xonly_vectorized(
     sigma_y_star,
     y_min,
     y_max,
+    zobs_star,
     on_bad_Z="floor",
     Z_floor=1e-300,
     chunk_size=200,
 ):
     """
-    Posterior predictive covariance Cov(ŷ*[g1], ŷ*[g2]) — color model, x̂ only.
+    Posterior predictive covariance Cov(ŷ*[g1], ŷ*[g2]) — color model, x̂ + redshift (no z-band).
 
-    Marginalizes ẑ out (§sec:cc:x_only). Since B[1,2]=0, ŷ ⊥ x̂ | y_TF, so
-    the conditional mean is just mean_yTF and the conditional variance is A₁₁ + V_★.
-    Off-diagonal elements arise from shared uncertainty in θ (same as full model).
+    Marginalizes ẑ out (§sec:cc:x_only). The conditional mean includes the
+    k-correction α_kcorr·log(1+z). Off-diagonal elements arise from shared
+    uncertainty in θ (same as full model).
     """
     xhat_star = np.asarray(xhat_star, dtype=float)
     sigma_x_star = np.asarray(sigma_x_star, dtype=float)
     sigma_y_star = np.asarray(sigma_y_star, dtype=float)
+    zobs_star = np.asarray(zobs_star, dtype=float)
     G = xhat_star.size
 
     mean_y, _ = ystar_pp_mean_sd_color_xonly_vectorized(
         draws, xhat_star, sigma_x_star,
         sigma_y_star=sigma_y_star,
         y_min=y_min, y_max=y_max,
+        zobs_star=zobs_star,
         on_bad_Z=on_bad_Z, Z_floor=Z_floor,
     )
 
@@ -1202,6 +1209,7 @@ def ystar_pp_cov_color_xonly_vectorized(
     siy_d = draws["sigma_int_y"].to_numpy(float)
     gamma_d = draws["gamma"].to_numpy(float)
     tau_c_d = draws["tau_c"].to_numpy(float)
+    alpha_k_d = draws["alpha_kcorr"].to_numpy(float)
     M = len(draws)
 
     accum = np.zeros((G, G), dtype=float)
@@ -1261,8 +1269,8 @@ def ystar_pp_cov_color_xonly_vectorized(
             mu_chunk[nd] = mu + sig * t
             var_chunk[nd] = np.maximum(sig**2 * (1.0 + u - t**2), 0.0)
 
-        # Conditional mean = mean_yTF (no color correction, ẑ marginalized out)
-        cond_mean_chunk = mu_chunk  # (B, G)
+        # Conditional mean = mean_yTF + α_kcorr·log(1+z)
+        cond_mean_chunk = mu_chunk + alpha_k_d[start:end, None] * np.log1p(zobs_star[None, :])  # (B, G)
 
         # Conditional variance = A₁₁ + V_★ (dmu_dyTF = 1)
         cond_var_chunk = A11 + var_chunk  # (B, G)
@@ -1298,18 +1306,19 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None):
     y_max = input_data["y_max"]
 
     (xhat_full, sigma_x_full, yhat_full, sigma_y_full,
-     _zhat_full, _sigma_z_full, _zobs) = load_xyz_and_uncertainties_from_desi(fits_path)
+     _zhat_full, _sigma_z_full, zobs_full) = load_xyz_and_uncertainties_from_desi(fits_path)
 
     rz_color_full = _load_rz_color_from_desi(fits_path)
     main = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
     xhat_star = xhat_full[main]
     sigma_x_star = sigma_x_full[main]
     sigma_y_star = sigma_y_full[main]
+    zobs_star = zobs_full[main]
 
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "gamma", "tau_c"],
+              "gamma", "tau_c", "alpha_kcorr"],
         drop_diagnostics=True,
     )
 
@@ -1317,6 +1326,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None):
         draws, xhat_star, sigma_x_star,
         sigma_y_star=sigma_y_star,
         y_min=y_min, y_max=y_max,
+        zobs_star=zobs_star,
     )
 
     fits_out = _p("color_xonly_cov.fits")
@@ -1444,7 +1454,7 @@ if __name__ == "__main__":
         "--xonly",
         action="store_true",
         default=False,
-        help="Also write color_xonly_catalog.fits using x̂ only (no z-band)",
+        help="Also write color_xonly_catalog.fits using x̂ and redshift (no z-band)",
     )
     args = parser.parse_args()
 

@@ -360,7 +360,7 @@ def process_desi_tf_data(
         "intercept_orig": float(intercept_orig),
         "sigma_int_x": 0.1,
         "sigma_int_y": 0.1,
-        "sigma_int_z": 0.1,
+        "log_sigma_int_z": -2.3,
         "mean_x": float(mean_x),
         "sd_x": float(sd_x),
     }

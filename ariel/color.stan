@@ -617,15 +617,15 @@ transformed data {
   vector[8] gl_w_8 = to_vector(gl_w_arr_8);
 }
 parameters {
-  real<lower=-9 * sd_x, upper=-3.5 * sd_x> slope_std;
+  real<lower=-9 * sd_x, upper=-4.0 * sd_x> slope_std;
   vector<lower=-24 + slope_std * mean_x / sd_x,
          upper=-14 + slope_std * mean_x / sd_x>[N_bins] intercept_std;
   real<lower=0, upper=1> sigma_int_x;
   real<lower=0, upper=1> sigma_int_y;
-  real<lower=0, upper=1> sigma_int_z;
+  real log_sigma_int_z;
 
   // [COLOR] color-correction parameters (Eqs. C29-C32)
-  real<upper=0>  gamma;            // luminosity-color slope at fixed velocity          (Eq. C29)
+  real<lower=-10, upper=0>  gamma;            // luminosity-color slope at fixed velocity          (Eq. C29)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
   real mu_c;             // mean color at x = x_bar                          (Eq. C31)
   real<lower=0> tau_c;   // intrinsic color scatter; lower=0 -> half-Cauchy  (Eq. C32)
@@ -641,12 +641,13 @@ transformed parameters {
   } else {
     sigma_int_x_std = sigma_int_x / sd_x;
   }
+  real<lower=0> sigma_int_z = exp(log_sigma_int_z);
 }
 model {
   // Priors — baseline
   sigma_int_x ~ cauchy(0, 1);
   sigma_int_y ~ cauchy(0, 1);
-  sigma_int_z ~ cauchy(0, 1);
+  log_sigma_int_z ~ normal(-3, 2);
 
   // [COLOR] Priors for color-correction parameters (Eqs. C29-C32)
   gamma   ~ std_normal();
@@ -753,18 +754,17 @@ model {
 
       // [COLOR] Selection probability: same sinh-GL machinery as tophat.stan,
       // but sigma2 -> sqrt(A11) (Appendix C §C.3; hat_z does not enter selection cuts)
-      // [KCORR] Selection acts on the observed y_obs which the model now says is
-      // y_TF + alpha_zn + noise. To translate the y_obs cuts (haty_min, haty_max,
-      // and the plane intercepts) into y_TF-space cuts, subtract alpha_zn from each.
+      // [KCORR] Selection is independent of alpha_kcorr: cuts were applied in y_obs space
+      // with fixed boundaries, so the selection denominator uses unshifted cuts.
       if (y_selection != 0 && plane_cut == 1) {
         target += -log(
           integrate_binormal_strip_sinh2_gl(
             y_min, y_max,
-            haty_min - alpha_zn, haty_max - alpha_zn,
+            haty_min, haty_max,
             slope_std, intercept_std[bin_idx],
             slope_plane_std,
-            intercept_plane_std  - alpha_zn,
-            intercept_plane2_std - alpha_zn,
+            intercept_plane_std,
+            intercept_plane2_std,
             sigma1_std[n],
             sigma_eff,       // [COLOR] sqrt(A11) replaces sqrt(sigmasq2)
             gl_x_8, gl_w_8
