@@ -203,7 +203,7 @@ warmup, absorbing parameter correlations (e.g. slope ↔ α_kcorr, δ_c ↔ μ_c
 and reducing the leapfrog steps needed per effective sample.
 
 ```bash
-./color sample num_warmup=200 num_samples=1000 num_chains=4 \
+./color sample num_warmup=250 num_samples=1000 num_chains=4 \
     adapt save_metric=1 \
     algorithm=hmc metric=dense_e \
     data file=output/$RUN/input.json \
