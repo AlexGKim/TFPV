@@ -990,11 +990,15 @@ with measurement equations
 \end{align}
 Here $\bar{x}$ is the sample mean of $\hat{x}$ and
 \begin{equation}
-\Delta_i \equiv \alpha_k \ln(1 + z_{\mathrm{obs},i})
+\Delta_i \equiv \alpha_k \bigl[\ln(1 + z_{\mathrm{obs},i}) - \overline{\ln(1+z)}\bigr]
 \label{eq:cc:Delta}
 \end{equation}
 is a residual $k$-correction that absorbs any redshift-dependent offset
-not already removed by the upstream photometric corrections.
+not already removed by the upstream photometric corrections,
+where $\overline{\ln(1+z)} \equiv N^{-1}\sum_j \ln(1+z_{\mathrm{obs},j})$
+is the sample mean.  Centering the regressor removes the degeneracy
+between $\alpha_k$ and the intercept; the mean $k$-correction is absorbed
+by the intercept by construction.
 Because $\Delta_i$ shifts the underlying absolute magnitude $y_{\mathrm{TF},i}$,
 it enters both the $r$-band and $z$-band means identically.
 The variable $\eta_i \sim \mathcal{N}(0,\tau_c^2)$ is the residual color after
@@ -1039,7 +1043,7 @@ Additional priors:
 \mu_c  &\sim \mathcal{N}(\bar{c}_{\mathrm{obs}},\,1), \label{eq:cc:muc_prior}\\
 \tau_c &\sim \mathrm{Half\text{-}Cauchy}(0,\,0.3), \label{eq:cc:tauc_prior}\\
 \sigma_{\mathrm{int},z} &\sim \mathrm{Half\text{-}Cauchy}(0,\,1), \label{eq:cc:sigz_prior}\\
-\alpha_k &\sim \mathcal{N}(0,\,5)\;\text{truncated to }\alpha_k \le 0, \label{eq:cc:alphak_prior}
+\alpha_k &\sim \mathcal{N}(0,\,5), \label{eq:cc:alphak_prior}
 \end{align}
 where $\bar{c}_{\mathrm{obs}} \equiv N^{-1}\sum_i (\hat{y}_i - \hat{z}_i)$ is
 the sample mean observed color.
@@ -1133,9 +1137,9 @@ where the $3\times 3$ covariance matrix is
 \begin{equation}
 \boldsymbol{B}_i =
 \begin{pmatrix}
-  \sigma_{1,i}^2 & 0 & -\delta\sigma_{1,i}^2 \\[4pt]
+  \sigma_{1,i}^2 & 0 & -\delta\sigma_{\mathrm{int},x}^2 \\[4pt]
   0 & A_{11} & A_{12} \\[4pt]
-  -\delta\sigma_{1,i}^2 & A_{12} & A_{22} + \delta^2\sigma_{1,i}^2
+  -\delta\sigma_{\mathrm{int},x}^2 & A_{12} & A_{22} + \delta^2\sigma_{\mathrm{int},x}^2
 \end{pmatrix},
 \label{eq:cc:B}
 \end{equation}
@@ -1143,15 +1147,64 @@ with $A_{11}$, $A_{12}$, $A_{22}$ the entries of $\boldsymbol{A}_i$
 (Eq.~\ref{eq:cc:A}).
 The $(\hat{x}, \hat{y})$ off-diagonal is zero because $x_i$ does not enter $y_i$
 once $y_{\mathrm{TF},i}$ is fixed; the $(\hat{x}, \hat{z})$ off-diagonal is
-$-\delta\sigma_{1,i}^2$ from the color--velocity slope.
+$-\delta\sigma_{\mathrm{int},x}^2$ because $\hat{z}_i$ depends on the latent $x_i$
+(not $\hat{x}_i$), and only the intrinsic variance $\sigma_{\mathrm{int},x}^2$ is
+shared between $\hat{x}_i$ and $\hat{z}_i$.
 
-The remaining 1D integral over $y_{\mathrm{TF},i}$ cannot be evaluated in closed
-form under the top-hat prior with truncation in $\hat{y}$, but is computed
-numerically using the sinh-reparameterization quadrature of
-Appendix~\ref{sec:likelihood} (Eqs.~\ref{eq:Ii_def} and following).
-The integrand now uses $\boldsymbol{B}_i$ in place of the baseline $\boldsymbol{\Sigma}_i$;
-the selection boundaries $\hat{y}_{\min}$, $\hat{y}_{\max}$, $\bar{c}_1$, $\bar{c}_2$
-on the observed $\hat{y}$ remain fixed scalars requiring no transformation.
+The remaining 1D integral over $y_{\mathrm{TF},i}$ admits a closed form because the
+mean vector in Eq.~\eqref{eq:cc:trivariate} is linear in $y_{\mathrm{TF},i}$. Write
+\begin{equation}
+\boldsymbol{\mu}(y_{\mathrm{TF}}) = \boldsymbol{a}_i + \boldsymbol{b}\,y_{\mathrm{TF}},
+\quad
+\boldsymbol{a}_i =
+\begin{pmatrix}
+  -\beta/\alpha \\
+  \Delta_i \\
+  \Delta_i - \mu_c + \delta\bar{x} + \delta\beta/\alpha
+\end{pmatrix},
+\quad
+\boldsymbol{b} =
+\begin{pmatrix}
+  1/\alpha \\
+  1 \\
+  1 - \delta/\alpha
+\end{pmatrix}.
+\label{eq:cc:linear_mean}
+\end{equation}
+Let $\hat{\boldsymbol{d}}_i \equiv (\hat{x}_i,\hat{y}_i,\hat{z}_i)^T - \boldsymbol{a}_i$ and define the scalars
+\begin{equation}
+\xi_i \equiv \boldsymbol{b}^T \boldsymbol{B}_i^{-1} \boldsymbol{b},
+\quad
+\phi_i \equiv \boldsymbol{b}^T \boldsymbol{B}_i^{-1} \hat{\boldsymbol{d}}_i,
+\quad
+\chi_i \equiv \hat{\boldsymbol{d}}_i^T \boldsymbol{B}_i^{-1} \hat{\boldsymbol{d}}_i.
+\label{eq:cc:scalars}
+\end{equation}
+Completing the square in $y_{\mathrm{TF}}$,
+\begin{equation}
+(\hat{\boldsymbol{d}}_i - \boldsymbol{b}\,y_{\mathrm{TF}})^T \boldsymbol{B}_i^{-1}
+(\hat{\boldsymbol{d}}_i - \boldsymbol{b}\,y_{\mathrm{TF}})
+= \xi_i\,(y_{\mathrm{TF}} - \mu^*_i)^2 + Q_{0,i},
+\label{eq:cc:complete_square}
+\end{equation}
+with $\mu^*_i \equiv \phi_i/\xi_i$ and $Q_{0,i} \equiv \chi_i - \phi_i^2/\xi_i$.
+The integrand becomes a 1D Gaussian in $y_{\mathrm{TF}}$ times a $y_{\mathrm{TF}}$-independent prefactor; integrating over $[y_{\min}, y_{\max}]$ gives
+\begin{equation}
+\int_{y_{\min}}^{y_{\max}}
+\mathcal{N}_3\!\bigl((\hat{x}_i,\hat{y}_i,\hat{z}_i)^T;\,\boldsymbol{\mu}(y_{\mathrm{TF}}),\,\boldsymbol{B}_i\bigr)\,
+dy_{\mathrm{TF}}
+=
+\frac{e^{-Q_{0,i}/2}}{2\pi\sqrt{|\boldsymbol{B}_i|\,\xi_i}}\,
+\bigl[\Phi(u^{\max}_i) - \Phi(u^{\min}_i)\bigr],
+\label{eq:cc:numerator_closed}
+\end{equation}
+where $u^{\bullet}_i \equiv \sqrt{\xi_i}\,(y_{\bullet} - \mu^*_i)$ and $\Phi$ is the
+standard normal CDF. Equation~\eqref{eq:cc:numerator_closed} supersedes the
+sinh-reparameterization quadrature of Appendix~\ref{sec:likelihood} for the
+trivariate likelihood numerator; the selection integral in
+Section~\ref{sec:cc:selection} still requires 1D quadrature, since the
+denominator includes an additional bivariate integration over the selection
+region.
 
 \subsection{Selection Probability}
 \label{sec:cc:selection}
@@ -1168,18 +1221,19 @@ P(S_i=1 \mid y_{\mathrm{TF},i},\,\theta,\,\gamma)
 \label{eq:cc:Psel}
 \end{equation}
 where $p(\hat{x}_i,\hat{y}_i \mid y_{\mathrm{TF},i}, \theta)$ is the
-$(\hat{x},\hat{y})$ marginal of Eq.~\eqref{eq:cc:trivariate} \emph{evaluated
-with $\Delta_i = 0$}, i.e.\ a bivariate
-Gaussian with mean $(\mu_{x,i}(y_{\mathrm{TF},i}),\; y_{\mathrm{TF},i})^T$ and
+$(\hat{x},\hat{y})$ marginal of Eq.~\eqref{eq:cc:trivariate}, i.e.\ a bivariate
+Gaussian with mean $(\mu_{x,i}(y_{\mathrm{TF},i}),\; y_{\mathrm{TF},i} + \Delta_i)^T$ and
 covariance $\bigl(\begin{smallmatrix}\sigma_{1,i}^2 & 0\\ 0 & A_{11}\end{smallmatrix}\bigr)$.
 The $\hat{z}$ component does not enter because it is independent of $\hat{x}$
 and $\hat{y}$ given $y_{\mathrm{TF},i}$; the mean shift from $\delta$ is
 carried only by $\hat{z}$, not by $\hat{y}$.
-The $k$-correction shift $\Delta_i$ is excluded from the selection
-denominator because the sample was selected on apparent-magnitude cuts
-applied before any $k$-correction is estimated; the selection boundaries
-$\hat{y}_{\min}$, $\hat{y}_{\max}$ are therefore fixed with respect to
-$\alpha_k$.
+Since $\Delta_i$ shifts $\mathrm{E}[\hat{y}_i \mid y_{\mathrm{TF},i}]$ by a
+galaxy-dependent amount, it enters the selection probability: at fixed
+$y_{\mathrm{TF},i}$, a non-zero $\Delta_i$ moves the predicted $\hat{y}_i$
+relative to the fixed boundaries $\hat{y}_{\min}$, $\hat{y}_{\max}$.
+Equivalently, one may evaluate the selection integral with $\Delta_i=0$ but
+with shifted boundaries $\hat{y}_{\min} - \Delta_i$ and
+$\hat{y}_{\max} - \Delta_i$.
 Substituting into the sheared-coordinate bivariate CDF machinery of
 Appendix~\ref{sec:likelihood} (Eq.~\ref{eq:Ii_def}), with
 $\sigma_{2,i}^2$ replaced by $A_{11} = \gamma^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2$,
@@ -1209,54 +1263,84 @@ where
 \begin{align}
 \mu_{y|\hat{x}\hat{z}}(y_{\mathrm{TF},\star})
 &= y_{\mathrm{TF},\star} + \Delta_\star
-  + \boldsymbol{b}^T
+  + \boldsymbol{b}_{\mathrm{reg}}^T
     \begin{pmatrix}
       \hat{x}_\star - \mu_{x,\star}(y_{\mathrm{TF},\star})\\[2pt]
       \hat{z}_\star - [y_{\mathrm{TF},\star} + \Delta_\star - \mu_c - \delta(\mu_{x,\star}(y_{\mathrm{TF},\star})-\bar{x})]
     \end{pmatrix},
 \label{eq:cc:mu_ygivenxz}\\
 \sigma_{y|\hat{x}\hat{z}}^2
-&= A_{11} - \boldsymbol{b}^T \boldsymbol{D}_\star \boldsymbol{b},
+&= A_{11} - \boldsymbol{b}_{\mathrm{reg}}^T \boldsymbol{D}_\star \boldsymbol{b}_{\mathrm{reg}},
 \label{eq:cc:sigma_ygivenxz}
 \end{align}
 with the regression coefficient vector
 \begin{equation}
-\boldsymbol{b} = \boldsymbol{D}_\star^{-1}
+\boldsymbol{b}_{\mathrm{reg}} = \boldsymbol{D}_\star^{-1}
 \begin{pmatrix}0\\[2pt]A_{12}\end{pmatrix},
 \qquad
 \boldsymbol{D}_\star =
 \begin{pmatrix}
-  \sigma_{1,\star}^2 & -\delta\sigma_{1,\star}^2\\[4pt]
-  -\delta\sigma_{1,\star}^2 & A_{22} + \delta^2\sigma_{1,\star}^2
+  \sigma_{1,\star}^2 & -\delta\sigma_{\mathrm{int},x}^2\\[4pt]
+  -\delta\sigma_{\mathrm{int},x}^2 & A_{22} + \delta^2\sigma_{\mathrm{int},x}^2
 \end{pmatrix}.
 \label{eq:cc:b_D}
 \end{equation}
 The variance $\sigma_{y|\hat{x}\hat{z}}^2$ is independent of $y_{\mathrm{TF},\star}$.
 
 \paragraph{Marginalizing $y_{\mathrm{TF},\star}$.}
-The remaining integral over $y_{\mathrm{TF},\star}$ under the posterior
-$p(y_{\mathrm{TF},\star} \mid \hat{x}_\star, \theta)$ is a truncated normal
-identical in structure to the baseline model (Appendix~\ref{sec:infer_single_galaxy_y},
-Eq.~\ref{eq:post_yTF_tophat}).
-Let $\mu_\star(\theta)$ and $V_\star(\theta)$ denote its mean and variance.
-The conditional moments at fixed $(\theta, \gamma)$ are then
+The remaining integral over $y_{\mathrm{TF},\star}$ uses the joint posterior
+$p(y_{\mathrm{TF},\star} \mid \hat{x}_\star, \hat{z}_\star, \theta)$, which
+exploits the information that $\hat{z}_\star$ carries about $y_{\mathrm{TF},\star}$
+through the dependence of $\hat{z}_\star$ on $y_{\mathrm{TF},\star}$.
+Marginalizing the trivariate Eq.~\eqref{eq:cc:trivariate} over $\hat{y}_\star$
+leaves a bivariate Gaussian likelihood
+\begin{equation}
+\begin{pmatrix}\hat{x}_\star\\ \hat{z}_\star\end{pmatrix}
+\;\Big|\;y_{\mathrm{TF},\star},\theta
+\;\sim\;
+\mathcal{N}_2\!\bigl(\boldsymbol{m}_\star(y_{\mathrm{TF},\star}),\,\boldsymbol{D}_\star\bigr),
+\label{eq:cc:bivariate_xz}
+\end{equation}
+with covariance $\boldsymbol{D}_\star$ as in Eq.~\eqref{eq:cc:b_D} and mean
+\begin{equation}
+\boldsymbol{m}_\star(y_{\mathrm{TF},\star})
+= \boldsymbol{m}_\star(0) + y_{\mathrm{TF},\star}\,\boldsymbol{b}_{xz},
+\qquad
+\boldsymbol{b}_{xz} = \begin{pmatrix}1/\alpha\\[2pt] 1 - \delta/\alpha\end{pmatrix}.
+\label{eq:cc:b_xz}
+\end{equation}
+Combined with the uniform prior on $y_{\mathrm{TF},\star}$, the posterior is a
+truncated normal on $[y_{\min}, y_{\max}]$ whose untruncated precision and
+mean are
+\begin{equation}
+\xi_{xz} = \boldsymbol{b}_{xz}^T \boldsymbol{D}_\star^{-1} \boldsymbol{b}_{xz},
+\qquad
+\mu^\dagger_{xz}
+= \xi_{xz}^{-1}\,\boldsymbol{b}_{xz}^T \boldsymbol{D}_\star^{-1}
+  \bigl(\boldsymbol{o}_\star - \boldsymbol{m}_\star(0)\bigr),
+\label{eq:cc:T_post_xz}
+\end{equation}
+with $\boldsymbol{o}_\star = (\hat{x}_\star, \hat{z}_\star)^T$.
+Let $\mu_{T|xz}(\theta)$ and $V_{T|xz}(\theta)$ denote the mean and variance of
+this truncated normal (cf.\ Appendix~\ref{sec:infer_single_galaxy_y}).
+
+Because $\mu_{y|\hat{x}\hat{z}}(y_{\mathrm{TF},\star})$ is linear in
+$y_{\mathrm{TF},\star}$ with slope
+\begin{equation}
+s = 1 - \boldsymbol{b}_{\mathrm{reg}}^T \boldsymbol{b}_{xz},
+\label{eq:cc:slope}
+\end{equation}
+the law of total expectation and variance give the exact conditional moments
 \begin{align}
 \mathrm{E}[\hat{y}_\star \mid \hat{x}_\star,\,\hat{z}_\star,\,\theta,\,\gamma]
-&= \mu_{y|\hat{x}\hat{z}}(\mu_\star(\theta))
-   + \frac{\partial \mu_{y|\hat{x}\hat{z}}}{\partial y_{\mathrm{TF},\star}} \cdot 0
-   \;\approx\; \mu_{y|\hat{x}\hat{z}}(\mu_\star(\theta)),
+&= \mu_{y|\hat{x}\hat{z}}\!\bigl(\mu_{T|xz}(\theta)\bigr),
 \label{eq:cc:mean_ystar}\\[4pt]
 \mathrm{Var}[\hat{y}_\star \mid \hat{x}_\star,\,\hat{z}_\star,\,\theta,\,\gamma]
-&= \sigma_{y|\hat{x}\hat{z}}^2
-   + \left(\frac{\partial \mu_{y|\hat{x}\hat{z}}}{\partial y_{\mathrm{TF},\star}}\right)^2 V_\star(\theta).
+&= \sigma_{y|\hat{x}\hat{z}}^2 + s^2\,V_{T|xz}(\theta).
 \label{eq:cc:var_ystar}
 \end{align}
-In Eq.~\eqref{eq:cc:mean_ystar}, the approximation holds because
-$\mu_{y|\hat{x}\hat{z}}$ is linear in $y_{\mathrm{TF},\star}$ and the law of total expectation
-gives $\mathrm{E}[\mu_{y|\hat{x}\hat{z}}(y_{\mathrm{TF},\star})] = \mu_{y|\hat{x}\hat{z}}(\mu_\star(\theta))$
-exactly.
 
-\paragraph{Posterior predictive.}
+\paragraph{Posterior predictive over MCMC draws.}
 The posterior predictive mean and variance over draws
 $\{(\theta^{(m)},\gamma^{(m)})\}_{m=1}^M$ are
 \begin{align}
@@ -1272,63 +1356,57 @@ $\{(\theta^{(m)},\gamma^{(m)})\}_{m=1}^M$ are
 \label{eq:cc:pp_var}
 \end{align}
 
+\paragraph{Prediction from rotation velocity alone.}
+A reduced prediction that ignores $\hat{z}_\star$ is obtained by marginalizing
+the trivariate Eq.~\eqref{eq:cc:trivariate} over $\hat{z}_\star$ rather than
+conditioning on it.  The upper-left $2\times 2$ block of $\boldsymbol{B}_\star$
+(Eq.~\eqref{eq:cc:B}) has $B_{12} = 0$, so $\hat{x}_\star$ and $\hat{y}_\star$
+are independent at fixed $y_{\mathrm{TF},\star}$ and
+\begin{equation}
+\hat{y}_\star \mid y_{\mathrm{TF},\star}
+\;\sim\;
+\mathcal{N}\!\bigl(y_{\mathrm{TF},\star} + \Delta_\star,\;A_{11}\bigr),
+\label{eq:cc:y_given_yTF_xonly}
+\end{equation}
+with $A_{11} = \gamma^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{y,\star}^2$
+as before.  The posterior of $y_{\mathrm{TF},\star}$ given $\hat{x}_\star$
+alone is the truncated normal of the baseline model
+(Eq.~\eqref{eq:post_yTF_tophat}), with mean $\mu_\star(\theta)$ and variance
+$V_\star(\theta)$.  By the law of total expectation and variance,
+\begin{align}
+\mathrm{E}[\hat{y}_\star \mid \hat{x}_\star,\,\theta,\,\gamma]
+&= \mu_\star(\theta) + \Delta_\star,
+\label{eq:cc:mean_xonly}\\[4pt]
+\mathrm{Var}[\hat{y}_\star \mid \hat{x}_\star,\,\theta,\,\gamma]
+&= A_{11} + V_\star(\theta).
+\label{eq:cc:var_xonly}
+\end{align}
+Posterior-predictive moments over MCMC draws follow
+Eqs.~\eqref{eq:cc:pp_mean}--\eqref{eq:cc:pp_var} with $\mathrm{E}^{(m)}$ and
+$\mathrm{Var}^{(m)}$ replaced by the above.  This $x$-only prediction is
+structurally identical to the baseline model
+(Appendix~\ref{sec:infer_single_galaxy_y}) with $\sigma_{2,\star}^2$ replaced
+by $A_{11}$.  Relative to the full $(\hat{x}_\star,\hat{z}_\star)$ prediction,
+it discards the $y_{\mathrm{TF},\star}$ information carried by
+$\hat{z}_\star$ but avoids propagating $z$-band photometric errors through
+$\boldsymbol{b}_{\mathrm{reg}}$; which prediction is tighter depends on the
+balance between these two effects.
+
 \subsection{Reduction to Baseline}
 \label{sec:cc:reduction}
 
-Setting $\gamma = 0$ and $\alpha_k = 0$: $A_{11} = \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 \equiv \sigma_{2,i}^2$,
-$A_{12} = 0$, $\Delta_i = 0$, and $\boldsymbol{b} = \boldsymbol{0}$.
+Setting $\gamma = 0$ and $\alpha_k = 0$ gives $A_{11} = \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 \equiv \sigma_{2,i}^2$,
+$A_{12} = 0$, $\Delta_i = 0$, and $\boldsymbol{b}_{\mathrm{reg}} = \boldsymbol{0}$.
 The $\hat{z}$ measurement drops out of the prediction entirely:
 $\sigma_{y|\hat{x}\hat{z}}^2 = A_{11} = \sigma_{2,i}^2$, recovering the
 baseline model of Appendix~\ref{sec:likelihood}.
 The likelihood at each galaxy reduces to the product
 $\mathcal{N}(\hat x_i; (y_{\mathrm{TF},i}-\beta)/\alpha, \sigma_{1,i}^2)\,
  \mathcal{N}(\hat y_i; y_{\mathrm{TF},i}, \sigma_{2,i}^2)\,
- \mathcal{N}(\hat z_i; y_{\mathrm{TF},i} - \mu_c - \delta(\mu_{x,i}-\bar{x}), \sigma_{\mathrm{int},z}^2 + \sigma_{z,i}^2)$
+ \mathcal{N}(\hat z_i; y_{\mathrm{TF},i} - \mu_c - \delta(\mu_{x,i}-\bar{x}), \sigma_{\mathrm{int},z}^2 + \sigma_{z,i}^2)$,
 where the $\hat{z}$ factor is independent of $\hat{y}$ and contributes only
 to the estimation of $(\mu_c, \delta, \sigma_{\mathrm{int},z})$, not to the
 $r$-band prediction.
-
-\subsection{Prediction from Rotation Velocity Alone}
-\label{sec:cc:x_only}
-
-When the $z$-band observation $\hat{z}_\star$ is not used in the prediction,
-one marginalizes the trivariate distribution
-(Eq.~\eqref{eq:cc:trivariate}) over $\hat{z}_\star$.
-The marginal of $(\hat{x}_\star, \hat{y}_\star)$ given $y_{\mathrm{TF},\star}$
-is obtained by taking the upper-left $2\times 2$ block of $\boldsymbol{B}_\star$
-(Eq.~\eqref{eq:cc:B}).
-Since $B_{12} = 0$, the two components are independent at fixed
-$y_{\mathrm{TF},\star}$:
-\begin{equation}
-\hat{y}_\star \mid y_{\mathrm{TF},\star}
-\;\sim\;
-\mathcal{N}\!\bigl(y_{\mathrm{TF},\star},\;A_{11}\bigr),
-\label{eq:cc:y_given_yTF_xonly}
-\end{equation}
-with $A_{11} = \gamma^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{y,\star}^2$
-as before.
-The posterior of $y_{\mathrm{TF},\star}$ given $\hat{x}_\star$ is the same
-truncated normal as in the baseline model (Eq.~\eqref{eq:post_yTF_tophat}),
-with mean $\mu_\star(\theta)$ and variance $V_\star(\theta)$.
-By the law of total expectation and variance,
-\begin{align}
-\mathrm{E}[\hat{y}_\star \mid \hat{x}_\star,\,\theta,\,\gamma]
-&= \mu_\star(\theta),
-\label{eq:cc:mean_xonly}\\[4pt]
-\mathrm{Var}[\hat{y}_\star \mid \hat{x}_\star,\,\theta,\,\gamma]
-&= A_{11} + V_\star(\theta).
-\label{eq:cc:var_xonly}
-\end{align}
-The posterior predictive mean and variance over draws follow
-Eqs.~\eqref{eq:cc:pp_mean}--\eqref{eq:cc:pp_var} with
-$\mathrm{E}^{(m)}$ and $\mathrm{Var}^{(m)}$ replaced by the above.
-This is structurally identical to the baseline model
-(Appendix~\ref{sec:infer_single_galaxy_y}) with $\sigma_{2,\star}^2$
-replaced by $A_{11}$.
-The $x$-only prediction yields larger uncertainties than the full
-prediction (Section~\ref{sec:cc:predict}) because it does not exploit the
-information in $\hat{z}_\star$, but it avoids amplifying $z$-band
-photometric errors through the regression coefficient $b_1 = A_{12}/A_{22}$.
 
 \subsection{Model Limitations}
 \label{sec:cc:limitations}

@@ -544,6 +544,9 @@ transformed data {
   // [COLOR] x_bar in standardized coordinates is 0 by construction (mean of x_std = 0)
   real x_bar_std = 0.0;
 
+  // [KCORR] mean of log1p(z_obs) — centering removes the alpha-intercept degeneracy
+  real mean_log1pz = mean(log1p(z_obs));
+
   // GL nodes — copied verbatim from tophat.stan
   array[32] real gl_x_arr = {-0.9972638618494815635, -0.9856115115452683354,
                              -0.9647622555875064308, -0.9349060759377396892,
@@ -625,14 +628,16 @@ parameters {
   real log_sigma_int_z;
 
   // [COLOR] color-correction parameters (Eqs. C29-C32)
-  real<lower=-10, upper=0>  gamma;            // luminosity-color slope at fixed velocity          (Eq. C29)
+  real gamma_tau_c;     // p = γ·τ_c (sampled directly; γ<0, τ_c>0 ⟹ p<0)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
   real mu_c;             // mean color at x = x_bar                          (Eq. C31)
   real<lower=0> tau_c;   // intrinsic color scatter; lower=0 -> half-Cauchy  (Eq. C32)
 
   // [KCORR] latent k-correction parameter
-  // Augments ŷ_obs by ΔM = alpha_kcorr * z_obs[n] (color-independent redshift trend).
-  real<upper=0> alpha_kcorr;
+  // Augments ŷ_obs by ΔM = alpha_kcorr * (log1p(z_obs[n]) - mean_log1pz)
+  // (color-independent redshift trend). Untruncated to avoid boundary-prior HMC pathology
+  // (see plan greedy-bubbling-pebble.md, Phase A5 decision 2026-05-18).
+  real alpha_kcorr;
 }
 transformed parameters {
   real sigma_int_x_std;
@@ -642,6 +647,7 @@ transformed parameters {
     sigma_int_x_std = sigma_int_x / sd_x;
   }
   real<lower=0> sigma_int_z = exp(log_sigma_int_z);
+  real gamma = gamma_tau_c / tau_c;
 }
 model {
   // Priors — baseline
@@ -650,10 +656,13 @@ model {
   log_sigma_int_z ~ normal(-3, 2);
 
   // [COLOR] Priors for color-correction parameters (Eqs. C29-C32)
-  gamma   ~ std_normal();
+  // Reparameterized: sample gamma_tau_c = γ·τ_c directly to break the γ–τ_c banana.
+  // Prior: p(γ,τ) dγ dτ → p(p/τ, τ)·|1/τ| dp dτ  (Jacobian = 1/τ_c)
+  // γ<0 truncation enforced structurally (gamma_tau_c<0, tau_c>0).
+  tau_c   ~ cauchy(0, 0.3);
+  target += normal_lpdf(gamma | 0, 1) - log(tau_c);
   delta_c ~ std_normal();
   mu_c    ~ normal(c_bar_obs, 1);
-  tau_c   ~ cauchy(0, 0.3);            // half-Cauchy because tau_c has lower=0
 
   // [KCORR] Prior for latent k-correction parameter
   // |k-corr error| at z=0.1 is plausibly < 0.5 mag, so |alpha|*z_max ~ 0.5 -> scale 5 is wide.
@@ -664,103 +673,89 @@ model {
   vector[N_total] sigma1_std   = sqrt(sigmasq1_std);
 
   if (y_TF_limits != 0) {
-    int K = 8;
-    real y_star = fmin(y_max, fmax(y_min, 0.5 * (haty_min + haty_max)));
-
     // [COLOR] A_i matrix scalar entries that don't depend on per-galaxy noise (Eq. C17)
-    real A11_base = square(gamma) * square(tau_c) + square(sigma_int_y);
-    real A12      = gamma * (gamma - 1.0) * square(tau_c);
-    real A22_base = square(gamma - 1.0) * square(tau_c) + square(sigma_int_z);
+    // γ²τ² = p², γ(γ-1)τ² = p(p-τ), (γ-1)²τ² = (p-τ)²  where p = gamma_tau_c
+    real A11_base = square(gamma_tau_c) + square(sigma_int_y);
+    real A12      = gamma_tau_c * (gamma_tau_c - tau_c);
+    real A22_base = square(gamma_tau_c - tau_c) + square(sigma_int_z);
+
+    // [COLOR] Closed-form numerator coefficients (paper Eq. eq:cc:linear_mean).
+    // μ(y_TF) = a_n + b·y_TF with b = (1/slope_std, 1, 1 − δ_c/slope_std) — galaxy-independent.
+    // In standardized x, x_bar_std = 0, so the δ_c·x̄ term in a_n vanishes.
+    real inv_slope_std        = inv(slope_std);
+    vector[3] b_vec           = [inv_slope_std, 1.0, 1.0 - delta_c * inv_slope_std]';
+    real intercept_over_slope = intercept_std[bin_idx] * inv_slope_std;
 
     for (n in 1 : N_total) {
-      // [KCORR] Per-galaxy k-correction mean shift (Eq. C17)
-      real alpha_zn = alpha_kcorr * log1p(z_obs[n]);
+      // [KCORR] Per-galaxy k-correction mean shift, centered to remove alpha-intercept degeneracy
+      real alpha_zn = alpha_kcorr * (log1p(z_obs[n]) - mean_log1pz);
 
       // [COLOR] Per-galaxy A_i diagonal entries (Eq. C17)
       real A11 = A11_base + sigma_y_sq[n];
       real A22 = A22_base + sigma_z_sq[n];
 
       // [COLOR] B_i covariance matrix (Eq. C21)
+      // Off-diagonal uses σ²_{int,x} (not σ²_1) because ẑ depends on latent x, not x̂.
       real s1sq = sigmasq1_std[n];
+      real sigma_intx_sq = square(sigma_int_x_std);
       matrix[3, 3] B;
       B[1, 1] = s1sq;
       B[1, 2] = 0.0;
       B[2, 1] = 0.0;
-      B[1, 3] = -delta_c * s1sq;
-      B[3, 1] = -delta_c * s1sq;
+      B[1, 3] = -delta_c * sigma_intx_sq;
+      B[3, 1] = -delta_c * sigma_intx_sq;
       B[2, 2] = A11;
       B[2, 3] = A12;
       B[3, 2] = A12;
-      B[3, 3] = A22 + square(delta_c) * s1sq;
+      B[3, 3] = A22 + square(delta_c) * sigma_intx_sq;
 
       matrix[3, 3] L_B = cholesky_decompose(B);
 
       // [COLOR] Observed data vector for this galaxy (standardized x)
       vector[3] obs = [x_std[n], y[n], z[n]]';
 
-      // [COLOR] sigma_eff: scale for sinh quadrature in y-direction = sqrt(A11)
-      // A11 = Var(hat_y | y_TF), the natural scale of the integrand along y_TF
-      real sigma_eff = sqrt(A11);
+      // [COLOR] Closed-form numerator integral (paper Eq. eq:cc:numerator_closed).
+      // a_n = (-intercept/slope, Δ_n, Δ_n - μ_c + δ_c·intercept/slope) in standardized x.
+      vector[3] a_vec = [-intercept_over_slope,
+                         alpha_zn,
+                         alpha_zn - mu_c + delta_c * intercept_over_slope]';
+      vector[3] d_vec = obs - a_vec;
 
-      // Numerator: log ∫_{y_min}^{y_max} N_3(obs; mu(y_TF), B_i) dy_TF
-      // Split into two pieces using sinh transforms around yhat_min and yhat_max.
-      real log_I1 = negative_infinity();
-      real log_I2 = negative_infinity();
+      // Triangular solves against L_B (Cholesky of B_n): v = L_B⁻¹·b, w = L_B⁻¹·d
+      vector[3] v_vec = mdivide_left_tri_low(L_B, b_vec);
+      vector[3] w_vec = mdivide_left_tri_low(L_B, d_vec);
 
-      // ---- Piece 1: y_TF in [y_min, y_star], sinh around yhat_min ----
-      if (y_star > y_min) {
-        real umin1 = asinh((y_min  - haty_min) / sigma_eff);
-        real umax1 = asinh((y_star - haty_min) / sigma_eff);
-        real mid1  = 0.5 * (umin1 + umax1);
-        real half1 = 0.5 * (umax1 - umin1);
-        vector[K] lterms;
-        for (k in 1 : K) {
-          real u_k  = mid1 + half1 * gl_x_8[k];
-          real y_tf = haty_min + sigma_eff * sinh(u_k);
-          real mu_x = (y_tf - intercept_std[bin_idx]) / slope_std;   // Eq. C21 mean[1]
-          // [KCORR] alpha_zn shifts both y_obs and z_obs means (since z = y - c, shift carries through)
-          vector[3] mu = [mu_x,
-                          y_tf + alpha_zn,
-                          y_tf + alpha_zn - mu_c - delta_c * mu_x]'; // Eq. C21 mean[2,3]
-          real log_w = log(gl_w_8[k]) + log(sigma_eff) + log(cosh(u_k)) + log(half1);
-          lterms[k] = log_w + multi_normal_cholesky_lpdf(obs | mu, L_B);
-        }
-        log_I1 = log_sum_exp(lterms);
-      }
+      real xi_n    = dot_self(v_vec);              // ξ_n  = bᵀ B_n⁻¹ b
+      real phi_n   = dot_product(v_vec, w_vec);    // φ_n  = bᵀ B_n⁻¹ d_n
+      real chi_n   = dot_self(w_vec);              // χ_n  = d_nᵀ B_n⁻¹ d_n
+      real mu_star = phi_n / xi_n;                 // μ*_n
+      real Q_0     = chi_n - square(phi_n) / xi_n; // Q_{0,n}
 
-      // ---- Piece 2: y_TF in [y_star, y_max], sinh around yhat_max ----
-      if (y_max > y_star) {
-        real umin2 = asinh((haty_max - y_max)  / sigma_eff);
-        real umax2 = asinh((haty_max - y_star) / sigma_eff);
-        real mid2  = 0.5 * (umin2 + umax2);
-        real half2 = 0.5 * (umax2 - umin2);
-        vector[K] lterms;
-        for (k in 1 : K) {
-          real u_k  = mid2 + half2 * gl_x_8[k];
-          real y_tf = haty_max - sigma_eff * sinh(u_k);
-          real mu_x = (y_tf - intercept_std[bin_idx]) / slope_std;
-          // [KCORR] alpha_zn shifts both y_obs and z_obs means
-          vector[3] mu = [mu_x,
-                          y_tf + alpha_zn,
-                          y_tf + alpha_zn - mu_c - delta_c * mu_x]';
-          real log_w = log(gl_w_8[k]) + log(sigma_eff) + log(cosh(u_k)) + log(half2);
-          lterms[k] = log_w + multi_normal_cholesky_lpdf(obs | mu, L_B);
-        }
-        log_I2 = log_sum_exp(lterms);
-      }
+      real sqrt_xi  = sqrt(xi_n);
+      real u_max    = sqrt_xi * (y_max - mu_star);
+      real u_min    = sqrt_xi * (y_min - mu_star);
+      real log_dPhi = log_diff_exp(normal_lcdf(u_max | 0, 1),
+                                    normal_lcdf(u_min | 0, 1));
 
-      // Combine; divide by (y_max - y_min) for top-hat prior normalization
-      target += log_sum_exp(log_I1, log_I2) - log(y_max - y_min);
+      // log L_n = -log(2π) - ½·log|B_n| - ½·log(ξ_n) - ½·Q_{0,n} + log ΔΦ_n,
+      // with log|B_n| = 2·∑ log(diag(L_B)).  Top-hat prior 1/(y_max - y_min).
+      target += -log(2 * pi())
+                - sum(log(diagonal(L_B)))
+                - 0.5 * log(xi_n)
+                - 0.5 * Q_0
+                + log_dPhi
+                - log(y_max - y_min);
 
       // [COLOR] Selection probability: same sinh-GL machinery as tophat.stan,
-      // but sigma2 -> sqrt(A11) (Appendix C §C.3; hat_z does not enter selection cuts)
-      // [KCORR] Selection is independent of alpha_kcorr: cuts were applied in y_obs space
-      // with fixed boundaries, so the selection denominator uses unshifted cuts.
+      // but sigma2 -> sqrt(A11) (Appendix C §C.3; hat_z does not enter selection cuts).
+      // [KCORR] The k-correction shifts E[y_obs|y_TF] by alpha_zn, so the effective
+      // selection window in y_TF-space is shifted by -alpha_zn.
       if (y_selection != 0 && plane_cut == 1) {
+        real sigma_eff = sqrt(A11);  // sqrt(Var(ŷ|y_TF)) — only needed for selection
         target += -log(
           integrate_binormal_strip_sinh2_gl(
             y_min, y_max,
-            haty_min, haty_max,
+            haty_min - alpha_zn, haty_max - alpha_zn,
             slope_std, intercept_std[bin_idx],
             slope_plane_std,
             intercept_plane_std,

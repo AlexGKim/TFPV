@@ -3,11 +3,12 @@
   "intercept_std": [
     -20.040947483282633
   ],
-  "slope_orig": -4.35758118890787,
-  "intercept_orig": -19.516957069985104,
-  "sigma_int_x": 0.1,
-  "sigma_int_y": 0.1,
-  "log_sigma_int_z": -2.3,
-  "mean_x": 0.12024799781845373,
-  "sd_x": 0.12963446798371872
+  "sigma_int_x": 0.055,
+  "sigma_int_y": 0.03,
+  "log_sigma_int_z": -4.6,
+  "gamma_tau_c": -0.19,
+  "delta_c": 0.065,
+  "mu_c": 0.29,
+  "tau_c": 0.037,
+  "alpha_kcorr": -0.5
 }

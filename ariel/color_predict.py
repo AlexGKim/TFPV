@@ -201,6 +201,7 @@ def ystar_pp_mean_sd_color_vectorized(
     y_min,
     y_max,
     zobs_star,
+    mean_log1pz,
     on_bad_Z="raise",
     Z_floor=1e-300,
 ):
@@ -278,24 +279,57 @@ def ystar_pp_mean_sd_color_vectorized(
     A22 = (gMG - 1) ** 2 * tcMG**2 + sizMG**2 + sigma_z_star[None, :] ** 2  # (M, G)
 
     # b vector from D^{-1} [0, A12]^T (Eq. C.28)
-    # D = [[σ1², -δσ1²], [-δσ1², A22 + δ²σ1²]]
-    # det(D) = σ1²·A22
+    # D = [[σ1², -δ·σ²_{int,x}], [-δ·σ²_{int,x}, A22 + δ²·σ²_{int,x}]]
+    # (off-diagonal uses σ²_{int,x} because ẑ depends on latent x, not x̂)
+    # det(D) = σ1²·A22 + δ²·σ²_{int,x}·σ²_x
     # b = D^{-1} [0, A12]^T
-    # D^{-1} = (1/det) [[A22+δ²σ1², δσ1²], [δσ1², σ1²]]
-    # b[0] = (δσ1² · A12) / det_D = δ · A12 / A22
-    # b[1] = (σ1² · A12) / det_D = A12 / A22
-    b0 = dMG * A12 / A22  # (M, G)
-    b1 = A12 / A22  # (M, G)
+    # b[0] = (δ·σ²_{int,x} · A12) / det_D
+    # b[1] = (σ1² · A12) / det_D
+    sigma_intx_sq = sixMG**2  # (M, G)
+    sigma_x_sq = sigma_x_star[None, :] ** 2  # (M, G)
+    det_D = sigma1_sq * A22 + dMG**2 * sigma_intx_sq * sigma_x_sq  # (M, G)
+    b0 = dMG * sigma_intx_sq * A12 / det_D  # (M, G)
+    b1 = sigma1_sq * A12 / det_D  # (M, G)
 
-    # Conditional variance σ²_{y|x̂ẑ} = A11 - b^T D b
-    # = A11 - [b0, b1] · D · [b0, b1]^T
-    # = A11 - A12² / A22  (simpler form from Schur complement)
-    sigma_y_given_xz_sq = A11 - A12**2 / A22  # (M, G)
+    # Conditional variance σ²_{y|x̂ẑ} = A11 - [0, A12]·D^{-1}·[0, A12]^T
+    # = A11 - σ1² · A12² / det_D
+    sigma_y_given_xz_sq = A11 - sigma1_sq * A12**2 / det_D  # (M, G)
 
-    # ---- Step 4: Truncated normal posterior for y_TF | x̂ ----
-    # μ_L = β + α·x̂_*, σ_L² = α²·σ1²
-    mu_L = bMG + aMG * xhat_star[None, :]  # (M, G)
-    sigma_L_sq = aMG**2 * sigma1_sq  # (M, G)
+    # ---- Step 4: Truncated normal posterior for y_TF | x̂, ẑ, θ ----
+    # Bivariate likelihood (x̂, ẑ) | y_TF ~ N_2(m(y_TF), D_★) (paper Eq. cc:bivariate_xz),
+    # with m(y_TF) = m(0) + y_TF · b_xz, b_xz = (1/α, 1 - δ/α).
+    # Posterior on y_TF (uniform prior) is N(μ^†_xz, 1/ξ_xz) truncated to [y_min, y_max],
+    # where ξ_xz = b_xz^T D^{-1} b_xz and
+    #       μ^†_xz = ξ_xz^{-1} · b_xz^T D^{-1} (o - m(0))
+    # with o = (x̂, ẑ)^T and m(0) = (-β/α, Δ - μ_c + δβ/α + δ·x̄)^T.
+
+    # k-correction term per (M, G); used in m(0)[1] and reused by Step 5.
+    alpha_zn = alpha_k[:, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)  # (M, G)
+
+    # adj(D) = [[A22 + δ²σ²_intx, δσ²_intx], [δσ²_intx, σ1²]]
+    adjD_11 = A22 + dMG**2 * sigma_intx_sq  # (M, G)
+    adjD_12 = dMG * sigma_intx_sq           # (M, G)
+    adjD_22 = sigma1_sq                     # (M, G)
+
+    # b_xz components
+    bxz_0 = 1.0 / aMG          # (M, G)
+    bxz_1 = 1.0 - dMG / aMG    # (M, G)
+
+    # Residuals at y_TF = 0: o - m(0)
+    r0_x = xhat_star[None, :] + bMG / aMG                                      # (M, G)
+    r0_z = zhat_star[None, :] - alpha_zn + mcMG - dMG * bMG / aMG - dMG * x_bar  # (M, G)
+
+    # b_xz^T adj(D) b_xz and b_xz^T adj(D) (o - m(0)); divide by det_D once.
+    bAb = bxz_0 * (adjD_11 * bxz_0 + adjD_12 * bxz_1) + bxz_1 * (
+        adjD_12 * bxz_0 + adjD_22 * bxz_1
+    )  # (M, G)
+    bAo = bxz_0 * (adjD_11 * r0_x + adjD_12 * r0_z) + bxz_1 * (
+        adjD_12 * r0_x + adjD_22 * r0_z
+    )  # (M, G)
+
+    xi_xz = bAb / det_D            # (M, G); always > 0 since D is PD
+    mu_L = bAo / bAb               # (M, G); = (bAo/det_D) / (bAb/det_D)
+    sigma_L_sq = 1.0 / xi_xz
     sigma_L = np.sqrt(sigma_L_sq)  # (M, G)
 
     # Compute truncated normal mean and variance on [a, b]
@@ -368,7 +402,6 @@ def ystar_pp_mean_sd_color_vectorized(
     mu_x_at_mean = (mean_yTF - bMG) / aMG  # (M, G)
 
     # Residual vector at y_TF = mean_yTF:
-    alpha_zn = alpha_k[:, None] * np.log1p(zobs_star[None, :])  # (M, G)
     res0 = xhat_star[None, :] - mu_x_at_mean  # (M, G)
     res1 = zhat_star[None, :] - (
         mean_yTF + alpha_zn - mcMG - dMG * (mu_x_at_mean - x_bar)
@@ -405,6 +438,7 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     y_min,
     y_max,
     zobs_star,
+    mean_log1pz,
     on_bad_Z="raise",
     Z_floor=1e-300,
 ):
@@ -532,9 +566,9 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
         mean_yTF[nd] = m
         var_yTF[nd] = v
 
-    # E[ŷ | x̂, z_obs, θ] = mean_yTF + α_kcorr·log(1+z)
+    # E[ŷ | x̂, z_obs, θ] = mean_yTF + α_kcorr·[log(1+z) - mean_log1pz]
     # Var[ŷ | x̂, z_obs, θ] = A₁₁ + V_*(θ)
-    cond_mean = mean_yTF + alpha_k[:, None] * np.log1p(zobs_star[None, :])  # (M, G)
+    cond_mean = mean_yTF + alpha_k[:, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)  # (M, G)
     cond_var = A11 + var_yTF  # (M, G)
 
     # Mix over draws
@@ -568,6 +602,7 @@ def DESI_color(
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
     x_bar = input_data.get("mean_x", None)
+    mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
     # Load galaxy data
     xhat_star, sigma_x_star, yhat_star, sigma_y_star, zhat_star, sigma_z_star, zobs_star = (
         load_xyz_and_uncertainties_from_desi(galaxy_fits)
@@ -607,6 +642,7 @@ def DESI_color(
         y_min=y_min,
         y_max=y_max,
         zobs_star=zobs_star,
+        mean_log1pz=mean_log1pz,
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -637,6 +673,7 @@ def DESI_color(
         y_min=y_min,
         y_max=y_max,
         zobs_star=zobs_main,
+        mean_log1pz=mean_log1pz,
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -829,6 +866,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
     x_bar = input_data.get("mean_x", float(np.nanmean(xhat[valid])))
+    mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
     mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_color_vectorized(
         draws,
@@ -841,6 +879,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
         y_min=y_min,
         y_max=y_max,
         zobs_star=zobs[valid],
+        mean_log1pz=mean_log1pz,
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -961,6 +1000,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None):
         input_data = json.load(f)
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
+    mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
     mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_color_xonly_vectorized(
         draws,
@@ -970,6 +1010,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None):
         y_min=y_min,
         y_max=y_max,
         zobs_star=zobs[valid],
+        mean_log1pz=mean_log1pz,
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -1021,6 +1062,7 @@ def ystar_pp_cov_color_vectorized(
     y_min,
     y_max,
     zobs_star,
+    mean_log1pz,
     on_bad_Z="floor",
     Z_floor=1e-300,
     chunk_size=200,
@@ -1057,7 +1099,7 @@ def ystar_pp_cov_color_vectorized(
         draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
         sigma_y_star=sigma_y_star,
         x_bar=x_bar, y_min=y_min, y_max=y_max,
-        zobs_star=zobs_star,
+        zobs_star=zobs_star, mean_log1pz=mean_log1pz,
         on_bad_Z=on_bad_Z, Z_floor=Z_floor,
     )
 
@@ -1073,6 +1115,7 @@ def ystar_pp_cov_color_vectorized(
     delta_d = draws["delta_c"].to_numpy(float)
     mu_c_d = draws["mu_c"].to_numpy(float)
     tau_c_d = draws["tau_c"].to_numpy(float)
+    alpha_k_d = draws["alpha_kcorr"].to_numpy(float)
     M = len(draws)
 
     accum = np.zeros((G, G), dtype=float)
@@ -1092,16 +1135,37 @@ def ystar_pp_cov_color_vectorized(
         tcMG = tau_c_d[start:end, None]
 
         sigma1_sq = sixMG**2 + sigma_x_star[None, :]**2
+        sigma_intx_sq = sixMG**2
+        sigma_x_sq = sigma_x_star[None, :]**2
         A11 = gMG**2 * tcMG**2 + siyMG**2 + sigma_y_star[None, :]**2
         A12 = gMG * (gMG - 1) * tcMG**2
         A22 = (gMG - 1)**2 * tcMG**2 + sizMG**2 + sigma_z_star[None, :]**2
 
-        b0 = dMG * A12 / A22
-        b1 = A12 / A22
-        sigma_y_given_xz_sq = A11 - A12**2 / A22
+        det_D = sigma1_sq * A22 + dMG**2 * sigma_intx_sq * sigma_x_sq
+        b0 = dMG * sigma_intx_sq * A12 / det_D
+        b1 = sigma1_sq * A12 / det_D
+        sigma_y_given_xz_sq = A11 - sigma1_sq * A12**2 / det_D
 
-        mu_L = bMG + aMG * xhat_star[None, :]
-        sigma_L_sq = aMG**2 * sigma1_sq
+        # k-correction: needed for both the joint posterior and the conditional mean
+        alpha_zn_chunk = alpha_k_d[start:end, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)
+
+        # Joint posterior y_TF | x̂, ẑ, θ  (paper Eq. cc:T_post_xz)
+        adjD_11 = A22 + dMG**2 * sigma_intx_sq
+        adjD_12 = dMG * sigma_intx_sq
+        adjD_22 = sigma1_sq
+        bxz_0 = 1.0 / aMG
+        bxz_1 = 1.0 - dMG / aMG
+        r0_x = xhat_star[None, :] + bMG / aMG
+        r0_z = zhat_star[None, :] - alpha_zn_chunk + mcMG - dMG * bMG / aMG - dMG * x_bar
+        bAb = bxz_0 * (adjD_11 * bxz_0 + adjD_12 * bxz_1) + bxz_1 * (
+            adjD_12 * bxz_0 + adjD_22 * bxz_1
+        )
+        bAo = bxz_0 * (adjD_11 * r0_x + adjD_12 * r0_z) + bxz_1 * (
+            adjD_12 * r0_x + adjD_22 * r0_z
+        )
+        xi_xz = bAb / det_D
+        mu_L = bAo / bAb
+        sigma_L_sq = 1.0 / xi_xz
         sigma_L = np.sqrt(sigma_L_sq)
 
         mu_chunk = np.empty_like(mu_L)
@@ -1145,8 +1209,8 @@ def ystar_pp_cov_color_vectorized(
         # Conditional mean of ŷ given (x̂, ẑ, θ) at y_TF = mu_chunk
         mu_x = (mu_chunk - bMG) / aMG
         res0 = xhat_star[None, :] - mu_x
-        res1 = zhat_star[None, :] - (mu_chunk - mcMG - dMG * (mu_x - x_bar))
-        cond_mean_chunk = mu_chunk + b0 * res0 + b1 * res1  # (B, G)
+        res1 = zhat_star[None, :] - (mu_chunk + alpha_zn_chunk - mcMG - dMG * (mu_x - x_bar))
+        cond_mean_chunk = mu_chunk + alpha_zn_chunk + b0 * res0 + b1 * res1  # (B, G)
 
         # Conditional variance contribution at fixed θ
         dres0_dyTF = -1.0 / aMG
@@ -1175,6 +1239,7 @@ def ystar_pp_cov_color_xonly_vectorized(
     y_min,
     y_max,
     zobs_star,
+    mean_log1pz,
     on_bad_Z="floor",
     Z_floor=1e-300,
     chunk_size=200,
@@ -1196,7 +1261,7 @@ def ystar_pp_cov_color_xonly_vectorized(
         draws, xhat_star, sigma_x_star,
         sigma_y_star=sigma_y_star,
         y_min=y_min, y_max=y_max,
-        zobs_star=zobs_star,
+        zobs_star=zobs_star, mean_log1pz=mean_log1pz,
         on_bad_Z=on_bad_Z, Z_floor=Z_floor,
     )
 
@@ -1269,8 +1334,8 @@ def ystar_pp_cov_color_xonly_vectorized(
             mu_chunk[nd] = mu + sig * t
             var_chunk[nd] = np.maximum(sig**2 * (1.0 + u - t**2), 0.0)
 
-        # Conditional mean = mean_yTF + α_kcorr·log(1+z)
-        cond_mean_chunk = mu_chunk + alpha_k_d[start:end, None] * np.log1p(zobs_star[None, :])  # (B, G)
+        # Conditional mean = mean_yTF + α_kcorr·[log(1+z) - mean_log1pz]
+        cond_mean_chunk = mu_chunk + alpha_k_d[start:end, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)  # (B, G)
 
         # Conditional variance = A₁₁ + V_★ (dmu_dyTF = 1)
         cond_var_chunk = A11 + var_chunk  # (B, G)
@@ -1304,6 +1369,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None):
         input_data = json.load(f)
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
+    mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
     (xhat_full, sigma_x_full, yhat_full, sigma_y_full,
      _zhat_full, _sigma_z_full, zobs_full) = load_xyz_and_uncertainties_from_desi(fits_path)
@@ -1327,6 +1393,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None):
         sigma_y_star=sigma_y_star,
         y_min=y_min, y_max=y_max,
         zobs_star=zobs_star,
+        mean_log1pz=mean_log1pz,
     )
 
     fits_out = _p("color_xonly_cov.fits")
@@ -1369,6 +1436,7 @@ def write_cov_color(run_dir, fits_path, cfg=None):
         input_data = json.load(f)
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
+    mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
     # Load MAIN-sample galaxies
     (xhat_full, sigma_x_full, yhat_full, sigma_y_full,
@@ -1396,6 +1464,7 @@ def write_cov_color(run_dir, fits_path, cfg=None):
         sigma_y_star=sigma_y_star,
         x_bar=x_bar, y_min=y_min, y_max=y_max,
         zobs_star=zobs_star,
+        mean_log1pz=mean_log1pz,
     )
 
     G = cov.shape[0]
