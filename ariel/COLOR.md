@@ -61,13 +61,57 @@ cd ../TFPV/ariel
 
 ---
 
-## Step 6c: Run MCMC sampling (color model)
+## Step 5d: Find MAP estimate (init_MAP.json)
+
+The MAP (maximum a posteriori) estimate provides a warm start near the posterior
+mode. Starting MCMC from the MAP rather than a hand-set `init.json` reduces
+warmup requirements and avoids the sampler spending time finding the basin.
 
 ```bash
-./color sample num_warmup=500 num_samples=1000 num_chains=4 \
-    adapt save_metric=1 \
+# Find MAP estimate — typically completes in < 5 minutes
+./color optimize \
     data file=output/$RUN/input.json \
     init=output/$RUN/init.json \
+    output file=output/$RUN/optimize.csv
+
+# Convert optimizer output to MCMC init file
+python - <<'EOF'
+import pandas as pd, json, os
+
+RUN = os.environ['RUN']
+df = pd.read_csv(f'output/{RUN}/optimize.csv', comment='#')
+row = df.iloc[0]
+old = json.load(open(f'output/{RUN}/init.json'))
+new = {}
+for k in old.keys():
+    if k == 'intercept_std':
+        cols = sorted([c for c in df.columns if c.startswith('intercept_std.')],
+                      key=lambda s: int(s.split('.')[1]))
+        new[k] = [float(row[c]) for c in cols]
+    elif k in df.columns:
+        new[k] = float(row[k])
+    else:
+        new[k] = old[k]
+with open(f'output/{RUN}/init_MAP.json', 'w') as f:
+    json.dump(new, f, indent=2)
+print(f'MAP init written to output/{RUN}/init_MAP.json')
+EOF
+```
+
+---
+
+## Step 6c: Run MCMC sampling (color model)
+
+`algorithm=hmc metric=dense_e` learns the full posterior covariance during
+warmup, absorbing parameter correlations (e.g. slope ↔ α_kcorr, δ_c ↔ μ_c)
+and reducing the leapfrog steps needed per effective sample.
+
+```bash
+./color sample num_warmup=200 num_samples=1000 num_chains=4 \
+    adapt save_metric=1 \
+    algorithm=hmc metric=dense_e \
+    data file=output/$RUN/input.json \
+    init=output/$RUN/init_MAP.json \
     output file=output/$RUN/color.csv
 ```
 
