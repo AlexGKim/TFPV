@@ -9,6 +9,6 @@
   "gamma_tau_c": -0.19,
   "delta_c": 0.065,
   "mu_c": 0.29,
-  "tau_c": 0.037,
-  "alpha_kcorr": -0.5
+  "alpha_kcorr": -0.5,
+  "log_tau_c": -3.2968373663379125
 }

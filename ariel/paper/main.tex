@@ -1041,7 +1041,7 @@ Additional priors:
 \gamma &\sim \mathcal{N}(0,\,1)\;\text{truncated to }\gamma < 0, \label{eq:cc:gamma_prior}\\
 \delta &\sim \mathcal{N}(0,\,1), \label{eq:cc:delta_prior}\\
 \mu_c  &\sim \mathcal{N}(\bar{c}_{\mathrm{obs}},\,1), \label{eq:cc:muc_prior}\\
-\tau_c &\sim \mathrm{Half\text{-}Cauchy}(0,\,0.3), \label{eq:cc:tauc_prior}\\
+\tau_c &\sim \mathrm{Half\text{-}Cauchy}(0,\,0.3)\;\text{truncated to }\tau_c > 0.014, \label{eq:cc:tauc_prior}\\
 \sigma_{\mathrm{int},z} &\sim \mathrm{Half\text{-}Cauchy}(0,\,1), \label{eq:cc:sigz_prior}\\
 \alpha_k &\sim \mathcal{N}(0,\,5), \label{eq:cc:alphak_prior}
 \end{align}
@@ -1052,6 +1052,47 @@ Without this constraint, the likelihood admits a near-degenerate solution
 at $\gamma > 0$ in which the roles of $\sigma_{\mathrm{int},y}$ and
 $\sigma_{\mathrm{int},z}$ are exchanged; fits to the data show that
 the $\gamma < 0$ mode has substantially higher posterior probability.
+The lower bound $\tau_c > 0.014$ excludes a second degenerate mode at
+$\tau_c \approx 0.006$--$0.013$ in which the color correction effectively
+shuts off ($\gamma\tau_c \to 0$); this mode occupies a clearly separated
+region of the posterior with substantially lower probability than the
+physical mode at $\tau_c \approx 0.03$.
+
+\paragraph{Sampling parameterization.}
+Hamiltonian Monte Carlo on the natural $(\gamma,\tau_c)$ coordinates is
+hampered by two coupled features of the posterior geometry.  First, the
+latent contribution to the $r$-band magnitude,
+$\gamma\eta_i \sim \mathcal{N}(0,p^2)$ with $p \equiv \gamma\tau_c$,
+depends on $\gamma$ and $\tau_c$ only through their product.  The $y$-data
+alone are therefore degenerate along contours of constant $p$; the $z$-
+and color-data resolve $\gamma$ and $\tau_c$ separately only weakly,
+leaving a banana-shaped posterior ridge.  Second, the prior on $\tau_c$
+places appreciable mass near zero, and the joint posterior contracts
+sharply as $\tau_c \to 0$: a single HMC step size cannot simultaneously
+resolve the narrow region near $\tau_c = 0$ and the broader region away
+from it.
+
+We mitigate both pathologies by sampling
+\begin{equation}
+(p,\,\ell)\;\equiv\;(\gamma\tau_c,\;\log\tau_c)
+\label{eq:cc:reparam}
+\end{equation}
+in place of $(\gamma,\tau_c)$, with $\gamma = p\,e^{-\ell}$ and
+$\tau_c = e^{\ell}$ recovered as derived quantities.  The $p$-coordinate
+aligns one sampler axis with the banana ridge; the log scale on $\tau_c$
+renders the geometry scale-invariant near $\tau_c = 0$, removing the
+contraction.  The change of variables has unit Jacobian determinant,
+\begin{equation}
+\left|\det\frac{\partial(p,\ell)}{\partial(\gamma,\tau_c)}\right|
+= \left|\det\begin{pmatrix}\tau_c & \gamma\\[2pt] 0 & \tau_c^{-1}\end{pmatrix}\right|
+= 1,
+\label{eq:cc:reparam_jac}
+\end{equation}
+because the $\tau_c^{-1}$ Jacobian from $\gamma\to p$ at fixed $\tau_c$ is
+exactly cancelled by the $\tau_c$ Jacobian from $\tau_c\to\ell$.  The
+priors of Eqs.~\eqref{eq:cc:gamma_prior}--\eqref{eq:cc:alphak_prior}
+therefore apply on the derived $\gamma$ and $\tau_c$ with no additional
+volume correction.
 
 \subsection{Marginalization over Latent Variables}
 \label{sec:cc:marginalization}

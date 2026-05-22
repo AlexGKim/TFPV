@@ -631,7 +631,11 @@ parameters {
   real gamma_tau_c;     // p = γ·τ_c (sampled directly; γ<0, τ_c>0 ⟹ p<0)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
   real mu_c;             // mean color at x = x_bar                          (Eq. C31)
-  real<lower=0> tau_c;   // intrinsic color scatter; lower=0 -> half-Cauchy  (Eq. C32)
+  // Reparameterized on log scale to defuse the τ_c → 0 funnel observed in
+  // DR1_v6_color (2026-05-19). Sampling log_tau_c gives scale-invariant HMC
+  // step sizes. Lower bound log(0.014) excludes the tau_c < 0.014 degenerate
+  // "color-correction-off" mode identified in DR1_v6 posterior (2026-05-20).
+  real<lower=log(0.014)> log_tau_c;  // log of intrinsic color scatter; enforces tau_c > 0.014 (Eq. C32)
 
   // [KCORR] latent k-correction parameter
   // Augments ŷ_obs by ΔM = alpha_kcorr * (log1p(z_obs[n]) - mean_log1pz)
@@ -647,6 +651,7 @@ transformed parameters {
     sigma_int_x_std = sigma_int_x / sd_x;
   }
   real<lower=0> sigma_int_z = exp(log_sigma_int_z);
+  real<lower=0> tau_c = exp(log_tau_c);   // [COLOR] derived from log_tau_c
   real gamma = gamma_tau_c / tau_c;
 }
 model {
@@ -656,11 +661,21 @@ model {
   log_sigma_int_z ~ normal(-3, 2);
 
   // [COLOR] Priors for color-correction parameters (Eqs. C29-C32)
-  // Reparameterized: sample gamma_tau_c = γ·τ_c directly to break the γ–τ_c banana.
-  // Prior: p(γ,τ) dγ dτ → p(p/τ, τ)·|1/τ| dp dτ  (Jacobian = 1/τ_c)
-  // γ<0 truncation enforced structurally (gamma_tau_c<0, tau_c>0).
+  //
+  // Sampling parameterization: (gamma_tau_c, log_tau_c)
+  //   • gamma_tau_c = p = γ·τ_c breaks the γ–τ_c banana.
+  //   • log_tau_c on unconstrained scale defuses the τ_c → 0 funnel; HMC
+  //     step sizes adapt to scale of τ_c automatically.
+  //
+  // Jacobian chain from "natural" priors p(γ, τ_c) dγ dτ_c to our params dp d(log τ_c):
+  //   dγ dτ_c = (1/τ_c) dp dτ_c           [γ = p/τ_c at fixed τ_c]
+  //           = (1/τ_c) · τ_c dp d(log τ_c) = dp d(log τ_c)
+  // So the net Jacobian is unity — no Jacobian term needed!  Both transforms
+  // cancel because the funnel-fix log transform exactly absorbs the γ-reparam
+  // Jacobian.  Priors below are applied directly to γ and τ_c on their natural
+  // scales (~ statements on derived quantities are fine in Stan).
   tau_c   ~ cauchy(0, 0.3);
-  target += normal_lpdf(gamma | 0, 1) - log(tau_c);
+  gamma   ~ std_normal();
   delta_c ~ std_normal();
   mu_c    ~ normal(c_bar_obs, 1);
 

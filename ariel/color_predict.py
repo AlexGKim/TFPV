@@ -585,6 +585,7 @@ def DESI_color(
     grid_resolution_y=50,
     make_residual_grid=True,
     make_redshift_grid=True,
+    xonly=False,
 ):
     """
     Run color-correction model predictions and produce diagnostic plots.
@@ -758,6 +759,66 @@ def DESI_color(
     plt.legend()
     plt.savefig(_p("variance_xhat_color.png"), dpi=300)
     plt.clf()
+
+    # --- x-only diagnostic plots (reuse loaded data and draws) ---
+    if xonly:
+        mean_pred_xo, sd_pred_xo = ystar_pp_mean_sd_color_xonly_vectorized(
+            draws,
+            xhat_star,
+            sigma_x_star,
+            sigma_y_star=sigma_y_star,
+            y_min=y_min,
+            y_max=y_max,
+            zobs_star=zobs_star,
+            mean_log1pz=mean_log1pz,
+        )
+        mean_pred_main_xo, _ = ystar_pp_mean_sd_color_xonly_vectorized(
+            draws,
+            xhat_main,
+            sigma_x_main,
+            sigma_y_star=sigma_y_main,
+            y_min=y_min,
+            y_max=y_max,
+            zobs_star=zobs_main,
+            mean_log1pz=mean_log1pz,
+        )
+        mean_y_xo = mean_pred_xo - yhat_star
+        mean_y_main_xo = mean_pred_main_xo - yhat_main
+
+        # Redshift scatter — x-only
+        plt.scatter(zobs_star, mean_y_xo, marker=".", alpha=0.2, label="DR2 PV Spirals")
+        plt.scatter(zobs_main, mean_y_main_xo, marker=".", alpha=0.2, label="Main Sample")
+        plt.xscale("log")
+        plt.xlabel(r"$z_{\text{obs}}$")
+        plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*] - \hat{y}_{\text{obs}}$ (mag)")
+        plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
+        plt.legend()
+        y_min_xo, y_max_xo = np.min(mean_y_main_xo), np.max(mean_y_main_xo)
+        y_range_xo = y_max_xo - y_min_xo
+        y_pad_xo = 0.1 * y_range_xo if y_range_xo > 0 else 1.0
+        plt.ylim((y_min_xo - y_pad_xo, y_max_xo + y_pad_xo))
+        plt.savefig(_p("redshift_color_xonly.png"), dpi=300)
+        plt.clf()
+
+        # Variance vs redshift — x-only
+        var_pred_xo = sd_pred_xo**2
+        plt.scatter(zobs_star, var_pred_xo, marker=".", alpha=0.15, s=4, label="Prediction")
+        plt.xscale("log")
+        plt.yscale("log")
+        plt.xlabel(r"$z_{\text{obs}}$")
+        plt.ylabel(r"Magnitude variance (mag$^2$)")
+        plt.legend()
+        plt.savefig(_p("variance_redshift_color_xonly.png"), dpi=300)
+        plt.clf()
+
+        # Variance vs xhat — x-only
+        plt.scatter(xhat_star, var_pred_xo, marker=".", alpha=0.15, s=4, label="Prediction")
+        plt.yscale("log")
+        plt.xlabel(r"$\log(V/V_0)$")
+        plt.ylabel(r"Magnitude variance (mag$^2$)")
+        plt.legend()
+        plt.savefig(_p("variance_xhat_color_xonly.png"), dpi=300)
+        plt.clf()
 
     return mean_y, sigma_y, zobs_star
 
@@ -1537,6 +1598,7 @@ if __name__ == "__main__":
         run_dir=args.run_dir,
         grid_resolution_x=args.grid_resolution,
         grid_resolution_y=args.grid_resolution,
+        xonly=args.xonly,
     )
 
     if not args.no_catalog:
