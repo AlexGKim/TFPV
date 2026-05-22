@@ -73,6 +73,7 @@ def load_params(file_pattern):
         "mu_{y_TF}":                      ["mu_y_TF"],
         "tau":                            ["tau"],
         r"$\gamma$":                      ["gamma"],
+        r"$\alpha_k$":                    ["alpha_kcorr"],
         r"$\delta_c$":                    ["delta_c"],
         r"$\mu_c$":                       ["mu_c"],
         r"$\tau_c$":                      ["tau_c"],
