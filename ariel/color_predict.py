@@ -215,7 +215,8 @@ def ystar_pp_mean_sd_color_vectorized(
     ----------
     draws : DataFrame
         MCMC posterior with columns: "slope", "intercept.1", "sigma_int_x",
-        "sigma_int_y", "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c", "alpha_kcorr".
+        "sigma_int_y", "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
+        "alpha_kcorr_r", "alpha_kcorr_z".
     xhat_star : (G,) array — observed log-velocity
     sigma_x_star : (G,) array — uncertainty on x̂
     zhat_star : (G,) array — observed z-band absolute magnitude
@@ -252,7 +253,8 @@ def ystar_pp_mean_sd_color_vectorized(
     delta = draws["delta_c"].to_numpy(float)
     mu_c = draws["mu_c"].to_numpy(float)
     tau_c = draws["tau_c"].to_numpy(float)
-    alpha_k = draws["alpha_kcorr"].to_numpy(float)  # (M,) k-correction slope, upper=0
+    alpha_k_r = draws["alpha_kcorr_r"].to_numpy(float)  # (M,) r-band k-correction slope
+    alpha_k_z = draws["alpha_kcorr_z"].to_numpy(float)  # (M,) z-band k-correction slope
 
     zobs_star = np.asarray(zobs_star, dtype=float)
 
@@ -303,8 +305,10 @@ def ystar_pp_mean_sd_color_vectorized(
     #       μ^†_xz = ξ_xz^{-1} · b_xz^T D^{-1} (o - m(0))
     # with o = (x̂, ẑ)^T and m(0) = (-β/α, Δ - μ_c + δβ/α + δ·x̄)^T.
 
-    # k-correction term per (M, G); used in m(0)[1] and reused by Step 5.
-    alpha_zn = alpha_k[:, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)  # (M, G)
+    # Band-dependent k-correction terms per (M, G)
+    log1pz_centered = np.log1p(zobs_star[None, :]) - mean_log1pz  # (1, G)
+    alpha_zn_r = alpha_k_r[:, None] * log1pz_centered  # (M, G) r-band
+    alpha_zn_z = alpha_k_z[:, None] * log1pz_centered  # (M, G) z-band
 
     # adj(D) = [[A22 + δ²σ²_intx, δσ²_intx], [δσ²_intx, σ1²]]
     adjD_11 = A22 + dMG**2 * sigma_intx_sq  # (M, G)
@@ -317,7 +321,7 @@ def ystar_pp_mean_sd_color_vectorized(
 
     # Residuals at y_TF = 0: o - m(0)
     r0_x = xhat_star[None, :] + bMG / aMG                                      # (M, G)
-    r0_z = zhat_star[None, :] - alpha_zn + mcMG - dMG * bMG / aMG - dMG * x_bar  # (M, G)
+    r0_z = zhat_star[None, :] - alpha_zn_z + mcMG - dMG * bMG / aMG - dMG * x_bar  # (M, G)
 
     # b_xz^T adj(D) b_xz and b_xz^T adj(D) (o - m(0)); divide by det_D once.
     bAb = bxz_0 * (adjD_11 * bxz_0 + adjD_12 * bxz_1) + bxz_1 * (
@@ -404,10 +408,10 @@ def ystar_pp_mean_sd_color_vectorized(
     # Residual vector at y_TF = mean_yTF:
     res0 = xhat_star[None, :] - mu_x_at_mean  # (M, G)
     res1 = zhat_star[None, :] - (
-        mean_yTF + alpha_zn - mcMG - dMG * (mu_x_at_mean - x_bar)
+        mean_yTF + alpha_zn_z - mcMG - dMG * (mu_x_at_mean - x_bar)
     )  # (M, G)
 
-    cond_mean = mean_yTF + alpha_zn + b0 * res0 + b1 * res1  # (M, G)
+    cond_mean = mean_yTF + alpha_zn_r + b0 * res0 + b1 * res1  # (M, G)
 
     # ---- Step 6: Conditional variance Var[ŷ | x̂, ẑ, θ] ----
     # ∂μ_{y|x̂ẑ}/∂y_TF = 1 + b^T · ∂residuals/∂y_TF
@@ -448,16 +452,16 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     Marginalizes ẑ out of the trivariate distribution (Eq. C.trivariate).
     Since B[1,2]=0, ŷ ⊥ x̂ | y_TF, giving:
 
-        ŷ_* | y_TF ~ N(y_TF + α_kcorr·log(1+z), A₁₁)
+        ŷ_* | y_TF ~ N(y_TF + Δ_r, A₁₁)
 
-    where A₁₁ = γ²τ_c² + σ²_{int,y} + σ²_{y,*}.
+    where A₁₁ = γ²τ_c² + σ²_{int,y} + σ²_{y,*} and Δ_r = α_{k,r}·[log(1+z) - mean].
     See paper/main.tex §sec:cc:x_only.
 
     Parameters
     ----------
     draws : DataFrame
         MCMC posterior with columns: "slope", "intercept.1", "sigma_int_x",
-        "sigma_int_y", "gamma", "tau_c", "alpha_kcorr".
+        "sigma_int_y", "gamma", "tau_c", "alpha_kcorr_r".
     xhat_star : (G,) array — observed log-velocity
     sigma_x_star : (G,) array — uncertainty on x̂
     sigma_y_star : (G,) array — measurement uncertainty on ŷ (enters A₁₁)
@@ -488,7 +492,7 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     siy = draws["sigma_int_y"].to_numpy(float)
     gamma = draws["gamma"].to_numpy(float)
     tau_c = draws["tau_c"].to_numpy(float)
-    alpha_k = draws["alpha_kcorr"].to_numpy(float)
+    alpha_k_r = draws["alpha_kcorr_r"].to_numpy(float)
 
     if np.any(alpha == 0):
         raise ValueError("Found slope == 0 in draws; model requires α ≠ 0.")
@@ -566,9 +570,9 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
         mean_yTF[nd] = m
         var_yTF[nd] = v
 
-    # E[ŷ | x̂, z_obs, θ] = mean_yTF + α_kcorr·[log(1+z) - mean_log1pz]
+    # E[ŷ | x̂, z_obs, θ] = mean_yTF + Δ_r (r-band k-correction only)
     # Var[ŷ | x̂, z_obs, θ] = A₁₁ + V_*(θ)
-    cond_mean = mean_yTF + alpha_k[:, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)  # (M, G)
+    cond_mean = mean_yTF + alpha_k_r[:, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)  # (M, G)
     cond_var = A11 + var_yTF  # (M, G)
 
     # Mix over draws
@@ -626,7 +630,8 @@ def DESI_color(
             "delta_c",
             "mu_c",
             "tau_c",
-            "alpha_kcorr",
+            "alpha_kcorr_r",
+            "alpha_kcorr_z",
         ],
         drop_diagnostics=True,
     )
@@ -918,7 +923,8 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c", "alpha_kcorr"],
+              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
+              "alpha_kcorr_r", "alpha_kcorr_z"],
         drop_diagnostics=True,
     )
 
@@ -1053,7 +1059,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None):
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "gamma", "tau_c", "alpha_kcorr"],
+              "gamma", "tau_c", "alpha_kcorr_r"],
         drop_diagnostics=True,
     )
 
@@ -1137,7 +1143,7 @@ def ystar_pp_cov_color_vectorized(
     Parameters
     ----------
     draws : DataFrame with columns slope, intercept.1, sigma_int_x, sigma_int_y,
-            sigma_int_z, gamma, delta_c, mu_c, tau_c, alpha_kcorr
+            sigma_int_z, gamma, delta_c, mu_c, tau_c, alpha_kcorr_r, alpha_kcorr_z
     xhat_star, sigma_x_star, zhat_star, sigma_z_star : (G,) arrays
     sigma_y_star : (G,) array — measurement uncertainty on ŷ (enters A₁₁)
     x_bar : float — sample mean of x̂ (from training data)
@@ -1176,7 +1182,8 @@ def ystar_pp_cov_color_vectorized(
     delta_d = draws["delta_c"].to_numpy(float)
     mu_c_d = draws["mu_c"].to_numpy(float)
     tau_c_d = draws["tau_c"].to_numpy(float)
-    alpha_k_d = draws["alpha_kcorr"].to_numpy(float)
+    alpha_k_r_d = draws["alpha_kcorr_r"].to_numpy(float)
+    alpha_k_z_d = draws["alpha_kcorr_z"].to_numpy(float)
     M = len(draws)
 
     accum = np.zeros((G, G), dtype=float)
@@ -1207,8 +1214,10 @@ def ystar_pp_cov_color_vectorized(
         b1 = sigma1_sq * A12 / det_D
         sigma_y_given_xz_sq = A11 - sigma1_sq * A12**2 / det_D
 
-        # k-correction: needed for both the joint posterior and the conditional mean
-        alpha_zn_chunk = alpha_k_d[start:end, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)
+        # Band-dependent k-corrections
+        log1pz_centered = np.log1p(zobs_star[None, :]) - mean_log1pz
+        alpha_zn_r_chunk = alpha_k_r_d[start:end, None] * log1pz_centered
+        alpha_zn_z_chunk = alpha_k_z_d[start:end, None] * log1pz_centered
 
         # Joint posterior y_TF | x̂, ẑ, θ  (paper Eq. cc:T_post_xz)
         adjD_11 = A22 + dMG**2 * sigma_intx_sq
@@ -1217,7 +1226,7 @@ def ystar_pp_cov_color_vectorized(
         bxz_0 = 1.0 / aMG
         bxz_1 = 1.0 - dMG / aMG
         r0_x = xhat_star[None, :] + bMG / aMG
-        r0_z = zhat_star[None, :] - alpha_zn_chunk + mcMG - dMG * bMG / aMG - dMG * x_bar
+        r0_z = zhat_star[None, :] - alpha_zn_z_chunk + mcMG - dMG * bMG / aMG - dMG * x_bar
         bAb = bxz_0 * (adjD_11 * bxz_0 + adjD_12 * bxz_1) + bxz_1 * (
             adjD_12 * bxz_0 + adjD_22 * bxz_1
         )
@@ -1270,8 +1279,8 @@ def ystar_pp_cov_color_vectorized(
         # Conditional mean of ŷ given (x̂, ẑ, θ) at y_TF = mu_chunk
         mu_x = (mu_chunk - bMG) / aMG
         res0 = xhat_star[None, :] - mu_x
-        res1 = zhat_star[None, :] - (mu_chunk + alpha_zn_chunk - mcMG - dMG * (mu_x - x_bar))
-        cond_mean_chunk = mu_chunk + alpha_zn_chunk + b0 * res0 + b1 * res1  # (B, G)
+        res1 = zhat_star[None, :] - (mu_chunk + alpha_zn_z_chunk - mcMG - dMG * (mu_x - x_bar))
+        cond_mean_chunk = mu_chunk + alpha_zn_r_chunk + b0 * res0 + b1 * res1  # (B, G)
 
         # Conditional variance contribution at fixed θ
         dres0_dyTF = -1.0 / aMG
@@ -1335,7 +1344,7 @@ def ystar_pp_cov_color_xonly_vectorized(
     siy_d = draws["sigma_int_y"].to_numpy(float)
     gamma_d = draws["gamma"].to_numpy(float)
     tau_c_d = draws["tau_c"].to_numpy(float)
-    alpha_k_d = draws["alpha_kcorr"].to_numpy(float)
+    alpha_k_r_d = draws["alpha_kcorr_r"].to_numpy(float)
     M = len(draws)
 
     accum = np.zeros((G, G), dtype=float)
@@ -1395,8 +1404,8 @@ def ystar_pp_cov_color_xonly_vectorized(
             mu_chunk[nd] = mu + sig * t
             var_chunk[nd] = np.maximum(sig**2 * (1.0 + u - t**2), 0.0)
 
-        # Conditional mean = mean_yTF + α_kcorr·[log(1+z) - mean_log1pz]
-        cond_mean_chunk = mu_chunk + alpha_k_d[start:end, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)  # (B, G)
+        # Conditional mean = mean_yTF + Δ_r (r-band k-correction)
+        cond_mean_chunk = mu_chunk + alpha_k_r_d[start:end, None] * (np.log1p(zobs_star[None, :]) - mean_log1pz)  # (B, G)
 
         # Conditional variance = A₁₁ + V_★ (dmu_dyTF = 1)
         cond_var_chunk = A11 + var_chunk  # (B, G)
@@ -1445,7 +1454,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None):
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "gamma", "tau_c", "alpha_kcorr"],
+              "gamma", "tau_c", "alpha_kcorr_r"],
         drop_diagnostics=True,
     )
 
@@ -1516,7 +1525,8 @@ def write_cov_color(run_dir, fits_path, cfg=None):
     draws = read_cmdstan_posterior(
         _p("color_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c", "alpha_kcorr"],
+              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
+              "alpha_kcorr_r", "alpha_kcorr_z"],
         drop_diagnostics=True,
     )
 

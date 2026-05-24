@@ -637,11 +637,11 @@ parameters {
   // "color-correction-off" mode identified in DR1_v6 posterior (2026-05-20).
   real<lower=log(0.014)> log_tau_c;  // log of intrinsic color scatter; enforces tau_c > 0.014 (Eq. C32)
 
-  // [KCORR] latent k-correction parameter
-  // Augments ŷ_obs by ΔM = alpha_kcorr * (log1p(z_obs[n]) - mean_log1pz)
-  // (color-independent redshift trend). Untruncated to avoid boundary-prior HMC pathology
-  // (see plan greedy-bubbling-pebble.md, Phase A5 decision 2026-05-18).
-  real alpha_kcorr;
+  // [KCORR] band-dependent latent k-correction parameters
+  // Delta_r = alpha_kcorr_r * (log1p(z_obs[n]) - mean_log1pz)  [r-band]
+  // Delta_z = alpha_kcorr_z * (log1p(z_obs[n]) - mean_log1pz)  [z-band]
+  real alpha_kcorr_r;
+  real alpha_kcorr_z;
 }
 transformed parameters {
   real sigma_int_x_std;
@@ -679,9 +679,9 @@ model {
   delta_c ~ std_normal();
   mu_c    ~ normal(c_bar_obs, 1);
 
-  // [KCORR] Prior for latent k-correction parameter
-  // |k-corr error| at z=0.1 is plausibly < 0.5 mag, so |alpha|*z_max ~ 0.5 -> scale 5 is wide.
-  alpha_kcorr ~ normal(0, 5);
+  // [KCORR] Priors for band-dependent k-correction parameters
+  alpha_kcorr_r ~ normal(0, 5);
+  alpha_kcorr_z ~ normal(0, 5);
 
   // Per-galaxy variances in standardized x-coordinates
   vector[N_total] sigmasq1_std = square(sigma_int_x_std) + sigma_x_std_sq;
@@ -702,8 +702,10 @@ model {
     real intercept_over_slope = intercept_std[bin_idx] * inv_slope_std;
 
     for (n in 1 : N_total) {
-      // [KCORR] Per-galaxy k-correction mean shift, centered to remove alpha-intercept degeneracy
-      real alpha_zn = alpha_kcorr * (log1p(z_obs[n]) - mean_log1pz);
+      // [KCORR] Per-galaxy band-dependent k-correction mean shifts
+      real log1pz_centered = log1p(z_obs[n]) - mean_log1pz;
+      real alpha_zn_r = alpha_kcorr_r * log1pz_centered;
+      real alpha_zn_z = alpha_kcorr_z * log1pz_centered;
 
       // [COLOR] Per-galaxy A_i diagonal entries (Eq. C17)
       real A11 = A11_base + sigma_y_sq[n];
@@ -732,8 +734,8 @@ model {
       // [COLOR] Closed-form numerator integral (paper Eq. eq:cc:numerator_closed).
       // a_n = (-intercept/slope, Δ_n, Δ_n - μ_c + δ_c·intercept/slope) in standardized x.
       vector[3] a_vec = [-intercept_over_slope,
-                         alpha_zn,
-                         alpha_zn - mu_c + delta_c * intercept_over_slope]';
+                         alpha_zn_r,
+                         alpha_zn_z - mu_c + delta_c * intercept_over_slope]';
       vector[3] d_vec = obs - a_vec;
 
       // Triangular solves against L_B (Cholesky of B_n): v = L_B⁻¹·b, w = L_B⁻¹·d
@@ -763,14 +765,14 @@ model {
 
       // [COLOR] Selection probability: same sinh-GL machinery as tophat.stan,
       // but sigma2 -> sqrt(A11) (Appendix C §C.3; hat_z does not enter selection cuts).
-      // [KCORR] The k-correction shifts E[y_obs|y_TF] by alpha_zn, so the effective
-      // selection window in y_TF-space is shifted by -alpha_zn.
+      // [KCORR] The r-band k-correction shifts E[y_obs|y_TF] by alpha_zn_r, so the
+      // effective selection window in y_TF-space is shifted by -alpha_zn_r.
       if (y_selection != 0 && plane_cut == 1) {
         real sigma_eff = sqrt(A11);  // sqrt(Var(ŷ|y_TF)) — only needed for selection
         target += -log(
           integrate_binormal_strip_sinh2_gl(
             y_min, y_max,
-            haty_min - alpha_zn, haty_max - alpha_zn,
+            haty_min - alpha_zn_r, haty_max - alpha_zn_r,
             slope_std, intercept_std[bin_idx],
             slope_plane_std,
             intercept_plane_std,

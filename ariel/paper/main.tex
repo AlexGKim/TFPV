@@ -979,8 +979,8 @@ y_{\mathrm{TF},i} &\sim \mathrm{Uniform}(y_{\min},\,y_{\max}), \label{eq:cc:yTF_
 x_i \mid y_{\mathrm{TF},i} &\sim \mathcal{N}\!\left(\frac{y_{\mathrm{TF},i}-\beta}{\alpha},\;\sigma_{\mathrm{int},x}^2\right), \label{eq:cc:x_given_yTF}\\
 c_i \mid x_i &\sim \mathcal{N}\!\left(\mu_c + \delta(x_i - \bar{x}),\;\tau_c^2\right), \label{eq:cc:c_given_x}\\
 \eta_i &\equiv c_i - \mu_c - \delta(x_i - \bar{x}), \label{eq:cc:eta_def}\\
-y_i \mid y_{\mathrm{TF},i},\,\eta_i &\sim \mathcal{N}\!\left(y_{\mathrm{TF},i} + \gamma\eta_i + \Delta_i,\;\sigma_{\mathrm{int},y}^2\right), \label{eq:cc:y_given_yTF_eta}\\
-z_i \mid y_{\mathrm{TF},i},\,\eta_i,\,x_i &\sim \mathcal{N}\!\left(y_{\mathrm{TF},i} + (\gamma-1)\eta_i - \mu_c - \delta(x_i-\bar{x}) + \Delta_i,\;\sigma_{\mathrm{int},z}^2\right), \label{eq:cc:z_given_yTF_eta}
+y_i \mid y_{\mathrm{TF},i},\,\eta_i &\sim \mathcal{N}\!\left(y_{\mathrm{TF},i} + \gamma\eta_i + \Delta_{r,i},\;\sigma_{\mathrm{int},y}^2\right), \label{eq:cc:y_given_yTF_eta}\\
+z_i \mid y_{\mathrm{TF},i},\,\eta_i,\,x_i &\sim \mathcal{N}\!\left(y_{\mathrm{TF},i} + (\gamma-1)\eta_i - \mu_c - \delta(x_i-\bar{x}) + \Delta_{z,i},\;\sigma_{\mathrm{int},z}^2\right), \label{eq:cc:z_given_yTF_eta}
 \end{align}
 with measurement equations
 \begin{align}
@@ -989,18 +989,21 @@ with measurement equations
 \hat{z}_i \mid z_i &\sim \mathcal{N}(z_i,\;\sigma_{z,i}^2). \label{eq:cc:zhat}
 \end{align}
 Here $\bar{x}$ is the sample mean of $\hat{x}$ and
-\begin{equation}
-\Delta_i \equiv \alpha_k \bigl[\ln(1 + z_{\mathrm{obs},i}) - \overline{\ln(1+z)}\bigr]
-\label{eq:cc:Delta}
-\end{equation}
-is a residual $k$-correction that absorbs any redshift-dependent offset
-not already removed by the upstream photometric corrections,
-where $\overline{\ln(1+z)} \equiv N^{-1}\sum_j \ln(1+z_{\mathrm{obs},j})$
-is the sample mean.  Centering the regressor removes the degeneracy
-between $\alpha_k$ and the intercept; the mean $k$-correction is absorbed
-by the intercept by construction.
-Because $\Delta_i$ shifts the underlying absolute magnitude $y_{\mathrm{TF},i}$,
-it enters both the $r$-band and $z$-band means identically.
+\begin{align}
+\Delta_{r,i} &\equiv \alpha_{k,r} \bigl[\ln(1 + z_{\mathrm{obs},i}) - \overline{\ln(1+z)}\bigr], \label{eq:cc:Delta_r}\\
+\Delta_{z,i} &\equiv \alpha_{k,z} \bigl[\ln(1 + z_{\mathrm{obs},i}) - \overline{\ln(1+z)}\bigr]  \label{eq:cc:Delta_z}
+\end{align}
+are band-dependent residual $k$-corrections that absorb any
+redshift-dependent offsets not already removed by the upstream photometric
+corrections, where
+$\overline{\ln(1+z)} \equiv N^{-1}\sum_j \ln(1+z_{\mathrm{obs},j})$ is the
+sample mean.  Centering the regressors removes degeneracies with the
+intercept and $\mu_c$; the mean $k$-corrections are absorbed by these
+parameters by construction.
+Separate slopes are needed because the $r$- and $z$-band $k$-corrections
+differ: the observed $r{-}z$ color reddens by $\sim\!0.12$~mag from
+$z_{\mathrm{obs}}=0.02$ to $0.1$ in the training sample, a trend that a
+single shared $\Delta_i$ cannot capture.
 The variable $\eta_i \sim \mathcal{N}(0,\tau_c^2)$ is the residual color after
 removing the population-level color--velocity slope $\delta$; it is
 independent of $x_i$ by construction.
@@ -1043,7 +1046,8 @@ Additional priors:
 \mu_c  &\sim \mathcal{N}(\bar{c}_{\mathrm{obs}},\,1), \label{eq:cc:muc_prior}\\
 \tau_c &\sim \mathrm{Half\text{-}Cauchy}(0,\,0.3)\;\text{truncated to }\tau_c > 0.014, \label{eq:cc:tauc_prior}\\
 \sigma_{\mathrm{int},z} &\sim \mathrm{Half\text{-}Cauchy}(0,\,1), \label{eq:cc:sigz_prior}\\
-\alpha_k &\sim \mathcal{N}(0,\,5), \label{eq:cc:alphak_prior}
+\alpha_{k,r} &\sim \mathcal{N}(0,\,5), \label{eq:cc:alphakr_prior}\\
+\alpha_{k,z} &\sim \mathcal{N}(0,\,5), \label{eq:cc:alphakz_prior}
 \end{align}
 where $\bar{c}_{\mathrm{obs}} \equiv N^{-1}\sum_i (\hat{y}_i - \hat{z}_i)$ is
 the sample mean observed color.
@@ -1090,7 +1094,7 @@ contraction.  The change of variables has unit Jacobian determinant,
 \end{equation}
 because the $\tau_c^{-1}$ Jacobian from $\gamma\to p$ at fixed $\tau_c$ is
 exactly cancelled by the $\tau_c$ Jacobian from $\tau_c\to\ell$.  The
-priors of Eqs.~\eqref{eq:cc:gamma_prior}--\eqref{eq:cc:alphak_prior}
+priors of Eqs.~\eqref{eq:cc:gamma_prior}--\eqref{eq:cc:alphakz_prior}
 therefore apply on the derived $\gamma$ and $\tau_c$ with no additional
 volume correction.
 
@@ -1100,12 +1104,12 @@ volume correction.
 \paragraph{Marginalizing $\eta_i$.}
 For fixed $(y_{\mathrm{TF},i}, x_i)$, the residual color
 $\eta_i \sim \mathcal{N}(0,\tau_c^2)$ is independent of $x_i$.
-Since $y_i = y_{\mathrm{TF},i} + \gamma\eta_i + \Delta_i + \epsilon_y$ (with $\epsilon_y \sim \mathcal{N}(0,\sigma_{\mathrm{int},y}^2)$)
-and $z_i = y_{\mathrm{TF},i} + (\gamma-1)\eta_i - \mu_c - \delta(x_i-\bar{x}) + \Delta_i + \epsilon_z$
+Since $y_i = y_{\mathrm{TF},i} + \gamma\eta_i + \Delta_{r,i} + \epsilon_y$ (with $\epsilon_y \sim \mathcal{N}(0,\sigma_{\mathrm{int},y}^2)$)
+and $z_i = y_{\mathrm{TF},i} + (\gamma-1)\eta_i - \mu_c - \delta(x_i-\bar{x}) + \Delta_{z,i} + \epsilon_z$
 (with $\epsilon_z \sim \mathcal{N}(0,\sigma_{\mathrm{int},z}^2)$ independent of $\epsilon_y$), we have
 \begin{align}
-\tilde{y}_i &\equiv y_i - y_{\mathrm{TF},i} - \Delta_i = \gamma\eta_i + \epsilon_y,\\
-\tilde{z}_i &\equiv z_i - [y_{\mathrm{TF},i} + \Delta_i - \mu_c - \delta(x_i-\bar{x})] = (\gamma-1)\eta_i + \epsilon_z.
+\tilde{y}_i &\equiv y_i - y_{\mathrm{TF},i} - \Delta_{r,i} = \gamma\eta_i + \epsilon_y,\\
+\tilde{z}_i &\equiv z_i - [y_{\mathrm{TF},i} + \Delta_{z,i} - \mu_c - \delta(x_i-\bar{x})] = (\gamma-1)\eta_i + \epsilon_z.
 \end{align}
 Marginalizing $\eta_i \sim \mathcal{N}(0,\tau_c^2)$ and adding measurement noise
 gives the joint marginal of $(\hat{y}_i, \hat{z}_i)$
@@ -1116,8 +1120,8 @@ given $(y_{\mathrm{TF},i}, x_i)$:
 \;\sim\;
 \mathcal{N}\!\left(
 \begin{pmatrix}
-  y_{\mathrm{TF},i} + \Delta_i\\[2pt]
-  y_{\mathrm{TF},i} + \Delta_i - \mu_c - \delta(x_i-\bar{x})
+  y_{\mathrm{TF},i} + \Delta_{r,i}\\[2pt]
+  y_{\mathrm{TF},i} + \Delta_{z,i} - \mu_c - \delta(x_i-\bar{x})
 \end{pmatrix},\;
 \boldsymbol{A}_i
 \right),
@@ -1139,8 +1143,8 @@ because $\hat{y}$ and $\hat{z}$ share the color residual $\eta_i$
 (with coefficients $\gamma$ and $\gamma-1$); the intrinsic scatters
 $\epsilon_y$ and $\epsilon_z$ are independent and do not contribute.
 
-\paragraph{Sanity check: $\gamma = 0$, $\alpha_k = 0$.}
-Setting $\gamma = 0$ and $\alpha_k = 0$: $\boldsymbol{A}_i = \mathrm{diag}(\sigma_{\mathrm{int},y}^2+\sigma_{y,i}^2,\; \sigma_{\mathrm{int},z}^2 + \sigma_{z,i}^2)$
+\paragraph{Sanity check: $\gamma = 0$, $\alpha_{k,r} = \alpha_{k,z} = 0$.}
+Setting $\gamma = 0$ and $\alpha_{k,r} = \alpha_{k,z} = 0$: $\boldsymbol{A}_i = \mathrm{diag}(\sigma_{\mathrm{int},y}^2+\sigma_{y,i}^2,\; \sigma_{\mathrm{int},z}^2 + \sigma_{z,i}^2)$
 and the off-diagonal vanishes, i.e., $\hat{y}$ and
 $\hat{z}$ are independent when color has no
 effect on $r$-band luminosity.
@@ -1167,8 +1171,8 @@ the trivariate marginal is
 \mathcal{N}\!\left(
 \begin{pmatrix}
   \mu_{x,i}(y_{\mathrm{TF},i})\\[2pt]
-  y_{\mathrm{TF},i} + \Delta_i\\[2pt]
-  y_{\mathrm{TF},i} + \Delta_i - \mu_c - \delta(\mu_{x,i}(y_{\mathrm{TF},i})-\bar{x})
+  y_{\mathrm{TF},i} + \Delta_{r,i}\\[2pt]
+  y_{\mathrm{TF},i} + \Delta_{z,i} - \mu_c - \delta(\mu_{x,i}(y_{\mathrm{TF},i})-\bar{x})
 \end{pmatrix},\;
 \boldsymbol{B}_i
 \right),
@@ -1200,8 +1204,8 @@ mean vector in Eq.~\eqref{eq:cc:trivariate} is linear in $y_{\mathrm{TF},i}$. Wr
 \boldsymbol{a}_i =
 \begin{pmatrix}
   -\beta/\alpha \\
-  \Delta_i \\
-  \Delta_i - \mu_c + \delta\bar{x} + \delta\beta/\alpha
+  \Delta_{r,i} \\
+  \Delta_{z,i} - \mu_c + \delta\bar{x} + \delta\beta/\alpha
 \end{pmatrix},
 \quad
 \boldsymbol{b} =
@@ -1263,18 +1267,18 @@ P(S_i=1 \mid y_{\mathrm{TF},i},\,\theta,\,\gamma)
 \end{equation}
 where $p(\hat{x}_i,\hat{y}_i \mid y_{\mathrm{TF},i}, \theta)$ is the
 $(\hat{x},\hat{y})$ marginal of Eq.~\eqref{eq:cc:trivariate}, i.e.\ a bivariate
-Gaussian with mean $(\mu_{x,i}(y_{\mathrm{TF},i}),\; y_{\mathrm{TF},i} + \Delta_i)^T$ and
+Gaussian with mean $(\mu_{x,i}(y_{\mathrm{TF},i}),\; y_{\mathrm{TF},i} + \Delta_{r,i})^T$ and
 covariance $\bigl(\begin{smallmatrix}\sigma_{1,i}^2 & 0\\ 0 & A_{11}\end{smallmatrix}\bigr)$.
 The $\hat{z}$ component does not enter because it is independent of $\hat{x}$
 and $\hat{y}$ given $y_{\mathrm{TF},i}$; the mean shift from $\delta$ is
 carried only by $\hat{z}$, not by $\hat{y}$.
-Since $\Delta_i$ shifts $\mathrm{E}[\hat{y}_i \mid y_{\mathrm{TF},i}]$ by a
+Since $\Delta_{r,i}$ shifts $\mathrm{E}[\hat{y}_i \mid y_{\mathrm{TF},i}]$ by a
 galaxy-dependent amount, it enters the selection probability: at fixed
-$y_{\mathrm{TF},i}$, a non-zero $\Delta_i$ moves the predicted $\hat{y}_i$
+$y_{\mathrm{TF},i}$, a non-zero $\Delta_{r,i}$ moves the predicted $\hat{y}_i$
 relative to the fixed boundaries $\hat{y}_{\min}$, $\hat{y}_{\max}$.
-Equivalently, one may evaluate the selection integral with $\Delta_i=0$ but
-with shifted boundaries $\hat{y}_{\min} - \Delta_i$ and
-$\hat{y}_{\max} - \Delta_i$.
+Equivalently, one may evaluate the selection integral with $\Delta_{r,i}=0$ but
+with shifted boundaries $\hat{y}_{\min} - \Delta_{r,i}$ and
+$\hat{y}_{\max} - \Delta_{r,i}$.
 Substituting into the sheared-coordinate bivariate CDF machinery of
 Appendix~\ref{sec:likelihood} (Eq.~\ref{eq:Ii_def}), with
 $\sigma_{2,i}^2$ replaced by $A_{11} = \gamma^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2$,
@@ -1303,11 +1307,11 @@ Schur complement gives
 where
 \begin{align}
 \mu_{y|\hat{x}\hat{z}}(y_{\mathrm{TF},\star})
-&= y_{\mathrm{TF},\star} + \Delta_\star
+&= y_{\mathrm{TF},\star} + \Delta_{r,\star}
   + \boldsymbol{b}_{\mathrm{reg}}^T
     \begin{pmatrix}
       \hat{x}_\star - \mu_{x,\star}(y_{\mathrm{TF},\star})\\[2pt]
-      \hat{z}_\star - [y_{\mathrm{TF},\star} + \Delta_\star - \mu_c - \delta(\mu_{x,\star}(y_{\mathrm{TF},\star})-\bar{x})]
+      \hat{z}_\star - [y_{\mathrm{TF},\star} + \Delta_{z,\star} - \mu_c - \delta(\mu_{x,\star}(y_{\mathrm{TF},\star})-\bar{x})]
     \end{pmatrix},
 \label{eq:cc:mu_ygivenxz}\\
 \sigma_{y|\hat{x}\hat{z}}^2
@@ -1406,7 +1410,7 @@ are independent at fixed $y_{\mathrm{TF},\star}$ and
 \begin{equation}
 \hat{y}_\star \mid y_{\mathrm{TF},\star}
 \;\sim\;
-\mathcal{N}\!\bigl(y_{\mathrm{TF},\star} + \Delta_\star,\;A_{11}\bigr),
+\mathcal{N}\!\bigl(y_{\mathrm{TF},\star} + \Delta_{r,\star},\;A_{11}\bigr),
 \label{eq:cc:y_given_yTF_xonly}
 \end{equation}
 with $A_{11} = \gamma^2\tau_c^2 + \sigma_{\mathrm{int},y}^2 + \sigma_{y,\star}^2$
@@ -1416,7 +1420,7 @@ alone is the truncated normal of the baseline model
 $V_\star(\theta)$.  By the law of total expectation and variance,
 \begin{align}
 \mathrm{E}[\hat{y}_\star \mid \hat{x}_\star,\,\theta,\,\gamma]
-&= \mu_\star(\theta) + \Delta_\star,
+&= \mu_\star(\theta) + \Delta_{r,\star},
 \label{eq:cc:mean_xonly}\\[4pt]
 \mathrm{Var}[\hat{y}_\star \mid \hat{x}_\star,\,\theta,\,\gamma]
 &= A_{11} + V_\star(\theta).
@@ -1436,8 +1440,8 @@ balance between these two effects.
 \subsection{Reduction to Baseline}
 \label{sec:cc:reduction}
 
-Setting $\gamma = 0$ and $\alpha_k = 0$ gives $A_{11} = \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 \equiv \sigma_{2,i}^2$,
-$A_{12} = 0$, $\Delta_i = 0$, and $\boldsymbol{b}_{\mathrm{reg}} = \boldsymbol{0}$.
+Setting $\gamma = 0$ and $\alpha_{k,r} = \alpha_{k,z} = 0$ gives $A_{11} = \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2 \equiv \sigma_{2,i}^2$,
+$A_{12} = 0$, $\Delta_{r,i} = \Delta_{z,i} = 0$, and $\boldsymbol{b}_{\mathrm{reg}} = \boldsymbol{0}$.
 The $\hat{z}$ measurement drops out of the prediction entirely:
 $\sigma_{y|\hat{x}\hat{z}}^2 = A_{11} = \sigma_{2,i}^2$, recovering the
 baseline model of Appendix~\ref{sec:likelihood}.
