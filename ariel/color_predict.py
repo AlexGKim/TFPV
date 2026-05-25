@@ -613,9 +613,9 @@ def DESI_color(
         load_xyz_and_uncertainties_from_desi(galaxy_fits)
     )
 
-    # Compute x_bar from data if not in input.json
+    # Compute x_bar from fitting sample if not in input.json
     if x_bar is None:
-        x_bar = float(np.mean(xhat_star))
+        x_bar = float(np.mean(input_data["x"]))
 
     # Load posterior draws
     draws = read_cmdstan_posterior(
@@ -932,7 +932,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
         input_data = json.load(f)
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
-    x_bar = input_data.get("mean_x", float(np.nanmean(xhat[valid])))
+    x_bar = input_data.get("mean_x", float(np.mean(input_data["x"])))
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
     mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_color_vectorized(
@@ -1511,7 +1511,7 @@ def write_cov_color(run_dir, fits_path, cfg=None):
     # Load MAIN-sample galaxies
     (xhat_full, sigma_x_full, yhat_full, sigma_y_full,
      zhat_full, sigma_z_full, zobs_full) = load_xyz_and_uncertainties_from_desi(fits_path)
-    x_bar = input_data.get("mean_x", float(np.mean(xhat_full)))
+    x_bar = input_data.get("mean_x", float(np.mean(input_data["x"])))
 
     rz_color_full = _load_rz_color_from_desi(fits_path)
     main = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)

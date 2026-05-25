@@ -788,6 +788,8 @@ def ystar_pp_mean_sd_tophat_vectorized(
     xhat_star,
     sigma_x_star,
     *,
+    zobs_star=None,
+    mean_log1pz=None,
     bounds_json="DESI_input.json",
     y_min_key="y_min",
     y_max_key="y_max",
@@ -882,6 +884,17 @@ def ystar_pp_mean_sd_tophat_vectorized(
 
     sigma_x_tot2 = (six[:, None] ** 2) + (sigma_x_star[None, :] ** 2)  # (M,G)
     mu_L = cMG + sMG * xhat_star[None, :]  # (M,G)
+
+    # k-correction shift
+    if zobs_star is not None and "alpha_kcorr_r" in draws.columns:
+        if mean_log1pz is None:
+            raise ValueError("mean_log1pz must be provided when zobs_star is given")
+        zobs_star_arr = np.asarray(zobs_star, dtype=float)
+        alpha_k_r = draws["alpha_kcorr_r"].to_numpy(float)  # (M,)
+        log1pz_centered = np.log1p(zobs_star_arr)[None, :] - mean_log1pz  # (1,G)
+        alpha_zn_r = alpha_k_r[:, None] * log1pz_centered  # (M,G)
+        mu_L = mu_L + alpha_zn_r
+
     sigma_L2 = (sMG**2) * sigma_x_tot2  # (M,G)
     sigma_L = np.sqrt(sigma_L2)  # (M,G)
 
@@ -1272,6 +1285,8 @@ def DESI(
         load_xy_and_uncertainties_from_desi(galaxy_fits, row=None, sort_by_zobs=False)
     )
 
+    mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
+
     # --- posterior + predictive ---
     if kind == "normal":
         draws = read_cmdstan_posterior(
@@ -1293,13 +1308,15 @@ def DESI(
     else:
         draws = read_cmdstan_posterior(
             _p("tophat_?.csv"),
-            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "alpha_kcorr_r"],
             drop_diagnostics=True,
         )
         mean_pred, sd_pred = ystar_pp_mean_sd_tophat_vectorized(
             draws,
             xhat_star,
             sigma_x_star,
+            zobs_star=zobs_star,
+            mean_log1pz=mean_log1pz,
             y_min=y_min,
             y_max=y_max,
             on_bad_Z="floor",
@@ -1328,6 +1345,8 @@ def DESI(
             draws,
             xhat_star2,
             sigma_x_star2,
+            zobs_star=zobs_star2,
+            mean_log1pz=mean_log1pz,
             y_min=y_min,
             y_max=y_max,
             on_bad_Z="floor",
@@ -2369,13 +2388,14 @@ def write_desi_catalog(model, run_dir, fits_path, cfg=None):
     else:
         draws = read_cmdstan_posterior(
             _p("tophat_?.csv"),
-            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "alpha_kcorr_r"],
             drop_diagnostics=True,
         )
 
     # 5. Compute mean_pred and sd_pred for valid rows only
     xhat_valid = xhat[valid]
     sigma_x_valid = sigma_x[valid]
+    zobs_valid = zobs[valid]
 
     if model == "normal":
         mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_normal_vectorized(
@@ -2386,10 +2406,13 @@ def write_desi_catalog(model, run_dir, fits_path, cfg=None):
             input_data = json.load(f)
         y_min = input_data.get("y_min")
         y_max = input_data.get("y_max")
+        mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
         mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_tophat_vectorized(
             draws,
             xhat_valid,
             sigma_x_valid,
+            zobs_star=zobs_valid,
+            mean_log1pz=mean_log1pz,
             y_min=y_min,
             y_max=y_max,
             on_bad_Z="floor",
@@ -2553,6 +2576,8 @@ def ystar_pp_cov_tophat_vectorized(
     xhat_star,
     sigma_x_star,
     *,
+    zobs_star=None,
+    mean_log1pz=None,
     bounds_json=None,
     y_min=None,
     y_max=None,
@@ -2614,6 +2639,8 @@ def ystar_pp_cov_tophat_vectorized(
         draws,
         xhat_star,
         sigma_x_star,
+        zobs_star=zobs_star,
+        mean_log1pz=mean_log1pz,
         y_min=y_min,
         y_max=y_max,
         on_bad_Z=on_bad_Z,
@@ -2624,6 +2651,17 @@ def ystar_pp_cov_tophat_vectorized(
     c = draws["intercept.1"].to_numpy(float)  # (M,)
     six = draws["sigma_int_x"].to_numpy(float)  # (M,)
     siy = draws["sigma_int_y"].to_numpy(float)  # (M,)
+
+    # k-correction precompute
+    if zobs_star is not None and "alpha_kcorr_r" in draws.columns:
+        if mean_log1pz is None:
+            raise ValueError("mean_log1pz must be provided when zobs_star is given")
+        zobs_arr = np.asarray(zobs_star, dtype=float)
+        alpha_k_r = draws["alpha_kcorr_r"].to_numpy(float)
+        log1pz_centered = np.log1p(zobs_arr) - mean_log1pz  # (G,)
+    else:
+        alpha_k_r = None
+        log1pz_centered = None
 
     accum = np.zeros((G, G), dtype=float)
     var_accum = np.zeros(G, dtype=float)
@@ -2637,6 +2675,8 @@ def ystar_pp_cov_tophat_vectorized(
 
         sigma_x_tot2 = six_c**2 + sigma_x_star[None, :] ** 2  # (B, G)
         mu_L = cc + sc * xhat_star[None, :]  # (B, G)
+        if alpha_k_r is not None:
+            mu_L = mu_L + alpha_k_r[start:end, None] * log1pz_centered[None, :]
         sigma_L = np.sqrt(sc**2 * sigma_x_tot2)  # (B, G)
 
         # Truncated-normal conditional mean and variance for each (draw, galaxy)
@@ -2749,14 +2789,20 @@ def write_cov(model, run_dir, fits_path, cfg=None):
     elif model == "tophat":
         draws = read_cmdstan_posterior(
             csv_pattern,
-            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y"],
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y", "alpha_kcorr_r"],
             drop_diagnostics=True,
         )
         input_json = os.path.join(run_dir, "input.json")
+        with open(input_json) as f:
+            input_data = json.load(f)
+        zobs_main = zobs_star_full[main]
+        mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
         cov = ystar_pp_cov_tophat_vectorized(
             draws,
             xhat_star,
             sigma_x_star,
+            zobs_star=zobs_main,
+            mean_log1pz=mean_log1pz,
             bounds_json=input_json,
         )
     else:

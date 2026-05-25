@@ -363,6 +363,7 @@ def process_desi_tf_data(
         "log_sigma_int_z": -2.3,
         "mean_x": float(mean_x),
         "sd_x": float(sd_x),
+        "alpha_kcorr_r": -0.5,
     }
 
     with open(init_output_file, "w") as f:
