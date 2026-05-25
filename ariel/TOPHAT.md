@@ -21,8 +21,8 @@ offset in the r-band. See `doc/model1.tex` for the formal model.
 
 ```bash
 export FITS=data/SGA-2020_iron_Vrot_VI_corr_v6.fits   # input FITS catalog
-export RUN=DR1_v6_tophat                              # output directory name: output/$RUN/
-export CONFIG=configs/dr1_v6.json                     # pipeline config
+export RUN=DR1_v6_tophat_kcorr                              # output directory name: output/$RUN/
+export CONFIG=configs/dr1_v6_tophat_k_corr.json                     # pipeline config
 ```
 
 ---
