@@ -20,7 +20,7 @@ offset in the r-band. See `doc/model1.tex` for the formal model.
 ## Setup
 
 ```bash
-export FITS=data/SGA-2020_iron_Vrot_VI_corr_v5.fits   # input FITS catalog
+export FITS=data/SGA-2020_iron_Vrot_VI_corr_v6.fits   # input FITS catalog
 export RUN=DR1_v6_tophat                              # output directory name: output/$RUN/
 export CONFIG=configs/dr1_v6.json                     # pipeline config
 ```
