@@ -1591,6 +1591,16 @@ if __name__ == "__main__":
         help="Run directory containing config.json, input.json, and color_?.csv files",
     )
     parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to JSON config (e.g. configs/dr1_v6_2color.json); sets run-dir",
+    )
+    parser.add_argument(
+        "--run",
+        default=None,
+        help="Run name; reads output/<run>/ (alternative to --run-dir)",
+    )
+    parser.add_argument(
         "--grid-resolution",
         type=int,
         default=50,
@@ -1617,6 +1627,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     import json as _json
+    if args.config or args.run:
+        from config_utils import apply_config, run_dir_from_args
+        apply_config(args)
+        if not args.run_dir:
+            args.run_dir = run_dir_from_args(args)
     _run_dir = args.run_dir or "."
     with open(os.path.join(_run_dir, "config.json")) as _f:
         _cfg = _json.load(_f)
