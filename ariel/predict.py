@@ -1494,6 +1494,20 @@ def DESI(
     plt.savefig(_p(f"redshift_{kind}.png"), dpi=300)
     plt.clf()
 
+    # --- g-r color residual plot ---
+    gr_color = _load_gr_color_from_desi(galaxy_fits)
+    if gr_color is not None:
+        gr_star2 = gr_color[main_mask]
+        plt.scatter(gr_color, mean_y, marker=".", alpha=0.2, label="DR2 PV Spirals")
+        plt.scatter(gr_star2, mean_y2, marker=".", alpha=0.2, label="Main Sample")
+        plt.xlabel(r"$g - r$ (mag)")
+        plt.ylabel(r"$\mathbb{E}[y_* | \hat x_*, \sigma_x^*] - y_{\rm obs}$ (mag)")
+        plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
+        plt.legend()
+        plt.ylim((-8, 4))
+        plt.savefig(_p(f"gr_color_{kind}.png"), dpi=300)
+        plt.clf()
+
     # --- magnitude variance vs redshift ---
     var_obs = sigma_y_star**2
     var_pred = sd_pred**2
@@ -2258,6 +2272,49 @@ def _load_rz_color_from_desi(fits_path):
         & np.isfinite(zobs_raw)
     )
     return rz_raw[mask]
+
+
+def _load_gr_color_from_desi(fits_path):
+    """
+    Load g-r apparent color from a DESI FITS catalog.
+
+    Returns a float64 array aligned with the validity mask applied by
+    load_xy_and_uncertainties_from_desi.  Returns None if g-band columns are absent.
+    """
+    from mag_utils import get_mag_cols
+
+    z_col_candidates = ("Z_DESI", "zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE")
+    with fits.open(fits_path) as hdul:
+        data = hdul[1].data  # type: ignore[union-attr]
+        names = set(data.dtype.names or ())
+
+        if "G_MAG_SB26_CORR" in names and "R_MAG_SB26_CORR" in names:
+            gr_raw = (
+                np.asarray(data["G_MAG_SB26_CORR"], dtype=float)
+                - np.asarray(data["R_MAG_SB26_CORR"], dtype=float)
+            )
+        elif "G_MAG_SB26" in names and "R_MAG_SB26" in names:
+            gr_raw = (
+                np.asarray(data["G_MAG_SB26"], dtype=float)
+                - np.asarray(data["R_MAG_SB26"], dtype=float)
+            )
+        else:
+            return None
+
+        V = np.asarray(data["V_0p4R26"], dtype=float)
+        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        col_abs, col_abs_err, _ = get_mag_cols(names)
+        yhat_raw = np.asarray(data[col_abs], dtype=float)
+        sigma_y_raw = np.asarray(data[col_abs_err], dtype=float)
+        z_col_use = next((c for c in z_col_candidates if c in names), None)
+        zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(V))
+
+    mask = (
+        np.isfinite(V) & np.isfinite(V_err) & (V > 0) & (V_err > 0)
+        & np.isfinite(yhat_raw) & np.isfinite(sigma_y_raw) & (sigma_y_raw >= 0)
+        & np.isfinite(zobs_raw)
+    )
+    return gr_raw[mask]
 
 
 def _apply_main_cuts(cfg, xhat, yhat, zobs=None, rz_color=None):

@@ -1,0 +1,17 @@
+{
+  "run": "DR1_v6_2color",
+  "fits_file": "data/SGA-2020_iron_Vrot_VI_corr_v6.fits",
+  "exe": "tophat",
+  "source": "DESI",
+  "model": "tophat",
+  "n_sigma": 3.0,
+  "haty_min": -21.5,
+  "haty_max": -18.7,
+  "slope_plane": -6.411172446998073,
+  "intercept_plane": -20.465542146039283,
+  "intercept_plane2": -18.06158128283612,
+  "n_sigma_perp": 3.0,
+  "z_obs_min": 0.01,
+  "z_obs_max": 0.065,
+  "rz_color_max": 0.8
+}

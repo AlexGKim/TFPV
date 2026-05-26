@@ -20,6 +20,7 @@ from predict import (
     create_average_grid_image,
     _apply_main_cuts,
     _load_rz_color_from_desi,
+    _load_gr_color_from_desi,
 )
 from mag_utils import get_mag_cols
 
@@ -804,6 +805,23 @@ def DESI_color(
         plt.ylim((y_min_xo - y_pad_xo, y_max_xo + y_pad_xo))
         plt.savefig(_p("redshift_color_xonly.png"), dpi=300)
         plt.clf()
+
+        # g-r color residual — x-only
+        gr_color = _load_gr_color_from_desi(galaxy_fits)
+        if gr_color is not None:
+            gr_main = gr_color[main_mask]
+            plt.scatter(gr_color, mean_y_xo, marker=".", alpha=0.2, label="DR2 PV Spirals")
+            plt.scatter(gr_main, mean_y_main_xo, marker=".", alpha=0.2, label="Main Sample")
+            plt.xlabel(r"$g - r$ (mag)")
+            plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*] - \hat{y}_{\rm obs}$ (mag)")
+            plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
+            plt.legend()
+            y_min_xo2, y_max_xo2 = np.nanmin(mean_y_main_xo), np.nanmax(mean_y_main_xo)
+            y_range_xo2 = y_max_xo2 - y_min_xo2
+            y_pad_xo2 = 0.1 * y_range_xo2 if y_range_xo2 > 0 else 1.0
+            plt.ylim((y_min_xo2 - y_pad_xo2, y_max_xo2 + y_pad_xo2))
+            plt.savefig(_p("gr_color_xonly.png"), dpi=300)
+            plt.clf()
 
         # Variance vs redshift — x-only
         var_pred_xo = sd_pred_xo**2
