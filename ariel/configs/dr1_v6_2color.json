@@ -1,9 +1,9 @@
 {
   "run": "DR1_v6_2color",
   "fits_file": "data/SGA-2020_iron_Vrot_VI_corr_v6.fits",
-  "exe": "tophat",
+  "exe": "2color",
   "source": "DESI",
-  "model": "tophat",
+  "model": "2color",
   "n_sigma": 3.0,
   "haty_min": -21.5,
   "haty_max": -18.7,

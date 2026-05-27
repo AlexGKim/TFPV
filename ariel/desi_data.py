@@ -127,6 +127,35 @@ def process_desi_tf_data(
         Z_ABSMAG_SB26 = R_ABSMAG_SB26 - (R_MAG_SB26 - Z_MAG_SB26)
         Z_ABSMAG_SB26_ERR = Z_MAG_SB26_ERR
 
+        # [2COLOR] g-band apparent magnitude and photometric uncertainty
+        if "G_MAG_SB26_CORR" in names:
+            if "G_MAG_SB26_ERR_CORR" not in names:
+                raise KeyError(
+                    "Found G_MAG_SB26_CORR but required column G_MAG_SB26_ERR_CORR "
+                    "is missing. Cannot construct sigma_g for 2color.stan."
+                )
+            G_MAG_SB26 = np.asarray(data["G_MAG_SB26_CORR"], dtype=float)
+            G_MAG_SB26_ERR = np.asarray(data["G_MAG_SB26_ERR_CORR"], dtype=float)
+        elif "G_MAG_SB26" in names:
+            if "G_MAG_SB26_ERR" not in names:
+                raise KeyError(
+                    "Found G_MAG_SB26 but required column G_MAG_SB26_ERR "
+                    "is missing. Cannot construct sigma_g for 2color.stan."
+                )
+            G_MAG_SB26 = np.asarray(data["G_MAG_SB26"], dtype=float)
+            G_MAG_SB26_ERR = np.asarray(data["G_MAG_SB26_ERR"], dtype=float)
+        else:
+            G_MAG_SB26 = None
+            G_MAG_SB26_ERR = None
+
+        # [2COLOR] g-band absolute magnitude: G_ABSMAG = R_ABSMAG - (R_MAG - G_MAG)
+        if G_MAG_SB26 is not None:
+            G_ABSMAG_SB26 = R_ABSMAG_SB26 - (R_MAG_SB26 - G_MAG_SB26)
+            G_ABSMAG_SB26_ERR = G_MAG_SB26_ERR
+        else:
+            G_ABSMAG_SB26 = None
+            G_ABSMAG_SB26_ERR = None
+
         z_all_raw = np.asarray(data[z_col_use], dtype=float)
 
     total_rows = len(V_0p4R26)
@@ -147,6 +176,9 @@ def process_desi_tf_data(
         & np.isfinite(Z_ABSMAG_SB26)      # [COLOR]
         & np.isfinite(Z_ABSMAG_SB26_ERR)  # [COLOR]
     )
+    # [2COLOR] require finite g-band if available
+    if G_ABSMAG_SB26 is not None:
+        valid_mask = valid_mask & np.isfinite(G_ABSMAG_SB26) & np.isfinite(G_ABSMAG_SB26_ERR)
 
     V_0p4R26 = V_0p4R26[valid_mask]
     V_0p4R26_ERR = V_0p4R26_ERR[valid_mask]
@@ -154,6 +186,9 @@ def process_desi_tf_data(
     R_ABSMAG_SB26_ERR = R_ABSMAG_SB26_ERR[valid_mask]
     Z_ABSMAG_SB26 = Z_ABSMAG_SB26[valid_mask]         # [COLOR]
     Z_ABSMAG_SB26_ERR = Z_ABSMAG_SB26_ERR[valid_mask] # [COLOR]
+    if G_ABSMAG_SB26 is not None:
+        G_ABSMAG_SB26 = G_ABSMAG_SB26[valid_mask]         # [2COLOR]
+        G_ABSMAG_SB26_ERR = G_ABSMAG_SB26_ERR[valid_mask] # [2COLOR]
     rz_color_all = (R_MAG_SB26 - Z_MAG_SB26)[valid_mask]  # apparent r-z color
     z_all_raw = z_all_raw[valid_mask]
 
@@ -170,6 +205,8 @@ def process_desi_tf_data(
     sigma_y_all = R_ABSMAG_SB26_ERR
     z_absmag_all = Z_ABSMAG_SB26         # [COLOR]
     sigma_z_absmag_all = Z_ABSMAG_SB26_ERR  # [COLOR]
+    g_absmag_all = G_ABSMAG_SB26         # [2COLOR] (may be None)
+    sigma_g_absmag_all = G_ABSMAG_SB26_ERR  # [2COLOR]
 
     # Redshift data (aligned to x_all/y_all by construction)
     zobs_all = z_all_raw
@@ -179,6 +216,7 @@ def process_desi_tf_data(
     # ============================================================================
     x_data, y_data, sigma_x_data, sigma_y_data, z_data = [], [], [], [], []
     z_absmag_data, sigma_z_absmag_data = [], []  # [COLOR]
+    g_absmag_data, sigma_g_absmag_data = [], []  # [2COLOR]
 
     # Track filtering statistics
     y_filtered_rows = 0
@@ -224,6 +262,9 @@ def process_desi_tf_data(
                         z_data.append(zobs_all[i])
                         z_absmag_data.append(z_absmag_all[i])          # [COLOR]
                         sigma_z_absmag_data.append(sigma_z_absmag_all[i])  # [COLOR]
+                        if g_absmag_all is not None:
+                            g_absmag_data.append(g_absmag_all[i])          # [2COLOR]
+                            sigma_g_absmag_data.append(sigma_g_absmag_all[i])  # [2COLOR]
                         plane_pass_rows += 1
                 else:
                     # Two‑sided: lower_bound < y < min(haty_max, upper_bound_oblique)
@@ -238,6 +279,9 @@ def process_desi_tf_data(
                         z_data.append(zobs_all[i])
                         z_absmag_data.append(z_absmag_all[i])          # [COLOR]
                         sigma_z_absmag_data.append(sigma_z_absmag_all[i])  # [COLOR]
+                        if g_absmag_all is not None:
+                            g_absmag_data.append(g_absmag_all[i])          # [2COLOR]
+                            sigma_g_absmag_data.append(sigma_g_absmag_all[i])  # [2COLOR]
                         plane_pass_rows += 1
             else:
                 # No plane cut (just the y‑range and optional redshift cut)
@@ -248,6 +292,9 @@ def process_desi_tf_data(
                 z_data.append(zobs_all[i])
                 z_absmag_data.append(z_absmag_all[i])          # [COLOR]
                 sigma_z_absmag_data.append(sigma_z_absmag_all[i])  # [COLOR]
+                if g_absmag_all is not None:
+                    g_absmag_data.append(g_absmag_all[i])          # [2COLOR]
+                    sigma_g_absmag_data.append(sigma_g_absmag_all[i])  # [2COLOR]
 
     # Convert to numpy arrays for calculations
     x = np.array(x_data, dtype=float)
@@ -257,6 +304,12 @@ def process_desi_tf_data(
     z_obs = np.array(z_data, dtype=float)
     z_absmag = np.array(z_absmag_data, dtype=float)          # [COLOR]
     sigma_z_absmag = np.array(sigma_z_absmag_data, dtype=float)  # [COLOR]
+    if g_absmag_all is not None:
+        g_absmag = np.array(g_absmag_data, dtype=float)          # [2COLOR]
+        sigma_g_absmag = np.array(sigma_g_absmag_data, dtype=float)  # [2COLOR]
+    else:
+        g_absmag = None
+        sigma_g_absmag = None
 
     N_after_cuts = len(x)
 
@@ -272,6 +325,9 @@ def process_desi_tf_data(
         z_obs = z_obs[idx]
         z_absmag = z_absmag[idx]          # [COLOR]
         sigma_z_absmag = sigma_z_absmag[idx]  # [COLOR]
+        if g_absmag is not None:
+            g_absmag = g_absmag[idx]          # [2COLOR]
+            sigma_g_absmag = sigma_g_absmag[idx]  # [2COLOR]
         print(
             f"  Subsampled from {N_after_cuts} to {n_objects} objects (random_seed={random_seed})"
         )
@@ -284,6 +340,9 @@ def process_desi_tf_data(
     z_obs_data = z_obs.tolist()
     z_absmag_data = z_absmag.tolist()          # [COLOR]
     sigma_z_absmag_data = sigma_z_absmag.tolist()  # [COLOR]
+    if g_absmag is not None:
+        g_absmag_data = g_absmag.tolist()          # [2COLOR]
+        sigma_g_absmag_data = sigma_g_absmag.tolist()  # [2COLOR]
 
     N_total = len(x)
 
@@ -317,6 +376,12 @@ def process_desi_tf_data(
         "sigma_z": sigma_z_absmag_data,
         "c_bar_obs": float(np.mean(y - z_absmag)) if N_total > 0 else 0.0,
     }
+
+    # [2COLOR] g-band fields for 2color.stan
+    if g_absmag is not None:
+        stan_data["g"] = g_absmag_data
+        stan_data["sigma_g"] = sigma_g_absmag_data
+        stan_data["c_bar_g_obs"] = float(np.mean(y - g_absmag)) if N_total > 0 else 0.0
 
     if plane_cut:
         stan_data["slope_plane"] = float(slope_plane)
@@ -364,7 +429,22 @@ def process_desi_tf_data(
         "mean_x": float(mean_x),
         "sd_x": float(sd_x),
         "alpha_kcorr_r": -0.5,
+        # [COLOR] color model init parameters
+        "gamma_tau_c": -0.19,
+        "delta_c": 0.065,
+        "mu_c": float(np.mean(y - z_absmag)) if N_total > 0 else 0.3,
+        "log_tau_c": -3.3,
+        "alpha_kcorr_z": -0.5,
     }
+
+    # [2COLOR] g-band init parameters
+    if g_absmag is not None:
+        init_data["gamma_tau_g"] = -0.1
+        init_data["delta_g"] = 0.0
+        init_data["mu_g"] = float(np.mean(y - g_absmag)) if N_total > 0 else 0.0
+        init_data["log_tau_g"] = -2.0
+        init_data["log_sigma_int_g"] = -2.3
+        init_data["alpha_kcorr_g"] = -0.5
 
     with open(init_output_file, "w") as f:
         json.dump(init_data, f, indent=2)

@@ -591,6 +591,7 @@ def DESI_color(
     make_residual_grid=True,
     make_redshift_grid=True,
     xonly=False,
+    model="color",
 ):
     """
     Run color-correction model predictions and produce diagnostic plots.
@@ -620,7 +621,7 @@ def DESI_color(
 
     # Load posterior draws
     draws = read_cmdstan_posterior(
-        _p("color_?.csv"),
+        _p(f"{model}_?.csv"),
         keep=[
             "slope",
             "intercept.1",
@@ -846,7 +847,7 @@ def DESI_color(
     return mean_y, sigma_y, zobs_star
 
 
-def write_desi_catalog_color(run_dir, fits_path, cfg=None):
+def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
     """
     Augment a DESI FITS catalog with color-model TFR-derived quantities and write
     to output/<run>/color_catalog.fits.
@@ -939,7 +940,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
 
     # Load posterior draws
     draws = read_cmdstan_posterior(
-        _p("color_?.csv"),
+        _p(f"{model}_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
               "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
               "alpha_kcorr_r", "alpha_kcorr_z"],
@@ -1004,7 +1005,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None):
     print(f"  MU_TF finite: {np.isfinite(MU_TF).sum()} objects")
 
 
-def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None):
+def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     """
     Augment a DESI FITS catalog with color-model TFR predictions using x̂ and
     redshift (no z-band), writing to output/<run>/color_xonly_catalog.fits.
@@ -1075,7 +1076,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None):
     )
 
     draws = read_cmdstan_posterior(
-        _p("color_?.csv"),
+        _p(f"{model}_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
               "gamma", "tau_c", "alpha_kcorr_r"],
         drop_diagnostics=True,
@@ -1437,7 +1438,7 @@ def ystar_pp_cov_color_xonly_vectorized(
     return cov
 
 
-def write_cov_color_xonly(run_dir, fits_path, cfg=None):
+def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     """
     Compute and save the posterior predictive covariance matrix for the color
     model using x̂ only (no z-band).
@@ -1470,7 +1471,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None):
     zobs_star = zobs_full[main]
 
     draws = read_cmdstan_posterior(
-        _p("color_?.csv"),
+        _p(f"{model}_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
               "gamma", "tau_c", "alpha_kcorr_r"],
         drop_diagnostics=True,
@@ -1502,7 +1503,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None):
     plot_cov(cov_sub, _p("color_xonly_cov_sub.png"))
 
 
-def write_cov_color(run_dir, fits_path, cfg=None):
+def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     """
     Compute and save the posterior predictive covariance matrix for the color model.
 
@@ -1541,7 +1542,7 @@ def write_cov_color(run_dir, fits_path, cfg=None):
     zobs_star = zobs_full[main]
 
     draws = read_cmdstan_posterior(
-        _p("color_?.csv"),
+        _p(f"{model}_?.csv"),
         keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
               "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
               "alpha_kcorr_r", "alpha_kcorr_z"],
@@ -1624,6 +1625,11 @@ if __name__ == "__main__":
         default=False,
         help="Also write color_xonly_catalog.fits using x̂ and redshift (no z-band)",
     )
+    parser.add_argument(
+        "--model",
+        default="color",
+        help="Model name for CSV glob pattern (default: color → color_?.csv)",
+    )
     args = parser.parse_args()
 
     import json as _json
@@ -1642,14 +1648,15 @@ if __name__ == "__main__":
         grid_resolution_x=args.grid_resolution,
         grid_resolution_y=args.grid_resolution,
         xonly=args.xonly,
+        model=args.model,
     )
 
     if not args.no_catalog:
-        write_desi_catalog_color(_run_dir, _fits_path, cfg=_cfg)
+        write_desi_catalog_color(_run_dir, _fits_path, cfg=_cfg, model=args.model)
 
     if not args.no_cov:
-        write_cov_color(_run_dir, _fits_path, cfg=_cfg)
+        write_cov_color(_run_dir, _fits_path, cfg=_cfg, model=args.model)
 
     if args.xonly:
-        write_desi_catalog_color_xonly(_run_dir, _fits_path, cfg=_cfg)
-        write_cov_color_xonly(_run_dir, _fits_path, cfg=_cfg)
+        write_desi_catalog_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)
+        write_cov_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)

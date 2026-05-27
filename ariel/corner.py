@@ -75,9 +75,14 @@ def load_params(file_pattern):
         r"$\gamma$":                      ["gamma"],
         r"$\alpha_{k,r}$":                 ["alpha_kcorr_r"],
         r"$\alpha_{k,z}$":                 ["alpha_kcorr_z"],
+        r"$\alpha_{k,g}$":                 ["alpha_kcorr_g"],
         r"$\delta_c$":                    ["delta_c"],
         r"$\mu_c$":                       ["mu_c"],
         r"$\tau_c$":                      ["tau_c"],
+        r"$\gamma_g$":                    ["gamma_g"],
+        r"$\delta_g$":                    ["delta_g"],
+        r"$\mu_g$":                       ["mu_g"],
+        r"$\tau_g$":                      ["tau_g"],
     }
 
     params = {}
