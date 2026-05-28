@@ -33,12 +33,12 @@ Convert the FITS file to Stan JSON format. Both z-band and g-band magnitudes are
 loaded automatically when the FITS catalog contains the relevant columns.
 
 ```bash
-# via config
 python desi_data.py --config $CONFIG
 ```
 
 `desi_data.py` writes `g`, `sigma_g`, and `c_bar_g_obs` to `input.json` in addition
-to the z-band fields required by `color.stan`.
+to the z-band fields. The `init.json` includes starting values for all color and
+g-band parameters.
 
 Inspect the scatter plot:
 
@@ -98,25 +98,26 @@ EOF
 
 ## Step 5e: Build initial metric from short run
 
-The 2color model has highly varying parameter scales (condition number ~2.7M),
-so the default identity mass matrix leads to very small stepsizes and deep
-leapfrog trees. Running a short 1-chain warmup and extracting the sample
-covariance as an initial metric dramatically reduces warmup cost.
+The 2color model has highly varying parameter scales (condition number ~2.7M across
+17 sampling parameters), so the default identity mass matrix leads to tiny stepsizes
+(~0.002) and maximum treedepth (~10) on every step. Providing a pre-computed
+covariance as the initial metric raises the stepsize ~40× and brings treedepth to
+a practical range.
 
 ```bash
-# Short 1-chain run to adapt metric (100 warmup + 100 samples, ~7 hours)
+# Short 1-chain run — does NOT need save_metric, just needs posterior samples
 ./2color sample num_warmup=100 num_samples=100 num_chains=1 \
     algorithm=hmc metric=dense_e \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
-    output file=output/$RUN/2color_metric_init.csv
+    output file=output/$RUN/2color.csv
 
 # Extract sample covariance as inverse mass matrix
 python - <<'EOF'
 import pandas as pd, numpy as np, json, os
 
 RUN = os.environ['RUN']
-df = pd.read_csv(f'output/{RUN}/2color_metric_init.csv', comment='#')
+df = pd.read_csv(f'output/{RUN}/2color.csv', comment='#')
 sampling_params = [
     'slope_std', 'intercept_std.1', 'sigma_int_x', 'sigma_int_y',
     'log_sigma_int_z', 'gamma_tau_c', 'delta_c', 'mu_c', 'log_tau_c',
@@ -133,12 +134,15 @@ print(f'Condition number: {np.linalg.cond(cov):.1f}')
 EOF
 ```
 
+The short run takes ~7 hours (N=4728 galaxies, 4×4 Cholesky per galaxy).
+
 ---
 
 ## Step 6: Run MCMC sampling
 
-Provide the pre-computed metric via `metric_file` to skip poorly-scaled warmup.
-The 250-step warmup will refine the metric further.
+Pass the pre-computed metric via `metric_file`. The 250-step warmup refines it
+further. With the metric, stepsize adapts to ~0.08 (vs ~0.002 without) and
+treedepth stays at 4–6.
 
 ```bash
 ./2color sample num_warmup=250 num_samples=1000 num_chains=4 \
@@ -150,7 +154,10 @@ The 250-step warmup will refine the metric further.
     output file=output/$RUN/2color.csv
 ```
 
-This produces `2color_1.csv` … `2color_4.csv` in `output/$RUN/`.
+This produces `2color_1.csv` … `2color_4.csv` in `output/$RUN/`. The adapted
+per-chain metrics are saved as `2color_metric_1.json` … `2color_metric_4.json`.
+
+Actual timing for DR1_v6_2color: warmup ~5.5 hours, sampling ~8.9 hours (4 chains).
 
 ---
 
@@ -174,11 +181,11 @@ open output/$RUN/2color.png
 
 Key parameters to check:
 - `slope` — TFR slope
-- `gamma` — r–z luminosity–color slope
-- `gamma_g` — g–r luminosity–color slope
+- `gamma` — r–z luminosity–color slope (expected negative; DR1_v6: −0.70 ± 0.20)
+- `gamma_g` — g–r luminosity–color slope (DR1_v6: −1.1 ± 0.05)
 - `delta_c`, `delta_g` — color–velocity slopes
 - `tau_c`, `tau_g` — intrinsic color scatter
-- `alpha_kcorr_r`, `alpha_kcorr_z`, `alpha_kcorr_g` — band k-corrections
+- `alpha_kcorr_r`, `alpha_kcorr_z`, `alpha_kcorr_g` — band k-corrections (DR1_v6: ~−5.7, −5.3, −6.3)
 
 ---
 
@@ -197,10 +204,9 @@ Diagnostic plots produced:
 
 | File | Description |
 |------|-------------|
-| `output/$RUN/2color_grid.png` | Mean residual on (x̂, ŷ) grid |
-| `output/$RUN/redshift_2color.png` | Residual vs. redshift scatter |
-| `output/$RUN/variance_redshift_2color.png` | Prediction variance vs. redshift |
-| `output/$RUN/gr_color_2color.png` | Residual vs. g–r color |
+| `output/$RUN/color_grid.png` | Mean residual on (x̂, ŷ) grid |
+| `output/$RUN/redshift_color.png` | Residual vs. redshift scatter |
+| `output/$RUN/variance_redshift_color.png` | Prediction variance vs. redshift |
 
 ---
 
@@ -210,7 +216,7 @@ Diagnostic plots produced:
 python color_predict.py --config $CONFIG --model 2color
 ```
 
-Produces `output/$RUN/2color_catalog.fits`.
+Produces `output/$RUN/color_catalog.fits`.
 
 ---
 
@@ -220,23 +226,7 @@ Produces `output/$RUN/2color_catalog.fits`.
 python color_predict.py --config $CONFIG --model 2color --no-catalog
 ```
 
-Produces `output/$RUN/2color_cov.fits`.
-
----
-
-## Performance note
-
-The 4×4 Cholesky per galaxy makes each gradient evaluation ~4× more expensive
-than the 3×3 color model. With N=4728 galaxies, expect:
-
-| Phase | Approx. time |
-|-------|-------------|
-| MAP optimization | ~20 min |
-| Short metric-init run (1 chain, 200 iter) | ~7 hours |
-| Full MCMC (4 chains, 1250 iter, with metric) | TBD — expect significant speedup vs. identity metric |
-
-The identity mass matrix produces treedepth ≈ 10 (maxed out) and stepsize ≈ 0.002.
-The pre-computed metric should bring treedepth to ≈ 4–6 and enable a practical run.
+Produces `output/$RUN/color_cov.fits`.
 
 ---
 
@@ -251,4 +241,3 @@ The pre-computed metric should bring treedepth to ≈ 4–6 and enable a practic
 | `configs/dr1_v6_2color.json` | Pipeline config for this run |
 | [COLOR.md](COLOR.md) | Single-color (r–z) workflow |
 | [TOPHAT.md](TOPHAT.md) | Baseline tophat + k-correction workflow |
-| [2COLOR.md](2COLOR.md) | This file |
