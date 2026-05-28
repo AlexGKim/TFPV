@@ -189,7 +189,9 @@ Key parameters to check:
 
 ---
 
-## Step 8: Predict absolute magnitudes
+## Step 8: Predict absolute magnitudes (full 2color model)
+
+Run all outputs (diagnostic plots, catalog, covariance, and x-only variants):
 
 ```bash
 python color_predict.py --config $CONFIG --model 2color --xonly
@@ -200,33 +202,47 @@ The script reads:
 - `output/$RUN/input.json` — bounds, mean_x, z-band and g-band data
 - `output/$RUN/2color_?.csv` — posterior MCMC draws
 
-Diagnostic plots produced:
+The full model conditions on (x̂, ẑ, ĝ) using the 3×3 D matrix to predict ŷ.
+The `--xonly` flag additionally produces predictions conditioned on x̂ alone
+(marginalizing ẑ and ĝ), with A₁₁ = γ²τ²_c + γ²_g τ²_g + σ²_{int,y} + σ²_{y,★}.
+
+Outputs produced:
 
 | File | Description |
 |------|-------------|
-| `output/$RUN/color_grid.png` | Mean residual on (x̂, ŷ) grid |
+| `output/$RUN/color_grid.png` | Mean residual on (x̂, ŷ) grid (MAIN sample) |
+| `output/$RUN/color_grid_full.png` | Mean residual on (x̂, ŷ) grid (full sample) |
 | `output/$RUN/redshift_color.png` | Residual vs. redshift scatter |
+| `output/$RUN/redshift_color_xonly.png` | Residual vs. redshift (x-only) |
+| `output/$RUN/gr_color_xonly.png` | Residual vs. g−r color (x-only) |
 | `output/$RUN/variance_redshift_color.png` | Prediction variance vs. redshift |
+| `output/$RUN/variance_redshift_color_xonly.png` | Prediction variance vs. redshift (x-only) |
+| `output/$RUN/color_catalog.fits` | DESI catalog with MU_TF, LOGDIST (full model) |
+| `output/$RUN/color_xonly_catalog.fits` | DESI catalog with MU_TF, LOGDIST (x-only) |
+| `output/$RUN/color_cov.fits` | (G,G) covariance matrix (full model) |
+| `output/$RUN/color_xonly_cov.fits` | (G,G) covariance matrix (x-only) |
 
 ---
 
-## Step 8b: Write DESI catalog
+## Step 8 variants
+
+To run only diagnostics and catalog (no covariance — much faster):
 
 ```bash
-python color_predict.py --config $CONFIG --model 2color
+python color_predict.py --config $CONFIG --model 2color --no-cov
 ```
 
-Produces `output/$RUN/color_catalog.fits`.
-
----
-
-## Step 8c: Write covariance matrix
+To run only the covariance matrix (skip catalog):
 
 ```bash
 python color_predict.py --config $CONFIG --model 2color --no-catalog
 ```
 
-Produces `output/$RUN/color_cov.fits`.
+To run only x-only diagnostics without the full covariance:
+
+```bash
+python color_predict.py --config $CONFIG --model 2color --xonly --no-cov
+```
 
 ---
 

@@ -145,6 +145,86 @@ def load_xyz_and_uncertainties_from_desi(
     return xhat, sigma_x, yhat, sigma_y, zhat, sigma_z, zobs
 
 
+def load_gband_from_desi(fits_path, *, apply_valid_mask=True):
+    """
+    Load g-band absolute magnitude and uncertainty from a DESI FITS catalog.
+
+    Uses the same validity mask as load_xyz_and_uncertainties_from_desi so
+    arrays are aligned.
+
+    Returns
+    -------
+    ghat : (G,) array — g-band absolute magnitudes
+    sigma_g : (G,) array — g-band uncertainties
+    """
+    from mag_utils import get_mag_cols
+
+    z_col_candidates = ("Z_DESI", "zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE")
+    with fits.open(fits_path) as hdul:
+        data = hdul[1].data  # type: ignore[union-attr]
+        names = set(data.dtype.names or ())
+
+        # r-band columns (needed for derivation)
+        col_abs, col_abs_err, app_mag_col = get_mag_cols(names)
+        yhat_raw = np.asarray(data[col_abs], dtype=float)
+        sigma_y_raw = np.asarray(data[col_abs_err], dtype=float)
+        R_app = np.asarray(data[app_mag_col], dtype=float)
+
+        # g-band apparent magnitude
+        if "G_MAG_SB26_CORR" in names:
+            G_app = np.asarray(data["G_MAG_SB26_CORR"], dtype=float)
+            G_err = np.asarray(data["G_MAG_SB26_ERR_CORR"], dtype=float)
+        elif "G_MAG_SB26" in names:
+            G_app = np.asarray(data["G_MAG_SB26"], dtype=float)
+            G_err = np.asarray(data["G_MAG_SB26_ERR"], dtype=float)
+        else:
+            raise ValueError("No g-band column found (tried G_MAG_SB26_CORR, G_MAG_SB26).")
+
+        # g-band absolute magnitude: G_ABSMAG = R_ABSMAG - (R_MAG - G_MAG)
+        ghat_raw = yhat_raw - (R_app - G_app)
+        sigma_g_raw = G_err
+
+        # z-band (needed for validity mask alignment)
+        if "Z_MAG_SB26_CORR" in names:
+            Z_app = np.asarray(data["Z_MAG_SB26_CORR"], dtype=float)
+            Z_err = np.asarray(data["Z_MAG_SB26_ERR_CORR"], dtype=float)
+        elif "Z_MAG_SB26" in names:
+            Z_app = np.asarray(data["Z_MAG_SB26"], dtype=float)
+            Z_err = np.asarray(data["Z_MAG_SB26_ERR"], dtype=float)
+        else:
+            Z_app = np.zeros_like(R_app)
+            Z_err = np.zeros_like(R_app)
+        zhat_raw = yhat_raw - (R_app - Z_app)
+        sigma_z_raw = Z_err
+
+        # Velocity and redshift (for mask alignment)
+        V = np.asarray(data["V_0p4R26"], dtype=float)
+        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        z_col_use = next((c for c in ("Z_DESI",) + z_col_candidates if c in names), None)
+        zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(V))
+
+    if apply_valid_mask:
+        mask = (
+            np.isfinite(V)
+            & np.isfinite(V_err)
+            & np.isfinite(yhat_raw)
+            & np.isfinite(sigma_y_raw)
+            & np.isfinite(zhat_raw)
+            & np.isfinite(sigma_z_raw)
+            & np.isfinite(zobs_raw)
+            & (V > 0)
+            & (V_err > 0)
+            & (sigma_y_raw >= 0)
+            & (sigma_z_raw >= 0)
+            & np.isfinite(ghat_raw)
+            & np.isfinite(sigma_g_raw)
+        )
+        ghat_raw = ghat_raw[mask]
+        sigma_g_raw = sigma_g_raw[mask]
+
+    return ghat_raw, sigma_g_raw
+
+
 def load_xyz_and_uncertainties_from_stan_json(json_path, *, apply_valid_mask=True):
     """
     Load x̂, σ_x, ŷ, σ_y, ẑ, σ_z, z_obs from a Stan-style input JSON
@@ -434,6 +514,278 @@ def ystar_pp_mean_sd_color_vectorized(
     return mean_y, sd_y
 
 
+def ystar_pp_mean_sd_2color_vectorized(
+    draws,
+    xhat_star,
+    sigma_x_star,
+    zhat_star,
+    sigma_z_star,
+    ghat_star,
+    sigma_g_star,
+    *,
+    sigma_y_star,
+    x_bar,
+    y_min,
+    y_max,
+    zobs_star,
+    mean_log1pz,
+    on_bad_Z="raise",
+    Z_floor=1e-300,
+):
+    """
+    Posterior predictive mean and SD of ŷ_* for the 2color model,
+    conditioning on observed (x̂_*, ẑ_*, ĝ_*) to predict ŷ_*.
+
+    Extends ystar_pp_mean_sd_color_vectorized from a 2×2 D matrix (x, z)
+    to a 3×3 D matrix (x, z, g) with independent color factors.
+
+    Parameters
+    ----------
+    draws : DataFrame
+        MCMC posterior with columns: "slope", "intercept.1", "sigma_int_x",
+        "sigma_int_y", "sigma_int_z", "sigma_int_g", "gamma", "gamma_g",
+        "delta_c", "delta_g", "mu_c", "mu_g", "tau_c", "tau_g",
+        "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g".
+    xhat_star : (G,) array — observed log-velocity
+    sigma_x_star : (G,) array — uncertainty on x̂
+    zhat_star : (G,) array — observed z-band absolute magnitude
+    sigma_z_star : (G,) array — uncertainty on ẑ
+    ghat_star : (G,) array — observed g-band absolute magnitude
+    sigma_g_star : (G,) array — uncertainty on ĝ
+    sigma_y_star : (G,) array — measurement uncertainty on ŷ (enters A₁₁)
+    x_bar : float — sample mean of x̂ (from training data)
+    y_min, y_max : float — tophat prior bounds on y_TF
+    zobs_star : (G,) array — observed redshift
+    mean_log1pz : float — mean log(1+z) from training sample
+
+    Returns
+    -------
+    mean_y : (G,) array — posterior predictive mean of ŷ_*
+    sd_y : (G,) array — posterior predictive SD of ŷ_*
+    """
+    xhat_star = np.asarray(xhat_star, dtype=float)
+    sigma_x_star = np.asarray(sigma_x_star, dtype=float)
+    zhat_star = np.asarray(zhat_star, dtype=float)
+    sigma_z_star = np.asarray(sigma_z_star, dtype=float)
+    ghat_star = np.asarray(ghat_star, dtype=float)
+    sigma_g_star = np.asarray(sigma_g_star, dtype=float)
+    sigma_y_star = np.asarray(sigma_y_star, dtype=float)
+    zobs_star = np.asarray(zobs_star, dtype=float)
+
+    a = float(y_min)
+    b = float(y_max)
+    if not (a < b):
+        raise ValueError(f"Require y_min < y_max; got y_min={a}, y_max={b}.")
+
+    # Extract draws (M,)
+    alpha = draws["slope"].to_numpy(float)
+    beta = draws["intercept.1"].to_numpy(float)
+    six = draws["sigma_int_x"].to_numpy(float)
+    siy = draws["sigma_int_y"].to_numpy(float)
+    siz = draws["sigma_int_z"].to_numpy(float)
+    sig_d = draws["sigma_int_g"].to_numpy(float)
+    gamma_c = draws["gamma"].to_numpy(float)
+    gamma_g = draws["gamma_g"].to_numpy(float)
+    delta_c = draws["delta_c"].to_numpy(float)
+    delta_g = draws["delta_g"].to_numpy(float)
+    mu_c = draws["mu_c"].to_numpy(float)
+    mu_g = draws["mu_g"].to_numpy(float)
+    tau_c = draws["tau_c"].to_numpy(float)
+    tau_g = draws["tau_g"].to_numpy(float)
+    alpha_k_r = draws["alpha_kcorr_r"].to_numpy(float)
+    alpha_k_z = draws["alpha_kcorr_z"].to_numpy(float)
+    alpha_k_g = draws["alpha_kcorr_g"].to_numpy(float)
+
+    if np.any(alpha == 0):
+        raise ValueError("Found slope == 0 in draws; model requires α ≠ 0.")
+
+    # Broadcast to (M, G)
+    aMG = alpha[:, None]
+    bMG = beta[:, None]
+    sixMG = six[:, None]
+    siyMG = siy[:, None]
+    sizMG = siz[:, None]
+    sigMG = sig_d[:, None]
+    gcMG = gamma_c[:, None]
+    ggMG = gamma_g[:, None]
+    dcMG = delta_c[:, None]
+    dgMG = delta_g[:, None]
+    mcMG = mu_c[:, None]
+    mgMG = mu_g[:, None]
+    tcMG = tau_c[:, None]
+    tgMG = tau_g[:, None]
+
+    sigma_intx_sq = sixMG**2  # (M, G)
+    sigma_x_sq = sigma_x_star[None, :] ** 2  # (1, G)
+    sigma1_sq = sigma_intx_sq + sigma_x_sq  # (M, G)
+
+    # A matrix entries (from 4×4 B in 2color.stan)
+    A11 = gcMG**2 * tcMG**2 + ggMG**2 * tgMG**2 + siyMG**2 + sigma_y_star[None, :] ** 2
+    A12 = gcMG * (gcMG - 1) * tcMG**2  # B[2,3] in Stan indexing
+    A14 = ggMG * (ggMG - 1) * tgMG**2  # B[2,4] in Stan indexing
+    A22 = (gcMG - 1) ** 2 * tcMG**2 + sizMG**2 + sigma_z_star[None, :] ** 2
+    A44 = (ggMG - 1) ** 2 * tgMG**2 + sigMG**2 + sigma_g_star[None, :] ** 2
+
+    # D matrix (3×3): sub-block of B for rows/cols {x, z, g}
+    # D[0,0] = σ1², D[0,1] = -δ_c·s², D[0,2] = -δ_g·s²
+    # D[1,1] = A22 + δ_c²·s², D[1,2] = 0, D[2,2] = A44 + δ_g²·s²
+    D00 = sigma1_sq
+    D01 = -dcMG * sigma_intx_sq
+    D02 = -dgMG * sigma_intx_sq
+    D11 = A22 + dcMG**2 * sigma_intx_sq
+    D22 = A44 + dgMG**2 * sigma_intx_sq
+    # D12 = 0 (independent factors)
+
+    # Compute D^{-1} analytically. Since D12=0, the cofactors simplify:
+    # det(D) = D00·D11·D22 - D01²·D22 - D02²·D11
+    det_D = D00 * D11 * D22 - D01**2 * D22 - D02**2 * D11
+
+    # Inverse of D (symmetric, D12=0):
+    # Dinv[0,0] = D11·D22 / det
+    # Dinv[1,1] = (D00·D22 - D02²) / det
+    # Dinv[2,2] = (D00·D11 - D01²) / det
+    # Dinv[0,1] = -D01·D22 / det
+    # Dinv[0,2] = -D02·D11 / det
+    # Dinv[1,2] = D01·D02 / det
+    inv_det = 1.0 / det_D
+    Di00 = D11 * D22 * inv_det
+    Di11 = (D00 * D22 - D02**2) * inv_det
+    Di22 = (D00 * D11 - D01**2) * inv_det
+    Di01 = -D01 * D22 * inv_det
+    Di02 = -D02 * D11 * inv_det
+    Di12 = D01 * D02 * inv_det
+
+    # Cross-vector c = B[y, {x,z,g}] = [0, A12, A14]
+    # b_cond = D^{-1} c  (regression coefficients for E[ŷ|x̂,ẑ,ĝ,y_TF])
+    # b_cond[0] = Di00·0 + Di01·A12 + Di02·A14 = Di01·A12 + Di02·A14
+    # b_cond[1] = Di01·0 + Di11·A12 + Di12·A14 = Di11·A12 + Di12·A14
+    # b_cond[2] = Di02·0 + Di12·A12 + Di22·A14 = Di12·A12 + Di22·A14
+    bc0 = Di01 * A12 + Di02 * A14
+    bc1 = Di11 * A12 + Di12 * A14
+    bc2 = Di12 * A12 + Di22 * A14
+
+    # Conditional variance σ²_{y|x̂ẑĝ} = A11 - c^T D^{-1} c
+    cDinvc = A12 * (Di11 * A12 + Di12 * A14) + A14 * (Di12 * A12 + Di22 * A14)
+    sigma_y_given_xzg_sq = A11 - cDinvc
+
+    # b_xzg vector: how y_TF enters the observation means
+    # b_xzg = [1/α, 1-δ_c/α, 1-δ_g/α]^T
+    bxzg_0 = 1.0 / aMG
+    bxzg_1 = 1.0 - dcMG / aMG
+    bxzg_2 = 1.0 - dgMG / aMG
+
+    # ξ = b_xzg^T D^{-1} b_xzg
+    xi = (bxzg_0 * (Di00 * bxzg_0 + Di01 * bxzg_1 + Di02 * bxzg_2)
+          + bxzg_1 * (Di01 * bxzg_0 + Di11 * bxzg_1 + Di12 * bxzg_2)
+          + bxzg_2 * (Di02 * bxzg_0 + Di12 * bxzg_1 + Di22 * bxzg_2))
+
+    # Band-dependent k-correction mean shifts
+    log1pz_centered = np.log1p(zobs_star[None, :]) - mean_log1pz
+    alpha_zn_r = alpha_k_r[:, None] * log1pz_centered
+    alpha_zn_z = alpha_k_z[:, None] * log1pz_centered
+    alpha_zn_g = alpha_k_g[:, None] * log1pz_centered
+
+    # Residual at y_TF=0: o - a_vec (observation minus mean at y_TF=0)
+    # a_vec = [-β/α, Δ_z - μ_c + δ_c·β/α, Δ_g - μ_g + δ_g·β/α]
+    # o = [x̂, ẑ, ĝ]
+    # r0 = o - a_vec
+    r0_x = xhat_star[None, :] + bMG / aMG
+    r0_z = zhat_star[None, :] - alpha_zn_z + mcMG - dcMG * bMG / aMG - dcMG * x_bar
+    r0_g = ghat_star[None, :] - alpha_zn_g + mgMG - dgMG * bMG / aMG - dgMG * x_bar
+
+    # φ = b_xzg^T D^{-1} r0
+    Dinv_r0_0 = Di00 * r0_x + Di01 * r0_z + Di02 * r0_g
+    Dinv_r0_1 = Di01 * r0_x + Di11 * r0_z + Di12 * r0_g
+    Dinv_r0_2 = Di02 * r0_x + Di12 * r0_z + Di22 * r0_g
+    phi = bxzg_0 * Dinv_r0_0 + bxzg_1 * Dinv_r0_1 + bxzg_2 * Dinv_r0_2
+
+    # Posterior on y_TF: N(μ^†, 1/ξ) truncated to [a, b]
+    mu_L = phi / xi
+    sigma_L_sq = 1.0 / xi
+    sigma_L = np.sqrt(sigma_L_sq)
+
+    # Compute truncated normal mean and variance
+    mean_yTF = np.empty_like(mu_L)
+    var_yTF = np.empty_like(mu_L)
+
+    deg = sigma_L == 0.0
+    if np.any(deg):
+        mu_deg = mu_L[deg]
+        ok = (mu_deg >= a) & (mu_deg <= b)
+        if not np.all(ok):
+            raise ValueError("Encountered sigma_L == 0 with mu_L outside [y_min,y_max].")
+        mean_yTF[deg] = mu_deg
+        var_yTF[deg] = 0.0
+
+    nd = ~deg
+    if np.any(nd):
+        mu = mu_L[nd]
+        sig = sigma_L[nd]
+
+        alpha_tn = (a - mu) / sig
+        beta_tn = (b - mu) / sig
+
+        use_sf = alpha_tn >= 0.0
+        log_sf_a = norm.logsf(alpha_tn)
+        log_sf_b = norm.logsf(beta_tn)
+        log_cdf_a = norm.logcdf(alpha_tn)
+        log_cdf_b = norm.logcdf(beta_tn)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            log_Z_sf = log_sf_a + np.log1p(
+                -np.exp(np.clip(log_sf_b - log_sf_a, -np.inf, 0.0))
+            )
+            log_Z_cdf = log_cdf_b + np.log1p(
+                -np.exp(np.clip(log_cdf_a - log_cdf_b, -np.inf, 0.0))
+            )
+        log_Z = np.where(use_sf, log_Z_sf, log_Z_cdf)
+
+        if on_bad_Z == "raise":
+            if np.any(~np.isfinite(log_Z)):
+                raise ValueError("log(Z) is non-finite for some (draw, galaxy).")
+        elif on_bad_Z == "floor":
+            log_Z = np.maximum(log_Z, np.log(Z_floor))
+        else:
+            raise ValueError("on_bad_Z must be 'raise' or 'floor'.")
+
+        log_phi_a = norm.logpdf(alpha_tn)
+        log_phi_b = norm.logpdf(beta_tn)
+        la = np.exp(log_phi_a - log_Z)
+        lb = np.exp(log_phi_b - log_Z)
+
+        t = la - lb
+        m = mu + sig * t
+        u = alpha_tn * la - beta_tn * lb
+        v = (sig**2) * (1.0 + u - t**2)
+        v = np.maximum(v, 0.0)
+
+        mean_yTF[nd] = m
+        var_yTF[nd] = v
+
+    # Conditional mean E[ŷ | x̂, ẑ, ĝ, θ]
+    # = y_TF + Δ_r + bc · (o - m(y_TF))
+    mu_x_at_mean = (mean_yTF - bMG) / aMG
+    res0 = xhat_star[None, :] - mu_x_at_mean
+    res1 = zhat_star[None, :] - (mean_yTF + alpha_zn_z - mcMG - dcMG * (mu_x_at_mean - x_bar))
+    res2 = ghat_star[None, :] - (mean_yTF + alpha_zn_g - mgMG - dgMG * (mu_x_at_mean - x_bar))
+
+    cond_mean = mean_yTF + alpha_zn_r + bc0 * res0 + bc1 * res1 + bc2 * res2
+
+    # Conditional variance: ∂μ/∂y_TF contributions
+    dres0_dyTF = -1.0 / aMG
+    dres1_dyTF = -(1.0 - dcMG / aMG)
+    dres2_dyTF = -(1.0 - dgMG / aMG)
+    dmu_dyTF = 1.0 + bc0 * dres0_dyTF + bc1 * dres1_dyTF + bc2 * dres2_dyTF
+
+    cond_var = sigma_y_given_xzg_sq + dmu_dyTF**2 * var_yTF
+
+    # Mix over MCMC draws
+    mean_y = cond_mean.mean(axis=0)
+    var_y = cond_var.mean(axis=0) + (cond_mean**2).mean(axis=0) - mean_y**2
+    sd_y = np.sqrt(np.maximum(var_y, 0.0))
+
+    return mean_y, sd_y
+
+
 def ystar_pp_mean_sd_color_xonly_vectorized(
     draws,
     xhat_star,
@@ -507,7 +859,12 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     tcMG = tau_c[:, None]
 
     # A₁₁ = γ²τ_c² + σ²_{int,y} + σ²_{y,*}  (Eq. C.A, marginalizing ẑ)
+    # For 2color model, also includes γ²_g·τ²_g
     A11 = gMG**2 * tcMG**2 + siyMG**2 + sigma_y_star[None, :] ** 2  # (M, G)
+    if "gamma_g" in draws.columns and "tau_g" in draws.columns:
+        gg = draws["gamma_g"].to_numpy(float)[:, None]
+        tg = draws["tau_g"].to_numpy(float)[:, None]
+        A11 = A11 + gg**2 * tg**2
 
     # Truncated normal posterior for y_TF | x̂  (identical to baseline)
     sigma1_sq = sixMG**2 + sigma_x_star[None, :] ** 2  # (M, G)
@@ -619,41 +976,47 @@ def DESI_color(
     if x_bar is None:
         x_bar = float(np.mean(input_data["x"]))
 
-    # Load posterior draws
-    draws = read_cmdstan_posterior(
-        _p(f"{model}_?.csv"),
-        keep=[
-            "slope",
-            "intercept.1",
-            "sigma_int_x",
-            "sigma_int_y",
-            "sigma_int_z",
-            "gamma",
-            "delta_c",
-            "mu_c",
-            "tau_c",
-            "alpha_kcorr_r",
-            "alpha_kcorr_z",
-        ],
-        drop_diagnostics=True,
-    )
+    # Load posterior draws and compute predictions
+    if model == "2color":
+        draws = read_cmdstan_posterior(
+            _p(f"{model}_?.csv"),
+            keep=[
+                "slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+                "sigma_int_z", "sigma_int_g", "gamma", "gamma_g",
+                "delta_c", "delta_g", "mu_c", "mu_g", "tau_c", "tau_g",
+                "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g",
+            ],
+            drop_diagnostics=True,
+        )
+        ghat_star, sigma_g_star = load_gband_from_desi(galaxy_fits)
 
-    # Posterior predictive
-    mean_pred, sd_pred = ystar_pp_mean_sd_color_vectorized(
-        draws,
-        xhat_star,
-        sigma_x_star,
-        zhat_star,
-        sigma_z_star,
-        sigma_y_star=sigma_y_star,
-        x_bar=x_bar,
-        y_min=y_min,
-        y_max=y_max,
-        zobs_star=zobs_star,
-        mean_log1pz=mean_log1pz,
-        on_bad_Z="floor",
-        Z_floor=1e-300,
-    )
+        mean_pred, sd_pred = ystar_pp_mean_sd_2color_vectorized(
+            draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
+            ghat_star, sigma_g_star,
+            sigma_y_star=sigma_y_star, x_bar=x_bar,
+            y_min=y_min, y_max=y_max,
+            zobs_star=zobs_star, mean_log1pz=mean_log1pz,
+            on_bad_Z="floor", Z_floor=1e-300,
+        )
+    else:
+        draws = read_cmdstan_posterior(
+            _p(f"{model}_?.csv"),
+            keep=[
+                "slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+                "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
+                "alpha_kcorr_r", "alpha_kcorr_z",
+            ],
+            drop_diagnostics=True,
+        )
+        ghat_star = sigma_g_star = None
+
+        mean_pred, sd_pred = ystar_pp_mean_sd_color_vectorized(
+            draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
+            sigma_y_star=sigma_y_star, x_bar=x_bar,
+            y_min=y_min, y_max=y_max,
+            zobs_star=zobs_star, mean_log1pz=mean_log1pz,
+            on_bad_Z="floor", Z_floor=1e-300,
+        )
 
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
@@ -670,21 +1033,25 @@ def DESI_color(
     sigma_z_main = sigma_z_star[main_mask]
     zobs_main = zobs_star[main_mask]
 
-    mean_pred_main, _ = ystar_pp_mean_sd_color_vectorized(
-        draws,
-        xhat_main,
-        sigma_x_main,
-        zhat_main,
-        sigma_z_main,
-        sigma_y_star=sigma_y_main,
-        x_bar=x_bar,
-        y_min=y_min,
-        y_max=y_max,
-        zobs_star=zobs_main,
-        mean_log1pz=mean_log1pz,
-        on_bad_Z="floor",
-        Z_floor=1e-300,
-    )
+    if model == "2color":
+        ghat_main = ghat_star[main_mask]
+        sigma_g_main = sigma_g_star[main_mask]
+        mean_pred_main, _ = ystar_pp_mean_sd_2color_vectorized(
+            draws, xhat_main, sigma_x_main, zhat_main, sigma_z_main,
+            ghat_main, sigma_g_main,
+            sigma_y_star=sigma_y_main, x_bar=x_bar,
+            y_min=y_min, y_max=y_max,
+            zobs_star=zobs_main, mean_log1pz=mean_log1pz,
+            on_bad_Z="floor", Z_floor=1e-300,
+        )
+    else:
+        mean_pred_main, _ = ystar_pp_mean_sd_color_vectorized(
+            draws, xhat_main, sigma_x_main, zhat_main, sigma_z_main,
+            sigma_y_star=sigma_y_main, x_bar=x_bar,
+            y_min=y_min, y_max=y_max,
+            zobs_star=zobs_main, mean_log1pz=mean_log1pz,
+            on_bad_Z="floor", Z_floor=1e-300,
+        )
     mean_y_main = mean_pred_main - yhat_main
 
     # --- Residual grid: MAIN sample ---
@@ -938,15 +1305,6 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
         & np.isfinite(sigma_z_full)
     )
 
-    # Load posterior draws
-    draws = read_cmdstan_posterior(
-        _p(f"{model}_?.csv"),
-        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
-              "alpha_kcorr_r", "alpha_kcorr_z"],
-        drop_diagnostics=True,
-    )
-
     with open(_p("input.json"), "r") as f:
         input_data = json.load(f)
     y_min = input_data["y_min"]
@@ -954,21 +1312,46 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
     x_bar = input_data.get("mean_x", float(np.mean(input_data["x"])))
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
-    mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_color_vectorized(
-        draws,
-        xhat[valid],
-        sigma_x[valid],
-        zhat_full[valid],
-        sigma_z_full[valid],
-        sigma_y_star=app_err[valid],
-        x_bar=x_bar,
-        y_min=y_min,
-        y_max=y_max,
-        zobs_star=zobs[valid],
-        mean_log1pz=mean_log1pz,
-        on_bad_Z="floor",
-        Z_floor=1e-300,
-    )
+    if model == "2color":
+        draws = read_cmdstan_posterior(
+            _p(f"{model}_?.csv"),
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+                  "sigma_int_z", "sigma_int_g", "gamma", "gamma_g",
+                  "delta_c", "delta_g", "mu_c", "mu_g", "tau_c", "tau_g",
+                  "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g"],
+            drop_diagnostics=True,
+        )
+        ghat_full, sigma_g_full = load_gband_from_desi(fits_path, apply_valid_mask=False)
+        valid = valid & np.isfinite(ghat_full) & np.isfinite(sigma_g_full)
+
+        mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_2color_vectorized(
+            draws,
+            xhat[valid], sigma_x[valid],
+            zhat_full[valid], sigma_z_full[valid],
+            ghat_full[valid], sigma_g_full[valid],
+            sigma_y_star=app_err[valid], x_bar=x_bar,
+            y_min=y_min, y_max=y_max,
+            zobs_star=zobs[valid], mean_log1pz=mean_log1pz,
+            on_bad_Z="floor", Z_floor=1e-300,
+        )
+    else:
+        draws = read_cmdstan_posterior(
+            _p(f"{model}_?.csv"),
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+                  "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
+                  "alpha_kcorr_r", "alpha_kcorr_z"],
+            drop_diagnostics=True,
+        )
+
+        mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_color_vectorized(
+            draws,
+            xhat[valid], sigma_x[valid],
+            zhat_full[valid], sigma_z_full[valid],
+            sigma_y_star=app_err[valid], x_bar=x_bar,
+            y_min=y_min, y_max=y_max,
+            zobs_star=zobs[valid], mean_log1pz=mean_log1pz,
+            on_bad_Z="floor", Z_floor=1e-300,
+        )
 
     mean_pred_full = np.full(n_rows, np.nan)
     sd_pred_full = np.full(n_rows, np.nan)
@@ -1075,10 +1458,13 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         & (sigma_x > 0)
     )
 
+    keep_cols = ["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+                 "gamma", "tau_c", "alpha_kcorr_r"]
+    if model == "2color":
+        keep_cols += ["gamma_g", "tau_g"]
     draws = read_cmdstan_posterior(
         _p(f"{model}_?.csv"),
-        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "gamma", "tau_c", "alpha_kcorr_r"],
+        keep=keep_cols,
         drop_diagnostics=True,
     )
 
@@ -1319,6 +1705,206 @@ def ystar_pp_cov_color_vectorized(
     return cov
 
 
+def ystar_pp_cov_2color_vectorized(
+    draws,
+    xhat_star,
+    sigma_x_star,
+    zhat_star,
+    sigma_z_star,
+    ghat_star,
+    sigma_g_star,
+    *,
+    sigma_y_star,
+    x_bar,
+    y_min,
+    y_max,
+    zobs_star,
+    mean_log1pz,
+    on_bad_Z="floor",
+    Z_floor=1e-300,
+    chunk_size=200,
+):
+    """
+    Posterior predictive covariance Cov(ŷ*[g1], ŷ*[g2]) — 2color model.
+
+    Uses the 3×3 D matrix (conditioning on x̂, ẑ, ĝ).
+    """
+    xhat_star = np.asarray(xhat_star, dtype=float)
+    sigma_x_star = np.asarray(sigma_x_star, dtype=float)
+    zhat_star = np.asarray(zhat_star, dtype=float)
+    sigma_z_star = np.asarray(sigma_z_star, dtype=float)
+    ghat_star = np.asarray(ghat_star, dtype=float)
+    sigma_g_star = np.asarray(sigma_g_star, dtype=float)
+    sigma_y_star = np.asarray(sigma_y_star, dtype=float)
+    zobs_star = np.asarray(zobs_star, dtype=float)
+    G = xhat_star.size
+
+    mean_y, _ = ystar_pp_mean_sd_2color_vectorized(
+        draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
+        ghat_star, sigma_g_star,
+        sigma_y_star=sigma_y_star,
+        x_bar=x_bar, y_min=y_min, y_max=y_max,
+        zobs_star=zobs_star, mean_log1pz=mean_log1pz,
+        on_bad_Z=on_bad_Z, Z_floor=Z_floor,
+    )
+
+    a = float(y_min)
+    b = float(y_max)
+
+    alpha_d = draws["slope"].to_numpy(float)
+    beta_d = draws["intercept.1"].to_numpy(float)
+    six_d = draws["sigma_int_x"].to_numpy(float)
+    siy_d = draws["sigma_int_y"].to_numpy(float)
+    siz_d = draws["sigma_int_z"].to_numpy(float)
+    sig_d = draws["sigma_int_g"].to_numpy(float)
+    gamma_c_d = draws["gamma"].to_numpy(float)
+    gamma_g_d = draws["gamma_g"].to_numpy(float)
+    delta_c_d = draws["delta_c"].to_numpy(float)
+    delta_g_d = draws["delta_g"].to_numpy(float)
+    mu_c_d = draws["mu_c"].to_numpy(float)
+    mu_g_d = draws["mu_g"].to_numpy(float)
+    tau_c_d = draws["tau_c"].to_numpy(float)
+    tau_g_d = draws["tau_g"].to_numpy(float)
+    alpha_k_r_d = draws["alpha_kcorr_r"].to_numpy(float)
+    alpha_k_z_d = draws["alpha_kcorr_z"].to_numpy(float)
+    alpha_k_g_d = draws["alpha_kcorr_g"].to_numpy(float)
+    M = len(draws)
+
+    accum = np.zeros((G, G), dtype=float)
+    var_accum = np.zeros(G, dtype=float)
+
+    for start in range(0, M, chunk_size):
+        end = min(start + chunk_size, M)
+
+        aMG = alpha_d[start:end, None]
+        bMG = beta_d[start:end, None]
+        sixMG = six_d[start:end, None]
+        siyMG = siy_d[start:end, None]
+        sizMG = siz_d[start:end, None]
+        sigMG = sig_d[start:end, None]
+        gcMG = gamma_c_d[start:end, None]
+        ggMG = gamma_g_d[start:end, None]
+        dcMG = delta_c_d[start:end, None]
+        dgMG = delta_g_d[start:end, None]
+        mcMG = mu_c_d[start:end, None]
+        mgMG = mu_g_d[start:end, None]
+        tcMG = tau_c_d[start:end, None]
+        tgMG = tau_g_d[start:end, None]
+
+        sigma_intx_sq = sixMG**2
+        sigma1_sq = sigma_intx_sq + sigma_x_star[None, :]**2
+
+        A11 = gcMG**2 * tcMG**2 + ggMG**2 * tgMG**2 + siyMG**2 + sigma_y_star[None, :]**2
+        A12 = gcMG * (gcMG - 1) * tcMG**2
+        A14 = ggMG * (ggMG - 1) * tgMG**2
+        A22 = (gcMG - 1)**2 * tcMG**2 + sizMG**2 + sigma_z_star[None, :]**2
+        A44 = (ggMG - 1)**2 * tgMG**2 + sigMG**2 + sigma_g_star[None, :]**2
+
+        D00 = sigma1_sq
+        D01 = -dcMG * sigma_intx_sq
+        D02 = -dgMG * sigma_intx_sq
+        D11 = A22 + dcMG**2 * sigma_intx_sq
+        D22 = A44 + dgMG**2 * sigma_intx_sq
+
+        det_D = D00 * D11 * D22 - D01**2 * D22 - D02**2 * D11
+        inv_det = 1.0 / det_D
+        Di00 = D11 * D22 * inv_det
+        Di11 = (D00 * D22 - D02**2) * inv_det
+        Di22 = (D00 * D11 - D01**2) * inv_det
+        Di01 = -D01 * D22 * inv_det
+        Di02 = -D02 * D11 * inv_det
+        Di12 = D01 * D02 * inv_det
+
+        bc0 = Di01 * A12 + Di02 * A14
+        bc1 = Di11 * A12 + Di12 * A14
+        bc2 = Di12 * A12 + Di22 * A14
+
+        cDinvc = A12 * (Di11 * A12 + Di12 * A14) + A14 * (Di12 * A12 + Di22 * A14)
+        sigma_y_given_xzg_sq = A11 - cDinvc
+
+        bxzg_0 = 1.0 / aMG
+        bxzg_1 = 1.0 - dcMG / aMG
+        bxzg_2 = 1.0 - dgMG / aMG
+
+        xi = (bxzg_0 * (Di00 * bxzg_0 + Di01 * bxzg_1 + Di02 * bxzg_2)
+              + bxzg_1 * (Di01 * bxzg_0 + Di11 * bxzg_1 + Di12 * bxzg_2)
+              + bxzg_2 * (Di02 * bxzg_0 + Di12 * bxzg_1 + Di22 * bxzg_2))
+
+        log1pz_centered = np.log1p(zobs_star[None, :]) - mean_log1pz
+        alpha_zn_r_chunk = alpha_k_r_d[start:end, None] * log1pz_centered
+        alpha_zn_z_chunk = alpha_k_z_d[start:end, None] * log1pz_centered
+        alpha_zn_g_chunk = alpha_k_g_d[start:end, None] * log1pz_centered
+
+        r0_x = xhat_star[None, :] + bMG / aMG
+        r0_z = zhat_star[None, :] - alpha_zn_z_chunk + mcMG - dcMG * bMG / aMG - dcMG * x_bar
+        r0_g = ghat_star[None, :] - alpha_zn_g_chunk + mgMG - dgMG * bMG / aMG - dgMG * x_bar
+
+        Dinv_r0_0 = Di00 * r0_x + Di01 * r0_z + Di02 * r0_g
+        Dinv_r0_1 = Di01 * r0_x + Di11 * r0_z + Di12 * r0_g
+        Dinv_r0_2 = Di02 * r0_x + Di12 * r0_z + Di22 * r0_g
+        phi = bxzg_0 * Dinv_r0_0 + bxzg_1 * Dinv_r0_1 + bxzg_2 * Dinv_r0_2
+
+        mu_L = phi / xi
+        sigma_L = np.sqrt(1.0 / xi)
+
+        mu_chunk = np.empty_like(mu_L)
+        var_chunk = np.empty_like(mu_L)
+
+        deg = sigma_L == 0.0
+        if np.any(deg):
+            mu_chunk[deg] = mu_L[deg]
+            var_chunk[deg] = 0.0
+
+        nd = ~deg
+        if np.any(nd):
+            mu = mu_L[nd]
+            sig = sigma_L[nd]
+            alpha_tn = (a - mu) / sig
+            beta_tn = (b - mu) / sig
+
+            use_sf = alpha_tn >= 0.0
+            log_sf_a = norm.logsf(alpha_tn)
+            log_sf_b = norm.logsf(beta_tn)
+            log_cdf_a = norm.logcdf(alpha_tn)
+            log_cdf_b = norm.logcdf(beta_tn)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                log_Z_sf = log_sf_a + np.log1p(
+                    -np.exp(np.clip(log_sf_b - log_sf_a, -np.inf, 0.0))
+                )
+                log_Z_cdf = log_cdf_b + np.log1p(
+                    -np.exp(np.clip(log_cdf_a - log_cdf_b, -np.inf, 0.0))
+                )
+            log_Z = np.where(use_sf, log_Z_sf, log_Z_cdf)
+            log_Z = np.maximum(log_Z, np.log(Z_floor))
+
+            la = np.exp(norm.logpdf(alpha_tn) - log_Z)
+            lb = np.exp(norm.logpdf(beta_tn) - log_Z)
+            t = la - lb
+            u = alpha_tn * la - beta_tn * lb
+            mu_chunk[nd] = mu + sig * t
+            var_chunk[nd] = np.maximum(sig**2 * (1.0 + u - t**2), 0.0)
+
+        mu_x = (mu_chunk - bMG) / aMG
+        res0 = xhat_star[None, :] - mu_x
+        res1 = zhat_star[None, :] - (mu_chunk + alpha_zn_z_chunk - mcMG - dcMG * (mu_x - x_bar))
+        res2 = ghat_star[None, :] - (mu_chunk + alpha_zn_g_chunk - mgMG - dgMG * (mu_x - x_bar))
+        cond_mean_chunk = mu_chunk + alpha_zn_r_chunk + bc0 * res0 + bc1 * res1 + bc2 * res2
+
+        dres0_dyTF = -1.0 / aMG
+        dres1_dyTF = -(1.0 - dcMG / aMG)
+        dres2_dyTF = -(1.0 - dgMG / aMG)
+        dmu_dyTF = 1.0 + bc0 * dres0_dyTF + bc1 * dres1_dyTF + bc2 * dres2_dyTF
+        cond_var_chunk = sigma_y_given_xzg_sq + dmu_dyTF**2 * var_chunk
+
+        mu_centered = cond_mean_chunk - mean_y[None, :]
+        accum += mu_centered.T @ mu_centered
+        var_accum += cond_var_chunk.sum(axis=0)
+
+    cov = accum / M
+    np.fill_diagonal(cov, np.diag(cov) + var_accum / M)
+    return cov
+
+
 def ystar_pp_cov_color_xonly_vectorized(
     draws,
     xhat_star,
@@ -1364,6 +1950,10 @@ def ystar_pp_cov_color_xonly_vectorized(
     gamma_d = draws["gamma"].to_numpy(float)
     tau_c_d = draws["tau_c"].to_numpy(float)
     alpha_k_r_d = draws["alpha_kcorr_r"].to_numpy(float)
+    has_2color = "gamma_g" in draws.columns and "tau_g" in draws.columns
+    if has_2color:
+        gamma_g_d = draws["gamma_g"].to_numpy(float)
+        tau_g_d = draws["tau_g"].to_numpy(float)
     M = len(draws)
 
     accum = np.zeros((G, G), dtype=float)
@@ -1380,6 +1970,10 @@ def ystar_pp_cov_color_xonly_vectorized(
         tcMG = tau_c_d[start:end, None]
 
         A11 = gMG**2 * tcMG**2 + siyMG**2 + sigma_y_star[None, :]**2
+        if has_2color:
+            ggMG = gamma_g_d[start:end, None]
+            tgMG = tau_g_d[start:end, None]
+            A11 = A11 + ggMG**2 * tgMG**2
 
         sigma1_sq = sixMG**2 + sigma_x_star[None, :]**2
         mu_L = bMG + aMG * xhat_star[None, :]
@@ -1470,10 +2064,13 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     sigma_y_star = sigma_y_full[main]
     zobs_star = zobs_full[main]
 
+    keep_cols = ["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+                 "gamma", "tau_c", "alpha_kcorr_r"]
+    if model == "2color":
+        keep_cols += ["gamma_g", "tau_g"]
     draws = read_cmdstan_posterior(
         _p(f"{model}_?.csv"),
-        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "gamma", "tau_c", "alpha_kcorr_r"],
+        keep=keep_cols,
         drop_diagnostics=True,
     )
 
@@ -1541,21 +2138,43 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     sigma_z_star = sigma_z_full[main]
     zobs_star = zobs_full[main]
 
-    draws = read_cmdstan_posterior(
-        _p(f"{model}_?.csv"),
-        keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-              "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
-              "alpha_kcorr_r", "alpha_kcorr_z"],
-        drop_diagnostics=True,
-    )
+    if model == "2color":
+        draws = read_cmdstan_posterior(
+            _p(f"{model}_?.csv"),
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+                  "sigma_int_z", "sigma_int_g", "gamma", "gamma_g",
+                  "delta_c", "delta_g", "mu_c", "mu_g", "tau_c", "tau_g",
+                  "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g"],
+            drop_diagnostics=True,
+        )
+        ghat_full_g, sigma_g_full_g = load_gband_from_desi(fits_path)
+        ghat_star = ghat_full_g[main]
+        sigma_g_star = sigma_g_full_g[main]
 
-    cov = ystar_pp_cov_color_vectorized(
-        draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
-        sigma_y_star=sigma_y_star,
-        x_bar=x_bar, y_min=y_min, y_max=y_max,
-        zobs_star=zobs_star,
-        mean_log1pz=mean_log1pz,
-    )
+        cov = ystar_pp_cov_2color_vectorized(
+            draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
+            ghat_star, sigma_g_star,
+            sigma_y_star=sigma_y_star,
+            x_bar=x_bar, y_min=y_min, y_max=y_max,
+            zobs_star=zobs_star,
+            mean_log1pz=mean_log1pz,
+        )
+    else:
+        draws = read_cmdstan_posterior(
+            _p(f"{model}_?.csv"),
+            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+                  "sigma_int_z", "gamma", "delta_c", "mu_c", "tau_c",
+                  "alpha_kcorr_r", "alpha_kcorr_z"],
+            drop_diagnostics=True,
+        )
+
+        cov = ystar_pp_cov_color_vectorized(
+            draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
+            sigma_y_star=sigma_y_star,
+            x_bar=x_bar, y_min=y_min, y_max=y_max,
+            zobs_star=zobs_star,
+            mean_log1pz=mean_log1pz,
+        )
 
     G = cov.shape[0]
     n_sub = min(512, G)
