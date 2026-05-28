@@ -242,7 +242,7 @@ def _build_parser():
     p.add_argument(
         '--model',
         default=None,
-        choices=['tophat', 'normal', 'color'],
+        choices=['tophat', 'normal', 'color', '2color'],
         help="Model to plot when using --run (default: tophat).",
     )
     p.add_argument(
