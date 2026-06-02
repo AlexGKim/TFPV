@@ -35,6 +35,19 @@ on Perlmutter (otherwise `make` fails with a missing `libOpenCL` error).
 export CONFIG=configs/dr1_v6_2color.json
 ```
 
+### 4. Data file prerequisites
+
+| File | In repo? | Contents | Notes |
+|------|----------|----------|-------|
+| `configs/dr1_v6_2color.json` | yes | Selection cuts (magnitude window, redshift range, color limit, ellipse geometry) produced by Phase A | Already committed |
+| `data/SGA-2020_iron_Vrot_VI_corr_v6.fits` | **no** | Raw DESI galaxy catalog (~9 MB) | Must be present on NERSC scratch; only needed if re-running step 4 |
+| `output/DR1_v6_2color/input.json` | yes | Stan data arrays: x, σ_x, y, σ_y, z_obs, g, σ_g for ~4728 selected galaxies, plus bounds and mean_x/sd_x | Output of step 4; committed to allow skipping step 4 |
+| `output/DR1_v6_2color/init_MAP.json` | yes | Stan parameter starting values at the MAP optimum: slope, intercept, scatter terms, color slopes, k-corrections | Output of step 5d; committed to allow skipping step 5d |
+| `output/DR1_v6_2color/metric.json` | yes | 17×17 inverse mass matrix (parameter covariance) for HMC | Output of step 5e; committed to allow skipping step 5e (~7h) |
+| `2color_g` (binary) | **no** | Compiled Stan GPU executable | Must be built on Perlmutter; see One-Time Setup below |
+
+For the initial test run with `DR1_v6_2color`, the three committed output files mean **steps 4, 5d, and 5e can all be skipped** — go straight to step 6.
+
 ---
 
 ## One-Time Setup
