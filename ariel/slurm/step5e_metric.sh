@@ -25,9 +25,22 @@ CONFIG=${CONFIG:-configs/dr1_v6_2color.json}
 RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
+# Use an existing metric as the initial covariance if available
+METRIC_ARG=""
+if [ -f "output/$RUN/metric.json" ]; then
+    METRIC_ARG="metric_file=output/$RUN/metric.json"
+    echo "Step 5e: using existing metric.json as initial covariance"
+elif [ -f "output/DR1_v6_2color/metric.json" ]; then
+    METRIC_ARG="metric_file=output/DR1_v6_2color/metric.json"
+    echo "Step 5e: using DR1_v6_2color/metric.json as initial covariance"
+else
+    echo "Step 5e: no existing metric found, starting from identity"
+fi
+
 echo "Step 5e: short metric-building run for run=$RUN (~7h)"
 ./2color_g sample num_warmup=100 num_samples=100 num_chains=1 \
     algorithm=hmc metric=dense_e \
+    $METRIC_ARG \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
     output file=output/$RUN/2color_metric_build.csv
