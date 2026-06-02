@@ -368,9 +368,9 @@ def process_desi_tf_data(
         "mu_y_TF": mu_y_TF,
         "tau": tau,
         "z_obs": z_obs_data,  # now defined, aligned, and JSON‑serializable
-        "z_obs_min": float(z_obs_min) if z_obs_min is not None else None,
-        "z_obs_max": float(z_obs_max) if z_obs_max is not None else None,
-        "rz_color_max": float(rz_color_max) if rz_color_max is not None else None,
+        **( {"z_obs_min": float(z_obs_min)} if z_obs_min is not None else {}),
+        **( {"z_obs_max": float(z_obs_max)} if z_obs_max is not None else {}),
+        **( {"rz_color_max": float(rz_color_max)} if rz_color_max is not None else {}),
         # [COLOR] z-band absolute magnitudes for color.stan
         "z": z_absmag_data,
         "sigma_z": sigma_z_absmag_data,
