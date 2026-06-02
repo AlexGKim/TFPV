@@ -1045,7 +1045,7 @@ Additional priors:
 \delta &\sim \mathcal{N}(0,\,1), \label{eq:cc:delta_prior}\\
 \mu_c  &\sim \mathcal{N}(\bar{c}_{\mathrm{obs}},\,1), \label{eq:cc:muc_prior}\\
 \tau_c &\sim \mathrm{Half\text{-}Cauchy}(0,\,0.3)\;\text{truncated to }\tau_c > 0.014, \label{eq:cc:tauc_prior}\\
-\sigma_{\mathrm{int},z} &\sim \mathrm{Half\text{-}Cauchy}(0,\,1), \label{eq:cc:sigz_prior}\\
+\ln\sigma_{\mathrm{int},z} &\sim \mathcal{N}(-3,\,2), \label{eq:cc:sigz_prior}\\
 \alpha_{k,r} &\sim \mathcal{N}(0,\,5), \label{eq:cc:alphakr_prior}\\
 \alpha_{k,z} &\sim \mathcal{N}(0,\,5), \label{eq:cc:alphakz_prior}
 \end{align}
@@ -1469,6 +1469,254 @@ the latent $y_i$; naive estimation of $\tau_c$ from the observed color variance
 overestimates the intrinsic scatter because $\hat{c}_i = \hat{y}_i - \hat{z}_i$
 has measurement noise $\sigma_{y,i}^2 + \sigma_{z,i}^2$; the posterior on $\tau_c$
 from the full hierarchical fit automatically deconvolves this.
+
+\section{Two-Color Extension}
+\label{sec:2color}
+
+The single-color model of \S\ref{sec:color_correction} uses the $r{-}z$ color
+(one latent factor $\eta_i$) to sharpen the absolute-magnitude prediction.  A
+natural extension adds the $g$-band as a second, independent latent color
+factor.  This appendix describes the \emph{2color} model, which replaces the
+trivariate likelihood $(\hat{x}_i,\hat{y}_i,\hat{z}_i)$ with a quadrivariate
+likelihood $(\hat{x}_i,\hat{y}_i,\hat{z}_i,\hat{g}_i)$.
+
+\subsection{Generative Model}
+\label{sec:2c:generative}
+
+Each galaxy retains the latent variables $y_{\mathrm{TF},i}$, $x_i$, and the
+$r{-}z$ residual color $\eta_i$ from \S\ref{sec:cc:generative}.  A second
+latent color $\eta_{g,i}$ describes the $g{-}r$ residual:
+\begin{align}
+  c_{g,i} \mid x_i &\sim
+    \mathcal{N}\!\bigl(\mu_g + \delta_g(x_i-\bar{x}),\;\tau_g^2\bigr),
+    \label{eq:2c:cg_given_x}\\
+  \eta_{g,i} &\equiv c_{g,i} - \mu_g - \delta_g(x_i-\bar{x}).
+    \label{eq:2c:etag_def}
+\end{align}
+The two residual colors $\eta_i$ and $\eta_{g,i}$ are independent.  The
+observation model for $g_i$ (the latent $g$-band absolute magnitude) is
+\begin{equation}
+  g_i \mid y_{\mathrm{TF},i},\,\eta_{g,i},\,x_i
+  \;\sim\;
+  \mathcal{N}\!\bigl(
+    y_{\mathrm{TF},i} + (\gamma_g-1)\eta_{g,i} - \mu_g - \delta_g(x_i-\bar{x})
+    + \Delta_{g,i},\;
+    \sigma_{\mathrm{int},g}^2
+  \bigr),
+  \label{eq:2c:g_given_yTF}
+\end{equation}
+where $\gamma_g$ is the $g{-}r$ luminosity--color slope and
+$\Delta_{g,i} \equiv \alpha_{k,g}[\ln(1+z_{\mathrm{obs},i})-\overline{\ln(1+z)}]$
+is the $g$-band residual $k$-correction.  The measurement equation is
+$\hat{g}_i \mid g_i \sim \mathcal{N}(g_i, \sigma_{g,i}^2)$.
+
+The $r$-band luminosity now depends on \emph{both} color factors:
+\begin{equation}
+  y_i \mid y_{\mathrm{TF},i},\,\eta_i,\,\eta_{g,i}
+  \;\sim\;
+  \mathcal{N}\!\bigl(
+    y_{\mathrm{TF},i} + \gamma\eta_i + \gamma_g\eta_{g,i} + \Delta_{r,i},\;
+    \sigma_{\mathrm{int},y}^2
+  \bigr),
+  \label{eq:2c:y_given_both}
+\end{equation}
+reducing to Eq.~\eqref{eq:cc:y_given_yTF_eta} when $\gamma_g=0$.
+
+\subsection{Marginalization to Quadrivariate Likelihood}
+\label{sec:2c:marginalization}
+
+Marginalizing the two independent residual colors
+$\eta_i\sim\mathcal{N}(0,\tau_c^2)$ and
+$\eta_{g,i}\sim\mathcal{N}(0,\tau_g^2)$, then marginalizing $x_i$, gives
+a quadrivariate Gaussian for
+$(\hat{x}_i,\hat{y}_i,\hat{z}_i,\hat{g}_i)\mid y_{\mathrm{TF},i}$
+with mean vector
+\begin{equation}
+\boldsymbol{\mu}_i(y_{\mathrm{TF},i})
+=
+\begin{pmatrix}
+  \mu_{x,i}(y_{\mathrm{TF},i})\\[2pt]
+  y_{\mathrm{TF},i} + \Delta_{r,i}\\[2pt]
+  y_{\mathrm{TF},i} + \Delta_{z,i} - \mu_c - \delta_c(\mu_{x,i}-\bar{x})\\[2pt]
+  y_{\mathrm{TF},i} + \Delta_{g,i} - \mu_g - \delta_g(\mu_{x,i}-\bar{x})
+\end{pmatrix}
+\label{eq:2c:mean}
+\end{equation}
+and $4\times4$ covariance matrix
+\begin{equation}
+\boldsymbol{B}_i =
+\begin{pmatrix}
+  \sigma_{1,i}^2 & 0
+    & -\delta_c\sigma_{\mathrm{int},x}^2
+    & -\delta_g\sigma_{\mathrm{int},x}^2 \\[4pt]
+  0 & A_{11}
+    & A_{12}
+    & A_{14} \\[4pt]
+  -\delta_c\sigma_{\mathrm{int},x}^2 & A_{12}
+    & A_{22} + \delta_c^2\sigma_{\mathrm{int},x}^2
+    & 0 \\[4pt]
+  -\delta_g\sigma_{\mathrm{int},x}^2 & A_{14}
+    & 0
+    & A_{44} + \delta_g^2\sigma_{\mathrm{int},x}^2
+\end{pmatrix},
+\label{eq:2c:B}
+\end{equation}
+where the entries are
+\begin{align}
+  A_{11} &= \gamma^2\tau_c^2 + \gamma_g^2\tau_g^2
+            + \sigma_{\mathrm{int},y}^2 + \sigma_{y,i}^2,
+            \label{eq:2c:A11}\\
+  A_{12} &= \gamma(\gamma-1)\tau_c^2,\\
+  A_{14} &= \gamma_g(\gamma_g-1)\tau_g^2,\\
+  A_{22} &= (\gamma-1)^2\tau_c^2 + \sigma_{\mathrm{int},z}^2 + \sigma_{z,i}^2,\\
+  A_{44} &= (\gamma_g-1)^2\tau_g^2 + \sigma_{\mathrm{int},g}^2 + \sigma_{g,i}^2.
+            \label{eq:2c:A44}
+\end{align}
+The zero in position $(3,4)$ of $\boldsymbol{B}_i$ reflects the independence of
+$\eta_i$ and $\eta_{g,i}$: the $r{-}z$ and $g{-}r$ intrinsic colors share no
+common latent factor, so $\hat{z}$ and $\hat{g}$ are conditionally independent
+given $(y_{\mathrm{TF},i}, x_i)$.
+
+\subsection{Closed-Form Likelihood}
+\label{sec:2c:likelihood}
+
+The integral over $y_{\mathrm{TF},i}$ proceeds exactly as in
+\S\ref{sec:cc:marginalization}: the mean $\boldsymbol{\mu}_i$ is affine in
+$y_{\mathrm{TF},i}$ with direction vector
+\begin{equation}
+\boldsymbol{b} =
+\begin{pmatrix}
+  1/\alpha\\[2pt] 1\\[2pt] 1-\delta_c/\alpha\\[2pt] 1-\delta_g/\alpha
+\end{pmatrix},
+\label{eq:2c:bvec}
+\end{equation}
+so the closed-form log-likelihood is
+\begin{equation}
+\ln\mathcal{L}_i
+= -\tfrac{3}{2}\ln(2\pi)
+  - \sum_k \ln L_{kk}
+  - \tfrac{1}{2}\ln\xi_i
+  - \tfrac{1}{2}Q_{0,i}
+  + \ln\Delta\Phi_i
+  - \ln(y_{\max}-y_{\min}),
+\label{eq:2c:loglik}
+\end{equation}
+where $L_{kk}$ are the diagonal elements of the Cholesky factor of
+$\boldsymbol{B}_i$, and
+\begin{align}
+  \xi_i &= \boldsymbol{b}^T \boldsymbol{B}_i^{-1} \boldsymbol{b},\\
+  \mu^\dagger_i &= \phi_i/\xi_i, \quad
+  \phi_i = \boldsymbol{b}^T \boldsymbol{B}_i^{-1} \boldsymbol{d}_i,\\
+  Q_{0,i} &= \boldsymbol{d}_i^T\boldsymbol{B}_i^{-1}\boldsymbol{d}_i
+             - \phi_i^2/\xi_i,\\
+  \Delta\Phi_i &= \Phi\!\bigl(\sqrt{\xi_i}(y_{\max}-\mu^\dagger_i)\bigr)
+                 -\Phi\!\bigl(\sqrt{\xi_i}(y_{\min}-\mu^\dagger_i)\bigr),
+\end{align}
+with $\boldsymbol{d}_i = \mathrm{obs}_i - \boldsymbol{\mu}_i(0)$.  The
+normalization uses $-\frac{3}{2}\ln(2\pi)$ (rather than $-\frac{1}{2}\ln(2\pi)$
+for the trivariate model) because the quadrivariate Gaussian has been reduced to
+a 1D integral; i.e.,\ $4-1=3$ Gaussian dimensions are integrated analytically.
+
+\subsection{Posterior Predictive Distribution}
+\label{sec:2c:predict}
+
+Prediction proceeds as in \S\ref{sec:cc:predict} but with a $3\times 3$
+conditioning matrix $\boldsymbol{D}_\star$ formed from the $(\hat{x},\hat{z},\hat{g})$
+sub-block of $\boldsymbol{B}_\star$:
+\begin{equation}
+\boldsymbol{D}_\star =
+\begin{pmatrix}
+  \sigma_{1,\star}^2
+    & -\delta_c\sigma_{\mathrm{int},x}^2
+    & -\delta_g\sigma_{\mathrm{int},x}^2\\[4pt]
+  -\delta_c\sigma_{\mathrm{int},x}^2
+    & A_{22}+\delta_c^2\sigma_{\mathrm{int},x}^2
+    & 0\\[4pt]
+  -\delta_g\sigma_{\mathrm{int},x}^2
+    & 0
+    & A_{44}+\delta_g^2\sigma_{\mathrm{int},x}^2
+\end{pmatrix}.
+\label{eq:2c:D}
+\end{equation}
+The regression coefficient vector is
+$\boldsymbol{b}_{\mathrm{reg}} = \boldsymbol{D}_\star^{-1}(0, A_{12}, A_{14})^T$
+and the conditional moments are
+\begin{align}
+  \mu_{y|\hat{x}\hat{z}\hat{g}}(y_{\mathrm{TF},\star})
+  &= y_{\mathrm{TF},\star} + \Delta_{r,\star}
+    + \boldsymbol{b}_{\mathrm{reg}}^T\boldsymbol{r}_\star(y_{\mathrm{TF},\star}),
+  \label{eq:2c:mu_cond}\\
+  \sigma_{y|\hat{x}\hat{z}\hat{g}}^2
+  &= A_{11}
+    - (0,A_{12},A_{14})\,\boldsymbol{D}_\star^{-1}\,(0,A_{12},A_{14})^T,
+  \label{eq:2c:sigma_cond}
+\end{align}
+where $\boldsymbol{r}_\star$ is the 3-vector of residuals
+$(\hat{x}_\star - \mu_{x,\star},\;
+  \hat{z}_\star - m_{z,\star},\;
+  \hat{g}_\star - m_{g,\star})$
+evaluated at $y_{\mathrm{TF},\star}$.
+
+The posterior on $y_{\mathrm{TF},\star}$ given $(\hat{x}_\star,\hat{z}_\star,\hat{g}_\star)$ is a truncated normal with precision
+\begin{equation}
+  \xi_{xzg}
+  = \boldsymbol{b}_{xzg}^T \boldsymbol{D}_\star^{-1} \boldsymbol{b}_{xzg},
+  \qquad
+  \boldsymbol{b}_{xzg}
+  = \begin{pmatrix}1/\alpha\\[2pt]1-\delta_c/\alpha\\[2pt]1-\delta_g/\alpha\end{pmatrix},
+  \label{eq:2c:xi_xzg}
+\end{equation}
+and mean $\mu^\dagger_{xzg} = \xi_{xzg}^{-1}\,\boldsymbol{b}_{xzg}^T
+\boldsymbol{D}_\star^{-1}(\boldsymbol{o}_\star - \boldsymbol{m}_\star(0))$.
+The exact posterior-predictive moments follow
+Eqs.~\eqref{eq:cc:mean_ystar}--\eqref{eq:cc:pp_var} with
+$\boldsymbol{D}_\star$, $\boldsymbol{b}_{\mathrm{reg}}$, $\xi_{xzg}$, and
+$\boldsymbol{b}_{xzg}$ replacing their $2\times 2$ counterparts.
+
+\subsection{Prediction from Rotation Velocity Alone}
+\label{sec:2c:xonly}
+
+Marginalizing $\hat{z}_\star$ and $\hat{g}_\star$ out of
+Eq.~\eqref{eq:2c:B} gives
+$\hat{y}_\star\mid y_{\mathrm{TF},\star}
+\sim\mathcal{N}(y_{\mathrm{TF},\star}+\Delta_{r,\star},\,A_{11})$
+(identical to Eq.~\eqref{eq:cc:y_given_yTF_xonly}), with
+$A_{11}$ now including $\gamma_g^2\tau_g^2$ (Eq.~\ref{eq:2c:A11}).
+The prediction follows Eqs.~\eqref{eq:cc:mean_xonly}--\eqref{eq:cc:var_xonly}
+with the augmented~$A_{11}$.
+
+\subsection{New Parameters and Priors}
+\label{sec:2c:priors}
+
+The 2color model adds six parameters beyond the single-color model:
+
+\begin{center}
+\begin{tabular}{lll}
+\hline
+Parameter & Meaning & Prior \\
+\hline
+$\gamma_g$ & $g{-}r$ luminosity--color slope & $\mathcal{N}(0,1)$ \\
+$\delta_g$ & population $g{-}r$ color--velocity slope & $\mathcal{N}(0,1)$ \\
+$\mu_g$ & mean $g{-}r$ color at $x=\bar{x}$ & $\mathcal{N}(\bar{c}_{g,\mathrm{obs}},1)$ \\
+$\tau_g$ & intrinsic $g{-}r$ scatter & $\mathrm{HalfCauchy}(0,0.3)$, $\tau_g>0.014$ \\
+$\sigma_{\mathrm{int},g}$ & $g$-band intrinsic scatter & $\ln\sigma_{\mathrm{int},g}\sim\mathcal{N}(-3,2)$ \\
+$\alpha_{k,g}$ & $g$-band $k$-correction slope & $\mathcal{N}(0,5)$ \\
+\hline
+\end{tabular}
+\end{center}
+
+The sampling parameterization uses $(p_g,\ell_g)\equiv(\gamma_g\tau_g,\ln\tau_g)$
+to avoid the $\gamma$--$\tau$ funnel, mirroring the reparameterization of
+\S\ref{sec:cc:generative}.
+
+\subsection{Reduction to Single-Color Model}
+\label{sec:2c:reduction}
+
+Setting $\gamma_g=0$, $\delta_g=0$, $\tau_g\to 0$, and
+$\alpha_{k,g}=0$ gives $A_{14}=0$, $A_{44}=\sigma_{\mathrm{int},g}^2+\sigma_{g,i}^2$,
+and the $(3,4)$ and $(4,4)$ entries of $\boldsymbol{B}_i$ decouple.  The
+$\hat{g}$ observation becomes uninformative, recovering the $3\times 3$ model
+of \S\ref{sec:cc:marginalization}.
 
 \bibliographystyle{aasjournal}
 

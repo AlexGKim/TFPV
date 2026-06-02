@@ -187,6 +187,13 @@ Key parameters to check:
 - `tau_c`, `tau_g` — intrinsic color scatter
 - `alpha_kcorr_r`, `alpha_kcorr_z`, `alpha_kcorr_g` — band k-corrections (DR1_v6: ~−5.7, −5.3, −6.3)
 
+```bash
+python explore_residuals.py --config $CONFIG --kind 2color
+```
+
+Residual plots (x-only prediction conditioned on x̂) are written to
+`output/$RUN/explore_residuals/`.
+
 ---
 
 ## Step 8: Predict absolute magnitudes (full 2color model)

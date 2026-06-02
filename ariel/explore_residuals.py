@@ -29,6 +29,7 @@ from predict import (
     ystar_pp_mean_sd_normal_vectorized,
     ystar_pp_mean_sd_tophat_vectorized,
 )
+from color_predict import ystar_pp_mean_sd_color_xonly_vectorized
 
 # ── constants matching DESI() defaults ────────────────────────────────────────
 V0 = 100.0
@@ -103,7 +104,7 @@ def main():
         default=None,
         help="Path to JSON config file (e.g., configs/dr1_v3.json)",
     )
-    parser.add_argument("--kind", default="tophat", choices=["tophat", "normal"])
+    parser.add_argument("--kind", default="tophat", choices=["tophat", "normal", "2color"])
     args = parser.parse_args()
 
     from config_utils import apply_config
@@ -236,7 +237,7 @@ def main():
             on_bad_Z="floor",
             Z_floor=1e-300,
         )
-    else:
+    elif kind == "normal":
         draws = read_cmdstan_posterior(
             os.path.join(run_dir, "normal_?.csv"),
             keep=[
@@ -250,6 +251,28 @@ def main():
             drop_diagnostics=True,
         )
         mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat, sigma_x)
+    else:  # 2color
+        keep_cols = ["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
+                     "gamma", "tau_c", "alpha_kcorr_r",
+                     "gamma_g", "tau_g"]
+        draws = read_cmdstan_posterior(
+            os.path.join(run_dir, "2color_?.csv"),
+            keep=keep_cols,
+            drop_diagnostics=True,
+        )
+        mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
+        mean_pred, sd_pred = ystar_pp_mean_sd_color_xonly_vectorized(
+            draws,
+            xhat,
+            sigma_x,
+            sigma_y_star=sigma_y,
+            y_min=y_min,
+            y_max=y_max,
+            zobs_star=zobs,
+            mean_log1pz=mean_log1pz,
+            on_bad_Z="floor",
+            Z_floor=1e-300,
+        )
 
     mean_y = mean_pred - yhat
     main_mask = _apply_main_cuts(cfg, xhat, yhat, zobs=zobs)
