@@ -77,7 +77,7 @@ export FITS=data/<new_catalog>.fits
 export RUN=<new_run_name>
 
 python selection_ellipse.py --config configs/<base>.json  # Step 1: fit selection ellipse
-python select_v2.py --config configs/<base>.json --exe ./2color  # Step 2: MLE + pull profile
+python select_v2.py --config configs/<base>.json --exe ./tophat  # Step 2: MLE + pull profile (tophat, not 2color)
 python set_fiducial.py --run $RUN                         # Step 3: interactive cut selection
 python export_config.py --run $RUN --out configs/<new>.json  # Step 3b: export config
 git add configs/<new>.json && git commit -m "add config for <new_run>"
