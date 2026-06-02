@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A desi_g
+#SBATCH -A desi
 #SBATCH -C cpu
 #SBATCH -q debug
 #SBATCH -t 0:10:00
@@ -14,13 +14,15 @@
 # Usage: sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step4_data.sh
 
 set -e
+source /global/common/software/desi/perlmutter/desiconda/20260227-2.3.1/conda/etc/profile.d/conda.sh
+conda activate /global/cfs/projectdirs/desi/users/akim/conda/envs/TFPV
 
 CONFIG=${CONFIG:-configs/batch_test.json}
-RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
+RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p output/$RUN slurm/logs
 
 echo "Step 4: desi_data.py for run=$RUN config=$CONFIG"
-python desi_data.py --config $CONFIG
+python3 desi_data.py --config $CONFIG
 
 touch output/$RUN/.step4_done
 echo "DONE: step4 → output/$RUN/input.json, init.json"

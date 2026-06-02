@@ -15,13 +15,15 @@
 # Requires: output/$RUN/2color_?.csv (all 4 chains done)
 
 set -e
+source /global/common/software/desi/perlmutter/desiconda/20260227-2.3.1/conda/etc/profile.d/conda.sh
+conda activate /global/cfs/projectdirs/desi/users/akim/conda/envs/TFPV
 
 CONFIG=${CONFIG:-configs/dr1_v6_2color.json}
-RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
+RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
 echo "Step 8: color_predict.py for run=$RUN"
-python color_predict.py --config $CONFIG --model 2color --xonly
+python3 color_predict.py --config $CONFIG --model 2color --xonly
 
 touch output/$RUN/.step8_done
 echo "DONE: step8 → color_catalog.fits, color_xonly_catalog.fits, color_cov.fits"

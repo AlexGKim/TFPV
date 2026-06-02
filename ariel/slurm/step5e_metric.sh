@@ -17,12 +17,14 @@
 # Requires: output/$RUN/input.json, init_MAP.json (step5d must be done)
 
 set -e
+source /global/common/software/desi/perlmutter/desiconda/20260227-2.3.1/conda/etc/profile.d/conda.sh
+conda activate /global/cfs/projectdirs/desi/users/akim/conda/envs/TFPV
 
 module load craype-accel-nvidia80 cudatoolkit nvidia PrgEnv-nvidia
 export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 
 CONFIG=${CONFIG:-configs/batch_test.json}
-RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
+RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
 # Use an existing metric as the initial covariance if available
@@ -45,7 +47,7 @@ echo "Step 5e: short metric-building run for run=$RUN (~7h)"
     init=output/$RUN/init_MAP.json \
     output file=output/$RUN/2color_metric_build.csv
 
-python make_metric.py --run $RUN \
+python3 make_metric.py --run $RUN \
     --csv output/$RUN/2color_metric_build.csv \
     --out output/$RUN/metric.json
 
