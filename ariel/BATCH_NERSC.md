@@ -48,6 +48,44 @@ export CONFIG=configs/dr1_v6_2color.json
 
 For the initial test run with `DR1_v6_2color`, the three committed output files mean **steps 4, 5d, and 5e can all be skipped** — go straight to step 6.
 
+### Obtaining the FITS file
+
+The FITS file is not in the repo. Transfer it to NERSC scratch before running step 4:
+
+```bash
+# From your local Mac:
+scp data/SGA-2020_iron_Vrot_VI_corr_v6.fits \
+    perlmutter.nersc.gov:$SCRATCH/TFPV/ariel/data/
+```
+
+Or if it is already on NERSC from a previous run, confirm it is in place:
+
+```bash
+ls -lh $SCRATCH/TFPV/ariel/data/SGA-2020_iron_Vrot_VI_corr_v6.fits
+```
+
+### Obtaining the config file (Phase A)
+
+The config file encodes the selection cuts chosen interactively on your local Mac.
+For `DR1_v6_2color` this is already done and committed — no action needed.
+
+For a **new dataset**, Phase A must be run locally first:
+
+```bash
+# On local Mac, from ariel/:
+export FITS=data/<new_catalog>.fits
+export RUN=<new_run_name>
+
+python selection_ellipse.py --config configs/<base>.json  # Step 1: fit selection ellipse
+python select_v2.py --config configs/<base>.json --exe ./tophat  # Step 2: MLE + pull profile
+python set_fiducial.py --run $RUN                         # Step 3: interactive cut selection
+python export_config.py --run $RUN --out configs/<new>.json  # Step 3b: export config
+git add configs/<new>.json && git commit -m "add config for <new_run>"
+git push
+```
+
+Then on NERSC: `git pull` to get the new config before submitting jobs.
+
 ---
 
 ## One-Time Setup
