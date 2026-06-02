@@ -40,7 +40,6 @@ def process_desi_tf_data(
     ),
     z_obs_min=None,  # <<< NEW: Minimum redshift for inclusion
     z_obs_max=None,
-    rz_color_max=None,  # r-z apparent color upper cut (e.g. 0.8 mag)
 ):
     """
     Process DESI TF data: convert to Stan JSON format and create initial conditions.
@@ -242,11 +241,6 @@ def process_desi_tf_data(
             z_filtered_rows += 1
             # -----------------------
 
-            # ---- COLOR CUT ----
-            if (rz_color_max is not None) and (rz_color_all[i] >= rz_color_max):
-                continue
-            color_filtered_rows += 1
-            # -------------------
 
             if plane_cut:
                 lower_bound_oblique = slope_plane * x_val + intercept_plane
@@ -370,7 +364,7 @@ def process_desi_tf_data(
         "z_obs": z_obs_data,  # now defined, aligned, and JSON‑serializable
         **( {"z_obs_min": float(z_obs_min)} if z_obs_min is not None else {}),
         **( {"z_obs_max": float(z_obs_max)} if z_obs_max is not None else {}),
-        **( {"rz_color_max": float(rz_color_max)} if rz_color_max is not None else {}),
+
         # [COLOR] z-band absolute magnitudes for color.stan
         "z": z_absmag_data,
         "sigma_z": sigma_z_absmag_data,
@@ -465,8 +459,7 @@ def process_desi_tf_data(
         print(f"  Rows with z_obs > {z_obs_min}: {z_min_filtered_rows}")
     if z_obs_max is not None:
         print(f"  Rows with z_obs <= {z_obs_max}: {z_filtered_rows}")
-    if rz_color_max is not None:
-        print(f"  Rows with r-z < {rz_color_max}: {color_filtered_rows}")
+
 
     if plane_cut:
         if not two_sided:
@@ -708,12 +701,7 @@ if __name__ == "__main__":
         default=None,
         help="Intercept of upper oblique cut (c2)",
     )
-    parser.add_argument(
-        "--rz_color_max",
-        type=float,
-        default=None,
-        help="Upper cut on r-z apparent color (e.g. 0.8 mag); galaxies with r-z >= this value are excluded",
-    )
+
     args = parser.parse_args()
 
     from config_utils import apply_config
@@ -748,7 +736,7 @@ if __name__ == "__main__":
             "slope_plane": args.slope_plane,
             "intercept_plane": args.intercept_plane,
             "intercept_plane2": args.intercept_plane2,
-            "rz_color_max": args.rz_color_max,
+
         }
     else:
         output_json = args.output or "DESI_input.json"
@@ -783,7 +771,7 @@ if __name__ == "__main__":
         random_seed=args.random_seed,
         z_obs_min=args.z_obs_min,
         z_obs_max=args.z_obs_max,
-        rz_color_max=args.rz_color_max,
+
     )
 
     if run_dir is not None:
