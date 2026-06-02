@@ -2336,9 +2336,6 @@ def _apply_main_cuts(cfg, xhat, yhat, zobs=None, rz_color=None):
     # the target selection window in phase space regardless of redshift.
     # Therefore, no zobs cut is applied here.
 
-    rz_color_max = cfg.get("rz_color_max")
-    if rz_color_max is not None and rz_color is not None:
-        mask &= np.asarray(rz_color, dtype=float) < rz_color_max
 
     return mask
 

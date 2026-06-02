@@ -74,7 +74,7 @@ Key fields:
 - `"exe"`: Stan binary name (base; GPU variant is `2color_g`)
 - `"haty_min"`, `"haty_max"`: magnitude selection window
 - `"z_obs_min"`, `"z_obs_max"`: redshift window
-- `"rz_color_max"`: r–z color cut
+
 
 All pipeline scripts accept `--config $CONFIG` or `--run $RUN`.
 
