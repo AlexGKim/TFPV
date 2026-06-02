@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A desi
+#SBATCH -A desi_g
 #SBATCH -C cpu
 #SBATCH -q debug
 #SBATCH -t 0:10:00
@@ -15,7 +15,7 @@
 
 set -e
 
-CONFIG=${CONFIG:-configs/dr1_v6_2color.json}
+CONFIG=${CONFIG:-configs/batch_test.json}
 RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p output/$RUN slurm/logs
 

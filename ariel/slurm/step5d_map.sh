@@ -19,7 +19,7 @@ set -e
 module load craype-accel-nvidia80 cudatoolkit nvidia PrgEnv-nvidia
 export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 
-CONFIG=${CONFIG:-configs/dr1_v6_2color.json}
+CONFIG=${CONFIG:-configs/batch_test.json}
 RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A desi
+#SBATCH -A desi_g
 #SBATCH -C cpu
 #SBATCH -q debug
 #SBATCH -t 0:30:00
