@@ -588,15 +588,11 @@ data {
   
   // Bin assignment for each galaxy (maps galaxy index to redshift bin)
   // array[N_total] int<lower=1, upper=N_bins> bin_idx;
-
-  // Redshift for k-correction
-  array[N_total] real z_obs;
 }
 // standardizing predictor variable
 transformed data {
   real mean_x = mean(x);
   real sd_x = sd(x);
-  real mean_log1pz = mean(log1p(to_vector(z_obs)));
   real sd_y = sd(y);
   vector[N_total] x_std = (x - mean_x) / sd_x;
   vector[N_total] sigma_x_std = sigma_x / sd_x;
@@ -708,8 +704,6 @@ parameters {
   real<lower=0, upper=1> sigma_int_x; // in x-units
   real<lower=0, upper=1> sigma_int_y; // in y-units
 
-  // r-band latent k-correction slope
-  real alpha_kcorr_r;
 }
 transformed parameters {
   // real sigma_int_y;
@@ -723,12 +717,6 @@ transformed parameters {
 model {
   // likelihood given flat prior in y_TF
   vector[N_total] yfromxstd = intercept_std[bin_idx] + slope_std * x_std;
-
-  // k-correction shift per galaxy
-  vector[N_total] alpha_zn_r;
-  for (n in 1:N_total)
-    alpha_zn_r[n] = alpha_kcorr_r * (log1p(z_obs[n]) - mean_log1pz);
-  vector[N_total] yfromxstd_kcorr = yfromxstd + alpha_zn_r;
   vector[N_total] sigmasq1_std = square(sigma_int_x_std) + sigma_x_std_sq;
   vector[N_total] sigmasq2 = square(sigma_int_y) + sigma_y_sq;
   // vector[N_total] sigmasq_tot = square(slope_std) * sigmasq1_std + sigmasq2;
@@ -737,12 +725,12 @@ model {
                                 + (square(sigma_int_y) + sigma_y_sq);
   
   //  term that applies to all cases
-  y ~ normal(yfromxstd_kcorr, sqrt(sigmasq_tot));
+  y ~ normal(yfromxstd, sqrt(sigmasq_tot));
   target += log(abs(slope_std)) * N_total;
   
   // if there is a non-zero range of y values allowed by the TFR limits, then we need to apply the selection function
   if (y_TF_limits != 0) {
-    vector[N_total] mu_star = (yfromxstd_kcorr .* sigmasq2
+    vector[N_total] mu_star = (yfromxstd .* sigmasq2
                                + y * square(slope_std) .* sigmasq1_std)
                               ./ sigmasq_tot;
     
@@ -794,7 +782,7 @@ model {
         //                    sqrt(sigmasq2[1]), 32));
         target += -log(
                        integrate_binormal_strip_sinh2_gl(y_min, y_max,
-                         haty_min - alpha_zn_r[n], haty_max - alpha_zn_r[n],
+                         haty_min, haty_max,
                          slope_std,
                          intercept_std[bin_idx], slope_plane_std,
                          intercept_plane_std, intercept_plane2_std,
@@ -813,7 +801,6 @@ model {
   // Priors
   sigma_int_x ~ cauchy(0, 1);
   sigma_int_y ~ cauchy(0, 1);
-  alpha_kcorr_r ~ normal(0, 5);
 }
 generated quantities {
   real slope = slope_std / sd_x;
