@@ -15,6 +15,8 @@ quadrivariate (x̂, ŷ, ẑ, ĝ) with a 4×4 covariance matrix. The two color fa
 | A — Setup | 1–3b | Complete [DR1.md](DR1.md) Steps 1–3b (selection ellipse, pull profile, fiducial, export config) |
 | B — 2color | 4–8 | Run Steps 4–8 below (data prep, compilation, MAP, metric, sampling, prediction) |
 
+To run Phase B on NERSC Perlmutter as batch SLURM jobs, see [BATCH_NERSC.md](BATCH_NERSC.md).
+
 ---
 
 ## Setup
