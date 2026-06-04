@@ -24,6 +24,59 @@ from predict import (
 )
 from mag_utils import get_mag_cols
 
+# ---------------------------------------------------------------------------
+# Systematic off-diagonal covariance terms (dust + photometric calibration)
+# ---------------------------------------------------------------------------
+
+# Std of internal-dust slope d from iron_internalDust z<0.1 MCMC
+# (iron_internalDust_z0p1_mcmc_nokcorr.pickle, chain 0 filtered to d ∈ (−1.5, 0))
+_D_ERR_R = 0.17680325261483004   # mag
+
+# Photometric calibration floor for the DESI North footprint
+_D_A_SYS = 0.02                  # mag
+
+
+def _systematic_offdiag_terms(ba, photsys):
+    """Per-galaxy systematic sensitivity vectors (MU / mag units).
+
+    Parameters
+    ----------
+    ba : (G,) array-like — axis ratio b/a for each galaxy
+    photsys : (G,) array-like of str — 'N' or 'S' per galaxy
+
+    Returns
+    -------
+    v_dust : (G,) ndarray — internal-dust sensitivity  d_err_r × (BA − 1)
+    v_phot : (G,) ndarray — photsys calibration floor  dAsys × 1_{N}
+    """
+    ba = np.asarray(ba, dtype=float)
+    photsys = np.asarray(photsys)
+    v_dust = _D_ERR_R * (ba - 1.0)
+    v_phot = np.where(photsys == 'N', _D_A_SYS, 0.0)
+    return v_dust, v_phot
+
+
+def _add_systematic_offdiag(cov, ba, photsys):
+    """Add dust and photsys off-diagonal covariance terms in-place.
+
+    The diagonal is preserved exactly; only true off-diagonal elements change.
+
+    Parameters
+    ----------
+    cov : (G, G) ndarray — covariance matrix, modified in-place
+    ba : (G,) array-like — axis ratio b/a
+    photsys : (G,) array-like of str — 'N' or 'S'
+
+    Returns
+    -------
+    cov : same array, modified in-place
+    """
+    v_dust, v_phot = _systematic_offdiag_terms(ba, photsys)
+    diag = np.diag(cov).copy()
+    cov += np.outer(v_dust, v_dust) + np.outer(v_phot, v_phot)
+    np.fill_diagonal(cov, diag)   # restore diagonal exactly
+    return cov
+
 
 def load_xyz_and_uncertainties_from_desi(
     fits_path,
@@ -2082,6 +2135,14 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         mean_log1pz=mean_log1pz,
     )
 
+    # Add dust and photometric-calibration off-diagonal systematics
+    with fits.open(fits_path) as _hdul:
+        _t = _hdul[1].data
+    _tmain = _t[np.array(main, dtype=bool)]
+    ba_star    = np.array(_tmain['BA'],      dtype=float)
+    photsys_star = np.array(_tmain['PHOTSYS'])
+    _add_systematic_offdiag(cov, ba_star, photsys_star)
+
     fits_out = _p("color_xonly_cov.fits")
     hdr = fits.Header()
     hdr["COMMENT"] = "Posterior predictive covariance matrix (float32), x-hat only"
@@ -2175,6 +2236,14 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
         )
+
+    # Add dust and photometric-calibration off-diagonal systematics
+    with fits.open(fits_path) as _hdul:
+        _t = _hdul[1].data
+    _tmain = _t[np.array(main, dtype=bool)]
+    ba_star    = np.array(_tmain['BA'],      dtype=float)
+    photsys_star = np.array(_tmain['PHOTSYS'])
+    _add_systematic_offdiag(cov, ba_star, photsys_star)
 
     G = cov.shape[0]
     n_sub = min(512, G)
