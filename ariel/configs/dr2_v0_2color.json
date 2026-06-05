@@ -1,0 +1,8 @@
+{
+  "run": "DR2_v0_2color",
+  "fits_file": "data/SGA-2020_loa_Vrot_VI_v0.fits",
+  "exe": "tophat",
+  "source": "DESI",
+  "model": "2color",
+  "dust_pickle": "data/loa_internalDust_nokcorr_mcmc.pickle"
+}

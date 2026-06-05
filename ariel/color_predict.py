@@ -28,21 +28,48 @@ from mag_utils import get_mag_cols
 # Systematic off-diagonal covariance terms (dust + photometric calibration)
 # ---------------------------------------------------------------------------
 
-# Std of internal-dust slope d from iron_internalDust z<0.1 MCMC
+# Std of internal-dust slope d — default from iron_internalDust z<0.1 MCMC
 # (iron_internalDust_z0p1_mcmc_nokcorr.pickle, chain 0 filtered to d ∈ (−1.5, 0))
-_D_ERR_R = 0.17680325261483004   # mag
+# Override per-run by setting "dust_pickle" in config.json.
+_D_ERR_R = 0.17680325261483004   # mag  (iron default)
 
 # Photometric calibration floor for the DESI North footprint
 _D_A_SYS = 0.02                  # mag
 
 
-def _systematic_offdiag_terms(ba, photsys):
+def _load_d_err_r(pickle_path):
+    """Load internal-dust slope std from an internalDust MCMC pickle.
+
+    Expects a tuple whose first element is a (n_chains, n_samples) array of
+    dust-slope posterior draws. Computes std of chain-0 samples filtered to
+    d ∈ (−1.5, 0), matching the convention used in TF_Y1_cov.ipynb.
+
+    Parameters
+    ----------
+    pickle_path : str — path to the internalDust MCMC pickle file
+
+    Returns
+    -------
+    d_err_r : float — std of dust slope in mag units
+    """
+    import pickle as _pickle
+    with open(pickle_path, 'rb') as fh:
+        result = _pickle.load(fh)
+    chain0 = np.asarray(result[0][0], dtype=float)
+    filtered = chain0[(chain0 > -1.5) & (chain0 < 0)]
+    d_err_r = float(np.std(filtered))
+    print(f"Loaded d_err_r = {d_err_r:.8f} mag from {pickle_path}")
+    return d_err_r
+
+
+def _systematic_offdiag_terms(ba, photsys, d_err_r=_D_ERR_R):
     """Per-galaxy systematic sensitivity vectors (MU / mag units).
 
     Parameters
     ----------
     ba : (G,) array-like — axis ratio b/a for each galaxy
     photsys : (G,) array-like of str — 'N' or 'S' per galaxy
+    d_err_r : float — std of internal-dust slope d (default: iron value)
 
     Returns
     -------
@@ -51,12 +78,12 @@ def _systematic_offdiag_terms(ba, photsys):
     """
     ba = np.asarray(ba, dtype=float)
     photsys = np.asarray(photsys)
-    v_dust = _D_ERR_R * (ba - 1.0)
+    v_dust = d_err_r * (ba - 1.0)
     v_phot = np.where(photsys == 'N', _D_A_SYS, 0.0)
     return v_dust, v_phot
 
 
-def _add_systematic_offdiag(cov, ba, photsys):
+def _add_systematic_offdiag(cov, ba, photsys, d_err_r=_D_ERR_R):
     """Add dust and photsys off-diagonal covariance terms in-place.
 
     The diagonal is preserved exactly; only true off-diagonal elements change.
@@ -66,12 +93,13 @@ def _add_systematic_offdiag(cov, ba, photsys):
     cov : (G, G) ndarray — covariance matrix, modified in-place
     ba : (G,) array-like — axis ratio b/a
     photsys : (G,) array-like of str — 'N' or 'S'
+    d_err_r : float — std of internal-dust slope d (default: iron value)
 
     Returns
     -------
     cov : same array, modified in-place
     """
-    v_dust, v_phot = _systematic_offdiag_terms(ba, photsys)
+    v_dust, v_phot = _systematic_offdiag_terms(ba, photsys, d_err_r=d_err_r)
     diag = np.diag(cov).copy()
     cov += np.outer(v_dust, v_dust) + np.outer(v_phot, v_phot)
     np.fill_diagonal(cov, diag)   # restore diagonal exactly
@@ -2101,6 +2129,10 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json")) as f:
             cfg = json.load(f)
 
+    # Load d_err_r from dust pickle if specified; fall back to iron default
+    _dust_pickle = cfg.get("dust_pickle")
+    _d_err_r = _load_d_err_r(_dust_pickle) if _dust_pickle else _D_ERR_R
+
     with open(_p("input.json")) as f:
         input_data = json.load(f)
     y_min = input_data["y_min"]
@@ -2137,11 +2169,11 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
 
     # Add dust and photometric-calibration off-diagonal systematics
     with fits.open(fits_path) as _hdul:
-        _t = _hdul[1].data
+        _t = _hdul[1].data  # type: ignore[union-attr]
     _tmain = _t[np.array(main, dtype=bool)]
     ba_star    = np.array(_tmain['BA'],      dtype=float)
     photsys_star = np.array(_tmain['PHOTSYS'])
-    _add_systematic_offdiag(cov, ba_star, photsys_star)
+    _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r)
 
     fits_out = _p("color_xonly_cov.fits")
     hdr = fits.Header()
@@ -2178,6 +2210,10 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     if not cfg:
         with open(_p("config.json")) as f:
             cfg = json.load(f)
+
+    # Load d_err_r from dust pickle if specified; fall back to iron default
+    _dust_pickle = cfg.get("dust_pickle")
+    _d_err_r = _load_d_err_r(_dust_pickle) if _dust_pickle else _D_ERR_R
 
     with open(_p("input.json")) as f:
         input_data = json.load(f)
@@ -2239,11 +2275,11 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
 
     # Add dust and photometric-calibration off-diagonal systematics
     with fits.open(fits_path) as _hdul:
-        _t = _hdul[1].data
+        _t = _hdul[1].data  # type: ignore[union-attr]
     _tmain = _t[np.array(main, dtype=bool)]
     ba_star    = np.array(_tmain['BA'],      dtype=float)
     photsys_star = np.array(_tmain['PHOTSYS'])
-    _add_systematic_offdiag(cov, ba_star, photsys_star)
+    _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r)
 
     G = cov.shape[0]
     n_sub = min(512, G)
