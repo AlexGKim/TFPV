@@ -1,8 +1,17 @@
 {
   "run": "DR2_v0_2color",
   "fits_file": "data/SGA-2020_loa_Vrot_VI_v0.fits",
-  "exe": "tophat",
+  "exe": "2color",
   "source": "DESI",
   "model": "2color",
+  "n_sigma": 3.0,
+  "haty_min": -22.0,
+  "haty_max": -18.5,
+  "slope_plane": -6.643332400024041,
+  "intercept_plane": -20.358756228023335,
+  "intercept_plane2": -18.053911959498492,
+  "n_sigma_perp": 3.0,
+  "z_obs_min": 0.01,
+  "z_obs_max": 0.065,
   "dust_pickle": "data/loa_internalDust_nokcorr_mcmc.pickle"
 }
