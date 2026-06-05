@@ -13,5 +13,7 @@
   "n_sigma_perp": 3.0,
   "z_obs_min": 0.01,
   "z_obs_max": 0.065,
-  "dust_pickle": "data/loa_internalDust_nokcorr_mcmc.pickle"
+  "dust_pickle": "data/loa_internalDust_nokcorr_mcmc.pickle",
+  "n_objects": 5000,
+  "random_seed": 42
 }

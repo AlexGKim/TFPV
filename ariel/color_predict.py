@@ -106,6 +106,61 @@ def _add_systematic_offdiag(cov, ba, photsys, d_err_r=_D_ERR_R):
     return cov
 
 
+def _get_holdout_mask(fits_path, main_mask, input_data):
+    """Return boolean mask (same length as ``main_mask``) for holdout galaxies.
+
+    Holdout = MAIN AND NOT in training set.
+
+    Reads SGA_ID from the FITS catalog (applying the same V > 0 validity filter
+    used by ``load_xyz_and_uncertainties_from_desi``) to map training IDs back
+    to the valid-row index space of ``main_mask``.
+
+    If ``train_sga_ids`` is absent from ``input_data`` (no split requested),
+    returns the full MAIN mask unchanged — backward compatible.
+
+    Parameters
+    ----------
+    fits_path : str — path to the DESI FITS catalog
+    main_mask : array-like of bool — MAIN=True mask (length = N valid galaxies)
+    input_data : dict — contents of input.json
+
+    Returns
+    -------
+    holdout : bool ndarray, same length as ``main_mask``
+    """
+    main_mask = np.asarray(main_mask, dtype=bool)
+    if "train_sga_ids" not in input_data:
+        return main_mask   # backward compat: all MAIN galaxies
+
+    train_ids = set(input_data["train_sga_ids"])
+
+    # Load SGA_IDs with the same validity filter as load_xyz_and_uncertainties_from_desi
+    with fits.open(fits_path) as hdul:
+        data = hdul[1].data  # type: ignore[union-attr]
+        V = np.asarray(data["V_0p4R26"], dtype=float)
+        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        names = set(data.dtype.names or ())
+        # z-band: needed to match the validity filter in load_xyz_and_uncertainties_from_desi
+        z_col = "Z_ABSMAG_SB26_CORR" if "Z_ABSMAG_SB26_CORR" in names else "Z_ABSMAG_SB26"
+        zhat_raw = np.asarray(data[z_col], dtype=float) if z_col in names else np.ones(len(V))
+        sga_ids_raw = np.asarray(data["SGA_ID"], dtype=float)
+    valid = (np.isfinite(V) & (V > 0) & np.isfinite(V_err) & (V_err > 0)
+             & np.isfinite(zhat_raw))
+    sga_ids_valid = sga_ids_raw[valid]
+
+    if len(sga_ids_valid) != len(main_mask):
+        raise ValueError(
+            f"_get_holdout_mask: SGA_ID array length ({len(sga_ids_valid)}) "
+            f"does not match main_mask length ({len(main_mask)}). "
+            f"The validity filter may differ from load_xyz_and_uncertainties_from_desi."
+        )
+
+    holdout = main_mask & ~np.isin(sga_ids_valid, list(train_ids))
+    print(f"  Train/holdout split: {len(train_ids)} training, "
+          f"{holdout.sum()} holdout  (MAIN total: {main_mask.sum()})")
+    return holdout
+
+
 def load_xyz_and_uncertainties_from_desi(
     fits_path,
     *,
@@ -1102,9 +1157,10 @@ def DESI_color(
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
 
-    # MAIN sample mask
+    # MAIN/holdout sample mask
     rz_color_desi = _load_rz_color_from_desi(galaxy_fits)
-    main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star, rz_color=rz_color_desi)
+    _main_all = _apply_main_cuts(cfg, xhat_star, yhat_star, rz_color=rz_color_desi)
+    main_mask = _get_holdout_mask(galaxy_fits, _main_all, input_data)
 
     xhat_main = xhat_star[main_mask]
     sigma_x_main = sigma_x_star[main_mask]
@@ -1449,7 +1505,8 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json"), "r") as f:
             cfg = json.load(f)
 
-    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    _main_valid = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    main = _get_holdout_mask(fits_path, _main_valid, input_data)
 
     new_cols = [
         fits.Column(name="MU_TF", format="E", array=MU_TF.astype(np.float32)),
@@ -1583,7 +1640,8 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json"), "r") as f:
             cfg = json.load(f)
 
-    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    _main_valid = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    main = _get_holdout_mask(fits_path, _main_valid, input_data)
 
     new_cols = [
         fits.Column(name="MU_TF", format="E", array=MU_TF.astype(np.float32)),
@@ -2143,7 +2201,8 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
      _zhat_full, _sigma_z_full, zobs_full) = load_xyz_and_uncertainties_from_desi(fits_path)
 
     rz_color_full = _load_rz_color_from_desi(fits_path)
-    main = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
+    _main_all = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
+    main = _get_holdout_mask(fits_path, _main_all, input_data)
     xhat_star = xhat_full[main]
     sigma_x_star = sigma_x_full[main]
     sigma_y_star = sigma_y_full[main]
@@ -2227,7 +2286,8 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     x_bar = input_data.get("mean_x", float(np.mean(input_data["x"])))
 
     rz_color_full = _load_rz_color_from_desi(fits_path)
-    main = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
+    _main_all = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
+    main = _get_holdout_mask(fits_path, _main_all, input_data)
     xhat_star = xhat_full[main]
     sigma_x_star = sigma_x_full[main]
     sigma_y_star = sigma_y_full[main]
