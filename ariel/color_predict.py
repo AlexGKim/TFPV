@@ -2389,25 +2389,58 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     y_max = input_data["y_max"]
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
-    # For 2color use with_gband=True so the holdout set is consistent with write_cov_color
-    if model == "2color":
-        (xhat_full, sigma_x_full, yhat_full, sigma_y_full,  # type: ignore[assignment]
-         _zhat_full, _sigma_z_full, zobs_full, _ghat, _sg, valid_mask) = load_xyz_and_uncertainties_from_desi(
-            fits_path, with_gband=True, return_mask=True
-        )
-    else:
-        (xhat_full, sigma_x_full, yhat_full, sigma_y_full,  # type: ignore[assignment]
-         _zhat_full, _sigma_z_full, zobs_full, valid_mask) = load_xyz_and_uncertainties_from_desi(
-            fits_path, return_mask=True
-        )
+    # Load in raw-catalog space using only r-band + velocity (same validity as the
+    # catalog writer), so MAIN and holdout counts are identical between catalog and cov.
+    # xonly prediction needs only x̂, σ_x, σ_y (r-band err), z_obs — no z-band or g-band.
+    _z_col_candidates = ("Z_DESI", "zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE")
+    with fits.open(fits_path) as _hdul:
+        _d = _hdul[1].data  # type: ignore[union-attr]
+        _names = set(_d.dtype.names or ())
+        _col_abs, _col_abs_err, _col_app = get_mag_cols(_names)
+        _V    = np.asarray(_d["V_0p4R26"],    dtype=float)
+        _Verr = np.asarray(_d["V_0p4R26_ERR"], dtype=float)
+        _app_err = np.asarray(_d[_col_abs_err], dtype=float)   # σ_y per galaxy
+        _abs_mag = np.asarray(_d[_col_abs],     dtype=float)   # r-band abs mag (main cuts)
+        _z_col = next((c for c in _z_col_candidates if c in _names), None)
+        if _z_col is None:
+            raise ValueError(f"No redshift column found; tried {_z_col_candidates}")
+        _zobs_raw = np.asarray(_d[_z_col], dtype=float)
+        # r-z colour for the ellipse main cut (load inline — same as catalog writer)
+        if "R_MAG_SB26_CORR" in _names and "Z_MAG_SB26_CORR" in _names:
+            _rz = (np.asarray(_d["R_MAG_SB26_CORR"], dtype=float)
+                   - np.asarray(_d["Z_MAG_SB26_CORR"], dtype=float))
+        elif "R_MAG_SB26" in _names and "Z_MAG_SB26" in _names:
+            _rz = (np.asarray(_d["R_MAG_SB26"], dtype=float)
+                   - np.asarray(_d["Z_MAG_SB26"], dtype=float))
+        else:
+            _rz = None
+        _ba_raw      = np.asarray(_d["BA"],      dtype=float)
+        _photsys_raw = np.asarray(_d["PHOTSYS"])
+        _sga_raw     = np.asarray(_d["SGA_ID"],  dtype=float)
 
-    rz_color_full = _load_rz_color_from_desi(fits_path)
-    _main_all = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
-    main = _get_holdout_mask(fits_path, _main_all, input_data)
-    xhat_star = xhat_full[main]
-    sigma_x_star = sigma_x_full[main]
-    sigma_y_star = sigma_y_full[main]
-    zobs_star = zobs_full[main]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        _xhat   = np.where(_V > 0, np.log10(_V / 100.0),               np.nan)
+        _sigma_x = np.where(_V > 0, _Verr / (_V * np.log(10.0)),       np.nan)
+
+    _valid = (np.isfinite(_V) & (_V > 0) & np.isfinite(_Verr) & (_Verr > 0)
+              & np.isfinite(_xhat) & np.isfinite(_sigma_x) & (_sigma_x > 0))
+
+    _main_valid = _valid & _apply_main_cuts(cfg, _xhat, _abs_mag,
+                                            zobs=_zobs_raw, rz_color=_rz)
+    if "train_sga_ids" in input_data:
+        _train_ids = set(input_data["train_sga_ids"])
+        main = _main_valid & ~np.isin(_sga_raw, list(_train_ids))
+    else:
+        main = _main_valid
+    print(f"  Train/holdout split: {len(input_data.get('train_sga_ids', []))} training, "
+          f"{main.sum()} holdout  (MAIN total: {_main_valid.sum()})")
+
+    xhat_star     = _xhat[main]
+    sigma_x_star  = _sigma_x[main]
+    sigma_y_star  = _app_err[main]
+    zobs_star     = _zobs_raw[main]
+    ba_star       = _ba_raw[main]
+    photsys_star  = _photsys_raw[main]
 
     keep_cols = ["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
                  "gamma", "tau_c", "alpha_kcorr_r"]
@@ -2418,15 +2451,6 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         keep=keep_cols,
         drop_diagnostics=True,
     )
-
-    # Load BA / PHOTSYS now (needed for systematic terms regardless of model).
-    # Reduce the raw catalog to the loader's validity-filtered rows so the
-    # boolean `main` (validity-space) aligns with the table rows.
-    with fits.open(fits_path) as _hdul:
-        _t = _hdul[1].data[valid_mask]  # type: ignore[union-attr]
-    _tmain = _t[np.array(main, dtype=bool)]
-    ba_star = np.array(_tmain['BA'], dtype=float)
-    photsys_star = np.array(_tmain['PHOTSYS'])
 
     G = int(xhat_star.size)
     n_sub = min(512, G)
