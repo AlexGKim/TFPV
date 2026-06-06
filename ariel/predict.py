@@ -2308,12 +2308,24 @@ def _load_gr_color_from_desi(fits_path):
         sigma_y_raw = np.asarray(data[col_abs_err], dtype=float)
         z_col_use = next((c for c in z_col_candidates if c in names), None)
         zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(V))
+        # z-band absolute magnitude — needed to match the xyz+g validity filter
+        if "Z_ABSMAG_SB26_CORR" in names:
+            zhat_raw = np.asarray(data["Z_ABSMAG_SB26_CORR"], dtype=float)
+            sz_raw   = np.asarray(data["Z_ABSMAG_SB26_ERR_CORR"], dtype=float)
+        elif "Z_ABSMAG_SB26" in names:
+            zhat_raw = np.asarray(data["Z_ABSMAG_SB26"], dtype=float)
+            sz_raw   = np.asarray(data["Z_ABSMAG_SB26_ERR"], dtype=float)
+        else:
+            zhat_raw = sz_raw = None  # type: ignore[assignment]
 
     mask = (
         np.isfinite(V) & np.isfinite(V_err) & (V > 0) & (V_err > 0)
         & np.isfinite(yhat_raw) & np.isfinite(sigma_y_raw) & (sigma_y_raw >= 0)
         & np.isfinite(zobs_raw)
+        & np.isfinite(gr_raw)   # exclude galaxies with NaN g-band
     )
+    if zhat_raw is not None:
+        mask = mask & np.isfinite(zhat_raw) & np.isfinite(sz_raw)  # type: ignore[arg-type]
     return gr_raw[mask]
 
 
