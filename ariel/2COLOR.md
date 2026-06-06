@@ -229,29 +229,41 @@ Outputs produced:
 | `output/$RUN/variance_redshift_color_xonly.png` | Prediction variance vs. redshift (x-only) |
 | `output/$RUN/color_catalog.fits` | DESI catalog with MU_TF, LOGDIST (full model) |
 | `output/$RUN/color_xonly_catalog.fits` | DESI catalog with MU_TF, LOGDIST (x-only) |
-| `output/$RUN/color_cov.fits` | (G,G) covariance matrix (full model) |
-| `output/$RUN/color_xonly_cov.fits` | (G,G) covariance matrix (x-only) |
+| `output/$RUN/color_cov.h5` | (G,G) covariance matrix HDF5, dataset `cov` (full model) |
+| `output/$RUN/color_xonly_cov.h5` | (G,G) covariance matrix HDF5, dataset `cov` (x-only) |
+
+> **Note:** For the 2color model the covariance matrices are written as gzip-compressed
+> HDF5 files (`color_cov.h5`, `color_xonly_cov.h5`), not FITS, to allow row-chunked
+> writes that keep peak memory below ~1 GB.  Read with:
+> ```python
+> import h5py, numpy as np
+> with h5py.File("output/$RUN/color_xonly_cov.h5", "r") as f:
+>     cov = f["cov"][:]          # full matrix (G×G float32)
+>     row = f["cov"][0, :]       # single row without loading all
+> ```
 
 ---
 
 ## Step 8 variants
 
-To run only diagnostics and catalog (no covariance — much faster):
-
-```bash
-python color_predict.py --config $CONFIG --model 2color --no-cov
-```
-
-To run only the covariance matrix (skip catalog):
-
-```bash
-python color_predict.py --config $CONFIG --model 2color --no-catalog
-```
-
-To run only x-only diagnostics without the full covariance:
+To run diagnostics and catalogs only (no covariance — much faster):
 
 ```bash
 python color_predict.py --config $CONFIG --model 2color --xonly --no-cov
+```
+
+To run only the x-only covariance (skip full cov and all catalogs):
+
+```bash
+python color_predict.py --config $CONFIG --model 2color --xonly --no-cov --no-catalog
+# then separately if you also need the full cov:
+python color_predict.py --config $CONFIG --model 2color --no-catalog
+```
+
+To run only the full covariance (skip x-only and catalog):
+
+```bash
+python color_predict.py --config $CONFIG --model 2color --no-catalog
 ```
 
 ---
