@@ -4,7 +4,7 @@
 
 set -e
 
-CONFIG=${1:-configs/dr1_v6_2color.json}
+CONFIG=${1:-configs/batch_test.json}
 
 echo "Submitting 4 chains for config=$CONFIG"
 JOB_IDS=()

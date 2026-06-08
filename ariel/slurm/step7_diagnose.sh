@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A desi_g
+#SBATCH -A desi
 #SBATCH -C cpu
 #SBATCH -q debug
 #SBATCH -t 0:30:00
@@ -29,8 +29,8 @@ echo "Step 7: diagnostics for run=$RUN"
 echo "--- stansummary ---"
 cat output/$RUN/stansummary.txt
 
-python3 corner.py --run $RUN --model 2color
-python3 explore_residuals.py --config $CONFIG --kind 2color
+# python3 corner.py --run $RUN --model 2color
+# python3 explore_residuals.py --config $CONFIG --kind 2color
 
 touch output/$RUN/.step7_done
 echo "DONE: step7 → stansummary.txt, diagnose.txt, 2color.png"

@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH -A desi_g
+#SBATCH -A desi
 #SBATCH -C cpu
-#SBATCH -q regular
-#SBATCH -t 4:00:00
+#SBATCH -q debug
+#SBATCH -t 0:30:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4

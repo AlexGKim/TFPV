@@ -19,20 +19,20 @@ set -e
 module load craype-accel-nvidia80 cudatoolkit nvidia PrgEnv-nvidia
 export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 
-CONFIG=${CONFIG:-configs/dr1_v6_2color.json}
+CONFIG=${CONFIG:-configs/batch_test.json}
 CHAIN_ID=${CHAIN_ID:?'CHAIN_ID must be set (1-4)'}
 RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
 echo "Step 6: MCMC chain $CHAIN_ID for run=$RUN"
 ./2color_g sample num_warmup=250 num_samples=1000 \
-    id=$CHAIN_ID \
     adapt save_metric=1 \
     algorithm=hmc metric=dense_e \
     metric_file=output/$RUN/metric.json \
+    id=$CHAIN_ID \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
-    output file=output/$RUN/2color.csv
+    output file=output/$RUN/2color_${CHAIN_ID}.csv
 
 touch output/$RUN/.step6_chain${CHAIN_ID}_done
 echo "DONE: step6 chain $CHAIN_ID → output/$RUN/2color_${CHAIN_ID}.csv"
