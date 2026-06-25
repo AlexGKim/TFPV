@@ -157,6 +157,9 @@ def process_desi_tf_data(
 
         z_all_raw = np.asarray(data[z_col_use], dtype=float)
 
+        # [SPLIT] Galaxy identifier for train/holdout tracking
+        sga_id_all_raw = np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names else np.arange(len(V_0p4R26), dtype=float)
+
     total_rows = len(V_0p4R26)
 
     # Convert velocities to log velocities
@@ -190,6 +193,7 @@ def process_desi_tf_data(
         G_ABSMAG_SB26_ERR = G_ABSMAG_SB26_ERR[valid_mask] # [2COLOR]
     rz_color_all = (R_MAG_SB26 - Z_MAG_SB26)[valid_mask]  # apparent r-z color
     z_all_raw = z_all_raw[valid_mask]
+    sga_id_all = sga_id_all_raw[valid_mask]  # [SPLIT]
 
     valid_rows = len(V_0p4R26)
 
@@ -216,6 +220,7 @@ def process_desi_tf_data(
     x_data, y_data, sigma_x_data, sigma_y_data, z_data = [], [], [], [], []
     z_absmag_data, sigma_z_absmag_data = [], []  # [COLOR]
     g_absmag_data, sigma_g_absmag_data = [], []  # [2COLOR]
+    sga_id_data = []                              # [SPLIT]
 
     # Track filtering statistics
     y_filtered_rows = 0
@@ -259,6 +264,7 @@ def process_desi_tf_data(
                         if g_absmag_all is not None:
                             g_absmag_data.append(g_absmag_all[i])          # [2COLOR]
                             sigma_g_absmag_data.append(sigma_g_absmag_all[i])  # [2COLOR]
+                        sga_id_data.append(sga_id_all[i])                  # [SPLIT]
                         plane_pass_rows += 1
                 else:
                     # Two‑sided: lower_bound < y < min(haty_max, upper_bound_oblique)
@@ -276,6 +282,7 @@ def process_desi_tf_data(
                         if g_absmag_all is not None:
                             g_absmag_data.append(g_absmag_all[i])          # [2COLOR]
                             sigma_g_absmag_data.append(sigma_g_absmag_all[i])  # [2COLOR]
+                        sga_id_data.append(sga_id_all[i])                  # [SPLIT]
                         plane_pass_rows += 1
             else:
                 # No plane cut (just the y‑range and optional redshift cut)
@@ -289,6 +296,7 @@ def process_desi_tf_data(
                 if g_absmag_all is not None:
                     g_absmag_data.append(g_absmag_all[i])          # [2COLOR]
                     sigma_g_absmag_data.append(sigma_g_absmag_all[i])  # [2COLOR]
+                sga_id_data.append(sga_id_all[i])                  # [SPLIT]
 
     # Convert to numpy arrays for calculations
     x = np.array(x_data, dtype=float)
@@ -304,6 +312,7 @@ def process_desi_tf_data(
     else:
         g_absmag = None
         sigma_g_absmag = None
+    sga_ids_main = np.array(sga_id_data, dtype=float)  # [SPLIT]
 
     N_after_cuts = len(x)
 
@@ -322,9 +331,12 @@ def process_desi_tf_data(
         if g_absmag is not None:
             g_absmag = g_absmag[idx]          # [2COLOR]
             sigma_g_absmag = sigma_g_absmag[idx]  # [2COLOR]
+        train_sga_ids = sga_ids_main[idx].tolist()  # [SPLIT] record which galaxies are training
         print(
             f"  Subsampled from {N_after_cuts} to {n_objects} objects (random_seed={random_seed})"
         )
+    else:
+        train_sga_ids = None  # [SPLIT] no split: all galaxies are training
 
     # Convert back to lists for JSON serialization
     x_data = x.tolist()
@@ -376,6 +388,12 @@ def process_desi_tf_data(
         stan_data["g"] = g_absmag_data
         stan_data["sigma_g"] = sigma_g_absmag_data
         stan_data["c_bar_g_obs"] = float(np.mean(y - g_absmag)) if N_total > 0 else 0.0
+
+    # [SPLIT] record training galaxy IDs so color_predict.py can identify holdout
+    if train_sga_ids is not None:
+        stan_data["train_sga_ids"] = train_sga_ids
+        print(f"  Train/holdout split: {len(train_sga_ids)} training, "
+              f"{N_after_cuts - len(train_sga_ids)} in same z-range not selected")
 
     if plane_cut:
         stan_data["slope_plane"] = float(slope_plane)

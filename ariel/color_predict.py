@@ -28,21 +28,48 @@ from mag_utils import get_mag_cols
 # Systematic off-diagonal covariance terms (dust + photometric calibration)
 # ---------------------------------------------------------------------------
 
-# Std of internal-dust slope d from iron_internalDust z<0.1 MCMC
+# Std of internal-dust slope d — default from iron_internalDust z<0.1 MCMC
 # (iron_internalDust_z0p1_mcmc_nokcorr.pickle, chain 0 filtered to d ∈ (−1.5, 0))
-_D_ERR_R = 0.17680325261483004   # mag
+# Override per-run by setting "dust_pickle" in config.json.
+_D_ERR_R = 0.17680325261483004   # mag  (iron default)
 
 # Photometric calibration floor for the DESI North footprint
 _D_A_SYS = 0.02                  # mag
 
 
-def _systematic_offdiag_terms(ba, photsys):
+def _load_d_err_r(pickle_path):
+    """Load internal-dust slope std from an internalDust MCMC pickle.
+
+    Expects a tuple whose first element is a (n_chains, n_samples) array of
+    dust-slope posterior draws. Computes std of chain-0 samples filtered to
+    d ∈ (−1.5, 0), matching the convention used in TF_Y1_cov.ipynb.
+
+    Parameters
+    ----------
+    pickle_path : str — path to the internalDust MCMC pickle file
+
+    Returns
+    -------
+    d_err_r : float — std of dust slope in mag units
+    """
+    import pickle as _pickle
+    with open(pickle_path, 'rb') as fh:
+        result = _pickle.load(fh)
+    chain0 = np.asarray(result[0][0], dtype=float)
+    filtered = chain0[(chain0 > -1.5) & (chain0 < 0)]
+    d_err_r = float(np.std(filtered))
+    print(f"Loaded d_err_r = {d_err_r:.8f} mag from {pickle_path}")
+    return d_err_r
+
+
+def _systematic_offdiag_terms(ba, photsys, d_err_r=_D_ERR_R):
     """Per-galaxy systematic sensitivity vectors (MU / mag units).
 
     Parameters
     ----------
     ba : (G,) array-like — axis ratio b/a for each galaxy
     photsys : (G,) array-like of str — 'N' or 'S' per galaxy
+    d_err_r : float — std of internal-dust slope d (default: iron value)
 
     Returns
     -------
@@ -51,12 +78,12 @@ def _systematic_offdiag_terms(ba, photsys):
     """
     ba = np.asarray(ba, dtype=float)
     photsys = np.asarray(photsys)
-    v_dust = _D_ERR_R * (ba - 1.0)
+    v_dust = d_err_r * (ba - 1.0)
     v_phot = np.where(photsys == 'N', _D_A_SYS, 0.0)
     return v_dust, v_phot
 
 
-def _add_systematic_offdiag(cov, ba, photsys):
+def _add_systematic_offdiag(cov, ba, photsys, d_err_r=_D_ERR_R):
     """Add dust and photsys off-diagonal covariance terms in-place.
 
     The diagonal is preserved exactly; only true off-diagonal elements change.
@@ -66,16 +93,152 @@ def _add_systematic_offdiag(cov, ba, photsys):
     cov : (G, G) ndarray — covariance matrix, modified in-place
     ba : (G,) array-like — axis ratio b/a
     photsys : (G,) array-like of str — 'N' or 'S'
+    d_err_r : float — std of internal-dust slope d (default: iron value)
 
     Returns
     -------
     cov : same array, modified in-place
     """
-    v_dust, v_phot = _systematic_offdiag_terms(ba, photsys)
+    v_dust, v_phot = _systematic_offdiag_terms(ba, photsys, d_err_r=d_err_r)
     diag = np.diag(cov).copy()
     cov += np.outer(v_dust, v_dust) + np.outer(v_phot, v_phot)
     np.fill_diagonal(cov, diag)   # restore diagonal exactly
     return cov
+
+
+def _write_cov_h5(out_path, all_mu_c, all_cond_var, v_dust=None, v_phot=None,
+                  row_chunk_size=512):
+    """Write a (G, G) posterior-predictive covariance matrix to an HDF5 file.
+
+    Uses pre-computed per-draw arrays to avoid ever allocating the full (G, G)
+    matrix in memory.
+
+    Parameters
+    ----------
+    out_path : str
+        Output HDF5 file path.  Dataset name is ``'cov'``.
+    all_mu_c : (M, G) float32
+        Mean-centred conditional draw means: ``cond_mean[m, :] − mean_y``.
+    all_cond_var : (M, G) float32
+        Per-draw conditional variances.
+    v_dust : (G,) array, optional
+        Dust systematic sensitivity vector (off-diagonal term only).
+    v_phot : (G,) array, optional
+        Photometric-calibration systematic sensitivity vector (off-diag only).
+    row_chunk_size : int
+        HDF5 chunk size along the row axis (default 512).
+
+    Returns
+    -------
+    out_path : str
+    """
+    import h5py
+
+    M, G = all_mu_c.shape
+    if v_dust is not None:
+        v_dust = np.asarray(v_dust, dtype=np.float64)
+    if v_phot is not None:
+        v_phot = np.asarray(v_phot, dtype=np.float64)
+
+    with h5py.File(out_path, 'w') as hf:
+        dset = hf.create_dataset(
+            'cov', shape=(G, G), dtype='float32',
+            chunks=(min(row_chunk_size, G), G),
+            compression='gzip', compression_opts=3,
+        )
+        for i in range(0, G, row_chunk_size):
+            j = min(i + row_chunk_size, G)
+            # Statistical covariance rows i:j  — (j-i, G) in float64 for precision
+            block = (all_mu_c[:, i:j].T.astype(np.float64)
+                     @ all_mu_c.astype(np.float64)) / M
+            # Add expected conditional variance to the diagonal entries of this block
+            block[np.arange(j - i), np.arange(i, j)] += (
+                all_cond_var[:, i:j].astype(np.float64).sum(axis=0) / M
+            )
+            # Systematic off-diagonal terms (diagonal contribution zeroed out)
+            if v_dust is not None:
+                d_block = v_dust[i:j, None] * v_dust[None, :]   # (j-i, G)
+                d_block[np.arange(j - i), np.arange(i, j)] = 0.0
+                block += d_block
+            if v_phot is not None:
+                p_block = v_phot[i:j, None] * v_phot[None, :]   # (j-i, G)
+                p_block[np.arange(j - i), np.arange(i, j)] = 0.0
+                block += p_block
+            dset[i:j, :] = block.astype(np.float32)
+    return out_path
+
+
+def _get_holdout_mask(fits_path, main_mask, input_data):
+    """Return boolean mask (same length as ``main_mask``) for holdout galaxies.
+
+    Holdout = MAIN AND NOT in training set.
+
+    Reads SGA_ID from the FITS catalog (applying the same V > 0 validity filter
+    used by ``load_xyz_and_uncertainties_from_desi``) to map training IDs back
+    to the valid-row index space of ``main_mask``.
+
+    If ``train_sga_ids`` is absent from ``input_data`` (no split requested),
+    returns the full MAIN mask unchanged — backward compatible.
+
+    Parameters
+    ----------
+    fits_path : str — path to the DESI FITS catalog
+    main_mask : array-like of bool — MAIN=True mask (length = N valid galaxies)
+    input_data : dict — contents of input.json
+
+    Returns
+    -------
+    holdout : bool ndarray, same length as ``main_mask``
+    """
+    main_mask = np.asarray(main_mask, dtype=bool)
+    if "train_sga_ids" not in input_data:
+        return main_mask   # backward compat: all MAIN galaxies
+
+    train_ids = set(input_data["train_sga_ids"])
+
+    # Load SGA_IDs with the same validity filter as load_xyz_and_uncertainties_from_desi.
+    # The caller is responsible for passing a main_mask whose length matches this filter:
+    # - non-2color (or no g-band in catalog): xyz filter only → N_xyz rows
+    # - 2color (with_gband=True in the data loader): xyz+g filter → N_xyzg rows
+    with fits.open(fits_path) as hdul:
+        data = hdul[1].data  # type: ignore[union-attr]
+        V = np.asarray(data["V_0p4R26"], dtype=float)
+        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        names = set(data.dtype.names or ())
+        # z-band: needed to match the validity filter in load_xyz_and_uncertainties_from_desi
+        z_col = "Z_ABSMAG_SB26_CORR" if "Z_ABSMAG_SB26_CORR" in names else "Z_ABSMAG_SB26"
+        zhat_raw = np.asarray(data[z_col], dtype=float) if z_col in names else np.ones(len(V))
+        sga_ids_raw = np.asarray(data["SGA_ID"], dtype=float)
+    valid = (np.isfinite(V) & (V > 0) & np.isfinite(V_err) & (V_err > 0)
+             & np.isfinite(zhat_raw))
+    # If main_mask is shorter than the xyz-filtered count, the caller used with_gband=True;
+    # apply g-band filtering here too so the SGA_ID array length matches.
+    n_xyz = int(valid.sum())
+    if len(main_mask) < n_xyz:
+        with fits.open(fits_path) as hdul:
+            data = hdul[1].data  # type: ignore[union-attr]
+            names = set(data.dtype.names or ())
+            if "G_MAG_SB26_CORR" in names:
+                G_app = np.asarray(data["G_MAG_SB26_CORR"], dtype=float)
+            elif "G_MAG_SB26" in names:
+                G_app = np.asarray(data["G_MAG_SB26"], dtype=float)
+            else:
+                G_app = None
+        if G_app is not None:
+            valid = valid & np.isfinite(G_app)
+    sga_ids_valid = sga_ids_raw[valid]
+
+    if len(sga_ids_valid) != len(main_mask):
+        raise ValueError(
+            f"_get_holdout_mask: SGA_ID array length ({len(sga_ids_valid)}) "
+            f"does not match main_mask length ({len(main_mask)}). "
+            f"The validity filter may differ from load_xyz_and_uncertainties_from_desi."
+        )
+
+    holdout = main_mask & ~np.isin(sga_ids_valid, list(train_ids))
+    print(f"  Train/holdout split: {len(train_ids)} training, "
+          f"{holdout.sum()} holdout  (MAIN total: {main_mask.sum()})")
+    return holdout
 
 
 def load_xyz_and_uncertainties_from_desi(
@@ -89,6 +252,8 @@ def load_xyz_and_uncertainties_from_desi(
     z_col="Z_DESI",
     z_col_candidates=("zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE"),
     apply_valid_mask=True,
+    with_gband=False,
+    return_mask=False,
 ):
     """
     Load x̂, σ_x, ŷ, σ_y, ẑ, σ_z, z_obs from a DESI FITS catalog.
@@ -96,9 +261,26 @@ def load_xyz_and_uncertainties_from_desi(
     ẑ is the z-band absolute magnitude (Z_ABSMAG_SB26 or derived from Z_MAG_SB26).
     σ_z is Z_MAG_SB26_ERR (photometric noise on z-band).
 
+    Parameters
+    ----------
+    with_gband : bool
+        If True, also load g-band and include g-band validity in the mask so that
+        all returned arrays are aligned with the g-band arrays. Returns a 9-tuple
+        (xhat, sigma_x, yhat, sigma_y, zhat, sigma_z, zobs, ghat, sigma_g).
+        Use this for 2color call sites to guarantee mask consistency.
+    return_mask : bool
+        If True, append the boolean validity mask (length = raw catalog rows,
+        sum = number of returned rows) as the final tuple element. When
+        apply_valid_mask=False the mask is all-True. Use this to reduce the raw
+        catalog to the same rows/order as the returned arrays.
+
     Returns
     -------
     xhat, sigma_x, yhat, sigma_y, zhat, sigma_z, zobs : np.ndarray
+        (7-tuple when with_gband=False)
+    xhat, sigma_x, yhat, sigma_y, zhat, sigma_z, zobs, ghat, sigma_g : np.ndarray
+        (9-tuple when with_gband=True)
+    The validity mask is appended as a final element when return_mask=True.
     """
     with fits.open(fits_path) as hdul:
         data = hdul[1].data  # type: ignore[union-attr]
@@ -169,6 +351,27 @@ def load_xyz_and_uncertainties_from_desi(
             zhat = yhat - (R_app - Z_app)
             sigma_z = np.asarray(data[z_app_err_col], dtype=float)
 
+        # Optionally load g-band (for 2color; ensures a single combined validity mask)
+        if with_gband:
+            if "G_MAG_SB26_CORR" in names:
+                G_app = np.asarray(data["G_MAG_SB26_CORR"], dtype=float)
+                G_err = np.asarray(data["G_MAG_SB26_ERR_CORR"], dtype=float)
+            elif "G_MAG_SB26" in names:
+                G_app = np.asarray(data["G_MAG_SB26"], dtype=float)
+                G_err = np.asarray(data["G_MAG_SB26_ERR"], dtype=float)
+            else:
+                raise ValueError(
+                    "with_gband=True but no g-band column found "
+                    "(tried G_MAG_SB26_CORR, G_MAG_SB26)."
+                )
+            # Apparent r-band needed for G_ABSMAG = R_ABSMAG - (R_app - G_app)
+            _, _, _app_r_col = get_mag_cols(names)
+            R_app_for_g = np.asarray(data[_app_r_col], dtype=float)
+            ghat = yhat - (R_app_for_g - G_app)
+            sigma_g = G_err
+        else:
+            ghat = sigma_g = None  # type: ignore[assignment]
+
     # Convert to xhat and sigma_x
     xhat = np.log10(V / V0)
     sigma_x = V_err / (V * np.log(10))
@@ -187,6 +390,8 @@ def load_xyz_and_uncertainties_from_desi(
             & (sigma_y >= 0)
             & (sigma_z >= 0)
         )
+        if with_gband:
+            mask = mask & np.isfinite(ghat) & np.isfinite(sigma_g)  # type: ignore[arg-type]
         xhat = xhat[mask]
         sigma_x = sigma_x[mask]
         yhat = yhat[mask]
@@ -194,7 +399,18 @@ def load_xyz_and_uncertainties_from_desi(
         zhat = zhat[mask]
         sigma_z = sigma_z[mask]
         zobs = zobs[mask]
+        if with_gband:
+            ghat = ghat[mask]    # type: ignore[index]
+            sigma_g = sigma_g[mask]  # type: ignore[index]
+    else:
+        mask = np.ones(len(V), dtype=bool)
 
+    if return_mask:
+        if with_gband:
+            return xhat, sigma_x, yhat, sigma_y, zhat, sigma_z, zobs, ghat, sigma_g, mask  # type: ignore[return-value]
+        return xhat, sigma_x, yhat, sigma_y, zhat, sigma_z, zobs, mask  # type: ignore[return-value]
+    if with_gband:
+        return xhat, sigma_x, yhat, sigma_y, zhat, sigma_z, zobs, ghat, sigma_g  # type: ignore[return-value]
     return xhat, sigma_x, yhat, sigma_y, zhat, sigma_z, zobs
 
 
@@ -584,6 +800,7 @@ def ystar_pp_mean_sd_2color_vectorized(
     mean_log1pz,
     on_bad_Z="raise",
     Z_floor=1e-300,
+    chunk_size=200,
 ):
     """
     Posterior predictive mean and SD of ŷ_* for the 2color model,
@@ -591,6 +808,8 @@ def ystar_pp_mean_sd_2color_vectorized(
 
     Extends ystar_pp_mean_sd_color_vectorized from a 2×2 D matrix (x, z)
     to a 3×3 D matrix (x, z, g) with independent color factors.
+
+    Processes MCMC draws in chunks of ``chunk_size`` to bound peak memory.
 
     Parameters
     ----------
@@ -610,6 +829,7 @@ def ystar_pp_mean_sd_2color_vectorized(
     y_min, y_max : float — tophat prior bounds on y_TF
     zobs_star : (G,) array — observed redshift
     mean_log1pz : float — mean log(1+z) from training sample
+    chunk_size : int — draws per chunk to limit peak memory usage
 
     Returns
     -------
@@ -630,211 +850,190 @@ def ystar_pp_mean_sd_2color_vectorized(
     if not (a < b):
         raise ValueError(f"Require y_min < y_max; got y_min={a}, y_max={b}.")
 
-    # Extract draws (M,)
-    alpha = draws["slope"].to_numpy(float)
-    beta = draws["intercept.1"].to_numpy(float)
-    six = draws["sigma_int_x"].to_numpy(float)
-    siy = draws["sigma_int_y"].to_numpy(float)
-    siz = draws["sigma_int_z"].to_numpy(float)
-    sig_d = draws["sigma_int_g"].to_numpy(float)
-    gamma_c = draws["gamma"].to_numpy(float)
-    gamma_g = draws["gamma_g"].to_numpy(float)
-    delta_c = draws["delta_c"].to_numpy(float)
-    delta_g = draws["delta_g"].to_numpy(float)
-    mu_c = draws["mu_c"].to_numpy(float)
-    mu_g = draws["mu_g"].to_numpy(float)
-    tau_c = draws["tau_c"].to_numpy(float)
-    tau_g = draws["tau_g"].to_numpy(float)
-    alpha_k_r = draws["alpha_kcorr_r"].to_numpy(float)
-    alpha_k_z = draws["alpha_kcorr_z"].to_numpy(float)
-    alpha_k_g = draws["alpha_kcorr_g"].to_numpy(float)
+    G = xhat_star.size
 
-    if np.any(alpha == 0):
+    # Extract all draw arrays up front (M,)
+    alpha_d   = draws["slope"].to_numpy(float)
+    beta_d    = draws["intercept.1"].to_numpy(float)
+    six_d     = draws["sigma_int_x"].to_numpy(float)
+    siy_d     = draws["sigma_int_y"].to_numpy(float)
+    siz_d     = draws["sigma_int_z"].to_numpy(float)
+    sig_d     = draws["sigma_int_g"].to_numpy(float)
+    gc_d      = draws["gamma"].to_numpy(float)
+    gg_d      = draws["gamma_g"].to_numpy(float)
+    dc_d      = draws["delta_c"].to_numpy(float)
+    dg_d      = draws["delta_g"].to_numpy(float)
+    mc_d      = draws["mu_c"].to_numpy(float)
+    mg_d      = draws["mu_g"].to_numpy(float)
+    tc_d      = draws["tau_c"].to_numpy(float)
+    tg_d      = draws["tau_g"].to_numpy(float)
+    ak_r_d    = draws["alpha_kcorr_r"].to_numpy(float)
+    ak_z_d    = draws["alpha_kcorr_z"].to_numpy(float)
+    ak_g_d    = draws["alpha_kcorr_g"].to_numpy(float)
+    M = len(draws)
+
+    if np.any(alpha_d == 0):
         raise ValueError("Found slope == 0 in draws; model requires α ≠ 0.")
 
-    # Broadcast to (M, G)
-    aMG = alpha[:, None]
-    bMG = beta[:, None]
-    sixMG = six[:, None]
-    siyMG = siy[:, None]
-    sizMG = siz[:, None]
-    sigMG = sig_d[:, None]
-    gcMG = gamma_c[:, None]
-    ggMG = gamma_g[:, None]
-    dcMG = delta_c[:, None]
-    dgMG = delta_g[:, None]
-    mcMG = mu_c[:, None]
-    mgMG = mu_g[:, None]
-    tcMG = tau_c[:, None]
-    tgMG = tau_g[:, None]
+    # Per-galaxy constants (1, G)
+    log1pz_centered = np.log1p(zobs_star) - mean_log1pz  # (G,)
 
-    sigma_intx_sq = sixMG**2  # (M, G)
-    sigma_x_sq = sigma_x_star[None, :] ** 2  # (1, G)
-    sigma1_sq = sigma_intx_sq + sigma_x_sq  # (M, G)
+    # Accumulators over all M draws
+    mean_sum   = np.zeros(G, dtype=float)  # Σ E[ŷ|θ]
+    mean_sq_sum = np.zeros(G, dtype=float)  # Σ E[ŷ|θ]²
+    var_sum    = np.zeros(G, dtype=float)  # Σ Var[ŷ|θ]
 
-    # A matrix entries (from 4×4 B in 2color.stan)
-    A11 = gcMG**2 * tcMG**2 + ggMG**2 * tgMG**2 + siyMG**2 + sigma_y_star[None, :] ** 2
-    A12 = gcMG * (gcMG - 1) * tcMG**2  # B[2,3] in Stan indexing
-    A14 = ggMG * (ggMG - 1) * tgMG**2  # B[2,4] in Stan indexing
-    A22 = (gcMG - 1) ** 2 * tcMG**2 + sizMG**2 + sigma_z_star[None, :] ** 2
-    A44 = (ggMG - 1) ** 2 * tgMG**2 + sigMG**2 + sigma_g_star[None, :] ** 2
+    for start in range(0, M, chunk_size):
+        end = min(start + chunk_size, M)
 
-    # D matrix (3×3): sub-block of B for rows/cols {x, z, g}
-    # D[0,0] = σ1², D[0,1] = -δ_c·s², D[0,2] = -δ_g·s²
-    # D[1,1] = A22 + δ_c²·s², D[1,2] = 0, D[2,2] = A44 + δ_g²·s²
-    D00 = sigma1_sq
-    D01 = -dcMG * sigma_intx_sq
-    D02 = -dgMG * sigma_intx_sq
-    D11 = A22 + dcMG**2 * sigma_intx_sq
-    D22 = A44 + dgMG**2 * sigma_intx_sq
-    # D12 = 0 (independent factors)
+        # Chunk draw arrays (B, 1) — broadcast with (1, G) galaxy arrays
+        aMG  = alpha_d[start:end, None]
+        bMG  = beta_d[start:end, None]
+        sixMG = six_d[start:end, None]
+        siyMG = siy_d[start:end, None]
+        sizMG = siz_d[start:end, None]
+        sigMG = sig_d[start:end, None]
+        gcMG  = gc_d[start:end, None]
+        ggMG  = gg_d[start:end, None]
+        dcMG  = dc_d[start:end, None]
+        dgMG  = dg_d[start:end, None]
+        mcMG  = mc_d[start:end, None]
+        mgMG  = mg_d[start:end, None]
+        tcMG  = tc_d[start:end, None]
+        tgMG  = tg_d[start:end, None]
 
-    # Compute D^{-1} analytically. Since D12=0, the cofactors simplify:
-    # det(D) = D00·D11·D22 - D01²·D22 - D02²·D11
-    det_D = D00 * D11 * D22 - D01**2 * D22 - D02**2 * D11
+        sigma_intx_sq = sixMG**2
+        sigma_x_sq    = sigma_x_star[None, :] ** 2
+        sigma1_sq     = sigma_intx_sq + sigma_x_sq
 
-    # Inverse of D (symmetric, D12=0):
-    # Dinv[0,0] = D11·D22 / det
-    # Dinv[1,1] = (D00·D22 - D02²) / det
-    # Dinv[2,2] = (D00·D11 - D01²) / det
-    # Dinv[0,1] = -D01·D22 / det
-    # Dinv[0,2] = -D02·D11 / det
-    # Dinv[1,2] = D01·D02 / det
-    inv_det = 1.0 / det_D
-    Di00 = D11 * D22 * inv_det
-    Di11 = (D00 * D22 - D02**2) * inv_det
-    Di22 = (D00 * D11 - D01**2) * inv_det
-    Di01 = -D01 * D22 * inv_det
-    Di02 = -D02 * D11 * inv_det
-    Di12 = D01 * D02 * inv_det
+        # A matrix entries (from 4×4 B in 2color.stan)
+        A11 = gcMG**2 * tcMG**2 + ggMG**2 * tgMG**2 + siyMG**2 + sigma_y_star[None, :] ** 2
+        A12 = gcMG * (gcMG - 1) * tcMG**2
+        A14 = ggMG * (ggMG - 1) * tgMG**2
+        A22 = (gcMG - 1) ** 2 * tcMG**2 + sizMG**2 + sigma_z_star[None, :] ** 2
+        A44 = (ggMG - 1) ** 2 * tgMG**2 + sigMG**2 + sigma_g_star[None, :] ** 2
 
-    # Cross-vector c = B[y, {x,z,g}] = [0, A12, A14]
-    # b_cond = D^{-1} c  (regression coefficients for E[ŷ|x̂,ẑ,ĝ,y_TF])
-    # b_cond[0] = Di00·0 + Di01·A12 + Di02·A14 = Di01·A12 + Di02·A14
-    # b_cond[1] = Di01·0 + Di11·A12 + Di12·A14 = Di11·A12 + Di12·A14
-    # b_cond[2] = Di02·0 + Di12·A12 + Di22·A14 = Di12·A12 + Di22·A14
-    bc0 = Di01 * A12 + Di02 * A14
-    bc1 = Di11 * A12 + Di12 * A14
-    bc2 = Di12 * A12 + Di22 * A14
+        # D matrix (3×3, D12=0)
+        D00 = sigma1_sq
+        D01 = -dcMG * sigma_intx_sq
+        D02 = -dgMG * sigma_intx_sq
+        D11 = A22 + dcMG**2 * sigma_intx_sq
+        D22 = A44 + dgMG**2 * sigma_intx_sq
 
-    # Conditional variance σ²_{y|x̂ẑĝ} = A11 - c^T D^{-1} c
-    cDinvc = A12 * (Di11 * A12 + Di12 * A14) + A14 * (Di12 * A12 + Di22 * A14)
-    sigma_y_given_xzg_sq = A11 - cDinvc
+        det_D   = D00 * D11 * D22 - D01**2 * D22 - D02**2 * D11
+        inv_det = 1.0 / det_D
+        Di00 =  D11 * D22 * inv_det
+        Di11 = (D00 * D22 - D02**2) * inv_det
+        Di22 = (D00 * D11 - D01**2) * inv_det
+        Di01 = -D01 * D22 * inv_det
+        Di02 = -D02 * D11 * inv_det
+        Di12 =  D01 * D02 * inv_det
 
-    # b_xzg vector: how y_TF enters the observation means
-    # b_xzg = [1/α, 1-δ_c/α, 1-δ_g/α]^T
-    bxzg_0 = 1.0 / aMG
-    bxzg_1 = 1.0 - dcMG / aMG
-    bxzg_2 = 1.0 - dgMG / aMG
+        # Conditional regression coefficients b_cond = D^{-1}[0, A12, A14]^T
+        bc0 = Di01 * A12 + Di02 * A14
+        bc1 = Di11 * A12 + Di12 * A14
+        bc2 = Di12 * A12 + Di22 * A14
 
-    # ξ = b_xzg^T D^{-1} b_xzg
-    xi = (bxzg_0 * (Di00 * bxzg_0 + Di01 * bxzg_1 + Di02 * bxzg_2)
-          + bxzg_1 * (Di01 * bxzg_0 + Di11 * bxzg_1 + Di12 * bxzg_2)
-          + bxzg_2 * (Di02 * bxzg_0 + Di12 * bxzg_1 + Di22 * bxzg_2))
+        # Conditional variance σ²_{y|x̂ẑĝ} = A11 - c^T D^{-1} c
+        cDinvc = A12 * (Di11 * A12 + Di12 * A14) + A14 * (Di12 * A12 + Di22 * A14)
+        sigma_y_given_xzg_sq = A11 - cDinvc
 
-    # Band-dependent k-correction mean shifts
-    log1pz_centered = np.log1p(zobs_star[None, :]) - mean_log1pz
-    alpha_zn_r = alpha_k_r[:, None] * log1pz_centered
-    alpha_zn_z = alpha_k_z[:, None] * log1pz_centered
-    alpha_zn_g = alpha_k_g[:, None] * log1pz_centered
+        # b_xzg = [1/α, 1-δ_c/α, 1-δ_g/α]^T
+        bxzg_0 = 1.0 / aMG
+        bxzg_1 = 1.0 - dcMG / aMG
+        bxzg_2 = 1.0 - dgMG / aMG
 
-    # Residual at y_TF=0: o - a_vec (observation minus mean at y_TF=0)
-    # a_vec = [-β/α, Δ_z - μ_c + δ_c·β/α, Δ_g - μ_g + δ_g·β/α]
-    # o = [x̂, ẑ, ĝ]
-    # r0 = o - a_vec
-    r0_x = xhat_star[None, :] + bMG / aMG
-    r0_z = zhat_star[None, :] - alpha_zn_z + mcMG - dcMG * bMG / aMG - dcMG * x_bar
-    r0_g = ghat_star[None, :] - alpha_zn_g + mgMG - dgMG * bMG / aMG - dgMG * x_bar
+        # ξ = b_xzg^T D^{-1} b_xzg
+        xi = (bxzg_0 * (Di00 * bxzg_0 + Di01 * bxzg_1 + Di02 * bxzg_2)
+              + bxzg_1 * (Di01 * bxzg_0 + Di11 * bxzg_1 + Di12 * bxzg_2)
+              + bxzg_2 * (Di02 * bxzg_0 + Di12 * bxzg_1 + Di22 * bxzg_2))
 
-    # φ = b_xzg^T D^{-1} r0
-    Dinv_r0_0 = Di00 * r0_x + Di01 * r0_z + Di02 * r0_g
-    Dinv_r0_1 = Di01 * r0_x + Di11 * r0_z + Di12 * r0_g
-    Dinv_r0_2 = Di02 * r0_x + Di12 * r0_z + Di22 * r0_g
-    phi = bxzg_0 * Dinv_r0_0 + bxzg_1 * Dinv_r0_1 + bxzg_2 * Dinv_r0_2
+        # Band k-corrections (B, G)
+        lz = log1pz_centered[None, :]
+        alpha_zn_r = ak_r_d[start:end, None] * lz
+        alpha_zn_z = ak_z_d[start:end, None] * lz
+        alpha_zn_g = ak_g_d[start:end, None] * lz
 
-    # Posterior on y_TF: N(μ^†, 1/ξ) truncated to [a, b]
-    mu_L = phi / xi
-    sigma_L_sq = 1.0 / xi
-    sigma_L = np.sqrt(sigma_L_sq)
+        # Residual at y_TF=0: r0 = o - a_vec
+        r0_x = xhat_star[None, :] + bMG / aMG
+        r0_z = zhat_star[None, :] - alpha_zn_z + mcMG - dcMG * bMG / aMG - dcMG * x_bar
+        r0_g = ghat_star[None, :] - alpha_zn_g + mgMG - dgMG * bMG / aMG - dgMG * x_bar
 
-    # Compute truncated normal mean and variance
-    mean_yTF = np.empty_like(mu_L)
-    var_yTF = np.empty_like(mu_L)
+        # φ = b_xzg^T D^{-1} r0  →  posterior mean of y_TF (untruncated)
+        Dinv_r0_0 = Di00 * r0_x + Di01 * r0_z + Di02 * r0_g
+        Dinv_r0_1 = Di01 * r0_x + Di11 * r0_z + Di12 * r0_g
+        Dinv_r0_2 = Di02 * r0_x + Di12 * r0_z + Di22 * r0_g
+        phi = bxzg_0 * Dinv_r0_0 + bxzg_1 * Dinv_r0_1 + bxzg_2 * Dinv_r0_2
 
-    deg = sigma_L == 0.0
-    if np.any(deg):
-        mu_deg = mu_L[deg]
-        ok = (mu_deg >= a) & (mu_deg <= b)
-        if not np.all(ok):
-            raise ValueError("Encountered sigma_L == 0 with mu_L outside [y_min,y_max].")
-        mean_yTF[deg] = mu_deg
-        var_yTF[deg] = 0.0
+        mu_L      = phi / xi
+        sigma_L   = np.sqrt(1.0 / xi)
 
-    nd = ~deg
-    if np.any(nd):
-        mu = mu_L[nd]
-        sig = sigma_L[nd]
+        # Truncated-normal moments of y_TF
+        mean_yTF = np.empty_like(mu_L)
+        var_yTF  = np.empty_like(mu_L)
 
-        alpha_tn = (a - mu) / sig
-        beta_tn = (b - mu) / sig
+        deg = sigma_L == 0.0
+        if np.any(deg):
+            mu_deg = mu_L[deg]
+            ok = (mu_deg >= a) & (mu_deg <= b)
+            if not np.all(ok):
+                raise ValueError("Encountered sigma_L == 0 with mu_L outside [y_min,y_max].")
+            mean_yTF[deg] = mu_deg
+            var_yTF[deg]  = 0.0
 
-        use_sf = alpha_tn >= 0.0
-        log_sf_a = norm.logsf(alpha_tn)
-        log_sf_b = norm.logsf(beta_tn)
-        log_cdf_a = norm.logcdf(alpha_tn)
-        log_cdf_b = norm.logcdf(beta_tn)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            log_Z_sf = log_sf_a + np.log1p(
-                -np.exp(np.clip(log_sf_b - log_sf_a, -np.inf, 0.0))
-            )
-            log_Z_cdf = log_cdf_b + np.log1p(
-                -np.exp(np.clip(log_cdf_a - log_cdf_b, -np.inf, 0.0))
-            )
-        log_Z = np.where(use_sf, log_Z_sf, log_Z_cdf)
+        nd = ~deg
+        if np.any(nd):
+            mu  = mu_L[nd]
+            sig = sigma_L[nd]
+            alpha_tn = (a - mu) / sig
+            beta_tn  = (b - mu) / sig
 
-        if on_bad_Z == "raise":
-            if np.any(~np.isfinite(log_Z)):
-                raise ValueError("log(Z) is non-finite for some (draw, galaxy).")
-        elif on_bad_Z == "floor":
-            log_Z = np.maximum(log_Z, np.log(Z_floor))
-        else:
-            raise ValueError("on_bad_Z must be 'raise' or 'floor'.")
+            use_sf   = alpha_tn >= 0.0
+            log_sf_a = norm.logsf(alpha_tn)
+            log_sf_b = norm.logsf(beta_tn)
+            log_cdf_a = norm.logcdf(alpha_tn)
+            log_cdf_b = norm.logcdf(beta_tn)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                log_Z_sf  = log_sf_a  + np.log1p(-np.exp(np.clip(log_sf_b  - log_sf_a,  -np.inf, 0.0)))
+                log_Z_cdf = log_cdf_b + np.log1p(-np.exp(np.clip(log_cdf_a - log_cdf_b, -np.inf, 0.0)))
+            log_Z = np.where(use_sf, log_Z_sf, log_Z_cdf)
 
-        log_phi_a = norm.logpdf(alpha_tn)
-        log_phi_b = norm.logpdf(beta_tn)
-        la = np.exp(log_phi_a - log_Z)
-        lb = np.exp(log_phi_b - log_Z)
+            if on_bad_Z == "raise":
+                if np.any(~np.isfinite(log_Z)):
+                    raise ValueError("log(Z) is non-finite for some (draw, galaxy).")
+            elif on_bad_Z == "floor":
+                log_Z = np.maximum(log_Z, np.log(Z_floor))
+            else:
+                raise ValueError("on_bad_Z must be 'raise' or 'floor'.")
 
-        t = la - lb
-        m = mu + sig * t
-        u = alpha_tn * la - beta_tn * lb
-        v = (sig**2) * (1.0 + u - t**2)
-        v = np.maximum(v, 0.0)
+            la = np.exp(norm.logpdf(alpha_tn) - log_Z)
+            lb = np.exp(norm.logpdf(beta_tn)  - log_Z)
+            t  = la - lb
+            u  = alpha_tn * la - beta_tn * lb
+            mean_yTF[nd] = mu + sig * t
+            var_yTF[nd]  = np.maximum(sig**2 * (1.0 + u - t**2), 0.0)
 
-        mean_yTF[nd] = m
-        var_yTF[nd] = v
+        # Conditional mean E[ŷ | x̂, ẑ, ĝ, θ] evaluated at E[y_TF]
+        mu_x = (mean_yTF - bMG) / aMG
+        res0 = xhat_star[None, :] - mu_x
+        res1 = zhat_star[None, :] - (mean_yTF + alpha_zn_z - mcMG - dcMG * (mu_x - x_bar))
+        res2 = ghat_star[None, :] - (mean_yTF + alpha_zn_g - mgMG - dgMG * (mu_x - x_bar))
+        cond_mean = mean_yTF + alpha_zn_r + bc0 * res0 + bc1 * res1 + bc2 * res2  # (B, G)
 
-    # Conditional mean E[ŷ | x̂, ẑ, ĝ, θ]
-    # = y_TF + Δ_r + bc · (o - m(y_TF))
-    mu_x_at_mean = (mean_yTF - bMG) / aMG
-    res0 = xhat_star[None, :] - mu_x_at_mean
-    res1 = zhat_star[None, :] - (mean_yTF + alpha_zn_z - mcMG - dcMG * (mu_x_at_mean - x_bar))
-    res2 = ghat_star[None, :] - (mean_yTF + alpha_zn_g - mgMG - dgMG * (mu_x_at_mean - x_bar))
+        # Conditional variance at fixed θ: σ²_{y|xzg} + (∂μ/∂y_TF)² · Var[y_TF]
+        dmu_dyTF = (1.0 + bc0 * (-1.0 / aMG)
+                       + bc1 * (-(1.0 - dcMG / aMG))
+                       + bc2 * (-(1.0 - dgMG / aMG)))
+        cond_var = sigma_y_given_xzg_sq + dmu_dyTF**2 * var_yTF  # (B, G)
 
-    cond_mean = mean_yTF + alpha_zn_r + bc0 * res0 + bc1 * res1 + bc2 * res2
+        # Accumulate for law of total expectation/variance
+        mean_sum    += cond_mean.sum(axis=0)
+        mean_sq_sum += (cond_mean**2).sum(axis=0)
+        var_sum     += cond_var.sum(axis=0)
 
-    # Conditional variance: ∂μ/∂y_TF contributions
-    dres0_dyTF = -1.0 / aMG
-    dres1_dyTF = -(1.0 - dcMG / aMG)
-    dres2_dyTF = -(1.0 - dgMG / aMG)
-    dmu_dyTF = 1.0 + bc0 * dres0_dyTF + bc1 * dres1_dyTF + bc2 * dres2_dyTF
-
-    cond_var = sigma_y_given_xzg_sq + dmu_dyTF**2 * var_yTF
-
-    # Mix over MCMC draws
-    mean_y = cond_mean.mean(axis=0)
-    var_y = cond_var.mean(axis=0) + (cond_mean**2).mean(axis=0) - mean_y**2
-    sd_y = np.sqrt(np.maximum(var_y, 0.0))
+    mean_y = mean_sum / M
+    var_y  = var_sum / M + mean_sq_sum / M - mean_y**2
+    sd_y   = np.sqrt(np.maximum(var_y, 0.0))
 
     return mean_y, sd_y
 
@@ -1020,10 +1219,18 @@ def DESI_color(
     y_max = input_data["y_max"]
     x_bar = input_data.get("mean_x", None)
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
-    # Load galaxy data
-    xhat_star, sigma_x_star, yhat_star, sigma_y_star, zhat_star, sigma_z_star, zobs_star = (
-        load_xyz_and_uncertainties_from_desi(galaxy_fits)
-    )
+    # Load galaxy data — for 2color use with_gband=True so all arrays share one mask
+    if model == "2color":
+        (xhat_star, sigma_x_star, yhat_star, sigma_y_star,  # type: ignore[assignment]
+         zhat_star, sigma_z_star, zobs_star,
+         ghat_star, sigma_g_star) = load_xyz_and_uncertainties_from_desi(
+            galaxy_fits, with_gband=True
+        )
+    else:
+        xhat_star, sigma_x_star, yhat_star, sigma_y_star, zhat_star, sigma_z_star, zobs_star = (  # type: ignore[assignment]
+            load_xyz_and_uncertainties_from_desi(galaxy_fits)
+        )
+        ghat_star = sigma_g_star = None
 
     # Compute x_bar from fitting sample if not in input.json
     if x_bar is None:
@@ -1041,7 +1248,6 @@ def DESI_color(
             ],
             drop_diagnostics=True,
         )
-        ghat_star, sigma_g_star = load_gband_from_desi(galaxy_fits)
 
         mean_pred, sd_pred = ystar_pp_mean_sd_2color_vectorized(
             draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
@@ -1074,9 +1280,10 @@ def DESI_color(
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
 
-    # MAIN sample mask
+    # MAIN/holdout sample mask
     rz_color_desi = _load_rz_color_from_desi(galaxy_fits)
-    main_mask = _apply_main_cuts(cfg, xhat_star, yhat_star, rz_color=rz_color_desi)
+    _main_all = _apply_main_cuts(cfg, xhat_star, yhat_star, rz_color=rz_color_desi)
+    main_mask = _get_holdout_mask(galaxy_fits, _main_all, input_data)
 
     xhat_main = xhat_star[main_mask]
     sigma_x_main = sigma_x_star[main_mask]
@@ -1421,7 +1628,15 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json"), "r") as f:
             cfg = json.load(f)
 
-    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    _main_valid = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    # Apply train/holdout split in raw-catalog space (n_rows rows).
+    # _get_holdout_mask operates in validity-filtered space and cannot be used here.
+    if "train_sga_ids" in input_data:
+        _train_ids = set(input_data["train_sga_ids"])
+        _sga_raw = np.asarray(data["SGA_ID"], dtype=float)
+        main = _main_valid & ~np.isin(_sga_raw, list(_train_ids))
+    else:
+        main = _main_valid
 
     new_cols = [
         fits.Column(name="MU_TF", format="E", array=MU_TF.astype(np.float32)),
@@ -1555,7 +1770,14 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json"), "r") as f:
             cfg = json.load(f)
 
-    main = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    _main_valid = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    # Apply train/holdout split in raw-catalog space (n_rows rows).
+    if "train_sga_ids" in input_data:
+        _train_ids = set(input_data["train_sga_ids"])
+        _sga_raw = np.asarray(data["SGA_ID"], dtype=float)
+        main = _main_valid & ~np.isin(_sga_raw, list(_train_ids))
+    else:
+        main = _main_valid
 
     new_cols = [
         fits.Column(name="MU_TF", format="E", array=MU_TF.astype(np.float32)),
@@ -1776,11 +1998,25 @@ def ystar_pp_cov_2color_vectorized(
     on_bad_Z="floor",
     Z_floor=1e-300,
     chunk_size=200,
+    out_h5=None,
+    v_dust=None,
+    v_phot=None,
+    row_chunk_size=512,
 ):
     """
     Posterior predictive covariance Cov(ŷ*[g1], ŷ*[g2]) — 2color model.
 
     Uses the 3×3 D matrix (conditioning on x̂, ẑ, ĝ).
+
+    When *out_h5* is provided the covariance is written to an HDF5 file via
+    ``_write_cov_h5`` (avoiding a (G,G) in-memory accumulator) and the path
+    is returned.  Otherwise the full matrix is accumulated in memory and
+    returned as a numpy array.
+
+    Parameters ``v_dust`` and ``v_phot`` are per-galaxy systematic sensitivity
+    vectors (shape G); if provided they are added as off-diagonal terms during
+    the HDF5 write.  They are ignored when *out_h5* is None (caller uses
+    :func:`_add_systematic_offdiag` on the returned matrix instead).
     """
     xhat_star = np.asarray(xhat_star, dtype=float)
     sigma_x_star = np.asarray(sigma_x_star, dtype=float)
@@ -1823,8 +2059,14 @@ def ystar_pp_cov_2color_vectorized(
     alpha_k_g_d = draws["alpha_kcorr_g"].to_numpy(float)
     M = len(draws)
 
-    accum = np.zeros((G, G), dtype=float)
-    var_accum = np.zeros(G, dtype=float)
+    if out_h5 is not None:
+        # Two-pass HDF5 path: store all draw results in (M, G) float32 arrays
+        all_mu_c = np.zeros((M, G), dtype=np.float32)
+        all_cond_var_2c = np.zeros((M, G), dtype=np.float32)
+    else:
+        # In-memory path: accumulate (G, G) matrix directly
+        accum = np.zeros((G, G), dtype=float)
+        var_accum = np.zeros(G, dtype=float)
 
     for start in range(0, M, chunk_size):
         end = min(start + chunk_size, M)
@@ -1950,8 +2192,19 @@ def ystar_pp_cov_2color_vectorized(
         cond_var_chunk = sigma_y_given_xzg_sq + dmu_dyTF**2 * var_chunk
 
         mu_centered = cond_mean_chunk - mean_y[None, :]
-        accum += mu_centered.T @ mu_centered
-        var_accum += cond_var_chunk.sum(axis=0)
+        if out_h5 is not None:
+            all_mu_c[start:end, :] = mu_centered.astype(np.float32)
+            all_cond_var_2c[start:end, :] = cond_var_chunk.astype(np.float32)
+        else:
+            accum += mu_centered.T @ mu_centered
+            var_accum += cond_var_chunk.sum(axis=0)
+
+    if out_h5 is not None:
+        return _write_cov_h5(
+            out_h5, all_mu_c, all_cond_var_2c,
+            v_dust=v_dust, v_phot=v_phot,
+            row_chunk_size=row_chunk_size,
+        )
 
     cov = accum / M
     np.fill_diagonal(cov, np.diag(cov) + var_accum / M)
@@ -1971,6 +2224,10 @@ def ystar_pp_cov_color_xonly_vectorized(
     on_bad_Z="floor",
     Z_floor=1e-300,
     chunk_size=200,
+    out_h5=None,
+    v_dust=None,
+    v_phot=None,
+    row_chunk_size=512,
 ):
     """
     Posterior predictive covariance Cov(ŷ*[g1], ŷ*[g2]) — color model, x̂ + redshift (no z-band).
@@ -1978,6 +2235,12 @@ def ystar_pp_cov_color_xonly_vectorized(
     Marginalizes ẑ out (§sec:cc:x_only). The conditional mean includes the
     k-correction α_kcorr·log(1+z). Off-diagonal elements arise from shared
     uncertainty in θ (same as full model).
+
+    When *out_h5* is provided the covariance is written to an HDF5 file via
+    ``_write_cov_h5`` and the path is returned.  Otherwise the full matrix is
+    accumulated in memory and returned as a numpy array.  ``v_dust`` and
+    ``v_phot`` are passed through to ``_write_cov_h5`` for per-row-block
+    systematic off-diagonal terms; they are ignored when *out_h5* is None.
     """
     xhat_star = np.asarray(xhat_star, dtype=float)
     sigma_x_star = np.asarray(sigma_x_star, dtype=float)
@@ -2009,8 +2272,12 @@ def ystar_pp_cov_color_xonly_vectorized(
         tau_g_d = draws["tau_g"].to_numpy(float)
     M = len(draws)
 
-    accum = np.zeros((G, G), dtype=float)
-    var_accum = np.zeros(G, dtype=float)
+    if out_h5 is not None:
+        all_mu_c_xo = np.zeros((M, G), dtype=np.float32)
+        all_cond_var_xo = np.zeros((M, G), dtype=np.float32)
+    else:
+        accum = np.zeros((G, G), dtype=float)
+        var_accum = np.zeros(G, dtype=float)
 
     for start in range(0, M, chunk_size):
         end = min(start + chunk_size, M)
@@ -2077,8 +2344,19 @@ def ystar_pp_cov_color_xonly_vectorized(
         cond_var_chunk = A11 + var_chunk  # (B, G)
 
         mu_centered = cond_mean_chunk - mean_y[None, :]
-        accum += mu_centered.T @ mu_centered
-        var_accum += cond_var_chunk.sum(axis=0)
+        if out_h5 is not None:
+            all_mu_c_xo[start:end, :] = mu_centered.astype(np.float32)
+            all_cond_var_xo[start:end, :] = cond_var_chunk.astype(np.float32)
+        else:
+            accum += mu_centered.T @ mu_centered
+            var_accum += cond_var_chunk.sum(axis=0)
+
+    if out_h5 is not None:
+        return _write_cov_h5(
+            out_h5, all_mu_c_xo, all_cond_var_xo,
+            v_dust=v_dust, v_phot=v_phot,
+            row_chunk_size=row_chunk_size,
+        )
 
     cov = accum / M
     np.fill_diagonal(cov, np.diag(cov) + var_accum / M)
@@ -2101,21 +2379,68 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json")) as f:
             cfg = json.load(f)
 
+    # Load d_err_r from dust pickle if specified; fall back to iron default
+    _dust_pickle = cfg.get("dust_pickle")
+    _d_err_r = _load_d_err_r(_dust_pickle) if _dust_pickle else _D_ERR_R
+
     with open(_p("input.json")) as f:
         input_data = json.load(f)
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
-    (xhat_full, sigma_x_full, yhat_full, sigma_y_full,
-     _zhat_full, _sigma_z_full, zobs_full) = load_xyz_and_uncertainties_from_desi(fits_path)
+    # Load in raw-catalog space using only r-band + velocity (same validity as the
+    # catalog writer), so MAIN and holdout counts are identical between catalog and cov.
+    # xonly prediction needs only x̂, σ_x, σ_y (r-band err), z_obs — no z-band or g-band.
+    _z_col_candidates = ("Z_DESI", "zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE")
+    with fits.open(fits_path) as _hdul:
+        _d = _hdul[1].data  # type: ignore[union-attr]
+        _names = set(_d.dtype.names or ())
+        _col_abs, _col_abs_err, _col_app = get_mag_cols(_names)
+        _V    = np.asarray(_d["V_0p4R26"],    dtype=float)
+        _Verr = np.asarray(_d["V_0p4R26_ERR"], dtype=float)
+        _app_err = np.asarray(_d[_col_abs_err], dtype=float)   # σ_y per galaxy
+        _abs_mag = np.asarray(_d[_col_abs],     dtype=float)   # r-band abs mag (main cuts)
+        _z_col = next((c for c in _z_col_candidates if c in _names), None)
+        if _z_col is None:
+            raise ValueError(f"No redshift column found; tried {_z_col_candidates}")
+        _zobs_raw = np.asarray(_d[_z_col], dtype=float)
+        # r-z colour for the ellipse main cut (load inline — same as catalog writer)
+        if "R_MAG_SB26_CORR" in _names and "Z_MAG_SB26_CORR" in _names:
+            _rz = (np.asarray(_d["R_MAG_SB26_CORR"], dtype=float)
+                   - np.asarray(_d["Z_MAG_SB26_CORR"], dtype=float))
+        elif "R_MAG_SB26" in _names and "Z_MAG_SB26" in _names:
+            _rz = (np.asarray(_d["R_MAG_SB26"], dtype=float)
+                   - np.asarray(_d["Z_MAG_SB26"], dtype=float))
+        else:
+            _rz = None
+        _ba_raw      = np.asarray(_d["BA"],      dtype=float)
+        _photsys_raw = np.asarray(_d["PHOTSYS"])
+        _sga_raw     = np.asarray(_d["SGA_ID"],  dtype=float)
 
-    rz_color_full = _load_rz_color_from_desi(fits_path)
-    main = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
-    xhat_star = xhat_full[main]
-    sigma_x_star = sigma_x_full[main]
-    sigma_y_star = sigma_y_full[main]
-    zobs_star = zobs_full[main]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        _xhat   = np.where(_V > 0, np.log10(_V / 100.0),               np.nan)
+        _sigma_x = np.where(_V > 0, _Verr / (_V * np.log(10.0)),       np.nan)
+
+    _valid = (np.isfinite(_V) & (_V > 0) & np.isfinite(_Verr) & (_Verr > 0)
+              & np.isfinite(_xhat) & np.isfinite(_sigma_x) & (_sigma_x > 0))
+
+    _main_valid = _valid & _apply_main_cuts(cfg, _xhat, _abs_mag,
+                                            zobs=_zobs_raw, rz_color=_rz)
+    if "train_sga_ids" in input_data:
+        _train_ids = set(input_data["train_sga_ids"])
+        main = _main_valid & ~np.isin(_sga_raw, list(_train_ids))
+    else:
+        main = _main_valid
+    print(f"  Train/holdout split: {len(input_data.get('train_sga_ids', []))} training, "
+          f"{main.sum()} holdout  (MAIN total: {_main_valid.sum()})")
+
+    xhat_star     = _xhat[main]
+    sigma_x_star  = _sigma_x[main]
+    sigma_y_star  = _app_err[main]
+    zobs_star     = _zobs_raw[main]
+    ba_star       = _ba_raw[main]
+    photsys_star  = _photsys_raw[main]
 
     keep_cols = ["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
                  "gamma", "tau_c", "alpha_kcorr_r"]
@@ -2127,38 +2452,48 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         drop_diagnostics=True,
     )
 
-    cov = ystar_pp_cov_color_xonly_vectorized(
-        draws, xhat_star, sigma_x_star,
-        sigma_y_star=sigma_y_star,
-        y_min=y_min, y_max=y_max,
-        zobs_star=zobs_star,
-        mean_log1pz=mean_log1pz,
-    )
-
-    # Add dust and photometric-calibration off-diagonal systematics
-    with fits.open(fits_path) as _hdul:
-        _t = _hdul[1].data
-    _tmain = _t[np.array(main, dtype=bool)]
-    ba_star    = np.array(_tmain['BA'],      dtype=float)
-    photsys_star = np.array(_tmain['PHOTSYS'])
-    _add_systematic_offdiag(cov, ba_star, photsys_star)
-
-    fits_out = _p("color_xonly_cov.fits")
-    hdr = fits.Header()
-    hdr["COMMENT"] = "Posterior predictive covariance matrix (float32), x-hat only"
-    hdr["COMMENT"] = f"Row/col order: MAIN=True rows of color_xonly_catalog.fits"
-    hdr["MODEL"] = "color_xonly"
-    hdr["RUN"] = os.path.basename(run_dir)
-    fits.writeto(fits_out, cov.astype(np.float32), header=hdr, overwrite=True)
-    print(f"Saved xonly covariance FITS to {fits_out}")
-
-    G = cov.shape[0]
+    G = int(xhat_star.size)
     n_sub = min(512, G)
     rng = np.random.default_rng(0)
     idx = rng.choice(G, size=n_sub, replace=False)
     idx.sort()
-    cov_sub = cov[np.ix_(idx, idx)]
-    plot_cov(cov_sub, _p("color_xonly_cov_sub.png"))
+
+    if model == "2color":
+        # For large G, write directly to HDF5 in row blocks to avoid OOM.
+        import h5py
+        v_dust, v_phot = _systematic_offdiag_terms(ba_star, photsys_star, d_err_r=_d_err_r)
+        h5_out = _p("color_xonly_cov.h5")
+        ystar_pp_cov_color_xonly_vectorized(
+            draws, xhat_star, sigma_x_star,
+            sigma_y_star=sigma_y_star,
+            y_min=y_min, y_max=y_max,
+            zobs_star=zobs_star,
+            mean_log1pz=mean_log1pz,
+            out_h5=h5_out, v_dust=v_dust, v_phot=v_phot,
+        )
+        print(f"Saved xonly covariance HDF5 to {h5_out}")
+        with h5py.File(h5_out, 'r') as _hf:
+            cov_sub = _hf['cov'][idx, :][:, idx]
+        plot_cov(cov_sub, _p("color_xonly_cov_sub.png"))
+    else:
+        cov = ystar_pp_cov_color_xonly_vectorized(
+            draws, xhat_star, sigma_x_star,
+            sigma_y_star=sigma_y_star,
+            y_min=y_min, y_max=y_max,
+            zobs_star=zobs_star,
+            mean_log1pz=mean_log1pz,
+        )
+        _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r)
+        fits_out = _p("color_xonly_cov.fits")
+        hdr = fits.Header()
+        hdr["COMMENT"] = "Posterior predictive covariance matrix (float32), x-hat only"
+        hdr["COMMENT"] = f"Row/col order: MAIN=True rows of color_xonly_catalog.fits"
+        hdr["MODEL"] = "color_xonly"
+        hdr["RUN"] = os.path.basename(run_dir)
+        fits.writeto(fits_out, cov.astype(np.float32), header=hdr, overwrite=True)
+        print(f"Saved xonly covariance FITS to {fits_out}")
+        cov_sub = cov[np.ix_(idx, idx)]
+        plot_cov(cov_sub, _p("color_xonly_cov_sub.png"))
 
 
 def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
@@ -2179,19 +2514,35 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json")) as f:
             cfg = json.load(f)
 
+    # Load d_err_r from dust pickle if specified; fall back to iron default
+    _dust_pickle = cfg.get("dust_pickle")
+    _d_err_r = _load_d_err_r(_dust_pickle) if _dust_pickle else _D_ERR_R
+
     with open(_p("input.json")) as f:
         input_data = json.load(f)
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
-    # Load MAIN-sample galaxies
-    (xhat_full, sigma_x_full, yhat_full, sigma_y_full,
-     zhat_full, sigma_z_full, zobs_full) = load_xyz_and_uncertainties_from_desi(fits_path)
+    # Load MAIN-sample galaxies — for 2color use with_gband=True so all arrays share one mask
+    if model == "2color":
+        (xhat_full, sigma_x_full, yhat_full, sigma_y_full,  # type: ignore[assignment]
+         zhat_full, sigma_z_full, zobs_full,
+         ghat_full, sigma_g_full, valid_mask) = load_xyz_and_uncertainties_from_desi(
+            fits_path, with_gband=True, return_mask=True
+        )
+    else:
+        (xhat_full, sigma_x_full, yhat_full, sigma_y_full,  # type: ignore[assignment]
+         zhat_full, sigma_z_full, zobs_full, valid_mask) = load_xyz_and_uncertainties_from_desi(
+            fits_path, return_mask=True
+        )
+        ghat_full = sigma_g_full = None
+
     x_bar = input_data.get("mean_x", float(np.mean(input_data["x"])))
 
     rz_color_full = _load_rz_color_from_desi(fits_path)
-    main = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
+    _main_all = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
+    main = _get_holdout_mask(fits_path, _main_all, input_data)
     xhat_star = xhat_full[main]
     sigma_x_star = sigma_x_full[main]
     sigma_y_star = sigma_y_full[main]
@@ -2199,7 +2550,24 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     sigma_z_star = sigma_z_full[main]
     zobs_star = zobs_full[main]
 
+    # Load BA / PHOTSYS before the covariance call — needed by both model paths.
+    # Reduce the raw catalog to the loader's validity-filtered rows so the
+    # boolean `main` (validity-space) aligns with the table rows.
+    with fits.open(fits_path) as _hdul:
+        _t = _hdul[1].data[valid_mask]  # type: ignore[union-attr]
+    _tmain = _t[np.array(main, dtype=bool)]
+    ba_star = np.array(_tmain['BA'], dtype=float)
+    photsys_star = np.array(_tmain['PHOTSYS'])
+
+    G = int(xhat_star.size)
+    n_sub = min(512, G)
+    rng = np.random.default_rng(0)
+    idx = rng.choice(G, size=n_sub, replace=False)
+    idx.sort()
+
     if model == "2color":
+        # For large G, write directly to HDF5 in row blocks to avoid OOM.
+        import h5py
         draws = read_cmdstan_posterior(
             _p(f"{model}_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
@@ -2208,18 +2576,26 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
                   "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g"],
             drop_diagnostics=True,
         )
-        ghat_full_g, sigma_g_full_g = load_gband_from_desi(fits_path)
-        ghat_star = ghat_full_g[main]
-        sigma_g_star = sigma_g_full_g[main]
-
-        cov = ystar_pp_cov_2color_vectorized(
+        ghat_star = ghat_full[main]
+        sigma_g_star = sigma_g_full[main]
+        v_dust, v_phot = _systematic_offdiag_terms(ba_star, photsys_star, d_err_r=_d_err_r)
+        h5_out = _p("color_cov.h5")
+        ystar_pp_cov_2color_vectorized(
             draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
             ghat_star, sigma_g_star,
             sigma_y_star=sigma_y_star,
             x_bar=x_bar, y_min=y_min, y_max=y_max,
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
+            out_h5=h5_out, v_dust=v_dust, v_phot=v_phot,
         )
+        print(f"Saved covariance HDF5 to {h5_out}")
+        # Read back diagnostic sub-matrices for plots.
+        with h5py.File(h5_out, 'r') as _hf:
+            cov_sub = _hf['cov'][idx, :][:, idx]
+        # σ²_{y,★} is already included in the diagonal via A₁₁.
+        plot_cov(cov_sub, _p("color_cov_sub_noobs.png"))
+        plot_cov(cov_sub, _p("color_cov_sub.png"))
     else:
         draws = read_cmdstan_posterior(
             _p(f"{model}_?.csv"),
@@ -2236,38 +2612,25 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
         )
+        _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r)
 
-    # Add dust and photometric-calibration off-diagonal systematics
-    with fits.open(fits_path) as _hdul:
-        _t = _hdul[1].data
-    _tmain = _t[np.array(main, dtype=bool)]
-    ba_star    = np.array(_tmain['BA'],      dtype=float)
-    photsys_star = np.array(_tmain['PHOTSYS'])
-    _add_systematic_offdiag(cov, ba_star, photsys_star)
+        # σ²_{y,★} is already included in the diagonal via A₁₁; no further addition needed.
+        cov_sub_noobs = cov[np.ix_(idx, idx)]
+        plot_cov(cov_sub_noobs, _p("color_cov_sub_noobs.png"))
 
-    G = cov.shape[0]
-    n_sub = min(512, G)
-    rng = np.random.default_rng(0)
-    idx = rng.choice(G, size=n_sub, replace=False)
-    idx.sort()
+        fits_out = _p("color_cov.fits")
+        hdr = fits.Header()
+        hdr["COMMENT"] = "Posterior predictive covariance matrix (float32)"
+        hdr["COMMENT"] = f"Row/col order: MAIN=True rows of color_catalog.fits"
+        hdr["MODEL"] = "color"
+        hdr["RUN"] = os.path.basename(run_dir)
+        fits.writeto(fits_out, cov.astype(np.float32), header=hdr, overwrite=True)
+        print(f"Saved covariance FITS to {fits_out}")
 
-    # σ²_{y,★} is already included in the diagonal via A₁₁; no further addition needed.
-    cov_sub_noobs = cov[np.ix_(idx, idx)]
-    plot_cov(cov_sub_noobs, _p("color_cov_sub_noobs.png"))
+        plot_cov(cov, _p("color_cov.png"))
 
-    fits_out = _p("color_cov.fits")
-    hdr = fits.Header()
-    hdr["COMMENT"] = "Posterior predictive covariance matrix (float32)"
-    hdr["COMMENT"] = f"Row/col order: MAIN=True rows of color_catalog.fits"
-    hdr["MODEL"] = "color"
-    hdr["RUN"] = os.path.basename(run_dir)
-    fits.writeto(fits_out, cov.astype(np.float32), header=hdr, overwrite=True)
-    print(f"Saved covariance FITS to {fits_out}")
-
-    plot_cov(cov, _p("color_cov.png"))
-
-    cov_sub = cov[np.ix_(idx, idx)]
-    plot_cov(cov_sub, _p("color_cov_sub.png"))
+        cov_sub = cov[np.ix_(idx, idx)]
+        plot_cov(cov_sub, _p("color_cov_sub.png"))
 
 
 if __name__ == "__main__":
