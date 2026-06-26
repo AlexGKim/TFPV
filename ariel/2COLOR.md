@@ -113,6 +113,7 @@ a practical range.
     algorithm=hmc metric=dense_e \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
+    metric_file=output/$RUN/metric.json \
     output file=output/$RUN/2color.csv
 
 # Extract sample covariance as inverse mass matrix
