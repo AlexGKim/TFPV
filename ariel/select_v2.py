@@ -39,6 +39,17 @@ from ellipse_sweep import load_desi, apply_cuts, _build_stan_dicts, _cuts_at_nsi
 from predict import ystar_pp_mean_sd_tophat_vectorized, create_average_grid_image
 
 
+def _subsample(raw_data, n_max, rng=None):
+    """Return a random subsample of raw_data if it exceeds n_max rows."""
+    n = len(raw_data["x"])
+    if n_max <= 0 or n <= n_max:
+        return raw_data
+    if rng is None:
+        rng = np.random.default_rng(0)
+    idx = rng.choice(n, size=n_max, replace=False)
+    return {k: v[idx] for k, v in raw_data.items()}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Stan MLE helper
 # ─────────────────────────────────────────────────────────────────────────────
@@ -451,6 +462,12 @@ def main():
         default=None,
         help="Fiducial dim-end magnitude limit (required with --set_fiducial)",
     )
+    parser.add_argument(
+        "--n_max",
+        type=int,
+        default=10000,
+        help="Maximum number of galaxies to use (random subsample); 0 = no limit",
+    )
     args = parser.parse_args()
 
     from config_utils import apply_config
@@ -523,7 +540,7 @@ def main():
                 "intercept_plane2",
             )
         }
-        raw_data = load_desi(args.fits_file)
+        raw_data = _subsample(load_desi(args.fits_file), args.n_max)
         x_sel, _, _, _ = apply_cuts(raw_data, cuts3_no_z)
         data_dict, _ = _build_stan_dicts(raw_data, cuts3_no_z)
         if data_dict is None:
@@ -583,7 +600,7 @@ def main():
     )
 
     # ── Step 2: Load data and apply cuts ──────────────────────────────────────
-    raw_data = load_desi(args.fits_file)
+    raw_data = _subsample(load_desi(args.fits_file), args.n_max)
     x, _, _, _ = apply_cuts(raw_data, cuts)
     print(f"After cuts: N = {len(x)}")
 

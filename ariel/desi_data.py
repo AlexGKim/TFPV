@@ -84,8 +84,12 @@ def process_desi_tf_data(
                 )
 
         # Extract velocity, magnitude, and redshift data
-        V_0p4R26 = np.asarray(data["V_0p4R26"], dtype=float)
-        V_0p4R26_ERR = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        if "logV" in names:
+            _logV = np.asarray(data["logV"], dtype=float)
+            _logV_err = np.asarray(data["logV_ERR"], dtype=float)
+        else:
+            _logV = np.asarray(data["LOGVROT"], dtype=float)
+            _logV_err = np.asarray(data["LOGVROT_ERR"], dtype=float)
 
         from mag_utils import get_mag_cols
 
@@ -158,22 +162,21 @@ def process_desi_tf_data(
         z_all_raw = np.asarray(data[z_col_use], dtype=float)
 
         # [SPLIT] Galaxy identifier for train/holdout tracking
-        sga_id_all_raw = np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names else np.arange(len(V_0p4R26), dtype=float)
+        sga_id_all_raw = np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names else np.arange(len(_logV), dtype=float)
 
-    total_rows = len(V_0p4R26)
+    total_rows = len(_logV)
 
-    # Convert velocities to log velocities
-    V0 = 100.0  # km/s reference
+    # Reference velocity (km/s)
+    V0 = 100.0
 
-    # Filter out invalid data (NaN, inf, non‑positive velocities, etc.)
+    # Filter out invalid data
     valid_mask = (
-        np.isfinite(V_0p4R26)
-        & np.isfinite(V_0p4R26_ERR)
+        np.isfinite(_logV)
+        & np.isfinite(_logV_err)
         & np.isfinite(R_ABSMAG_SB26)
         & np.isfinite(R_ABSMAG_SB26_ERR)
         & np.isfinite(z_all_raw)
-        & (V_0p4R26 > 0)
-        & (V_0p4R26_ERR > 0)
+        & (_logV_err > 0)
         & (R_ABSMAG_SB26_ERR >= 0)
         & np.isfinite(Z_ABSMAG_SB26)      # [COLOR]
         & np.isfinite(Z_ABSMAG_SB26_ERR)  # [COLOR]
@@ -182,8 +185,8 @@ def process_desi_tf_data(
     if G_ABSMAG_SB26 is not None:
         valid_mask = valid_mask & np.isfinite(G_ABSMAG_SB26) & np.isfinite(G_ABSMAG_SB26_ERR)
 
-    V_0p4R26 = V_0p4R26[valid_mask]
-    V_0p4R26_ERR = V_0p4R26_ERR[valid_mask]
+    _logV = _logV[valid_mask]
+    _logV_err = _logV_err[valid_mask]
     R_ABSMAG_SB26 = R_ABSMAG_SB26[valid_mask]
     R_ABSMAG_SB26_ERR = R_ABSMAG_SB26_ERR[valid_mask]
     Z_ABSMAG_SB26 = Z_ABSMAG_SB26[valid_mask]         # [COLOR]
@@ -195,13 +198,11 @@ def process_desi_tf_data(
     z_all_raw = z_all_raw[valid_mask]
     sga_id_all = sga_id_all_raw[valid_mask]  # [SPLIT]
 
-    valid_rows = len(V_0p4R26)
+    valid_rows = len(_logV)
 
-    # Convert to log velocities: x = log10(V / V0)
-    x_all = np.log10(V_0p4R26 / V0)
-
-    # Propagate uncertainties: sigma_x = sigma_V / (V * ln(10))
-    sigma_x_all = V_0p4R26_ERR / (V_0p4R26 * np.log(10))
+    # x = log10(V / V0); already stored as log10(V) so subtract log10(V0)
+    x_all = _logV - np.log10(V0)
+    sigma_x_all = _logV_err
 
     # Magnitude data
     y_all = R_ABSMAG_SB26

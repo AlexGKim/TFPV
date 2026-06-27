@@ -202,14 +202,16 @@ def _get_holdout_mask(fits_path, main_mask, input_data):
     # - 2color (with_gband=True in the data loader): xyz+g filter → N_xyzg rows
     with fits.open(fits_path) as hdul:
         data = hdul[1].data  # type: ignore[union-attr]
-        V = np.asarray(data["V_0p4R26"], dtype=float)
-        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
         names = set(data.dtype.names or ())
+        logV, logV_err = _load_logV(data, names)
         # z-band: needed to match the validity filter in load_xyz_and_uncertainties_from_desi
         z_col = "Z_ABSMAG_SB26_CORR" if "Z_ABSMAG_SB26_CORR" in names else "Z_ABSMAG_SB26"
-        zhat_raw = np.asarray(data[z_col], dtype=float) if z_col in names else np.ones(len(V))
-        sga_ids_raw = np.asarray(data["SGA_ID"], dtype=float)
-    valid = (np.isfinite(V) & (V > 0) & np.isfinite(V_err) & (V_err > 0)
+        zhat_raw = np.asarray(data[z_col], dtype=float) if z_col in names else np.ones(len(logV))
+        if "SGA_ID" in names:
+            sga_ids_raw = np.asarray(data["SGA_ID"], dtype=float)
+        else:
+            sga_ids_raw = np.arange(len(logV), dtype=float)
+    valid = (np.isfinite(logV) & np.isfinite(logV_err) & (logV_err > 0)
              & np.isfinite(zhat_raw))
     # If main_mask is shorter than the xyz-filtered count, the caller used with_gband=True;
     # apply g-band filtering here too so the SGA_ID array length matches.
@@ -241,12 +243,25 @@ def _get_holdout_mask(fits_path, main_mask, input_data):
     return holdout
 
 
+def _load_logV(data, names):
+    """Return (logV, logV_err) arrays from whichever velocity columns are present."""
+    if "logV" in names:
+        return (np.asarray(data["logV"], dtype=float),
+                np.asarray(data["logV_ERR"], dtype=float))
+    return (np.asarray(data["LOGVROT"], dtype=float),
+            np.asarray(data["LOGVROT_ERR"], dtype=float))
+
+
+def _logV_to_x(logV, logV_err, V0=100.0):
+    """Convert log10(V) and its error to x = log10(V/V0) and sigma_x."""
+    x = logV - np.log10(V0)
+    return x, logV_err
+
+
 def load_xyz_and_uncertainties_from_desi(
     fits_path,
     *,
     V0=100.0,
-    vel_col="V_0p4R26",
-    vel_err_col="V_0p4R26_ERR",
     mag_col=None,
     mag_err_col=None,
     z_col="Z_DESI",
@@ -332,8 +347,7 @@ def load_xyz_and_uncertainties_from_desi(
             z_abs_err_col = None
 
         # Load velocity
-        V = np.asarray(data[vel_col], dtype=float)
-        V_err = np.asarray(data[vel_err_col], dtype=float)
+        _lV, _lV_err = _load_logV(data, names)
         yhat = np.asarray(data[mag_col], dtype=float)
         sigma_y = np.asarray(data[mag_err_col], dtype=float)
         zobs = np.asarray(data[z_col_use], dtype=float)
@@ -373,20 +387,18 @@ def load_xyz_and_uncertainties_from_desi(
             ghat = sigma_g = None  # type: ignore[assignment]
 
     # Convert to xhat and sigma_x
-    xhat = np.log10(V / V0)
-    sigma_x = V_err / (V * np.log(10))
+    xhat, sigma_x = _logV_to_x(_lV, _lV_err, V0)
 
     if apply_valid_mask:
         mask = (
-            np.isfinite(V)
-            & np.isfinite(V_err)
+            np.isfinite(_lV)
+            & np.isfinite(_lV_err)
+            & (_lV_err > 0)
             & np.isfinite(yhat)
             & np.isfinite(sigma_y)
             & np.isfinite(zhat)
             & np.isfinite(sigma_z)
             & np.isfinite(zobs)
-            & (V > 0)
-            & (V_err > 0)
             & (sigma_y >= 0)
             & (sigma_z >= 0)
         )
@@ -467,22 +479,20 @@ def load_gband_from_desi(fits_path, *, apply_valid_mask=True):
         sigma_z_raw = Z_err
 
         # Velocity and redshift (for mask alignment)
-        V = np.asarray(data["V_0p4R26"], dtype=float)
-        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        _logV, _logV_err = _load_logV(data, names)
         z_col_use = next((c for c in ("Z_DESI",) + z_col_candidates if c in names), None)
-        zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(V))
+        zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(_logV))
 
     if apply_valid_mask:
         mask = (
-            np.isfinite(V)
-            & np.isfinite(V_err)
+            np.isfinite(_logV)
+            & np.isfinite(_logV_err)
+            & (_logV_err > 0)
             & np.isfinite(yhat_raw)
             & np.isfinite(sigma_y_raw)
             & np.isfinite(zhat_raw)
             & np.isfinite(sigma_z_raw)
             & np.isfinite(zobs_raw)
-            & (V > 0)
-            & (V_err > 0)
             & (sigma_y_raw >= 0)
             & (sigma_z_raw >= 0)
             & np.isfinite(ghat_raw)
@@ -1510,8 +1520,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
 
         col_abs, col_abs_err, col_app = get_mag_cols(names)
 
-        V = np.asarray(data["V_0p4R26"], dtype=float)
-        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        _lV, _lV_err = _load_logV(data, names)
         app = np.asarray(data[col_app], dtype=float)
         app_err = np.asarray(data[col_abs_err], dtype=float)
         abs_mag = np.asarray(data[col_abs], dtype=float)
@@ -1549,15 +1558,12 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
         else:
             rz_color = None
 
-    with np.errstate(invalid="ignore", divide="ignore"):
-        xhat = np.where(V > 0, np.log10(V / 100.0), np.nan)
-        sigma_x = np.where(V > 0, V_err / (V * np.log(10.0)), np.nan)
+    xhat, sigma_x = _logV_to_x(_lV, _lV_err)
 
     valid = (
-        np.isfinite(V)
-        & (V > 0)
-        & np.isfinite(V_err)
-        & (V_err > 0)
+        np.isfinite(_lV)
+        & np.isfinite(_lV_err)
+        & (_lV_err > 0)
         & np.isfinite(xhat)
         & np.isfinite(sigma_x)
         & (sigma_x > 0)
@@ -1692,8 +1698,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
 
         col_abs, col_abs_err, col_app = get_mag_cols(names)
 
-        V = np.asarray(data["V_0p4R26"], dtype=float)
-        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        _lV, _lV_err = _load_logV(data, names)
         app = np.asarray(data[col_app], dtype=float)
         app_err = np.asarray(data[col_abs_err], dtype=float)
         abs_mag = np.asarray(data[col_abs], dtype=float)
@@ -1712,15 +1717,12 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         else:
             rz_color = None
 
-    with np.errstate(invalid="ignore", divide="ignore"):
-        xhat = np.where(V > 0, np.log10(V / 100.0), np.nan)
-        sigma_x = np.where(V > 0, V_err / (V * np.log(10.0)), np.nan)
+    xhat, sigma_x = _logV_to_x(_lV, _lV_err)
 
     valid = (
-        np.isfinite(V)
-        & (V > 0)
-        & np.isfinite(V_err)
-        & (V_err > 0)
+        np.isfinite(_lV)
+        & np.isfinite(_lV_err)
+        & (_lV_err > 0)
         & np.isfinite(xhat)
         & np.isfinite(sigma_x)
         & (sigma_x > 0)
@@ -2397,8 +2399,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         _d = _hdul[1].data  # type: ignore[union-attr]
         _names = set(_d.dtype.names or ())
         _col_abs, _col_abs_err, _col_app = get_mag_cols(_names)
-        _V    = np.asarray(_d["V_0p4R26"],    dtype=float)
-        _Verr = np.asarray(_d["V_0p4R26_ERR"], dtype=float)
+        _lV, _lVerr = _load_logV(_d, _names)
         _app_err = np.asarray(_d[_col_abs_err], dtype=float)   # σ_y per galaxy
         _abs_mag = np.asarray(_d[_col_abs],     dtype=float)   # r-band abs mag (main cuts)
         _z_col = next((c for c in _z_col_candidates if c in _names), None)
@@ -2418,11 +2419,9 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         _photsys_raw = np.asarray(_d["PHOTSYS"])
         _sga_raw     = np.asarray(_d["SGA_ID"],  dtype=float)
 
-    with np.errstate(invalid="ignore", divide="ignore"):
-        _xhat   = np.where(_V > 0, np.log10(_V / 100.0),               np.nan)
-        _sigma_x = np.where(_V > 0, _Verr / (_V * np.log(10.0)),       np.nan)
+    _xhat, _sigma_x = _logV_to_x(_lV, _lVerr)
 
-    _valid = (np.isfinite(_V) & (_V > 0) & np.isfinite(_Verr) & (_Verr > 0)
+    _valid = (np.isfinite(_lV) & np.isfinite(_lVerr) & (_lVerr > 0)
               & np.isfinite(_xhat) & np.isfinite(_sigma_x) & (_sigma_x > 0))
 
     _main_valid = _valid & _apply_main_cuts(cfg, _xhat, _abs_mag,
