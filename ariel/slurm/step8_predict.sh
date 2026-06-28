@@ -23,7 +23,12 @@ RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
 echo "Step 8: color_predict.py for run=$RUN"
-python3 color_predict.py --config $CONFIG --model 2color --xonly
+# DEBUG=1: skip the covariance (can take hours for large mock catalogs).
+if [ "${DEBUG:-0}" = "1" ]; then
+    python3 color_predict.py --config $CONFIG --model 2color --xonly --no-cov
+else
+    python3 color_predict.py --config $CONFIG --model 2color --xonly
+fi
 
 touch output/$RUN/.step8_done
 echo "DONE: step8 → color_catalog.fits, color_xonly_catalog.fits, color_cov.fits"

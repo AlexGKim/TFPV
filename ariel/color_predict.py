@@ -2423,7 +2423,8 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
                    - np.asarray(_d["Z_MAG_SB26"], dtype=float))
         else:
             _rz = None
-        _ba_raw      = np.asarray(_d["BA"],      dtype=float)
+        _ba_col      = "BA" if "BA" in _names else "BA_RATIO"
+        _ba_raw      = np.asarray(_d[_ba_col],   dtype=float)
         _photsys_raw = np.asarray(_d["PHOTSYS"])
         _sga_raw     = (np.asarray(_d["SGA_ID"], dtype=float) if "SGA_ID" in _d.names
                         else np.arange(len(_d), dtype=float))
@@ -2564,7 +2565,8 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     with fits.open(fits_path) as _hdul:
         _t = _hdul[1].data[valid_mask]  # type: ignore[union-attr]
     _tmain = _t[np.array(main, dtype=bool)]
-    ba_star = np.array(_tmain['BA'], dtype=float)
+    _ba_col_out = 'BA' if 'BA' in _tmain.names else 'BA_RATIO'
+    ba_star = np.array(_tmain[_ba_col_out], dtype=float)
     photsys_star = np.array(_tmain['PHOTSYS'])
 
     G = int(xhat_star.size)

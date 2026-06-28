@@ -88,7 +88,7 @@ for CFG in "$CONFIG_DIR"/*.json; do
     JID7=$(sbatch --parsable --dependency=afterok:$DEP6 \
            --export=CONFIG=$CFG slurm/step7_diagnose.sh)
     JID8=$(sbatch --parsable --dependency=afterok:$JID7 \
-           --export=CONFIG=$CFG slurm/step8_predict.sh)
+           --export=CONFIG=$CFG,DEBUG=$DEBUG slurm/step8_predict.sh)
 
     echo "$RUN,$CFG,$JID4,$JID5D,${CHAIN_JIDS[0]},${CHAIN_JIDS[1]},${CHAIN_JIDS[2]},${CHAIN_JIDS[3]},$JID7,$JID8,$DEBUG" >> "$TRACKER"
     echo "  step4=$JID4 step5d=$JID5D step6=${CHAIN_JIDS[*]} step7=$JID7 step8=$JID8"
