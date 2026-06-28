@@ -1653,7 +1653,9 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
         fits.Column(name="LOGDIST_ERR", format="E", array=LOGDIST_ERR.astype(np.float32)),
         fits.Column(name="MAIN", format="L", array=main),
     ]
-    all_cols = fits.ColDefs(list(table_hdu.columns) + new_cols)
+    new_names = {c.name for c in new_cols}
+    base_cols = [c for c in table_hdu.columns if c.name not in new_names]
+    all_cols = fits.ColDefs(base_cols + new_cols)
     new_table_hdu = fits.BinTableHDU.from_columns(all_cols)
     out_hdul = fits.HDUList([primary_hdu, new_table_hdu])
     out_path = _p("color_catalog.fits")
@@ -1792,7 +1794,9 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         fits.Column(name="LOGDIST_ERR", format="E", array=LOGDIST_ERR.astype(np.float32)),
         fits.Column(name="MAIN", format="L", array=main),
     ]
-    all_cols = fits.ColDefs(list(table_hdu.columns) + new_cols)
+    new_names = {c.name for c in new_cols}
+    base_cols = [c for c in table_hdu.columns if c.name not in new_names]
+    all_cols = fits.ColDefs(base_cols + new_cols)
     new_table_hdu = fits.BinTableHDU.from_columns(all_cols)
     out_hdul = fits.HDUList([primary_hdu, new_table_hdu])
     out_path = _p("color_xonly_catalog.fits")
