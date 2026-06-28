@@ -133,8 +133,12 @@ def load_desi(fits_file="data/DESI-DR1_TF_pv_cat_v15.fits"):
         data = hdul[1].data
         names = set(data.dtype.names or ())
 
-    V = np.asarray(data["V_0p4R26"], dtype=float)
-    V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+    if "logV" in names:
+        logV = np.asarray(data["logV"], dtype=float)
+        logV_err = np.asarray(data["logV_ERR"], dtype=float)
+    else:
+        logV = np.asarray(data["LOGVROT"], dtype=float)
+        logV_err = np.asarray(data["LOGVROT_ERR"], dtype=float)
 
     from mag_utils import get_mag_cols
 
@@ -149,19 +153,18 @@ def load_desi(fits_file="data/DESI-DR1_TF_pv_cat_v15.fits"):
             zobs = np.asarray(data[col], dtype=float)
             break
     if zobs is None:
-        zobs = np.zeros(len(V))
+        zobs = np.zeros(len(logV))
 
     valid = (
-        np.isfinite(V)
-        & np.isfinite(V_err)
+        np.isfinite(logV)
+        & np.isfinite(logV_err)
         & np.isfinite(mag)
         & np.isfinite(mag_e)
-        & (V > 0)
-        & (V_err > 0)
+        & (logV_err > 0)
         & (mag_e >= 0)
     )
-    x = np.log10(V[valid] / V0)
-    sx = V_err[valid] / (V[valid] * np.log(10.0))
+    x = logV[valid] - np.log10(V0)
+    sx = logV_err[valid]
     print(f"  Valid rows: {int(valid.sum())}")
     return dict(
         x=x,

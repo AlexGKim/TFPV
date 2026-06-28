@@ -74,8 +74,12 @@ def load_data(
         else:  # DESI
             print(f"  Total rows: {total_rows}  (no MAIN filter for DESI source)")
 
-            V = np.asarray(data["V_0p4R26"], dtype=float)
-            V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+            if "logV" in names:
+                logV = np.asarray(data["logV"], dtype=float)
+                logV_err = np.asarray(data["logV_ERR"], dtype=float)
+            else:
+                logV = np.asarray(data["LOGVROT"], dtype=float)
+                logV_err = np.asarray(data["LOGVROT_ERR"], dtype=float)
 
             from mag_utils import get_mag_cols
 
@@ -83,8 +87,8 @@ def load_data(
             absmag = np.asarray(data[col_abs], dtype=float)
             absmag_err = np.asarray(data[col_abs_err], dtype=float)
 
-            x_raw = np.log10(np.where(V > 0, V, np.nan) / 100.0)
-            sigma_x = V_err / (np.where(V > 0, V, np.nan) * np.log(10.0))
+            x_raw = logV - np.log10(100.0)
+            sigma_x = logV_err
             y_raw = absmag
             sigma_y = absmag_err
 

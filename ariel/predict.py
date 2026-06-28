@@ -340,14 +340,26 @@ def load_xy_and_uncertainties_from_stan_json(
     return xhat, sigma_x, yhat, sigma_y, zobs
 
 
+def _load_logV(data, names):
+    """Return (logV, logV_err) from whichever velocity columns are present."""
+    if "logV" in names:
+        return (np.asarray(data["logV"], dtype=float),
+                np.asarray(data["logV_ERR"], dtype=float))
+    return (np.asarray(data["LOGVROT"], dtype=float),
+            np.asarray(data["LOGVROT_ERR"], dtype=float))
+
+
+def _logV_to_x(logV, logV_err, V0=100.0):
+    """Convert log10(V) and its error to x = log10(V/V0) and sigma_x."""
+    return logV - np.log10(V0), logV_err
+
+
 def load_xy_and_uncertainties_from_desi(
     fits_path,
     row=None,
     sort_by_zobs=False,
     *,
     V0=100.0,
-    vel_col="V_0p4R26",
-    vel_err_col="V_0p4R26_ERR",
     mag_col=None,
     mag_err_col=None,
     z_col="Z_DESI",
@@ -422,15 +434,14 @@ def load_xy_and_uncertainties_from_desi(
             mag_err_col = mag_err_col or col_abs_err
 
         # Required columns
-        required = [vel_col, vel_err_col, mag_col, mag_err_col, z_col_use]
+        required = [mag_col, mag_err_col, z_col_use]
         missing = [c for c in required if c not in names]
         if missing:
             raise ValueError(
                 f"Missing required column(s) {missing}. Available: {sorted(list(names))[:30]} ..."
             )
 
-        V = np.asarray(data[vel_col], dtype=float)
-        V_err = np.asarray(data[vel_err_col], dtype=float)
+        _lV, _lV_err = _load_logV(data, names)
         yhat = np.asarray(data[mag_col], dtype=float)
         sigma_y = np.asarray(data[mag_err_col], dtype=float)
         zobs = np.asarray(data[z_col_use], dtype=float)
@@ -438,19 +449,17 @@ def load_xy_and_uncertainties_from_desi(
     # Convert to xhat and sigma_x
     if V0 <= 0:
         raise ValueError("V0 must be > 0.")
-    xhat = np.log10(V / V0)
-    sigma_x = V_err / (V * np.log(10))
+    xhat, sigma_x = _logV_to_x(_lV, _lV_err, V0)
 
     # Optional validity mask (mirrors your process_desi_tf_data logic)
     if apply_valid_mask:
         mask = (
-            np.isfinite(V)
-            & np.isfinite(V_err)
+            np.isfinite(_lV)
+            & np.isfinite(_lV_err)
             & np.isfinite(yhat)
             & np.isfinite(sigma_y)
             & np.isfinite(zobs)
-            & (V > 0)
-            & (V_err > 0)
+            & (_lV_err > 0)
             & (sigma_y >= 0)
         )
         xhat = xhat[mask]
@@ -2258,16 +2267,15 @@ def _load_rz_color_from_desi(fits_path):
         else:
             return None
 
-        V = np.asarray(data["V_0p4R26"], dtype=float)
-        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        _lV, _lV_err = _load_logV(data, names)
         col_abs, col_abs_err, _ = get_mag_cols(names)
         yhat_raw = np.asarray(data[col_abs], dtype=float)
         sigma_y_raw = np.asarray(data[col_abs_err], dtype=float)
         z_col_use = next((c for c in z_col_candidates if c in names), None)
-        zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(V))
+        zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(_lV))
 
     mask = (
-        np.isfinite(V) & np.isfinite(V_err) & (V > 0) & (V_err > 0)
+        np.isfinite(_lV) & np.isfinite(_lV_err) & (_lV_err > 0)
         & np.isfinite(yhat_raw) & np.isfinite(sigma_y_raw) & (sigma_y_raw >= 0)
         & np.isfinite(zobs_raw)
     )
@@ -2301,13 +2309,12 @@ def _load_gr_color_from_desi(fits_path):
         else:
             return None
 
-        V = np.asarray(data["V_0p4R26"], dtype=float)
-        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        _lV, _lV_err = _load_logV(data, names)
         col_abs, col_abs_err, _ = get_mag_cols(names)
         yhat_raw = np.asarray(data[col_abs], dtype=float)
         sigma_y_raw = np.asarray(data[col_abs_err], dtype=float)
         z_col_use = next((c for c in z_col_candidates if c in names), None)
-        zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(V))
+        zobs_raw = np.asarray(data[z_col_use], dtype=float) if z_col_use else np.ones(len(_lV))
         # z-band absolute magnitude — needed to match the xyz+g validity filter
         if "Z_ABSMAG_SB26_CORR" in names:
             zhat_raw = np.asarray(data["Z_ABSMAG_SB26_CORR"], dtype=float)
@@ -2319,7 +2326,7 @@ def _load_gr_color_from_desi(fits_path):
             zhat_raw = sz_raw = None  # type: ignore[assignment]
 
     mask = (
-        np.isfinite(V) & np.isfinite(V_err) & (V > 0) & (V_err > 0)
+        np.isfinite(_lV) & np.isfinite(_lV_err) & (_lV_err > 0)
         & np.isfinite(yhat_raw) & np.isfinite(sigma_y_raw) & (sigma_y_raw >= 0)
         & np.isfinite(zobs_raw)
         & np.isfinite(gr_raw)   # exclude galaxies with NaN g-band
@@ -2401,8 +2408,7 @@ def write_desi_catalog(model, run_dir, fits_path, cfg=None):
         col_abs, col_abs_err, col_app = get_mag_cols(names)
 
         # 2. Extract working arrays for all rows
-        V = np.asarray(data["V_0p4R26"], dtype=float)
-        V_err = np.asarray(data["V_0p4R26_ERR"], dtype=float)
+        _lV, _lV_err = _load_logV(data, names)
         app = np.asarray(data[col_app], dtype=float)
         app_err = np.asarray(data[col_abs_err], dtype=float)
         abs_mag = np.asarray(data[col_abs], dtype=float)
@@ -2422,16 +2428,13 @@ def write_desi_catalog(model, run_dir, fits_path, cfg=None):
         else:
             rz_color = None
 
-    with np.errstate(invalid="ignore", divide="ignore"):
-        xhat = np.where(V > 0, np.log10(V / 100.0), np.nan)
-        sigma_x = np.where(V > 0, V_err / (V * np.log(10.0)), np.nan)
+    xhat, sigma_x = _logV_to_x(_lV, _lV_err)
 
     # 3. Validity mask for prediction
     valid = (
-        np.isfinite(V)
-        & (V > 0)
-        & np.isfinite(V_err)
-        & (V_err > 0)
+        np.isfinite(_lV)
+        & np.isfinite(_lV_err)
+        & (_lV_err > 0)
         & np.isfinite(xhat)
         & np.isfinite(sigma_x)
         & (sigma_x > 0)

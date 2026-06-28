@@ -111,6 +111,7 @@ a practical range.
 # from scratch during warmup. metric.json is created by the Python snippet below.
 ./2color sample num_warmup=100 num_samples=100 num_chains=1 \
     algorithm=hmc metric=dense_e \
+    metric_file=output/$RUN/metric.json \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
     output file=output/$RUN/2color.csv
