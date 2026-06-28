@@ -1,6 +1,6 @@
 {
   "run": "abacus_2color",
-  "fits_file": "data/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11_appmag.fits",
+  "fits_file": "/global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits",
   "exe": "2color",
   "source": "fullmocks",
   "model": "2color",
