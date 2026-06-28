@@ -29,20 +29,35 @@ CHAIN_ID=${CHAIN_ID:?'CHAIN_ID must be set (1-4)'}
 RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
-# Sampling depth: full by default, tiny in DEBUG mode (plumbing test only).
+# Sampling depth: full (with adaptation) by default; in DEBUG mode skip adaptation
+# entirely and sample at a fixed known-good stepsize so each iteration is fast and
+# predictable. (With num_warmup<20 Stan disables adaptation and falls back to a
+# tiny stepsize -> every transition hits max treedepth and a single iteration can
+# take >10 min. A plumbing test must avoid that.)
 if [ "${DEBUG:-0}" = "1" ]; then
-    NUM_WARMUP=${NUM_WARMUP:-10}
-    NUM_SAMPLES=${NUM_SAMPLES:-10}
-    echo "Step 6: DEBUG mode — $NUM_WARMUP warmup / $NUM_SAMPLES samples (results not science-grade)"
+    NUM_WARMUP=${NUM_WARMUP:-0}
+    NUM_SAMPLES=${NUM_SAMPLES:-15}
+    ADAPT_ARGS="adapt engaged=0"
+    # max_depth=1 caps NUTS at 2 leapfrog steps/iteration (~1-2s each), so 15
+    # samples completes in ~30s regardless of stepsize. Without this, NUTS picks
+    # deep trees (treedepth 4-6, 64+ steps/iter) and a 20-min debug slot isn't
+    # enough for even a single sample.
+    ENGINE_ARGS="engine=nuts max_depth=1"
+    STEPSIZE_ARG="stepsize=${STEPSIZE:-0.08}"
+    echo "Step 6: DEBUG mode — no adaptation, max_depth=1, fixed stepsize ${STEPSIZE:-0.08}, "\
+"$NUM_SAMPLES samples (results not science-grade)"
 else
     NUM_WARMUP=${NUM_WARMUP:-250}
     NUM_SAMPLES=${NUM_SAMPLES:-1000}
+    ADAPT_ARGS="adapt save_metric=1"
+    ENGINE_ARGS=""
+    STEPSIZE_ARG=""
 fi
 
 echo "Step 6: MCMC chain $CHAIN_ID for run=$RUN"
 ./2color_g sample num_warmup=$NUM_WARMUP num_samples=$NUM_SAMPLES \
-    adapt save_metric=1 \
-    algorithm=hmc metric=dense_e \
+    $ADAPT_ARGS \
+    algorithm=hmc $ENGINE_ARGS metric=dense_e $STEPSIZE_ARG \
     metric_file=output/$RUN/metric.json \
     id=$CHAIN_ID \
     data file=output/$RUN/input.json \

@@ -1639,7 +1639,9 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
     # _get_holdout_mask operates in validity-filtered space and cannot be used here.
     if "train_sga_ids" in input_data:
         _train_ids = set(input_data["train_sga_ids"])
-        _sga_raw = np.asarray(data["SGA_ID"], dtype=float)
+        names = [c.name for c in table_hdu.columns]
+        _sga_raw = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
+                    else np.arange(len(data), dtype=float))
         main = _main_valid & ~np.isin(_sga_raw, list(_train_ids))
     else:
         main = _main_valid
@@ -1776,7 +1778,9 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     # Apply train/holdout split in raw-catalog space (n_rows rows).
     if "train_sga_ids" in input_data:
         _train_ids = set(input_data["train_sga_ids"])
-        _sga_raw = np.asarray(data["SGA_ID"], dtype=float)
+        names = [c.name for c in table_hdu.columns]
+        _sga_raw = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
+                    else np.arange(len(data), dtype=float))
         main = _main_valid & ~np.isin(_sga_raw, list(_train_ids))
     else:
         main = _main_valid
@@ -2417,7 +2421,8 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
             _rz = None
         _ba_raw      = np.asarray(_d["BA"],      dtype=float)
         _photsys_raw = np.asarray(_d["PHOTSYS"])
-        _sga_raw     = np.asarray(_d["SGA_ID"],  dtype=float)
+        _sga_raw     = (np.asarray(_d["SGA_ID"], dtype=float) if "SGA_ID" in _d.names
+                        else np.arange(len(_d), dtype=float))
 
     _xhat, _sigma_x = _logV_to_x(_lV, _lVerr)
 

@@ -115,8 +115,13 @@ sbatch --export=CONFIG=configs/abacus_2color.json slurm/step5e_metric.sh   # ~7h
 ## Debug Mode — fast end-to-end plumbing test
 
 Full chains cost ~14h each, so before a real batch confirm the *plumbing*
-(config generation, metric copy, dependencies, sentinels, output FITS) with tiny
-10+10 chains on the debug queue. Results are **not** science-grade.
+(config generation, metric copy, dependencies, sentinels, output FITS) with short
+chains on the debug queue. Debug chains skip adaptation and sample at a fixed
+known-good stepsize (0.08) with the seeded metric, so each completes in a few
+minutes (step6 gets `-t 00:20:00` on the debug GPU queue). Results are **not**
+science-grade. (Do not use `num_warmup<20` with adaptation: Stan then disables
+adaptation, falls back to a tiny stepsize, and a single iteration can exceed
+10 min.)
 
 ```bash
 python3 make_batch_configs.py \

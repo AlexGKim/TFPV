@@ -45,9 +45,9 @@ fi
 STEP6_OVERRIDE=()
 STEP6_EXPORT_EXTRA=""
 if [ "$DEBUG" = "1" ]; then
-    STEP6_OVERRIDE=(-q debug -t 00:05:00)
+    STEP6_OVERRIDE=(-q debug -t 00:20:00)
     STEP6_EXPORT_EXTRA=",DEBUG=1"
-    echo "DEBUG mode: step6 chains run 10+10 samples on the debug GPU queue."
+    echo "DEBUG mode: step6 chains sample 15 draws at fixed stepsize (no adaptation) on the debug GPU queue."
 fi
 
 n_submitted=0
