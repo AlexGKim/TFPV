@@ -1,0 +1,25 @@
+{
+  "slope_std": -0.6503724646001351,
+  "intercept_std": [
+    -20.24257235626588
+  ],
+  "slope_orig": -4.98593119075423,
+  "intercept_orig": -19.36802452300226,
+  "sigma_int_x": 0.1,
+  "sigma_int_y": 0.1,
+  "log_sigma_int_z": -2.3,
+  "mean_x": 0.17540310922969832,
+  "sd_x": 0.13044152430466097,
+  "alpha_kcorr_r": -0.5,
+  "gamma_tau_c": -0.19,
+  "delta_c": 0.065,
+  "mu_c": 0.3125354043788132,
+  "log_tau_c": -3.3,
+  "alpha_kcorr_z": -0.5,
+  "gamma_tau_g": -0.1,
+  "delta_g": 0.0,
+  "mu_g": -0.5613912957330834,
+  "log_tau_g": -2.0,
+  "log_sigma_int_g": -2.3,
+  "alpha_kcorr_g": -0.5
+}
