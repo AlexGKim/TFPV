@@ -199,3 +199,125 @@ bash slurm/check_status.sh configs/batch_v0.5.7/c000_ph000_r001.json
 - **step5e** (~7h) is run once on the first mock to build a mock-specific metric,
   then that metric is reused for all other files. The DR1 metric is **not**
   transferable to mocks (see decision #3 above).
+
+---
+
+## Subset Partition Mode (single file → 17 disjoint subsets)
+
+When a single mock FITS file is too large for the prediction step to fit in memory
+(e.g. 169k galaxies → OOM on the O(M×G) posterior predictive computation), split
+it into disjoint subsets that each match the DR1 sample size (~10k galaxies).
+
+### How it works
+
+`desi_data.py` supports two new config fields:
+
+```json
+{
+  "n_subsets": 17,      // total number of disjoint partitions
+  "subset_index": 0     // which partition (0-indexed)
+}
+```
+
+When both are present, `desi_data.py` replaces random subsampling with a
+deterministic partition:
+
+1. Apply all selection cuts (magnitude window, redshift, plane cuts) → N_after_cuts
+2. Permute all N_after_cuts indices with `random_seed` (shared across subsets)
+3. Split the permuted array into `n_subsets` contiguous chunks
+4. Select chunk `subset_index`
+
+This guarantees **zero overlap** between subsets and full coverage of all post-cut
+galaxies. The `n_objects` field is ignored when partitioning.
+
+### Config generation
+
+17 configs live at `configs/abacus_2color_s00.json` through `s16.json`. They share
+all selection parameters from `configs/abacus_2color.json` but differ in:
+- `"run": "abacus_2color_s00"` … `"abacus_2color_s16"`
+- `"subset_index": 0` … `16`
+- `"n_subsets": 17`
+- `"fits_file"`: local path `data/TF_AbacusSummit_…_appmag.fits`
+
+To regenerate:
+
+```python
+import json
+base = json.load(open('configs/abacus_2color.json'))
+base['fits_file'] = 'data/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11_appmag.fits'
+base.pop('n_objects', None)
+for i in range(17):
+    cfg = dict(base)
+    cfg['run'] = f'abacus_2color_s{i:02d}'
+    cfg['subset_index'] = i
+    cfg['n_subsets'] = 17
+    with open(f'configs/abacus_2color_s{i:02d}.json', 'w') as f:
+        json.dump(cfg, f, indent=2)
+```
+
+### Running one subset end-to-end
+
+```bash
+export CONFIG=configs/abacus_2color_s00.json
+
+# Step 4: data prep (produces ~5500 objects per subset from 93k post-cut)
+python desi_data.py --config $CONFIG
+
+# Step 5d: MAP optimization
+sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh
+
+# Step 5e: skip — copy metric from the existing mock run
+cp output/abacus_2color/metric.json output/abacus_2color_s00/metric.json
+
+# Step 6+7+8: sampling + diagnostics + predictions
+bash slurm/step6_submit.sh $CONFIG
+```
+
+### Running all 17 subsets
+
+```bash
+for i in $(seq -w 0 16); do
+    CONFIG=configs/abacus_2color_s${i}.json
+    python desi_data.py --config $CONFIG
+    cp output/abacus_2color/metric.json output/abacus_2color_s${i}/metric.json
+done
+
+# Submit all (throttled):
+for i in $(seq -w 0 16); do
+    bash slurm/step6_submit.sh configs/abacus_2color_s${i}.json
+done
+```
+
+### Predictions (plots only, no covariance)
+
+For local runs where the covariance matrix would OOM:
+
+```bash
+python color_predict.py --run-dir output/abacus_2color_s00 --model 2color --no-cov --no-catalog
+```
+
+This produces diagnostic plots (`redshift_color.png`, `redshift_color_xonly.png`,
+etc.) without computing the O(G²) covariance matrix. The `--xonly` flag is now
+default (produces x-only plots alongside full-model plots).
+
+### Output structure
+
+Each subset produces a full independent run:
+
+```
+output/abacus_2color_s00/
+  ├── config.json, input.json, init.json
+  ├── 2color_{1..4}.csv          (MCMC chains)
+  ├── stansummary.txt, diagnose.txt
+  ├── redshift_color.png         (full model residuals vs z)
+  ├── redshift_color_xonly.png   (x-only residuals vs z)
+  └── color_catalog.fits         (if --no-catalog not set)
+output/abacus_2color_s01/
+  └── ...
+```
+
+### Subset sizes
+
+With `n_subsets=17` and 93,796 galaxies passing cuts:
+- Subsets 0–15: 5,517 galaxies each (93796 // 17)
+- Subset 16: 5,524 galaxies (remainder)

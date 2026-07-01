@@ -1,0 +1,19 @@
+{
+  "run": "abacus_2color_s01",
+  "fits_file": "data/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11_appmag.fits",
+  "exe": "2color",
+  "source": "fullmocks",
+  "model": "2color",
+  "n_sigma": 3.0,
+  "haty_min": -22.0,
+  "haty_max": -18.5,
+  "slope_plane": -7.21121367388516,
+  "intercept_plane": -20.289955714851725,
+  "intercept_plane2": -17.640026215077597,
+  "n_sigma_perp": 3.0,
+  "z_obs_min": 0.01,
+  "z_obs_max": 0.065,
+  "random_seed": 42,
+  "subset_index": 1,
+  "n_subsets": 17
+}

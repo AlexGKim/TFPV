@@ -1203,6 +1203,34 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     return mean_y, sd_y
 
 
+_BATCH_SIZE = 7000
+
+_PER_GALAXY_KW = {"sigma_y_star", "zobs_star"}
+
+
+def _batched_mean_sd(fn, draws, *pos_arrays, **kwargs):
+    """Call fn in galaxy-chunks to limit peak memory (M × G → M × batch)."""
+    G = len(pos_arrays[0])
+    if G <= _BATCH_SIZE:
+        return fn(draws, *pos_arrays, **kwargs)
+
+    mean_out = np.empty(G)
+    sd_out = np.empty(G)
+    for start in range(0, G, _BATCH_SIZE):
+        end = min(start + _BATCH_SIZE, G)
+        pos_batch = tuple(a[start:end] for a in pos_arrays)
+        kw_batch = {}
+        for k, v in kwargs.items():
+            if k in _PER_GALAXY_KW and hasattr(v, '__len__') and len(v) == G:
+                kw_batch[k] = v[start:end]
+            else:
+                kw_batch[k] = v
+        m, s = fn(draws, *pos_batch, **kw_batch)
+        mean_out[start:end] = m
+        sd_out[start:end] = s
+    return mean_out, sd_out
+
+
 def DESI_color(
     run_dir=None,
     grid_resolution_x=50,
@@ -1259,7 +1287,8 @@ def DESI_color(
             drop_diagnostics=True,
         )
 
-        mean_pred, sd_pred = ystar_pp_mean_sd_2color_vectorized(
+        mean_pred, sd_pred = _batched_mean_sd(
+            ystar_pp_mean_sd_2color_vectorized,
             draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
             ghat_star, sigma_g_star,
             sigma_y_star=sigma_y_star, x_bar=x_bar,
@@ -1279,7 +1308,8 @@ def DESI_color(
         )
         ghat_star = sigma_g_star = None
 
-        mean_pred, sd_pred = ystar_pp_mean_sd_color_vectorized(
+        mean_pred, sd_pred = _batched_mean_sd(
+            ystar_pp_mean_sd_color_vectorized,
             draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
             sigma_y_star=sigma_y_star, x_bar=x_bar,
             y_min=y_min, y_max=y_max,
@@ -1306,7 +1336,8 @@ def DESI_color(
     if model == "2color":
         ghat_main = ghat_star[main_mask]
         sigma_g_main = sigma_g_star[main_mask]
-        mean_pred_main, _ = ystar_pp_mean_sd_2color_vectorized(
+        mean_pred_main, _ = _batched_mean_sd(
+            ystar_pp_mean_sd_2color_vectorized,
             draws, xhat_main, sigma_x_main, zhat_main, sigma_z_main,
             ghat_main, sigma_g_main,
             sigma_y_star=sigma_y_main, x_bar=x_bar,
@@ -1315,7 +1346,8 @@ def DESI_color(
             on_bad_Z="floor", Z_floor=1e-300,
         )
     else:
-        mean_pred_main, _ = ystar_pp_mean_sd_color_vectorized(
+        mean_pred_main, _ = _batched_mean_sd(
+            ystar_pp_mean_sd_color_vectorized,
             draws, xhat_main, sigma_x_main, zhat_main, sigma_z_main,
             sigma_y_star=sigma_y_main, x_bar=x_bar,
             y_min=y_min, y_max=y_max,
@@ -1406,7 +1438,8 @@ def DESI_color(
 
     # --- x-only diagnostic plots (reuse loaded data and draws) ---
     if xonly:
-        mean_pred_xo, sd_pred_xo = ystar_pp_mean_sd_color_xonly_vectorized(
+        mean_pred_xo, sd_pred_xo = _batched_mean_sd(
+            ystar_pp_mean_sd_color_xonly_vectorized,
             draws,
             xhat_star,
             sigma_x_star,
@@ -1416,7 +1449,8 @@ def DESI_color(
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
         )
-        mean_pred_main_xo, _ = ystar_pp_mean_sd_color_xonly_vectorized(
+        mean_pred_main_xo, _ = _batched_mean_sd(
+            ystar_pp_mean_sd_color_xonly_vectorized,
             draws,
             xhat_main,
             sigma_x_main,
@@ -2683,7 +2717,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--xonly",
         action="store_true",
-        default=False,
+        default=True,
         help="Also write color_xonly_catalog.fits using x̂ and redshift (no z-band)",
     )
     parser.add_argument(
@@ -2719,5 +2753,7 @@ if __name__ == "__main__":
         write_cov_color(_run_dir, _fits_path, cfg=_cfg, model=args.model)
 
     if args.xonly:
-        write_desi_catalog_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)
-        write_cov_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)
+        if not args.no_catalog:
+            write_desi_catalog_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)
+        if not args.no_cov:
+            write_cov_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)

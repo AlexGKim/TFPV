@@ -26,6 +26,8 @@ def process_desi_tf_data(
     intercept_plane2=None,
     n_objects=None,
     random_seed=None,
+    n_subsets=None,
+    subset_index=None,
     *,
     z_col="Z_DESI",
     z_col_candidates=(
@@ -317,8 +319,30 @@ def process_desi_tf_data(
 
     N_after_cuts = len(x)
 
-    # Subsample if n_objects is specified
-    if n_objects is not None and n_objects < N_after_cuts:
+    # Partition into disjoint subsets, or subsample randomly
+    if n_subsets is not None and subset_index is not None:
+        rng = np.random.default_rng(random_seed)
+        perm = rng.permutation(N_after_cuts)
+        chunk_size = N_after_cuts // n_subsets
+        start = subset_index * chunk_size
+        end = (subset_index + 1) * chunk_size if subset_index < n_subsets - 1 else N_after_cuts
+        idx = np.sort(perm[start:end])
+        x = x[idx]
+        y = y[idx]
+        sigma_x = sigma_x[idx]
+        sigma_y = sigma_y[idx]
+        z_obs = z_obs[idx]
+        z_absmag = z_absmag[idx]
+        sigma_z_absmag = sigma_z_absmag[idx]
+        if g_absmag is not None:
+            g_absmag = g_absmag[idx]
+            sigma_g_absmag = sigma_g_absmag[idx]
+        train_sga_ids = sga_ids_main[idx].tolist()
+        print(
+            f"  Partition {subset_index}/{n_subsets}: {len(idx)} objects from {N_after_cuts} "
+            f"(random_seed={random_seed})"
+        )
+    elif n_objects is not None and n_objects < N_after_cuts:
         rng = np.random.default_rng(random_seed)
         idx = rng.choice(N_after_cuts, size=n_objects, replace=False)
         idx.sort()
@@ -702,6 +726,14 @@ if __name__ == "__main__":
         help="Random seed for reproducible subsampling",
     )
     parser.add_argument(
+        "--n_subsets", type=int, default=None,
+        help="Number of disjoint partitions (requires --subset_index)",
+    )
+    parser.add_argument(
+        "--subset_index", type=int, default=None,
+        help="Which partition to select (0-indexed, requires --n_subsets)",
+    )
+    parser.add_argument(
         "--z_obs_min", type=float, default=None, help="Minimum redshift"
     )
     parser.add_argument("--z_obs_max", type=float, default=None, help="Maximum redshift")
@@ -788,6 +820,8 @@ if __name__ == "__main__":
         intercept_plane2=args.intercept_plane2,
         n_objects=args.n_objects,
         random_seed=args.random_seed,
+        n_subsets=args.n_subsets,
+        subset_index=args.subset_index,
         z_obs_min=args.z_obs_min,
         z_obs_max=args.z_obs_max,
 
