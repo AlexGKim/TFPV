@@ -232,8 +232,8 @@ galaxies. The `n_objects` field is ignored when partitioning.
 
 ### Config generation
 
-17 configs live at `configs/abacus_2color_s00.json` through `s16.json`. They share
-all selection parameters from `configs/abacus_2color.json` but differ in:
+17 configs live at `configs/abacus_subsets/abacus_2color_s00.json` through `s16.json`.
+They share all selection parameters from `configs/abacus_2color.json` but differ in:
 - `"run": "abacus_2color_s00"` … `"abacus_2color_s16"`
 - `"subset_index": 0` … `16`
 - `"n_subsets": 17`
@@ -255,37 +255,30 @@ for i in range(17):
         json.dump(cfg, f, indent=2)
 ```
 
-### Running one subset end-to-end
-
-```bash
-export CONFIG=configs/abacus_2color_s00.json
-
-# Step 4: data prep (produces ~5500 objects per subset from 93k post-cut)
-python desi_data.py --config $CONFIG
-
-# Step 5d: MAP optimization
-sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh
-
-# Step 5e: skip — copy metric from the existing mock run
-cp output/abacus_2color/metric.json output/abacus_2color_s00/metric.json
-
-# Step 6+7+8: sampling + diagnostics + predictions
-bash slurm/step6_submit.sh $CONFIG
-```
-
 ### Running all 17 subsets
 
-```bash
-for i in $(seq -w 0 16); do
-    CONFIG=configs/abacus_2color_s${i}.json
-    python desi_data.py --config $CONFIG
-    cp output/abacus_2color/metric.json output/abacus_2color_s${i}/metric.json
-done
+`batch_submit.sh` handles the full chain for every config in a directory. Pass
+`--metric` so it seeds each run dir before submitting:
 
-# Submit all (throttled):
-for i in $(seq -w 0 16); do
-    bash slurm/step6_submit.sh configs/abacus_2color_s${i}.json
-done
+```bash
+bash slurm/batch_submit.sh configs/abacus_subsets \
+    --metric output/abacus_2color/metric.json
+```
+
+This submits `step4 → step5d → step6×4 → step7 → step8` for all 17 subsets with
+SLURM dependencies, throttled to 8 concurrent files (68 chains) by default.
+
+### Running one subset end-to-end (manual)
+
+```bash
+export CONFIG=configs/abacus_subsets/abacus_2color_s00.json
+
+sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
+# After step4 done:
+cp output/abacus_2color/metric.json output/abacus_2color_s00/metric.json
+sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh
+# After step5d done:
+bash slurm/step6_submit.sh $CONFIG
 ```
 
 ### Predictions (plots only, no covariance)
