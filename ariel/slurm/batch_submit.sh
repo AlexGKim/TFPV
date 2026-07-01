@@ -3,7 +3,10 @@
 #
 # For each configs/<dir>/<run>.json it submits a SLURM dependency chain:
 #   step4 -> step5d -> step6 x4 -> step7 -> step8
-# (step5e is skipped; make_batch_configs.py already seeded output/<run>/metric.json.)
+# (step5e is NOT included here — run it separately once per data type to build
+# output/<run>/metric.json, then reseed all run dirs with that metric before calling
+# this script. make_batch_configs.py copies whichever metric.json you pass via
+# --metric into each output/<run>/metric.json.)
 #
 # Files whose output/<run>/.step8_done sentinel exists are skipped (idempotent).
 # Submissions are throttled so at most MAX_CONCURRENT files' chains are in the

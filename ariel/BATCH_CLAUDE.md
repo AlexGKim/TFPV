@@ -60,7 +60,9 @@ FITS catalog
                                                                     └── step8 (color_predict.py)
 ```
 
-`metric.json` is reusable — copy it to a new run directory to skip step5e.
+`metric.json` is reusable **within the same data type** — copy it to a new run
+directory to skip step5e. It is **not** transferable across data types (e.g.
+the DR1 metric must not be used for AbacusSummit mocks; see failure mode below).
 
 ---
 
@@ -119,16 +121,38 @@ and inspect `output/$RUN/data.png`.
 
 ---
 
+### Step 6: Metric incompatible with data type (cholesky failures + timeout)
+
+**Symptom:** Repeated `cholesky_decompose: Matrix m is not positive definite`
+warnings in the step6 SLURM log. `stepsize__` in the CSV is ~0.002 (vs. ~0.08
+with a good metric). Each iteration takes ~50s. The chain does not reach 1000
+samples within the 18h time limit.
+
+**Diagnosis:** The `metric.json` in `output/$RUN/` was built from a different
+data type (e.g. DR1 metric copied to a mock run). The posterior geometry differs
+enough that the mass matrix is invalid for the new data.
+
+**Fix:** Build a metric from this data type via step5e:
+```bash
+sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh   # ~7h
+```
+Then resubmit the step6 chains. For subsequent files of the same data type, copy
+the new metric instead of re-running step5e.
+
+---
+
 ### Step 6: High divergences or max treedepth
 
 **Symptom:** `diagnose.txt` reports many divergences or `% transitions hitting
 max treedepth` > 20%.
 
 **Diagnosis:** Check whether `metric.json` was used. If `stepsize__` in the CSV
-is near 0.002, the metric was not applied.
+is near 0.002, the metric was not applied or is incompatible (see failure mode
+above).
 
-**Fix:** Confirm `metric.json` exists in `output/$RUN/`. If missing, run step5e
-or copy from another run: `cp output/DR1_v6_2color/metric.json output/$RUN/`.
+**Fix:** Confirm `metric.json` exists in `output/$RUN/` and was built from the
+same data type as this run. If missing, run step5e. Do not copy the DR1 metric
+to a mock run (or vice versa).
 
 ---
 

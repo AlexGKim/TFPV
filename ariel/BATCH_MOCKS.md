@@ -30,20 +30,24 @@ workflow. The following decisions are fixed; do not re-derive them:
    **not part of this pipeline**. Each per-file config differs from the base only
    in `run` and `fits_file`.
 
-3. **Step 5e (the ~7h metric build) is skipped entirely.** A single
-   `metric.json` is reused for every file. The HMC metric only affects sampling
-   *efficiency* (step 6 re-adapts it during warmup via `adapt save_metric=1`), not
-   correctness, and the model + cuts are identical across mocks. The reusable
-   metric lives at `output/abacus_2color/metric.json` (seeded by copying
-   `output/DR1_v6_2color/metric.json`).
+3. **Step 5e (metric build, ~7h) must be run once per mock dataset, then
+   reused across all files in that dataset.** The DR1 metric
+   (`output/DR1_v6_2color/metric.json`) is **not** transferable to mocks —
+   confirmed empirically: using it caused repeated `cholesky_decompose`
+   failures in the sampler, the chains ran at ~50s/iteration (vs. ~1–2s with
+   a good metric), and 18h was not enough for 1000 samples. Build the metric
+   once on any representative mock file, then copy it to all other run dirs.
+   The reusable mock metric lives at `output/abacus_2color/metric.json` once
+   built.
 
 4. **Per-file run name** is the `c<NN>_ph<NN>_r<NN>` token from the filename
    (regex `c\d+_ph\d+_r\d+`), e.g.
    `TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits` → run
    `c000_ph000_r001`. Outputs go to `output/<run>/`.
 
-5. **Per-file chain** (step 5e dropped):
-   `step4 → step5d → step6 ×4 → step7 → step8`.
+5. **Per-file chain:**
+   `step4 → step5d → step5e (first file only) → step6 ×4 → step7 → step8`.
+   Subsequent files copy the metric from the first file and skip step5e.
 
 **Target mock set:** `v0.5.7`
 (`/global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7/`).
@@ -192,4 +196,6 @@ bash slurm/check_status.sh configs/batch_v0.5.7/c000_ph000_r001.json
   files this is the GPU-hours driver — use the `MAX_CONCURRENT` throttle and mind
   the NERSC regular-GPU QOS limits.
 - step7 (CPU debug, ~15 min), step8 (CPU, fast for 5000 objects).
-- step5e is **not** run in the batch (metric reused), saving ~7h per file.
+- **step5e** (~7h) is run once on the first mock to build a mock-specific metric,
+  then that metric is reused for all other files. The DR1 metric is **not**
+  transferable to mocks (see decision #3 above).

@@ -104,11 +104,11 @@ Wait for it to complete, then verify:
 ls -lh 2color_g
 ```
 
-### Build the metric (one-time, reusable)
+### Build the metric (one-time per data type, reusable within that type)
 
 The metric captures the parameter covariance and dramatically improves HMC
-efficiency. It only needs to be built once — the result can be copied to any
-new run directory.
+efficiency. It only needs to be built once per **data type** — the result can
+be copied to any new run of the same type.
 
 ```bash
 # First complete step 4 and 5d (see below), then:
@@ -116,11 +116,19 @@ sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh
 ```
 
 This takes ~7 hours. Once done, `output/DR1_v6_2color/metric.json` exists and
-can be reused for future runs:
+can be reused for future runs **of the same data type**:
 
 ```bash
 cp output/DR1_v6_2color/metric.json output/<new_run>/metric.json
 ```
+
+> **Warning — metric is NOT transferable across data types.** The DR1 metric
+> (`output/DR1_v6_2color/metric.json`) **must not** be copied to AbacusSummit
+> mock runs. Confirmed empirically: doing so causes repeated
+> `cholesky_decompose: Matrix m is not positive definite` warnings, stepsize
+> collapses to ~0.002 (from ~0.08), each iteration takes ~50s, and 18h is
+> insufficient for 1000 samples. Mock runs need their own metric built from a
+> mock file via step5e, then that mock metric can be reused for other mocks.
 
 ---
 
