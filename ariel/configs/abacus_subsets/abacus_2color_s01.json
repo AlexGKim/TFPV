@@ -15,5 +15,6 @@
   "z_obs_max": 0.065,
   "random_seed": 42,
   "subset_index": 1,
-  "n_subsets": 17
+  "n_subsets": 5,
+  "n_objects": 5000
 }

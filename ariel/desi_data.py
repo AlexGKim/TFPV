@@ -24,8 +24,8 @@ def process_desi_tf_data(
     slope_plane=None,
     intercept_plane=None,
     intercept_plane2=None,
-    n_objects=None,
-    random_seed=None,
+    n_objects=5000,
+    random_seed=42,
     n_subsets=None,
     subset_index=None,
     *,
@@ -337,11 +337,30 @@ def process_desi_tf_data(
         if g_absmag is not None:
             g_absmag = g_absmag[idx]
             sigma_g_absmag = sigma_g_absmag[idx]
-        train_sga_ids = sga_ids_main[idx].tolist()
+        subset_sga_ids = sga_ids_main[idx].tolist()
+        N_subset = len(idx)
         print(
-            f"  Partition {subset_index}/{n_subsets}: {len(idx)} objects from {N_after_cuts} "
+            f"  Partition {subset_index}/{n_subsets}: {N_subset} objects from {N_after_cuts} "
             f"(random_seed={random_seed})"
         )
+        # Subsample within the subset for training (holdout = remainder)
+        if n_objects is not None and n_objects < N_subset:
+            rng2 = np.random.default_rng(random_seed + subset_index + 1)
+            train_idx = np.sort(rng2.choice(N_subset, size=n_objects, replace=False))
+            x = x[train_idx]
+            y = y[train_idx]
+            sigma_x = sigma_x[train_idx]
+            sigma_y = sigma_y[train_idx]
+            z_obs = z_obs[train_idx]
+            z_absmag = z_absmag[train_idx]
+            sigma_z_absmag = sigma_z_absmag[train_idx]
+            if g_absmag is not None:
+                g_absmag = g_absmag[train_idx]
+                sigma_g_absmag = sigma_g_absmag[train_idx]
+            train_sga_ids = [subset_sga_ids[i] for i in train_idx]
+            print(f"  Training subsample: {n_objects} from {N_subset} subset galaxies")
+        else:
+            train_sga_ids = subset_sga_ids
     elif n_objects is not None and n_objects < N_after_cuts:
         rng = np.random.default_rng(random_seed)
         idx = rng.choice(N_after_cuts, size=n_objects, replace=False)
@@ -417,14 +436,40 @@ def process_desi_tf_data(
     # [SPLIT] record training galaxy IDs so color_predict.py can identify holdout
     if train_sga_ids is not None:
         stan_data["train_sga_ids"] = train_sga_ids
-        print(f"  Train/holdout split: {len(train_sga_ids)} training, "
-              f"{N_after_cuts - len(train_sga_ids)} in same z-range not selected")
+        if n_subsets is not None:
+            stan_data["n_subsets"] = n_subsets
+            stan_data["subset_index"] = subset_index
+            stan_data["subset_sga_ids"] = subset_sga_ids
+            print(f"  Train/holdout split: {len(train_sga_ids)} training, "
+                  f"{len(subset_sga_ids) - len(train_sga_ids)} holdout within subset")
+        else:
+            print(f"  Train/holdout split: {len(train_sga_ids)} training, "
+                  f"{N_after_cuts - len(train_sga_ids)} in same z-range not selected")
 
     if plane_cut:
         stan_data["slope_plane"] = float(slope_plane)
         stan_data["intercept_plane"] = float(intercept_plane)
         if two_sided:
             stan_data["intercept_plane2"] = float(intercept_plane2)
+
+    # [SPLIT] Warn loudly if this overwrites an input.json fit to a different
+    # partition — otherwise stale MCMC chains fit under the old partition can
+    # keep being used silently by downstream steps (color_predict.py etc.).
+    if os.path.exists(data_output_file):
+        with open(data_output_file) as f:
+            _old = json.load(f)
+        _partition_keys = ["n_subsets", "subset_index", "n_objects", "random_seed"]
+        _old_partition = {k: _old.get(k) for k in _partition_keys}
+        _new_partition = {
+            "n_subsets": n_subsets, "subset_index": subset_index,
+            "n_objects": n_objects, "random_seed": random_seed,
+        }
+        if _old_partition != _new_partition:
+            print(f"  WARNING: overwriting {data_output_file} whose partition "
+                  f"metadata differs from this run: old={_old_partition} "
+                  f"new={_new_partition}. Any existing MCMC chains/init/metric "
+                  f"in this run dir were fit to the OLD partition and must be "
+                  f"regenerated (step5d/step6) before further use.")
 
     with open(data_output_file, "w") as f:
         json.dump(stan_data, f, indent=2)
@@ -717,12 +762,12 @@ if __name__ == "__main__":
         help="Lower apparent magnitude selection limit",
     )
     parser.add_argument(
-        "--n_objects", type=int, default=None, help="Subsample size (None for all)"
+        "--n_objects", type=int, default=5000, help="Training sample size (default 5000)"
     )
     parser.add_argument(
         "--random_seed",
         type=int,
-        default=None,
+        default=42,
         help="Random seed for reproducible subsampling",
     )
     parser.add_argument(

@@ -202,60 +202,66 @@ bash slurm/check_status.sh configs/batch_v0.5.7/c000_ph000_r001.json
 
 ---
 
-## Subset Partition Mode (single file → 17 disjoint subsets)
+## Subset Partition Mode (single file → 5 disjoint subsets)
 
 When a single mock FITS file is too large for the prediction step to fit in memory
 (e.g. 169k galaxies → OOM on the O(M×G) posterior predictive computation), split
-it into disjoint subsets that each match the DR1 sample size (~10k galaxies).
+it into disjoint subsets. Each subset trains on 5,000 galaxies (matching DR2) and
+predicts on the remaining holdout within the subset.
 
 ### How it works
 
-`desi_data.py` supports two new config fields:
+`desi_data.py` supports three config fields for partitioning:
 
 ```json
 {
-  "n_subsets": 17,      // total number of disjoint partitions
-  "subset_index": 0     // which partition (0-indexed)
+  "n_subsets": 5,       // total number of disjoint partitions
+  "subset_index": 0,    // which partition (0-indexed)
+  "n_objects": 5000     // training sample size within the subset
 }
 ```
 
-When both are present, `desi_data.py` replaces random subsampling with a
-deterministic partition:
+When `n_subsets` and `subset_index` are present, `desi_data.py`:
 
 1. Apply all selection cuts (magnitude window, redshift, plane cuts) → N_after_cuts
 2. Permute all N_after_cuts indices with `random_seed` (shared across subsets)
 3. Split the permuted array into `n_subsets` contiguous chunks
-4. Select chunk `subset_index`
+4. Select chunk `subset_index` (~18,759 galaxies per subset)
+5. Subsample `n_objects` from the chunk for training (5,000)
+6. Record both `subset_sga_ids` (full chunk) and `train_sga_ids` (training sample)
 
 This guarantees **zero overlap** between subsets and full coverage of all post-cut
-galaxies. The `n_objects` field is ignored when partitioning.
+galaxies. Predictions are made on the holdout within the subset (~13,759 galaxies
+not used for training).
 
 ### Config generation
 
-17 configs live at `configs/abacus_subsets/abacus_2color_s00.json` through `s16.json`.
+5 configs live at `configs/abacus_subsets/abacus_2color_s00.json` through `s04.json`.
 They share all selection parameters from `configs/abacus_2color.json` but differ in:
-- `"run": "abacus_2color_s00"` … `"abacus_2color_s16"`
-- `"subset_index": 0` … `16`
-- `"n_subsets": 17`
+- `"run": "abacus_2color_s00"` … `"abacus_2color_s04"`
+- `"subset_index": 0` … `4`
+- `"n_subsets": 5`
+- `"n_objects": 5000`
 - `"fits_file"`: local path `data/TF_AbacusSummit_…_appmag.fits`
 
 To regenerate:
 
 ```python
-import json
+import json, os
 base = json.load(open('configs/abacus_2color.json'))
 base['fits_file'] = 'data/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11_appmag.fits'
-base.pop('n_objects', None)
-for i in range(17):
+os.makedirs('configs/abacus_subsets', exist_ok=True)
+for i in range(5):
     cfg = dict(base)
     cfg['run'] = f'abacus_2color_s{i:02d}'
     cfg['subset_index'] = i
-    cfg['n_subsets'] = 17
-    with open(f'configs/abacus_2color_s{i:02d}.json', 'w') as f:
+    cfg['n_subsets'] = 5
+    cfg['n_objects'] = 5000
+    with open(f'configs/abacus_subsets/abacus_2color_s{i:02d}.json', 'w') as f:
         json.dump(cfg, f, indent=2)
 ```
 
-### Running all 17 subsets
+### Running all 5 subsets (NERSC / SLURM)
 
 `batch_submit.sh` handles the full chain for every config in a directory. Pass
 `--metric` so it seeds each run dir before submitting:
@@ -265,10 +271,10 @@ bash slurm/batch_submit.sh configs/abacus_subsets \
     --metric output/abacus_2color/metric.json
 ```
 
-This submits `step4 → step5d → step6×4 → step7 → step8` for all 17 subsets with
-SLURM dependencies, throttled to 8 concurrent files (68 chains) by default.
+This submits `step4 → step5d → step6×4 → step7 → step8` for all 5 subsets with
+SLURM dependencies, throttled to 8 concurrent files (20 chains) by default.
 
-### Running one subset end-to-end (manual)
+### Running one subset end-to-end (manual, NERSC / SLURM)
 
 ```bash
 export CONFIG=configs/abacus_subsets/abacus_2color_s00.json
@@ -281,6 +287,18 @@ sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh
 bash slurm/step6_submit.sh $CONFIG
 ```
 
+### Running locally without SLURM
+
+`run_subsets.sh` runs subsets s01–s04 end-to-end (step4 → step5d → step6 → step7
+→ step8) directly via the `./2color` binary, for machines without SLURM access.
+It intentionally skips `s00`, which is meant to be run standalone first (e.g. via
+the manual commands above with `CONFIG=configs/abacus_subsets/abacus_2color_s00.json`,
+substituting direct `python`/`./2color` calls for the `sbatch` wrappers):
+
+```bash
+zsh run_subsets.sh
+```
+
 ### Predictions (plots only, no covariance)
 
 For local runs where the covariance matrix would OOM:
@@ -291,7 +309,8 @@ python color_predict.py --run-dir output/abacus_2color_s00 --model 2color --no-c
 
 This produces diagnostic plots (`redshift_color.png`, `redshift_color_xonly.png`,
 etc.) without computing the O(G²) covariance matrix. The `--xonly` flag is now
-default (produces x-only plots alongside full-model plots).
+default (produces x-only plots alongside full-model plots). Predictions are made
+on the ~13,759 holdout galaxies within the subset.
 
 ### Output structure
 
@@ -311,6 +330,8 @@ output/abacus_2color_s01/
 
 ### Subset sizes
 
-With `n_subsets=17` and 93,796 galaxies passing cuts:
-- Subsets 0–15: 5,517 galaxies each (93796 // 17)
-- Subset 16: 5,524 galaxies (remainder)
+With `n_subsets=5` and 93,796 galaxies passing cuts:
+- Subsets 0–3: 18,759 galaxies each (93796 // 5)
+- Subset 4: 18,760 galaxies (remainder)
+- Training: 5,000 per subset
+- Holdout (for prediction): ~13,759 per subset

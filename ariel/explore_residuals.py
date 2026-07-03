@@ -164,6 +164,8 @@ def main():
         z_sma50 = _get_col("Z_SMA50")
         group_mult = _get_col("GROUP_MULT")
         photsys = _get_col("PHOTSYS", dtype=str)
+        sga_id = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
+                  else np.arange(len(data), dtype=float))
 
     # validity mask (mirrors load_xy_and_uncertainties_from_desi)
     mask = (
@@ -202,6 +204,7 @@ def main():
     z_sma50 = _m(z_sma50)
     group_mult = _m(group_mult)
     photsys = _m(photsys)
+    sga_id = _m(sga_id)
 
     print(f"N galaxies (valid mask): {mask.sum()}")
 
@@ -276,6 +279,19 @@ def main():
 
     mean_y = mean_pred - yhat
     main_mask = _apply_main_cuts(cfg, xhat, yhat, zobs=zobs)
+
+    # [SPLIT] Confine "main sample" to this run's holdout: exclude training
+    # galaxies, and — in subset partition mode — restrict to this run's
+    # subset_sga_ids. Without this, main_mask would pool training + holdout
+    # galaxies across every subset partition, not just this run's.
+    if "train_sga_ids" in input_data:
+        in_training = np.isin(sga_id, input_data["train_sga_ids"])
+        if "n_subsets" in input_data:
+            in_subset = np.isin(sga_id, input_data["subset_sga_ids"])
+            main_mask = main_mask & in_subset & ~in_training
+        else:
+            main_mask = main_mask & ~in_training
+
     print(f"N main-sample: {main_mask.sum()}")
 
     # ── continuous parameter plots ─────────────────────────────────────────────

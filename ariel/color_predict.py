@@ -237,7 +237,19 @@ def _get_holdout_mask(fits_path, main_mask, input_data):
             f"The validity filter may differ from load_xyz_and_uncertainties_from_desi."
         )
 
-    holdout = main_mask & ~np.isin(sga_ids_valid, list(train_ids))
+    in_training = np.isin(sga_ids_valid, list(train_ids))
+
+    # Subset partition mode: predict on subset holdout (in subset but NOT in training)
+    if "n_subsets" in input_data:
+        subset_ids = set(input_data["subset_sga_ids"])
+        in_subset = np.isin(sga_ids_valid, list(subset_ids))
+        holdout = main_mask & in_subset & ~in_training
+        print(f"  Subset partition mode: {in_subset.sum()} subset galaxies, "
+              f"{in_training.sum()} training, {holdout.sum()} holdout")
+        return holdout
+
+    # Standard holdout mode: predict on MAIN galaxies NOT in training
+    holdout = main_mask & ~in_training
     print(f"  Train/holdout split: {len(train_ids)} training, "
           f"{holdout.sum()} holdout  (MAIN total: {main_mask.sum()})")
     return holdout
@@ -1817,7 +1829,17 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         names = [c.name for c in table_hdu.columns]
         _sga_raw = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
                     else np.arange(len(data), dtype=float))
-        main = _main_valid & ~np.isin(_sga_raw, list(_train_ids))
+        _in_training = np.isin(_sga_raw, list(_train_ids))
+        # Subset partition mode: restrict holdout to this partition's subset
+        # (mirrors _get_holdout_mask's subset handling).
+        if "n_subsets" in input_data:
+            _subset_ids = set(input_data["subset_sga_ids"])
+            _in_subset = np.isin(_sga_raw, list(_subset_ids))
+            main = _main_valid & _in_subset & ~_in_training
+            print(f"  Subset partition mode: {_in_subset.sum()} subset galaxies, "
+                  f"{_in_training.sum()} training, {main.sum()} holdout")
+        else:
+            main = _main_valid & ~_in_training
     else:
         main = _main_valid
 
@@ -2472,7 +2494,17 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
                                             zobs=_zobs_raw, rz_color=_rz)
     if "train_sga_ids" in input_data:
         _train_ids = set(input_data["train_sga_ids"])
-        main = _main_valid & ~np.isin(_sga_raw, list(_train_ids))
+        _in_training = np.isin(_sga_raw, list(_train_ids))
+        # Subset partition mode: restrict holdout to this partition's subset
+        # (mirrors _get_holdout_mask's subset handling).
+        if "n_subsets" in input_data:
+            _subset_ids = set(input_data["subset_sga_ids"])
+            _in_subset = np.isin(_sga_raw, list(_subset_ids))
+            main = _main_valid & _in_subset & ~_in_training
+            print(f"  Subset partition mode: {_in_subset.sum()} subset galaxies, "
+                  f"{_in_training.sum()} training, {main.sum()} holdout")
+        else:
+            main = _main_valid & ~_in_training
     else:
         main = _main_valid
     print(f"  Train/holdout split: {len(input_data.get('train_sga_ids', []))} training, "
