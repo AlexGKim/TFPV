@@ -29,7 +29,15 @@ from predict import (
     ystar_pp_mean_sd_normal_vectorized,
     ystar_pp_mean_sd_tophat_vectorized,
 )
-from color_predict import ystar_pp_mean_sd_color_xonly_vectorized
+from color_predict import (
+    _load_logV,
+    _logV_to_x,
+    ystar_pp_mean_sd_color_xonly_vectorized,
+)
+
+# Redshift column candidates, in priority order (DR1 uses Z_DESI; mocks use
+# one of the fallbacks) — matches color_predict.py's z_col_candidates pattern.
+Z_COL_CANDIDATES = ("Z_DESI", "zobs", "ZOBS", "Z", "ZHELIO", "Z_CMB", "ZDESI", "ZTRUE")
 
 # ── constants matching DESI() defaults ────────────────────────────────────────
 V0 = 100.0
@@ -141,14 +149,19 @@ def main():
 
         col_abs, col_abs_err, col_app = get_mag_cols(names)
 
-        V = _get_col("V_0p4R26")
-        V_err = _get_col("V_0p4R26_ERR")
+        # Velocity: _load_logV resolves logV/LOGVROT (mocks) vs whatever DR1
+        # uses, so this works for both data types instead of hardcoding one.
+        logV, logV_err = _load_logV(data, names)
         yhat_raw = _get_col(col_abs)
         sigma_y_raw = _get_col(col_abs_err)
-        zobs_raw = _get_col("Z_DESI")
+
+        z_col = next((c for c in Z_COL_CANDIDATES if c in names), None)
+        if z_col is None:
+            raise ValueError(f"No redshift column found; tried {Z_COL_CANDIDATES}")
+        zobs_raw = np.asarray(data[z_col], dtype=float)
 
         # extra columns
-        ba = _get_col("BA")
+        ba = _get_col("BA") if "BA" in names else _get_col("BA_RATIO")
         morphtype = _get_col("MORPHTYPE", dtype=str)
         d26_kpc = _get_col("D26_kpc")
         g_mag = _get_col("G_MAG_SB26_CORR")
@@ -167,23 +180,27 @@ def main():
         sga_id = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
                   else np.arange(len(data), dtype=float))
 
-    # validity mask (mirrors load_xy_and_uncertainties_from_desi)
+    xhat_raw, sigma_x_raw = _logV_to_x(logV, logV_err, V0)
+
+    # validity mask (mirrors load_xyz_and_uncertainties_from_desi / _get_holdout_mask)
     mask = (
-        np.isfinite(V)
-        & np.isfinite(V_err)
+        np.isfinite(logV)
+        & np.isfinite(logV_err)
+        & (logV_err > 0)
+        & np.isfinite(xhat_raw)
+        & np.isfinite(sigma_x_raw)
+        & (sigma_x_raw > 0)
         & np.isfinite(yhat_raw)
         & np.isfinite(sigma_y_raw)
         & np.isfinite(zobs_raw)
-        & (V > 0)
-        & (V_err > 0)
         & (sigma_y_raw >= 0)
     )
 
     def _m(arr):
         return arr[mask]
 
-    xhat = np.log10(_m(V) / V0)
-    sigma_x = _m(V_err) / (_m(V) * np.log(10))
+    xhat = _m(xhat_raw)
+    sigma_x = _m(sigma_x_raw)
     yhat = _m(yhat_raw)
     sigma_y = _m(sigma_y_raw)
     zobs = _m(zobs_raw)
