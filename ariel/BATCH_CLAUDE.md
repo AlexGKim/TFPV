@@ -186,6 +186,50 @@ python color_predict.py --config $CONFIG --model 2color --xonly --no-cov
 
 ---
 
+### Step 7: `corner.py` fails with `ModuleNotFoundError: No module named 'chainconsumer'`
+
+**Symptom:** `step7_diagnose.sh` (which runs `corner.py` and `explore_residuals.py`
+right after `stansummary`/`diagnose`) dies with this traceback, and `set -e`
+aborts the rest of the script — no `2color.png`, and (if this happens inside
+`step6_submit.sh`'s auto-chained step7→step8) step8 never runs either, even
+though the MCMC chains themselves finished cleanly.
+
+**Diagnosis:** `chainconsumer` isn't installed in whatever environment invoked
+`corner.py`. Confirm with `python3 -c "import chainconsumer"` inside the same
+conda env `step7_diagnose.sh` activates
+(`/global/cfs/projectdirs/desi/users/akim/conda/envs/TFPV`).
+
+**Fix:** `pip install chainconsumer` into that env, then re-run step 7 (and step
+8 if it got skipped):
+```bash
+sbatch --export=CONFIG=$CONFIG slurm/step7_diagnose.sh
+sbatch --export=CONFIG=$CONFIG slurm/step8_predict.sh
+```
+
+---
+
+### Step 4: silently stale `input.json` after editing a config
+
+**Symptom:** Chains sample fine and everything looks normal, but predictions
+don't match the selection/holdout you expect — e.g. `n_objects`/`n_subsets`
+were changed in a config but the run's actual training rows didn't change.
+
+**Diagnosis:** `desi_data.py` now warns when it's about to overwrite an
+`output/$RUN/input.json` whose partition metadata (`n_subsets`, `subset_index`,
+`n_objects`, `random_seed`) differs from the config currently being applied —
+check `slurm/logs/step4_data_*.out` for a `WARNING: overwriting ... whose
+partition metadata differs` line. If step 4 was never re-run after a config
+edit, `input.json`/`init_MAP.json`/the MCMC chains are all still fit to the old
+config and must be regenerated (step4 → step5d → step6) before trusting step 8.
+
+**Fix:** Always re-run step4 after editing a config, even if you think only an
+unrelated field changed:
+```bash
+sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
+```
+
+---
+
 ## Key Parameters to Check After Step 7
 
 From `stansummary.txt` or corner plot `2color.png`:

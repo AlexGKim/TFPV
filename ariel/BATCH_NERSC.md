@@ -233,6 +233,7 @@ After the full pipeline completes:
 | `output/$RUN/stansummary.txt` | Convergence summary (R̂, ESS) |
 | `output/$RUN/diagnose.txt` | Divergence and treedepth diagnostics |
 | `output/$RUN/2color.png` | Corner plot |
+| `output/$RUN/explore_residuals/` | Residual-vs-galaxy-property diagnostic plots |
 | `output/$RUN/color_catalog.fits` | Catalog with MU_TF, LOGDIST (full model) |
 | `output/$RUN/color_xonly_catalog.fits` | Catalog (x-only model) |
 | `output/$RUN/color_cov.fits` | (G,G) posterior predictive covariance |
