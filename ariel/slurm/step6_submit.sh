@@ -1,28 +1,24 @@
 #!/bin/bash
-# Submit 4 independent MCMC chain jobs, then gate step7 on all completing.
+# Submit the 4-chain MCMC job (step6_node.sh, one node/4 GPUs), then gate
+# step7 on it completing.
 # Usage: bash slurm/step6_submit.sh [configs/dr1_v6_2color.json]
 
 set -e
 
 CONFIG=${1:-configs/batch_test.json}
 
-echo "Submitting 4 chains for config=$CONFIG"
-JOB_IDS=()
-for CHAIN_ID in 1 2 3 4; do
-    JID=$(sbatch --parsable \
-          --export=CONFIG=$CONFIG,CHAIN_ID=$CHAIN_ID \
-          slurm/step6_chain.sh)
-    JOB_IDS+=($JID)
-    echo "  Chain $CHAIN_ID submitted as job $JID"
-done
+echo "Submitting step6 (4 chains, 1 node) for config=$CONFIG"
+JID6=$(sbatch --parsable \
+       --export=CONFIG=$CONFIG \
+       slurm/step6_node.sh)
+echo "  step6_node submitted as job $JID6"
 
 # Submit step7 to run after all 4 chains succeed
-DEP=$(IFS=:; echo "${JOB_IDS[*]}")
 JID7=$(sbatch --parsable \
-       --dependency=afterok:$DEP \
+       --dependency=afterok:$JID6 \
        --export=CONFIG=$CONFIG \
        slurm/step7_diagnose.sh)
-echo "Step 7 (diagnose) submitted as job $JID7, depends on: $DEP"
+echo "Step 7 (diagnose) submitted as job $JID7, depends on: $JID6"
 
 # Submit step8 after step7
 JID8=$(sbatch --parsable \

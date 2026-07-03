@@ -27,7 +27,7 @@ hits max treedepth (10). With it, stepsize ~0.08 and treedepth 4–6.
 | 4 | `slurm/step4_data.sh` | config JSON, FITS file | `input.json`, `init.json` | <5 min | debug |
 | 5d | `slurm/step5d_map.sh` | `input.json`, `init.json` | `optimize.csv`, `init_MAP.json` | ~5 min | debug GPU |
 | 5e | `slurm/step5e_metric.sh` | `input.json`, `init_MAP.json` | `2color_metric_build.csv`, `metric.json` | ~7 h | regular GPU |
-| 6 | `slurm/step6_chain.sh` (×4) | `input.json`, `init_MAP.json`, `metric.json` | `2color_{1..4}.csv`, `2color_metric_{1..4}.json` | ~14 h each | regular GPU |
+| 6 | `slurm/step6_node.sh` (1 node, 4 GPUs, 4 chains) | `input.json`, `init_MAP.json`, `metric.json` | `2color_{1..4}.csv`, `2color_metric_{1..4}.json` | ~14 h (parallel) | regular GPU |
 | 7 | `slurm/step7_diagnose.sh` | `2color_?.csv` | `stansummary.txt`, `diagnose.txt`, `2color.png` | ~15 min | debug CPU |
 | 8 | `slurm/step8_predict.sh` | config, `input.json`, `2color_?.csv` | `color_catalog.fits`, `color_cov.fits` | 1–4 h | regular CPU |
 
@@ -51,7 +51,7 @@ FITS catalog
                                             └── metric.json ──────────────┐
                                                                            │
                                             ┌──────────────────────────────┘
-                                            └── step6 ×4 (2color_g sample, 1 chain each)
+                                            └── step6 (1 node, 4 GPUs, 4 chains via CUDA_VISIBLE_DEVICES)
                                                     ├── 2color_1.csv
                                                     ├── 2color_2.csv
                                                     ├── 2color_3.csv
@@ -167,9 +167,11 @@ grep -c "^[^#]" output/$RUN/2color_?.csv
 ```
 Expected output: `1000` for each file (plus 1 for the header).
 
-**Fix:** If chains are truncated (time limit), re-run step6 for missing chains.
-If all 4 chains completed but R̂ is still high, increase `num_warmup` in
-`step6_chain.sh` (edit `num_warmup=250` → `num_warmup=500`).
+**Fix:** If chains are truncated (time limit), re-run step6 for missing chains
+(`sbatch --export=CONFIG=$CONFIG slurm/step6_node.sh` for all 4, or
+`slurm/step6_chain.sh` with `CHAIN_ID=N` for just one). If all 4 chains
+completed but R̂ is still high, increase `num_warmup` (edit
+`slurm/step6_node.sh`'s default, or pass `NUM_WARMUP=500` via `--export`).
 
 ---
 
@@ -254,7 +256,7 @@ Good convergence: R̂ < 1.01 for all parameters, ESS > 100 per chain.
 | `make_map_init.py --run $RUN` | Parse `optimize.csv` → `init_MAP.json` |
 | `make_metric.py --run $RUN` | Compute covariance from short CSV → `metric.json` |
 | `slurm/check_status.sh $CONFIG` | Show which steps are done/missing |
-| `slurm/step6_submit.sh $CONFIG` | Submit 4 chains + auto-chain steps 7 and 8 |
+| `slurm/step6_submit.sh $CONFIG` | Submit step6_node.sh (4 chains, 1 node) + auto-chain steps 7 and 8 |
 
 ---
 
@@ -265,7 +267,8 @@ Good convergence: R̂ < 1.01 for all parameters, ESS > 100 per chain.
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step4_data.sh
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5d_map.sh
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5e_metric.sh
-sbatch --export=CONFIG=configs/dr1_v6_2color.json,CHAIN_ID=1 slurm/step6_chain.sh
+sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step6_node.sh       # all 4 chains, 1 node/4 GPUs
+sbatch --export=CONFIG=configs/dr1_v6_2color.json,CHAIN_ID=1 slurm/step6_chain.sh  # just chain 1
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step7_diagnose.sh
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step8_predict.sh
 

@@ -72,9 +72,9 @@ more arrive. (Other populated sets exist: `DR2/.../v0.5.6/` 675 files, and older
 | `make_batch_configs.py` | Generate per-(file, subset) configs from a mock dir (`--n-subsets`, default 5); seed each `output/<run>/metric.json`. |
 | `slurm/batch_submit.sh` | Submit the full dependency chain per (file, subset) run (`--debug` for plumbing test). |
 | `slurm/batch_status.sh` | Aggregate sentinel completion across all runs in a config dir. |
-| `slurm/step6_chain.sh` | One MCMC chain; honors `DEBUG=1` (10+10 samples, standard CSV name). |
+| `slurm/step6_node.sh` | All 4 MCMC chains, 1 node/4 GPUs (`CUDA_VISIBLE_DEVICES`); honors `DEBUG=1` (15 samples, no adaptation). `step6_chain.sh` still exists for resubmitting a single failed chain. |
 | `batch/job_tracker.csv` | Appended log of submitted SLURM job IDs per run. |
-| `slurm/step{4,5d,6,7,8}_*.sh` | The underlying step scripts (unchanged; see `BATCH_NERSC.md`). |
+| `slurm/step{4,5d,6,7,8}_*.sh` | The underlying step scripts (see `BATCH_NERSC.md`). |
 
 ---
 
@@ -204,11 +204,22 @@ bash slurm/check_status.sh configs/batch_v0.5.7/c000_ph000_r001_s00.json
 ## Runtime / cost notes
 
 - step4 (CPU debug, <5 min), step5d (GPU debug, ~5 min): cheap, per (file, subset).
-- **step6 dominates:** 4 chains × ~14h each (run in parallel) per (file, subset)
-  run. With `n_files` files and `n_subsets` subsets each (default 5), total step6
-  chains = `n_files × n_subsets × 4` — **5× the GPU-hours of a naive one-run-per-file
-  estimate.** Use the `MAX_CONCURRENT` throttle (counts in units of *runs*, i.e.
-  4-chain groups, not files) and mind the NERSC regular-GPU QOS limits.
+- **step6 dominates GPU-hours:** 4 chains × ~14h each (run in parallel, 1 per GPU
+  on a single `step6_node.sh` node) per (file, subset) run. With `n_files` files
+  and `n_subsets` subsets each (default 5), total step6 chains = `n_files ×
+  n_subsets × 4` — **5× the GPU-hours of a naive one-run-per-file estimate.**
+- **step6 job-submission count is now `n_files × n_subsets`, not ×4.**
+  `step6_node.sh` runs all 4 chains as backgrounded processes on the 4 GPUs of
+  one already-allocated node (`sacct` confirms a `--gpus-per-task=1` job gets
+  the whole 4-GPU node anyway — nothing here is fractionally shared), instead
+  of `batch_submit.sh` submitting 4 separate `step6_chain.sh` jobs per run. This
+  matters most on constrained QOS like debug (`MaxSubmitPU=5`): fanning out 5
+  subsets × 4 old-style chain jobs could only fit ~1 run's GPU jobs in the
+  queue at once and required manually threading each run's submission through
+  as slots freed — with `step6_node.sh` each run needs only 1 debug-GPU slot
+  (+1 for step5d), so far more runs fit in flight simultaneously. Use the
+  `MAX_CONCURRENT` throttle (now counts `step6_node` jobs, i.e. runs, directly)
+  and mind the NERSC regular-GPU QOS limits for the real (non-debug) batch.
 - step7 (CPU debug, ~15 min), step8 (CPU, fast for 5000 objects) — per (file, subset).
 - **step5e** (~7h) is run once total (on the first subset of the first mock file)
   to build a mock-specific metric, then that metric is reused for every other

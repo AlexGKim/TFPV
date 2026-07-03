@@ -164,25 +164,40 @@ sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh
 
 Produces: `output/$RUN/metric.json`  (~7 hours)
 
-### Step 6 — MCMC sampling (4 independent chains)
+### Step 6 — MCMC sampling (4 independent chains, 1 node)
 
-Requires steps 5d and 5e to be complete. This script submits all 4 chains and
-automatically chains step 7 and step 8 as dependencies:
+Requires steps 5d and 5e to be complete. This script submits a single
+`step6_node.sh` job (1 node, 4 GPUs, one chain per GPU via
+`CUDA_VISIBLE_DEVICES`) and automatically chains step 7 and step 8 as
+dependencies:
 
 ```bash
 bash slurm/step6_submit.sh $CONFIG
 ```
 
-Each chain runs independently (~14 hours each, all 4 run in parallel).
+`sacct` shows a `--gpus-per-task=1` job is allocated the *whole* 4-GPU node
+regardless (`gres/gpu:a100=4, cpu=128, node=1`), and each chain runs
+single-threaded (`num_threads=1`), so 4 separate 1-GPU jobs (the old
+`step6_chain.sh`×4 pattern) reserved 4 whole nodes and used only 1 GPU on
+each — 3 idle GPUs and ~127 idle CPU cores per job. `step6_node.sh` runs all
+4 chains as backgrounded processes within the one node SLURM already grants
+it, so it's both faster (one queue wait instead of four, and avoids QOS
+submit-count limits when running many runs in a batch — see `BATCH_MOCKS.md`)
+and uses hardware that would otherwise sit idle. Each chain still runs
+independently (~14 hours each, in parallel on its own GPU).
 Step 7 (diagnostics) starts automatically after all 4 chains complete.
 Step 8 (predictions) starts automatically after step 7.
+
+If a single chain fails while the other 3 succeed, `step6_chain.sh` (1
+chain, 1 job) is still available to resubmit just that chain — see
+"Resubmitting Failed Steps" below.
 
 ### Monitoring
 
 ```bash
 squeue -u $USER                          # live SLURM queue
 bash slurm/check_status.sh $CONFIG      # sentinel-file status
-cat slurm/logs/step6_chain1_*.out        # tail a chain log
+cat slurm/logs/step6_node_*.out          # tail the step6 log (all 4 chains)
 ```
 
 ---
@@ -191,7 +206,16 @@ cat slurm/logs/step6_chain1_*.out        # tail a chain log
 
 Each step is idempotent — re-running it overwrites outputs cleanly.
 
+### All 4 chains
+
+```bash
+sbatch --export=CONFIG=$CONFIG slurm/step6_node.sh
+```
+
 ### Single chain failure
+
+If only one of the 4 chains failed, resubmit just that one instead of the
+whole node:
 
 ```bash
 sbatch --export=CONFIG=$CONFIG,CHAIN_ID=2 slurm/step6_chain.sh
@@ -248,6 +272,6 @@ After the full pipeline completes:
 | step4 (data prep) | debug | <5 min |
 | step5d (MAP) | debug | ~5 min |
 | step5e (metric) | regular | ~7 hours |
-| step6 (4 chains) | regular | ~14 hours each (parallel) |
+| step6 (4 chains, 1 node) | regular | ~14 hours (all 4 in parallel on 1 node's 4 GPUs) |
 | step7 (diagnose) | debug | ~15 min |
 | step8 (predict) | regular | ~1–4 hours |

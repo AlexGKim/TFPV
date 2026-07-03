@@ -2,13 +2,13 @@
 # Submit the full per-file 2COLOR pipeline for every config in a directory.
 #
 # For each configs/<dir>/<run>.json it submits a SLURM dependency chain:
-#   step4 -> step5d -> step6 x4 -> step7 -> step8
+#   step4 -> step5d -> step6 (1 node, 4 chains/4 GPUs) -> step7 -> step8
 # (step5e is NOT included here — run it separately once per data type to build
 # a metric.json, then pass it via --metric so this script seeds each run dir.)
 #
 # Files whose output/<run>/.step8_done sentinel exists are skipped (idempotent).
-# Submissions are throttled so at most MAX_CONCURRENT files' chains are in the
-# queue at once (each file = 4 GPU chains).
+# Submissions are throttled so at most MAX_CONCURRENT runs' step6 nodes are
+# queued at once (each run = 1 step6_node.sh job = 1 full 4-GPU node).
 #
 # Usage:
 #   bash slurm/batch_submit.sh <config_dir> [MAX_CONCURRENT] [--metric <path>] [--debug]
@@ -59,7 +59,7 @@ fi
 mkdir -p slurm/logs batch
 TRACKER="batch/job_tracker.csv"
 if [ ! -f "$TRACKER" ]; then
-    echo "run,config,step4,step5d,step6_1,step6_2,step6_3,step6_4,step7,step8,debug" > "$TRACKER"
+    echo "run,config,step4,step5d,step6,step7,step8,debug" > "$TRACKER"
 fi
 
 # step6 queue/time override for debug mode (command-line overrides in-script SBATCH).
@@ -68,7 +68,7 @@ STEP6_EXPORT_EXTRA=""
 if [ "$DEBUG" = "1" ]; then
     STEP6_OVERRIDE=(-q debug -t 00:20:00)
     STEP6_EXPORT_EXTRA=",DEBUG=1"
-    echo "DEBUG mode: step6 chains sample 15 draws at fixed stepsize (no adaptation) on the debug GPU queue."
+    echo "DEBUG mode: step6 samples 15 draws at fixed stepsize (no adaptation) on the debug GPU queue."
 fi
 
 n_submitted=0
@@ -83,11 +83,11 @@ for CFG in "$CONFIG_DIR"/*.json; do
         continue
     fi
 
-    # Throttle: wait until fewer than MAX_CONCURRENT files' worth of chains are queued.
+    # Throttle: wait until fewer than MAX_CONCURRENT step6 nodes are queued.
     while true; do
-        N_CHAINS=$(squeue -h -u "$USER" -n step6_chain 2>/dev/null | wc -l)
-        if [ "$N_CHAINS" -lt "$((MAX_CONCURRENT * 4))" ]; then break; fi
-        echo "  throttle: $N_CHAINS step6 chains queued (limit $((MAX_CONCURRENT * 4))), waiting 60s..."
+        N_NODES=$(squeue -h -u "$USER" -n step6_node 2>/dev/null | wc -l)
+        if [ "$N_NODES" -lt "$MAX_CONCURRENT" ]; then break; fi
+        echo "  throttle: $N_NODES step6 nodes queued (limit $MAX_CONCURRENT), waiting 60s..."
         sleep 60
     done
 
@@ -102,23 +102,18 @@ for CFG in "$CONFIG_DIR"/*.json; do
     JID5D=$(sbatch --parsable --dependency=afterok:$JID4 \
             --export=CONFIG=$CFG slurm/step5d_map.sh)
 
-    CHAIN_JIDS=()
-    for CHAIN_ID in 1 2 3 4; do
-        JID=$(sbatch --parsable --dependency=afterok:$JID5D \
-              "${STEP6_OVERRIDE[@]}" \
-              --export=CONFIG=$CFG,CHAIN_ID=$CHAIN_ID$STEP6_EXPORT_EXTRA \
-              slurm/step6_chain.sh)
-        CHAIN_JIDS+=($JID)
-    done
+    JID6=$(sbatch --parsable --dependency=afterok:$JID5D \
+           "${STEP6_OVERRIDE[@]}" \
+           --export=CONFIG=$CFG$STEP6_EXPORT_EXTRA \
+           slurm/step6_node.sh)
 
-    DEP6=$(IFS=:; echo "${CHAIN_JIDS[*]}")
-    JID7=$(sbatch --parsable --dependency=afterok:$DEP6 \
+    JID7=$(sbatch --parsable --dependency=afterok:$JID6 \
            --export=CONFIG=$CFG slurm/step7_diagnose.sh)
     JID8=$(sbatch --parsable --dependency=afterok:$JID7 \
            --export=CONFIG=$CFG,DEBUG=$DEBUG slurm/step8_predict.sh)
 
-    echo "$RUN,$CFG,$JID4,$JID5D,${CHAIN_JIDS[0]},${CHAIN_JIDS[1]},${CHAIN_JIDS[2]},${CHAIN_JIDS[3]},$JID7,$JID8,$DEBUG" >> "$TRACKER"
-    echo "  step4=$JID4 step5d=$JID5D step6=${CHAIN_JIDS[*]} step7=$JID7 step8=$JID8"
+    echo "$RUN,$CFG,$JID4,$JID5D,$JID6,$JID7,$JID8,$DEBUG" >> "$TRACKER"
+    echo "  step4=$JID4 step5d=$JID5D step6=$JID6 step7=$JID7 step8=$JID8"
     n_submitted=$((n_submitted + 1))
 done
 
