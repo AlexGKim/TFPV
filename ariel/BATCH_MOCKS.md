@@ -24,30 +24,36 @@ workflow. The following decisions are fixed; do not re-derive them:
 
 2. **Selection cuts are frozen and shared by every mock.** They come from
    `configs/abacus_2color.json` (`haty_min/max`, `slope_plane`,
-   `intercept_plane`, `intercept_plane2`, `z_obs_min/max`, `n_objects=5000`,
-   `random_seed=42`, `n_sigma`, `n_sigma_perp`). The hands-on Phase A (selection
-   ellipse / fiducial selection) was already done to produce these values and is
-   **not part of this pipeline**. Each per-file config differs from the base only
-   in `run` and `fits_file`.
+   `intercept_plane`, `intercept_plane2`, `z_obs_min/max`, `random_seed=42`,
+   `n_sigma`, `n_sigma_perp`). The hands-on Phase A (selection ellipse /
+   fiducial selection) was already done to produce these values and is **not
+   part of this pipeline**.
 
 3. **Step 5e (metric build, ~7h) must be run once per mock dataset, then
-   reused across all files in that dataset.** The DR1 metric
-   (`output/DR1_v6_2color/metric.json`) is **not** transferable to mocks —
-   confirmed empirically: using it caused repeated `cholesky_decompose`
+   reused across every file *and every subset* in that dataset.** The DR1
+   metric (`output/DR1_v6_2color/metric.json`) is **not** transferable to
+   mocks — confirmed empirically: using it caused repeated `cholesky_decompose`
    failures in the sampler, the chains ran at ~50s/iteration (vs. ~1–2s with
    a good metric), and 18h was not enough for 1000 samples. Build the metric
-   once on any representative mock file, then copy it to all other run dirs.
+   once on any representative mock subset, then copy it to all other run dirs.
    The reusable mock metric lives at `output/abacus_2color/metric.json` once
    built.
 
-4. **Per-file run name** is the `c<NN>_ph<NN>_r<NN>` token from the filename
-   (regex `c\d+_ph\d+_r\d+`), e.g.
-   `TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits` → run
-   `c000_ph000_r001`. Outputs go to `output/<run>/`.
+4. **Every mock file is split into `n_subsets` disjoint subsets** (see "Subset
+   Partition Mode" below) — this isn't just for the one oversized 169k-galaxy
+   test file, it's the standard mode `make_batch_configs.py` uses for every
+   file in the batch. **Run name** is the `c<NN>_ph<NN>_r<NN>` file token
+   (regex `c\d+_ph\d+_r\d+`) plus a `_s<NN>` subset suffix, e.g.
+   `TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits` → runs
+   `c000_ph000_r001_s00` … `c000_ph000_r001_s04` (for `n_subsets=5`). Outputs
+   go to `output/<run>/`, one independent run dir per (file, subset) pair.
 
-5. **Per-file chain:**
-   `step4 → step5d → step5e (first file only) → step6 ×4 → step7 → step8`.
-   Subsequent files copy the metric from the first file and skip step5e.
+5. **Per-(file, subset) chain:**
+   `step4 → step5d → step5e (first subset of first file only) → step6 ×4 →
+   step7 → step8`. Every other (file, subset) pair copies the metric from the
+   first and skips step5e. **Cost implication:** total step6 chains submitted
+   = `n_files × n_subsets × 4`, not `n_files × 4` — factor in `n_subsets`
+   (default 5) when estimating GPU-hours (see "Runtime / cost notes" below).
 
 **Target mock set:** `v0.5.7`
 (`/global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7/`).
@@ -63,8 +69,8 @@ more arrive. (Other populated sets exist: `DR2/.../v0.5.6/` 675 files, and older
 |----------|------|
 | `configs/abacus_2color.json` | Base config: frozen selection cuts + test fits file. |
 | `output/abacus_2color/metric.json` | Reusable HMC metric (seed; copied into every run dir). |
-| `make_batch_configs.py` | Generate per-file configs from a mock dir; seed each `output/<run>/metric.json`. |
-| `slurm/batch_submit.sh` | Submit the full dependency chain per file (`--debug` for plumbing test). |
+| `make_batch_configs.py` | Generate per-(file, subset) configs from a mock dir (`--n-subsets`, default 5); seed each `output/<run>/metric.json`. |
+| `slurm/batch_submit.sh` | Submit the full dependency chain per (file, subset) run (`--debug` for plumbing test). |
 | `slurm/batch_status.sh` | Aggregate sentinel completion across all runs in a config dir. |
 | `slurm/step6_chain.sh` | One MCMC chain; honors `DEBUG=1` (10+10 samples, standard CSV name). |
 | `batch/job_tracker.csv` | Appended log of submitted SLURM job IDs per run. |
@@ -132,10 +138,15 @@ python3 make_batch_configs.py \
     --dir /global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7 \
     --base configs/abacus_2color.json \
     --outdir configs/batch_debug \
-    --metric output/abacus_2color/metric.json
+    --metric output/abacus_2color/metric.json \
+    --n-subsets 5 --n-objects 5000
 bash slurm/batch_submit.sh configs/batch_debug --debug
 watch bash slurm/batch_status.sh configs/batch_debug   # all 8 sentinels in ~10-15 min
 ```
+
+This generates `n_files × n_subsets` configs/runs (5 per file by default), so a
+debug run against even a handful of mock files fans out to dozens of tiny
+plumbing-test chains — that's expected and still fast on the debug queue.
 
 Success = every `.step*_done` sentinel appears and `output/<run>/color_catalog.fits`
 is written. Then drop `--debug` for the real run.
@@ -145,14 +156,15 @@ is written. Then drop `--debug` for the real run.
 ## Full Batch Run
 
 ```bash
-# 1. Generate one config per fits file + seed each run's metric:
+# 1. Generate n_subsets configs per fits file + seed each run's metric:
 python3 make_batch_configs.py \
     --dir /global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7 \
     --base configs/abacus_2color.json \
     --outdir configs/batch_v0.5.7 \
-    --metric output/abacus_2color/metric.json
+    --metric output/abacus_2color/metric.json \
+    --n-subsets 5 --n-objects 5000
 
-# 2. Submit (throttle so at most N files' chains are queued at once):
+# 2. Submit (throttle so at most N (file, subset) runs' chains are queued at once):
 bash slurm/batch_submit.sh configs/batch_v0.5.7 8
 
 # 3. Monitor:
@@ -162,7 +174,7 @@ bash slurm/batch_status.sh configs/batch_v0.5.7 --verbose  # per-run detail
 ```
 
 `batch_submit.sh` skips any run whose `.step8_done` sentinel already exists, so it
-is safe to re-run to pick up failed/incomplete files.
+is safe to re-run to pick up failed/incomplete (file, subset) runs.
 
 ---
 
@@ -179,35 +191,45 @@ is safe to re-run to pick up failed/incomplete files.
 
 ```bash
 # A single chain (after step5d done):
-sbatch --export=CONFIG=configs/batch_v0.5.7/c000_ph000_r001.json,CHAIN_ID=2 slurm/step6_chain.sh
-# Re-run a whole file's remaining steps: clear its sentinel(s) and re-submit:
-rm output/c000_ph000_r001/.step8_done
+sbatch --export=CONFIG=configs/batch_v0.5.7/c000_ph000_r001_s00.json,CHAIN_ID=2 slurm/step6_chain.sh
+# Re-run one (file, subset) run's remaining steps: clear its sentinel(s) and re-submit:
+rm output/c000_ph000_r001_s00/.step8_done
 bash slurm/batch_submit.sh configs/batch_v0.5.7 8
 # Per-run status:
-bash slurm/check_status.sh configs/batch_v0.5.7/c000_ph000_r001.json
+bash slurm/check_status.sh configs/batch_v0.5.7/c000_ph000_r001_s00.json
 ```
 
 ---
 
 ## Runtime / cost notes
 
-- step4 (CPU debug, <5 min), step5d (GPU debug, ~5 min): cheap.
-- **step6 dominates:** 4 chains × ~14h each (run in parallel) per file. With N
-  files this is the GPU-hours driver — use the `MAX_CONCURRENT` throttle and mind
-  the NERSC regular-GPU QOS limits.
-- step7 (CPU debug, ~15 min), step8 (CPU, fast for 5000 objects).
-- **step5e** (~7h) is run once on the first mock to build a mock-specific metric,
-  then that metric is reused for all other files. The DR1 metric is **not**
-  transferable to mocks (see decision #3 above).
+- step4 (CPU debug, <5 min), step5d (GPU debug, ~5 min): cheap, per (file, subset).
+- **step6 dominates:** 4 chains × ~14h each (run in parallel) per (file, subset)
+  run. With `n_files` files and `n_subsets` subsets each (default 5), total step6
+  chains = `n_files × n_subsets × 4` — **5× the GPU-hours of a naive one-run-per-file
+  estimate.** Use the `MAX_CONCURRENT` throttle (counts in units of *runs*, i.e.
+  4-chain groups, not files) and mind the NERSC regular-GPU QOS limits.
+- step7 (CPU debug, ~15 min), step8 (CPU, fast for 5000 objects) — per (file, subset).
+- **step5e** (~7h) is run once total (on the first subset of the first mock file)
+  to build a mock-specific metric, then that metric is reused for every other
+  file *and* every other subset. The DR1 metric is **not** transferable to mocks
+  (see decision #3 above).
 
 ---
 
-## Subset Partition Mode (single file → 5 disjoint subsets)
+## Subset Partition Mode (mechanism, and a single-file manual walkthrough)
 
-When a single mock FITS file is too large for the prediction step to fit in memory
-(e.g. 169k galaxies → OOM on the O(M×G) posterior predictive computation), split
-it into disjoint subsets. Each subset trains on 5,000 galaxies (matching DR2) and
-predicts on the remaining holdout within the subset.
+When a mock FITS file is too large for the prediction step to fit in memory (e.g.
+169k galaxies → OOM on the O(M×G) posterior predictive computation), split it into
+disjoint subsets. Each subset trains on 5,000 galaxies (matching DR2) and predicts
+on the remaining holdout within the subset. **This is not an opt-in special case
+for oversized outliers** — decisions #3–#5 above establish it as the standard mode
+for every file in the real batch, and `make_batch_configs.py --n-subsets 5` (used
+by "Full Batch Run" above) generates it automatically for every file it finds. The
+rest of this section documents the underlying mechanism and walks through it by
+hand for one file — useful for understanding what's happening, debugging a single
+run, or validating locally before a real multi-file batch (which is exactly how
+`configs/abacus_subsets/` and `run_subsets.sh` were built and exercised).
 
 ### How it works
 
