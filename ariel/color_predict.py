@@ -1461,7 +1461,7 @@ def DESI_color(
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
         )
-        mean_pred_main_xo, _ = _batched_mean_sd(
+        mean_pred_main_xo, sd_pred_main_xo = _batched_mean_sd(
             ystar_pp_mean_sd_color_xonly_vectorized,
             draws,
             xhat_main,
@@ -1475,14 +1475,38 @@ def DESI_color(
         mean_y_xo = mean_pred_xo - yhat_star
         mean_y_main_xo = mean_pred_main_xo - yhat_main
 
+        # Inverse-variance-weighted average of the Main Sample, in 10 equal
+        # log-bins from 1e-2 to 0.065 (the training z_obs range).
+        bin_edges_xo = np.logspace(np.log10(1e-2), np.log10(0.065), 11)
+        bin_centers_xo = np.sqrt(bin_edges_xo[:-1] * bin_edges_xo[1:])
+        weights_xo = 1.0 / sd_pred_main_xo**2
+        bin_idx_xo = np.digitize(zobs_main, bin_edges_xo) - 1
+        weighted_mean_xo = np.full(10, np.nan)
+        weighted_sem_xo = np.full(10, np.nan)
+        for i in range(10):
+            sel = bin_idx_xo == i
+            if not np.any(sel):
+                continue
+            w = weights_xo[sel]
+            wsum = w.sum()
+            weighted_mean_xo[i] = np.sum(w * mean_y_main_xo[sel]) / wsum
+            weighted_sem_xo[i] = 1.0 / np.sqrt(wsum)
+
         # Redshift scatter — x-only
         plt.scatter(zobs_star, mean_y_xo, marker=".", alpha=0.2, label="DR2 PV Spirals")
         plt.scatter(zobs_main, mean_y_main_xo, marker=".", alpha=0.2, label="Main Sample")
+        plt.errorbar(
+            bin_centers_xo, weighted_mean_xo, yerr=weighted_sem_xo,
+            fmt="o-", color="black", markersize=5, linewidth=1.5, capsize=3,
+            label="Weighted average (Main, 10 log-bins, $10^{-2}$-0.065)",
+            zorder=5,
+        )
         plt.xscale("log")
+        plt.xlim(0.005, 0.1)
         plt.xlabel(r"$z_{\text{obs}}$")
         plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*] - \hat{y}_{\text{obs}}$ (mag)")
         plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
-        plt.legend()
+        plt.legend(fontsize=8)
         y_min_xo, y_max_xo = np.min(mean_y_main_xo), np.max(mean_y_main_xo)
         y_range_xo = y_max_xo - y_min_xo
         y_pad_xo = 0.1 * y_range_xo if y_range_xo > 0 else 1.0

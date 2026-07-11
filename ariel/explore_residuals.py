@@ -309,6 +309,16 @@ def main():
         else:
             main_mask = main_mask & ~in_training
 
+    # _apply_main_cuts intentionally skips any zobs cut (MAIN defines the
+    # phase-space selection window regardless of redshift). But galaxies well
+    # outside the fit's training range extrapolate the model, so default this
+    # diagnostic's "main sample" to the training z_obs_max cut from config.
+    z_obs_max = cfg.get("z_obs_max")
+    if z_obs_max is not None:
+        n_before = main_mask.sum()
+        main_mask = main_mask & (zobs < z_obs_max)
+        print(f"  z_obs_max={z_obs_max} cut: {n_before} -> {main_mask.sum()} main-sample galaxies")
+
     print(f"N main-sample: {main_mask.sum()}")
 
     # ── continuous parameter plots ─────────────────────────────────────────────
