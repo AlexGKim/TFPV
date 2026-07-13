@@ -1506,11 +1506,27 @@ def DESI_color(
         plt.xlabel(r"$z_{\text{obs}}$")
         plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*] - \hat{y}_{\text{obs}}$ (mag)")
         plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
-        plt.legend(fontsize=8)
+        plt.legend(fontsize=8, loc="lower right", framealpha=1.0)
         y_min_xo, y_max_xo = np.min(mean_y_main_xo), np.max(mean_y_main_xo)
         y_range_xo = y_max_xo - y_min_xo
         y_pad_xo = 0.1 * y_range_xo if y_range_xo > 0 else 1.0
         plt.ylim((y_min_xo - y_pad_xo, y_max_xo + y_pad_xo))
+
+        # Inset: weighted-average points only, on an expanded y-scale
+        axins = plt.gca().inset_axes([0.08, 0.56, 0.4, 0.4], zorder=10)
+        axins.set_facecolor("white")
+        axins.patch.set_alpha(1.0)
+        axins.errorbar(
+            bin_centers_xo, weighted_mean_xo, yerr=weighted_sem_xo,
+            fmt="o-", color="black", markersize=4, linewidth=1.2, capsize=2,
+            zorder=5,
+        )
+        axins.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.0)
+        axins.set_xscale("log")
+        axins.set_xlim(0.005, 0.1)
+        axins.set_ylim(-0.05, 0.05)
+        axins.tick_params(labelsize=6)
+
         plt.savefig(_p("redshift_color_xonly.png"), dpi=300)
         plt.clf()
 
