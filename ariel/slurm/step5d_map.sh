@@ -39,18 +39,36 @@ echo "Step 5d: MAP optimize for run=$RUN"
 
 python3 make_map_init.py --run $RUN || true
 
-# Guarantee a usable, finite init_MAP.json. If the optimizer diverged (non-finite
-# S_scale/S_Lcorr) or make_map_init failed, fall back to the moderate init.json;
-# NUTS warmup adapts from any reasonable start, so a converged MAP is not required.
-if ! python3 -c "
-import json, math, sys
-d = json.load(open('output/$RUN/init_MAP.json'))
-vals = list(d['S_scale']) + [x for row in d['S_Lcorr'] for x in row]
-sys.exit(0 if all(math.isfinite(v) for v in vals) else 1)
-" 2>/dev/null; then
-    echo "step5d: init_MAP.json missing/non-finite -> falling back to init.json"
-    cp output/$RUN/init.json output/$RUN/init_MAP.json
-fi
+# Guarantee a usable, well-conditioned init_MAP.json. On degenerate data (e.g.
+# mocks whose per-band noise is perfectly correlated) the near-rank-1 MAP makes
+# the optimizer diverge, driving S_scale to 0 (finite but SINGULAR -> step6's
+# Cholesky fails). If init_MAP.json is missing, non-finite, or has a degenerate
+# S_scale, replace it with a moderate well-conditioned start (S_scale=0.3,
+# intrinsic correlation 0.7); NUTS warmup adapts from there, so a converged MAP
+# is not required.
+python3 - "$RUN" <<'PYEOF'
+import json, math, sys, numpy as np
+run = sys.argv[1]
+mapf = f'output/{run}/init_MAP.json'
+def bad():
+    try:
+        d = json.load(open(mapf)); s = d['S_scale']; L = d['S_Lcorr']
+        vals = list(s) + [x for row in L for x in row]
+        if not all(math.isfinite(v) for v in vals): return True
+        if min(s) < 1e-2: return True          # degenerate / singular scatter
+        return False
+    except Exception:
+        return True
+if bad():
+    print('step5d: init_MAP.json missing/non-finite/degenerate -> moderate fallback init')
+    d = json.load(open(f'output/{run}/init.json'))
+    R = np.full((3, 3), 0.7); np.fill_diagonal(R, 1.0)
+    d['S_scale'] = [0.3, 0.3, 0.3]
+    d['S_Lcorr'] = np.linalg.cholesky(R).tolist()
+    json.dump(d, open(mapf, 'w'), indent=2)
+else:
+    print('step5d: MAP init_MAP.json OK (S_scale =', json.load(open(mapf))['S_scale'], ')')
+PYEOF
 
 touch output/$RUN/.step5d_done
 echo "DONE: step5d → output/$RUN/init_MAP.json"
