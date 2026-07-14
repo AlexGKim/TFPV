@@ -29,7 +29,12 @@
 # step6_chain.sh, so check_status.sh/batch_status.sh need no changes.
 #
 # Usage: sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step6_node.sh
-# Requires: output/$RUN/input.json, init_MAP.json, metric.json (steps 5d+5e done)
+# Requires: output/$RUN/input.json, init_MAP.json (step 5d done).
+# Each chain adapts its own dense metric from identity during warmup
+# (metric=dense_e adapt save_metric=1) -- no pre-built metric.json / step 5e
+# needed. The free-covariance 2color model samples cleanly with in-warmup
+# adaptation, and a metric.json from a different model version has the wrong
+# dimension anyway.
 #
 # DEBUG mode: set DEBUG=1 to run tiny 0+15 chains (no adaptation, fixed
 # stepsize) -- see step6_chain.sh for the rationale. Submit with
@@ -68,7 +73,6 @@ for CHAIN_ID in 1 2 3 4; do
         CUDA_VISIBLE_DEVICES=$GPU_ID ./2color_g sample num_warmup=$NUM_WARMUP num_samples=$NUM_SAMPLES \
             $ADAPT_ARGS \
             algorithm=hmc $ENGINE_ARGS metric=dense_e $STEPSIZE_ARG \
-            metric_file=output/$RUN/metric.json \
             id=$CHAIN_ID \
             data file=output/$RUN/input.json \
             init=output/$RUN/init_MAP.json \
