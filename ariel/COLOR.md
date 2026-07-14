@@ -171,28 +171,15 @@ warmup requirements and avoids the sampler spending time finding the basin.
     output file=output/$RUN/optimize.csv
 
 # Convert optimizer output to MCMC init file
-python - <<'EOF'
-import pandas as pd, json, os
-
-RUN = os.environ['RUN']
-df = pd.read_csv(f'output/{RUN}/optimize.csv', comment='#')
-row = df.iloc[0]
-old = json.load(open(f'output/{RUN}/init.json'))
-new = {}
-for k in old.keys():
-    if k == 'intercept_std':
-        cols = sorted([c for c in df.columns if c.startswith('intercept_std.')],
-                      key=lambda s: int(s.split('.')[1]))
-        new[k] = [float(row[c]) for c in cols]
-    elif k in df.columns:
-        new[k] = float(row[k])
-    else:
-        new[k] = old[k]
-with open(f'output/{RUN}/init_MAP.json', 'w') as f:
-    json.dump(new, f, indent=2)
-print(f'MAP init written to output/{RUN}/init_MAP.json')
-EOF
+python3 make_map_init.py --run $RUN
 ```
+
+`make_map_init.py` also floors any `sigma_int_*` / `log_sigma_int_*` parameter
+that the MAP drove near its 0 boundary (default floor: 0.01, via
+`--sigma-floor`). MAP frequently collapses these to ~0, which starts HMC
+warmup directly in the degenerate near-singular-covariance regime and slows
+convergence; starting slightly off the boundary gives the sampler room to
+explore. Pass `--sigma-floor 0` to disable and use the raw MAP value.
 
 ---
 

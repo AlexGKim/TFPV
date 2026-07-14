@@ -73,28 +73,15 @@ The MAP provides a warm start near the posterior mode.
     output file=output/$RUN/optimize.csv
 
 # Convert optimizer output to MCMC init file
-python - <<'EOF'
-import pandas as pd, json, os
-
-RUN = os.environ['RUN']
-df = pd.read_csv(f'output/{RUN}/optimize.csv', comment='#')
-row = df.iloc[0]
-old = json.load(open(f'output/{RUN}/init.json'))
-new = {}
-for k in old.keys():
-    if k == 'intercept_std':
-        cols = sorted([c for c in df.columns if c.startswith('intercept_std.')],
-                      key=lambda s: int(s.split('.')[1]))
-        new[k] = [float(row[c]) for c in cols]
-    elif k in df.columns:
-        new[k] = float(row[k])
-    else:
-        new[k] = old[k]
-with open(f'output/{RUN}/init_MAP.json', 'w') as f:
-    json.dump(new, f, indent=2)
-print(f'MAP init written to output/{RUN}/init_MAP.json')
-EOF
+python3 make_map_init.py --run $RUN
 ```
+
+`make_map_init.py` also floors any `sigma_int_*` / `log_sigma_int_*` parameter
+that the MAP drove near its 0 boundary (default floor: 0.01, via
+`--sigma-floor`). MAP frequently collapses these to ~0, which starts HMC
+warmup directly in the degenerate near-singular-covariance regime and slows
+convergence; starting slightly off the boundary gives the sampler room to
+explore. Pass `--sigma-floor 0` to disable and use the raw MAP value.
 
 ---
 
@@ -123,9 +110,10 @@ import pandas as pd, numpy as np, json, os
 RUN = os.environ['RUN']
 df = pd.read_csv(f'output/{RUN}/2color.csv', comment='#')
 sampling_params = [
-    'slope_std', 'intercept_std.1', 'sigma_int_x', 'sigma_int_y',
-    'log_sigma_int_z', 'gamma_tau_c', 'delta_c', 'mu_c', 'log_tau_c',
-    'gamma_tau_g', 'delta_g', 'mu_g', 'log_tau_g', 'log_sigma_int_g',
+    'slope_std', 'intercept_std.1', 'sigma_int_x',
+    'S_scale.1', 'S_scale.2', 'S_scale.3',            # intrinsic (y,z,g) scatter std
+    'S_Lcorr.2.1', 'S_Lcorr.3.1', 'S_Lcorr.3.2',      # free correlation-Cholesky entries
+    'delta_c', 'mu_c', 'delta_g', 'mu_g',
     'alpha_kcorr_r', 'alpha_kcorr_z', 'alpha_kcorr_g'
 ]
 X = df[sampling_params].values
@@ -185,11 +173,14 @@ open output/$RUN/2color.png
 
 Key parameters to check:
 - `slope` — TFR slope
-- `gamma` — r–z luminosity–color slope (expected negative; DR1_v6: −0.70 ± 0.20)
-- `gamma_g` — g–r luminosity–color slope (DR1_v6: −1.1 ± 0.05)
-- `delta_c`, `delta_g` — color–velocity slopes
-- `tau_c`, `tau_g` — intrinsic color scatter
-- `alpha_kcorr_r`, `alpha_kcorr_z`, `alpha_kcorr_g` — band k-corrections (DR1_v6: ~−5.7, −5.3, −6.3)
+- `S_scale.1/2/3` — intrinsic (y,z,g) scatter std. The free intrinsic-covariance
+  parameterization (replacing the old `gamma`/`tau_c`/`gamma_g`/`tau_g`/`sigma_int_*`
+  product form) fits far better and reveals a near-rank-1, ~0.4-mag, ~99%-correlated
+  achromatic (PV/distance-modulus) scatter mode (DR2 MAP: ~0.42/0.39/0.44).
+- `S_Lcorr` — intrinsic-correlation Cholesky; implied band correlations are high
+  (DR2 MAP: y-z ≈ y-g ≈ 0.99, z-g ≈ 0.97).
+- `delta_c`, `delta_g` — color–velocity slopes (mean structure)
+- `alpha_kcorr_r`, `alpha_kcorr_z`, `alpha_kcorr_g` — band k-corrections
 
 ```bash
 python explore_residuals.py --config $CONFIG --kind 2color

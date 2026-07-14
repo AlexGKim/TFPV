@@ -519,14 +519,24 @@ def process_desi_tf_data(
         "alpha_kcorr_z": -0.5,
     }
 
-    # [2COLOR] g-band init parameters
+    # [2COLOR] g-band init parameters.
+    # The 2color model (2color.stan) samples the intrinsic (y,z,g) scatter as a
+    # free 3x3 covariance: S_scale (per-band std) + S_Lcorr (correlation
+    # Cholesky), replacing the old gamma_tau_g / log_tau_g / log_sigma_int_g
+    # product parameters. Start from a moderate, uncorrelated covariance
+    # (identity correlation); step5d MAP optimization refines it. The base
+    # gamma_tau_c / log_tau_c / sigma_int_y / log_sigma_int_z entries above are
+    # retained for the single-color color.stan model and are ignored by 2color.
     if g_absmag is not None:
-        init_data["gamma_tau_g"] = -0.1
         init_data["delta_g"] = 0.0
         init_data["mu_g"] = float(np.mean(y - g_absmag)) if N_total > 0 else 0.0
-        init_data["log_tau_g"] = -2.0
-        init_data["log_sigma_int_g"] = -2.3
         init_data["alpha_kcorr_g"] = -0.5
+        init_data["S_scale"] = [0.2, 0.2, 0.2]
+        init_data["S_Lcorr"] = [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
 
     with open(init_output_file, "w") as f:
         json.dump(init_data, f, indent=2)

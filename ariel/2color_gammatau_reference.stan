@@ -1,27 +1,19 @@
-// 2color.stan — Two-Color TFR Model, free intrinsic-covariance parameterization
+// color.stan — Color-Correction TFR Model (Appendix C)
 //
-// Quadrivariate (x, y, z, g) model extending tophat.stan. The intrinsic (y,z,g)
-// scatter is a DIRECTLY-SAMPLED 3x3 covariance S (index 1=y, 2=z, 3=g):
-//   S_scale  — per-band intrinsic std (y, z, g)
-//   S_Lcorr  — Cholesky factor of the 3x3 intrinsic correlation (LKJ prior)
-// This replaces the earlier two-independent-latent-color-factor product
-// parameterization (gamma_tau_c/tau_c/sigma_int_y, gamma_tau_g/tau_g/sigma_int_g,
-// sigma_int_z) whose covariance forced the z-g coupling to zero. That constraint
-// drove the sigma_int -> 0 / tau-floor collapse in both the AbacusSummit mocks
-// and real DR2; the free covariance fits far better (DR2 MAP lp -11807 -> -11536)
-// and reveals a near-rank-1, ~0.4-mag, ~99%-correlated achromatic (PV/distance-
-// modulus) intrinsic-scatter mode. The mean-color structure (delta_c, mu_c,
-// delta_g, mu_g) and the band k-corrections (alpha_kcorr_{r,z,g}) are unchanged.
+// Extends tophat.stan by adding z-band data (hat_z) and four parameters:
+//   gamma    — luminosity-color slope at fixed velocity
+//   delta_c  — population color-velocity slope (named delta_c to avoid clash with any
+//               Stan built-in; delta is not reserved but delta_c is clearer)
+//   mu_c     — conditional mean color at x = x_bar
+//   tau_c    — intrinsic color scatter at fixed velocity
 //
-// The 2D marginal likelihood of tophat.stan is replaced by a 1D numerical
-// integral of the quadrivariate N_4 density over y_TF, using the same
-// sinh-reparameterized Gauss-Legendre scheme as the selection function.
-// Selection probability reuses integrate_binormal_strip_sinh2_gl with
-// sigma2 -> sqrt(A11), where A11 = S[1,1] + sigma_y^2.
+// Key structural change: the analytical 2D marginal likelihood of tophat.stan
+// is replaced by a 1D numerical integral of the trivariate N_3 density over y_TF,
+// using the same sinh-reparameterized Gauss-Legendre scheme as the selection function.
+// Selection probability reuses integrate_binormal_strip_sinh2_gl with sigma2 -> sqrt(A11).
 //
-// References: paper/main.tex Appendix "Two-Color Extension".
-// Differences from tophat.stan are marked // [COLOR] / // [2COLOR].
-// The prior gamma/tau reference parameterization is kept in 2color_gammatau_reference.stan.
+// References: paper/main.tex lines 956-1269 (Appendix C).
+// Differences from tophat.stan are marked // [COLOR].
 
 functions {
   real binormal_cdf(real z1, real z2, real rho) {
@@ -641,21 +633,25 @@ parameters {
   vector<lower=-24 + slope_std * mean_x / sd_x,
          upper=-14 + slope_std * mean_x / sd_x>[N_bins] intercept_std;
   real<lower=0, upper=1> sigma_int_x;
+  real<lower=0, upper=1> sigma_int_y;
+  real log_sigma_int_z;
 
-  // [2COLOR] The intrinsic (y,z,g) scatter covariance S is sampled DIRECTLY as
-  // a 3x3 covariance (scales + LKJ correlation Cholesky), replacing the curved,
-  // over-parameterized (gamma_tau_c, log_tau_c, gamma_tau_g, log_tau_g,
-  // sigma_int_y, log_sigma_int_z, log_sigma_int_g) product parameterization.
-  // This (a) removes the gamma*tau curvature/ridge, (b) frees the z-g coupling
-  // that the old factor model forced to zero. Index order: 1=y, 2=z, 3=g.
-  vector<lower=0>[3] S_scale;              // intrinsic scatter std in y,z,g
-  cholesky_factor_corr[3] S_Lcorr;         // Cholesky of the 3x3 correlation
-
-  // [COLOR] mean-color structure (kept: these define the MEAN, not the scatter)
+  // [COLOR] color-correction parameters (Eqs. C29-C32)
+  real gamma_tau_c;     // p = γ·τ_c (sampled directly; γ<0, τ_c>0 ⟹ p<0)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
   real mu_c;             // mean color at x = x_bar                          (Eq. C31)
+  // Reparameterized on log scale to defuse the τ_c → 0 funnel observed in
+  // DR1_v6_color (2026-05-19). Sampling log_tau_c gives scale-invariant HMC
+  // step sizes. Lower bound log(0.014) excludes the tau_c < 0.014 degenerate
+  // "color-correction-off" mode identified in DR1_v6 posterior (2026-05-20).
+  real<lower=log(0.014)> log_tau_c;  // log of intrinsic color scatter; enforces tau_c > 0.014 (Eq. C32)
+
+  // [2COLOR] g-band color-correction parameters (independent second factor)
+  real gamma_tau_g;
   real delta_g;
   real mu_g;
+  real<lower=log(0.014)> log_tau_g;
+  real log_sigma_int_g;
 
   // [KCORR] band-dependent latent k-correction parameters
   real alpha_kcorr_r;
@@ -663,31 +659,52 @@ parameters {
   real alpha_kcorr_g;
 }
 transformed parameters {
-  // [2COLOR] fit_sigmas==0 branch (dead: fit_sigmas is hardcoded to 1) formerly
-  // used sigma_int_y; use sigma_int_x in both branches now that the sigmas are
-  // folded into S.
-  real sigma_int_x_std = sigma_int_x / sd_x;
+  real sigma_int_x_std;
+  if (fit_sigmas == 0) {
+    sigma_int_x_std = sigma_int_y / sd_x;
+  } else {
+    sigma_int_x_std = sigma_int_x / sd_x;
+  }
+  real<lower=0> sigma_int_z = exp(log_sigma_int_z);
+  real<lower=0> tau_c = exp(log_tau_c);   // [COLOR] derived from log_tau_c
+  real gamma = gamma_tau_c / tau_c;
 
-  // [2COLOR] intrinsic (y,z,g) covariance from scales + correlation Cholesky.
-  matrix[3, 3] L_S = diag_pre_multiply(S_scale, S_Lcorr);
-  matrix[3, 3] S   = multiply_lower_tri_self_transpose(L_S);   // S = L_S L_Sᵀ
+  // [2COLOR] g-band derived parameters
+  real<lower=0> sigma_int_g = exp(log_sigma_int_g);
+  real<lower=0> tau_g = exp(log_tau_g);
+  real gamma_g = gamma_tau_g / tau_g;
 }
 model {
   // Priors — baseline
   sigma_int_x ~ cauchy(0, 1);
+  sigma_int_y ~ cauchy(0, 1);
+  log_sigma_int_z ~ normal(-3, 2);
 
-  // [2COLOR] Priors on the intrinsic covariance S.
-  //   S_scale: weakly-informative half-Cauchy on the per-band intrinsic std.
-  //   S_Lcorr: LKJ(2) mildly favors the identity (weak shrinkage toward
-  //            uncorrelated bands) without forcing any coupling to zero.
-  S_scale ~ cauchy(0, 1);
-  S_Lcorr ~ lkj_corr_cholesky(2);
-
-  // [COLOR] Priors for the mean-color structure (unchanged)
+  // [COLOR] Priors for color-correction parameters (Eqs. C29-C32)
+  //
+  // Sampling parameterization: (gamma_tau_c, log_tau_c)
+  //   • gamma_tau_c = p = γ·τ_c breaks the γ–τ_c banana.
+  //   • log_tau_c on unconstrained scale defuses the τ_c → 0 funnel; HMC
+  //     step sizes adapt to scale of τ_c automatically.
+  //
+  // Jacobian chain from "natural" priors p(γ, τ_c) dγ dτ_c to our params dp d(log τ_c):
+  //   dγ dτ_c = (1/τ_c) dp dτ_c           [γ = p/τ_c at fixed τ_c]
+  //           = (1/τ_c) · τ_c dp d(log τ_c) = dp d(log τ_c)
+  // So the net Jacobian is unity — no Jacobian term needed!  Both transforms
+  // cancel because the funnel-fix log transform exactly absorbs the γ-reparam
+  // Jacobian.  Priors below are applied directly to γ and τ_c on their natural
+  // scales (~ statements on derived quantities are fine in Stan).
+  tau_c   ~ cauchy(0, 0.3);
+  gamma   ~ std_normal();
   delta_c ~ std_normal();
   mu_c    ~ normal(c_bar_obs, 1);
+
+  // [2COLOR] Priors for g-band color-correction parameters
+  tau_g   ~ cauchy(0, 0.3);
+  gamma_g ~ std_normal();
   delta_g ~ std_normal();
   mu_g    ~ normal(c_bar_g_obs, 1);
+  log_sigma_int_g ~ normal(-3, 2);
 
   // [KCORR] Priors for band-dependent k-correction parameters
   alpha_kcorr_r ~ normal(0, 5);
@@ -699,15 +716,15 @@ model {
   vector[N_total] sigma1_std   = sqrt(sigmasq1_std);
 
   if (y_TF_limits != 0) {
-    // [2COLOR] Intrinsic (y,z,g) covariance entries taken directly from S
-    // (index 1=y, 2=z, 3=g). These replace the old gamma*tau product entries;
-    // the z-g coupling S[2,3] is now a free parameter rather than forced 0.
-    real S_yy = S[1, 1];
-    real S_yz = S[1, 2];
-    real S_yg = S[1, 3];
-    real S_zz = S[2, 2];
-    real S_zg = S[2, 3];
-    real S_gg = S[3, 3];
+    // [COLOR] A_i matrix scalar entries that don't depend on per-galaxy noise (Eq. C17)
+    // γ²τ² = p², γ(γ-1)τ² = p(p-τ), (γ-1)²τ² = (p-τ)²  where p = gamma_tau_c
+    // [2COLOR] A11_base includes both color factors (independent)
+    real A11_base = square(gamma_tau_c) + square(gamma_tau_g) + square(sigma_int_y);
+    real A12      = gamma_tau_c * (gamma_tau_c - tau_c);
+    real A22_base = square(gamma_tau_c - tau_c) + square(sigma_int_z);
+    // [2COLOR] g-band entries (analogous to z-band)
+    real A14      = gamma_tau_g * (gamma_tau_g - tau_g);
+    real A44_base = square(gamma_tau_g - tau_g) + square(sigma_int_g);
 
     // [2COLOR] Closed-form numerator coefficients extended to 4-vector.
     real inv_slope_std        = inv(slope_std);
@@ -723,8 +740,11 @@ model {
       real alpha_zn_z = alpha_kcorr_z * log1pz_centered;
       real alpha_zn_g = alpha_kcorr_g * log1pz_centered;
 
-      // [2COLOR] Per-galaxy y diagonal (intrinsic + measurement); used by selection.
-      real A11 = S_yy + sigma_y_sq[n];
+      // [COLOR] Per-galaxy A_i diagonal entries (Eq. C17)
+      real A11 = A11_base + sigma_y_sq[n];
+      real A22 = A22_base + sigma_z_sq[n];
+      // [2COLOR] g-band diagonal entry
+      real A44 = A44_base + sigma_g_sq[n];
 
       // [2COLOR] B_i covariance matrix extended to 4×4
       real s1sq = sigmasq1_std[n];
@@ -736,14 +756,12 @@ model {
       B[1, 4] = -delta_g * sigma_intx_sq;
       B[4, 1] = -delta_g * sigma_intx_sq;
       B[2, 2] = A11;
-      B[2, 3] = S_yz;
-      B[3, 2] = S_yz;
-      B[2, 4] = S_yg;
-      B[4, 2] = S_yg;
-      B[3, 4] = S_zg;                                   // [2COLOR] now free (was 0)
-      B[4, 3] = S_zg;
-      B[3, 3] = S_zz + square(delta_c) * sigma_intx_sq + sigma_z_sq[n];
-      B[4, 4] = S_gg + square(delta_g) * sigma_intx_sq + sigma_g_sq[n];
+      B[2, 3] = A12;
+      B[3, 2] = A12;
+      B[2, 4] = A14;
+      B[4, 2] = A14;
+      B[3, 3] = A22 + square(delta_c) * sigma_intx_sq;
+      B[4, 4] = A44 + square(delta_g) * sigma_intx_sq;
 
       matrix[4, 4] L_B = cholesky_decompose(B);
 

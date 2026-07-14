@@ -271,10 +271,11 @@ def main():
             drop_diagnostics=True,
         )
         mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat, sigma_x)
-    else:  # 2color
-        keep_cols = ["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-                     "gamma", "tau_c", "alpha_kcorr_r",
-                     "gamma_g", "tau_g"]
+    else:  # 2color (free intrinsic-covariance parameterization)
+        keep_cols = ["slope", "intercept.1", "sigma_int_x", "alpha_kcorr_r",
+                     "S_scale.1", "S_scale.2", "S_scale.3",
+                     "S_Lcorr.1.1", "S_Lcorr.2.1", "S_Lcorr.2.2",
+                     "S_Lcorr.3.1", "S_Lcorr.3.2", "S_Lcorr.3.3"]
         draws = read_cmdstan_posterior(
             os.path.join(run_dir, "2color_?.csv"),
             keep=keep_cols,
