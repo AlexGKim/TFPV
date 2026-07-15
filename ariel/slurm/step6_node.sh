@@ -61,7 +61,10 @@ else
     NUM_WARMUP=${NUM_WARMUP:-250}
     NUM_SAMPLES=${NUM_SAMPLES:-1000}
     ADAPT_ARGS="adapt save_metric=1"
-    ENGINE_ARGS=""
+    # max_depth=8 (vs Stan's default 10): the free-covariance posterior is
+    # near-singular and NUTS saturates treedepth, so depth 10 costs up to
+    # 1023 leapfrog steps/iteration (~4x depth 8) for little extra mixing.
+    ENGINE_ARGS="engine=nuts max_depth=8"
     STEPSIZE_ARG=""
 fi
 
