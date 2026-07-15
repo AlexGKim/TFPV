@@ -58,7 +58,6 @@ echo "Step 6: MCMC chain $CHAIN_ID for run=$RUN"
 ./2color_g sample num_warmup=$NUM_WARMUP num_samples=$NUM_SAMPLES \
     $ADAPT_ARGS \
     algorithm=hmc $ENGINE_ARGS metric=dense_e $STEPSIZE_ARG \
-    metric_file=output/$RUN/metric.json \
     id=$CHAIN_ID \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
