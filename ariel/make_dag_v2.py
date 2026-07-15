@@ -35,9 +35,9 @@ WHITE_KEYS = {key for key, spec in ALL_BOXES.items() if spec[-1] is NEUTRAL}
 
 SOLID_ARROWS = [
     ("tf", "yTF"), ("color", "ec"), ("color", "eg"),
-    ("xtrue", "xhat"), ("xtrue", "yTF"), ("xtrue", "ec"), ("xtrue", "eg"),
+    ("xtrue", "xhat"), ("yTF", "xtrue"), ("xtrue", "ec"), ("xtrue", "eg"),
     ("yTF", "yhat"), ("yTF", "zhat"), ("yTF", "ghat"),
-    ("ec", "zhat"), ("eg", "ghat"),
+    ("ec", "yhat"), ("ec", "zhat"), ("eg", "yhat"), ("eg", "ghat"),
 ]
 
 DASHED_ARROWS = [("kcorr", "yhat", 0.25), ("kcorr", "zhat", 0.15), ("kcorr", "ghat", 0.0)]
