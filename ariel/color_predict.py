@@ -24,6 +24,20 @@ from predict import (
 )
 from mag_utils import get_mag_cols
 
+
+def _apply_main_cuts_with_zmax(cfg, xhat, yhat, zobs=None, rz_color=None):
+    """MAIN-sample cuts for color_predict.py: same as predict.py's
+    _apply_main_cuts (which intentionally excludes any zobs cut — MAIN
+    defines the phase-space selection window regardless of redshift), plus
+    an additional cfg["z_obs_max"] cut applied here only, so the color/2color
+    MAIN sample used in this file matches the TF fitting z-range.
+    """
+    mask = _apply_main_cuts(cfg, xhat, yhat, zobs=zobs, rz_color=rz_color)
+    if zobs is not None and cfg.get("z_obs_max") is not None:
+        mask &= np.asarray(zobs) <= cfg["z_obs_max"]
+    return mask
+
+
 # ---------------------------------------------------------------------------
 # Systematic off-diagonal covariance terms (dust + photometric calibration)
 # ---------------------------------------------------------------------------
@@ -1381,7 +1395,7 @@ def DESI_color(
 
     # MAIN/holdout sample mask
     rz_color_desi = _load_rz_color_from_desi(galaxy_fits)
-    _main_all = _apply_main_cuts(cfg, xhat_star, yhat_star, rz_color=rz_color_desi)
+    _main_all = _apply_main_cuts_with_zmax(cfg, xhat_star, yhat_star, zobs=zobs_star, rz_color=rz_color_desi)
     main_mask = _get_holdout_mask(galaxy_fits, _main_all, input_data)
 
     xhat_main = xhat_star[main_mask]
@@ -1767,7 +1781,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json"), "r") as f:
             cfg = json.load(f)
 
-    _main_valid = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    _main_valid = valid & _apply_main_cuts_with_zmax(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
     # Apply train/holdout split in raw-catalog space (n_rows rows).
     # _get_holdout_mask operates in validity-filtered space and cannot be used here.
     if "train_sga_ids" in input_data:
@@ -1911,7 +1925,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json"), "r") as f:
             cfg = json.load(f)
 
-    _main_valid = valid & _apply_main_cuts(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
+    _main_valid = valid & _apply_main_cuts_with_zmax(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
     # Apply train/holdout split in raw-catalog space (n_rows rows).
     if "train_sga_ids" in input_data:
         _train_ids = set(input_data["train_sga_ids"])
@@ -2574,7 +2588,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     _valid = (np.isfinite(_lV) & np.isfinite(_lVerr) & (_lVerr > 0)
               & np.isfinite(_xhat) & np.isfinite(_sigma_x) & (_sigma_x > 0))
 
-    _main_valid = _valid & _apply_main_cuts(cfg, _xhat, _abs_mag,
+    _main_valid = _valid & _apply_main_cuts_with_zmax(cfg, _xhat, _abs_mag,
                                             zobs=_zobs_raw, rz_color=_rz)
     if "train_sga_ids" in input_data:
         _train_ids = set(input_data["train_sga_ids"])
@@ -2702,7 +2716,7 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     x_bar = input_data.get("mean_x", float(np.mean(input_data["x"])))
 
     rz_color_full = _load_rz_color_from_desi(fits_path)
-    _main_all = _apply_main_cuts(cfg, xhat_full, yhat_full, rz_color=rz_color_full)
+    _main_all = _apply_main_cuts_with_zmax(cfg, xhat_full, yhat_full, zobs=zobs_full, rz_color=rz_color_full)
     main = _get_holdout_mask(fits_path, _main_all, input_data)
     xhat_star = xhat_full[main]
     sigma_x_star = sigma_x_full[main]
