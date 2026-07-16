@@ -1477,10 +1477,11 @@ from the full hierarchical fit automatically deconvolves this.
 
 The single-color model of \S\ref{sec:color_correction} uses the $r{-}z$ color
 (one latent factor $\eta_i$) to sharpen the absolute-magnitude prediction.  A
-natural extension adds the $g$-band as a second, independent latent color
-factor.  This appendix describes the \emph{2color} model, which replaces the
-trivariate likelihood $(\hat{x}_i,\hat{y}_i,\hat{z}_i)$ with a quadrivariate
-likelihood $(\hat{x}_i,\hat{y}_i,\hat{z}_i,\hat{g}_i)$.
+natural extension adds $g$-band photometry, modeling the joint chromatic scatter
+of the three absolute magnitudes directly.  This appendix describes the
+\emph{2color} model, which replaces the trivariate likelihood
+$(\hat{x}_i,\hat{y}_i,\hat{z}_i)$ with a quadrivariate likelihood
+$(\hat{x}_i,\hat{y}_i,\hat{z}_i,\hat{g}_i)$.
 
 \subsection{Generative Model}
 \label{sec:2c:generative}
@@ -1500,7 +1501,7 @@ $\delta_c,\delta_g$ the color--velocity slopes, and $\Delta_{r,i},\Delta_{z,i},
 \Delta_{g,i}$ the band residual $k$-corrections
 [$\Delta_{b,i}\equiv\alpha_{k,b}(\ln(1+z_{\mathrm{obs},i})-\overline{\ln(1+z)})$].
 The latent absolute magnitudes $(y_i,z_i,g_i)$ scatter about these means with a
-\emph{free} $3\times3$ intrinsic covariance,
+\emph{rank-2} $3\times3$ intrinsic covariance,
 \begin{equation}
   \begin{pmatrix} y_i\\ z_i\\ g_i \end{pmatrix}
   \Bigm|\, y_{\mathrm{TF},i}, x_i
@@ -1510,19 +1511,44 @@ The latent absolute magnitudes $(y_i,z_i,g_i)$ scatter about these means with a
     \boldsymbol{S}
   \right),
   \qquad
-  \boldsymbol{S} = \boldsymbol{D}_s\,\boldsymbol{R}\,\boldsymbol{D}_s,
+  \boldsymbol{S} = \boldsymbol{V}\,\boldsymbol{\Sigma}_c\,\boldsymbol{V}^T,
   \label{eq:2c:S}
 \end{equation}
-with $\boldsymbol{D}_s=\mathrm{diag}(S_{\mathrm{scale}})$ the per-band intrinsic
-standard deviations (index $1{=}y$, $2{=}z$, $3{=}g$) and $\boldsymbol{R}$ the
-$3\times3$ intrinsic correlation matrix. The measurement equations are
+where $\boldsymbol{V}$ is a $3\times2$ matrix with orthonormal columns spanning
+the plane orthogonal to a \emph{free} unit null direction $\hat{\boldsymbol{n}}$,
+and $\boldsymbol{\Sigma}_c$ is a free $2\times2$ symmetric positive-definite
+matrix.  By construction $\boldsymbol{S}\,\hat{\boldsymbol{n}}=\boldsymbol{0}$:
+$\boldsymbol{S}$ is rank~2, with a null space along $\hat{\boldsymbol{n}}$, so
+exactly one direction in $(y,z,g)$ space carries no intrinsic scatter --- but
+\emph{which} direction is inferred from the data, not fixed in advance.  The unit
+vector $\hat{\boldsymbol{n}}$ is assigned a uniform prior on the sphere, and
+$\boldsymbol{V}$ is constructed as an orthonormal basis of its orthogonal
+complement (via a Householder reflector, so the map is smooth in
+$\hat{\boldsymbol{n}}$).  The special case
+$\hat{\boldsymbol{n}}=\boldsymbol{e}=(1,1,1)/\!\sqrt{3}$ recovers the
+\emph{chromatic-only} model, in which the excluded direction is exactly the
+achromatic (peculiar-velocity/distance-modulus) mode $(1,1,1)$ and all achromatic
+variance is deferred to the downstream velocity-covariance model $C_{vv}$
+(\S\ref{sec:2c:priors}); by fitting $\hat{\boldsymbol{n}}$ we instead let the
+data determine the excluded direction and \emph{test} whether it coincides with
+$\boldsymbol{e}$ rather than assuming it does.
+The $2\times2$ covariance is parameterized as
+$\boldsymbol{\Sigma}_c = \boldsymbol{D}_c\,\boldsymbol{R}_c\,\boldsymbol{D}_c$
+with $\boldsymbol{D}_c=\mathrm{diag}(S_{c,1},S_{c,2})$ (two scatter
+scales) and $\boldsymbol{R}_c$ a $2\times2$ correlation matrix (one free
+parameter).  The intrinsic scatter therefore has 5 free parameters in total ---
+two for $\hat{\boldsymbol{n}}$, two scales, and one correlation --- which is
+exactly the dimension of a general rank-2 positive-semidefinite $3\times3$
+matrix; it sits strictly between the fixed-null chromatic-only form (3
+parameters) and an unconstrained full-rank covariance (6).  Only the plane
+$\mathrm{span}(\boldsymbol{V})$, equivalently $\hat{\boldsymbol{n}}$ up to sign,
+is identified: the in-plane orientation of the columns of $\boldsymbol{V}$ is a
+gauge freedom absorbed by the full $2\times2$ $\boldsymbol{\Sigma}_c$.
+Writing $S_{yy},S_{yz},S_{yg},S_{zz},S_{zg},S_{gg}$ for the entries of
+$\boldsymbol{S}=\boldsymbol{V}\boldsymbol{\Sigma}_c\boldsymbol{V}^T$,
+the measurement equations are
 $\hat{y}_i\mid y_i\sim\mathcal{N}(y_i,\sigma_{y,i}^2)$ and likewise for
-$\hat{z}_i,\hat{g}_i$. This replaces the earlier product parameterization
-($\gamma,\tau_c,\gamma_g,\tau_g,\sigma_{\mathrm{int},y},
-\sigma_{\mathrm{int},z},\sigma_{\mathrm{int},g}$), whose two independent factors
-forced the intrinsic $z{-}g$ covariance to vanish; the free $\boldsymbol{S}$
-removes that constraint. Writing $S_{yy},S_{yz},S_{yg},S_{zz},S_{zg},S_{gg}$ for
-the entries of $\boldsymbol{S}$, the intrinsic (measurement-free) covariance of
+$\hat{z}_i,\hat{g}_i$, and the intrinsic (measurement-free) covariance of
 $(y_i,z_i,g_i)$ enters the likelihood through the $\boldsymbol{B}_i$ matrix below.
 
 \subsection{Marginalization to Quadrivariate Likelihood}
@@ -1570,13 +1596,28 @@ $\boldsymbol{S}$ (Eq.~\ref{eq:2c:S}),
   A_{14} &= S_{yg},\\
   A_{22} &= S_{zz} + \sigma_{z,i}^2,\\
   A_{44} &= S_{gg} + \sigma_{g,i}^2,\\
-  A_{zg} &= S_{zg}. \label{eq:2c:A44}
+  A_{zg} &= S_{zg} + \delta_c\delta_g\sigma_{\mathrm{int},x}^2. \label{eq:2c:A44}
 \end{align}
-The $(3,4)$ entry $A_{zg}=S_{zg}$ is a \emph{free} parameter: the intrinsic
-$\hat{z}$--$\hat{g}$ covariance is no longer forced to zero, so $\hat{z}$ and
-$\hat{g}$ are not required to be conditionally independent given
+The $(3,4)$ entry has two contributions. $S_{zg}$ is a \emph{free} parameter: the
+intrinsic $\hat{z}$--$\hat{g}$ covariance is no longer forced to zero, so
+$\hat{z}$ and $\hat{g}$ are not required to be conditionally independent given
 $(y_{\mathrm{TF},i}, x_i)$. Fixing $S_{zg}=0$ recovers the earlier
-two-independent-latent-color-factor model.
+two-independent-latent-color-factor model. The second term is \emph{induced} by
+the marginalization rather than free: because $m_{z,i}$ and $m_{g,i}$ both depend
+on $x_i$ with slopes $-\delta_c$ and $-\delta_g$
+(Eqs.~\ref{eq:2c:S}~ff.), integrating $x_i$ over its intrinsic scatter
+correlates $\hat{z}$ and $\hat{g}$ by
+$(-\delta_c)(-\delta_g)\sigma_{\mathrm{int},x}^2$, exactly as the same
+marginalization produces the $-\delta_c\sigma_{\mathrm{int},x}^2$ entries in the
+first row and column and the $\delta_c^2\sigma_{\mathrm{int},x}^2$,
+$\delta_g^2\sigma_{\mathrm{int},x}^2$ terms on the diagonal. Retaining it is what makes $\boldsymbol{B}_i$ the marginal covariance of the
+generative model, and hence positive definite by construction: $\boldsymbol{S}$
+is positive semi-definite (rank~2, null along $\hat{\boldsymbol{n}}$) and the
+strictly positive per-band measurement variances
+$(\sigma_{y,i}^2,\sigma_{z,i}^2,\sigma_{g,i}^2)$ fill the null direction,
+guaranteeing that $\boldsymbol{B}_i$ is strictly positive definite.  Dropping the
+induced term admits parameter values for which $\boldsymbol{B}_i$ has a negative
+eigenvalue and the Cholesky factorization fails.
 
 \subsection{Closed-Form Likelihood}
 \label{sec:2c:likelihood}
@@ -1632,13 +1673,21 @@ sub-block of $\boldsymbol{B}_\star$:
     & -\delta_g\sigma_{\mathrm{int},x}^2\\[4pt]
   -\delta_c\sigma_{\mathrm{int},x}^2
     & A_{22}+\delta_c^2\sigma_{\mathrm{int},x}^2
-    & 0\\[4pt]
+    & A_{zg}\\[4pt]
   -\delta_g\sigma_{\mathrm{int},x}^2
-    & 0
+    & A_{zg}
     & A_{44}+\delta_g^2\sigma_{\mathrm{int},x}^2
-\end{pmatrix}.
+\end{pmatrix},
 \label{eq:2c:D}
 \end{equation}
+with the $(\hat{z},\hat{g})$ entry $A_{zg}=S_{zg}+\delta_c\delta_g
+\sigma_{\mathrm{int},x}^2$ inherited directly from $\boldsymbol{B}_\star$
+(Eq.~\ref{eq:2c:A44}): both the free intrinsic $S_{zg}$ and the term induced by
+marginalizing the shared latent $x_\star$ are retained, since
+$\boldsymbol{D}_\star$ is a genuine sub-block of $\boldsymbol{B}_\star$. Dropping
+the induced $\delta_c\delta_g\sigma_{\mathrm{int},x}^2$ term would make
+$\boldsymbol{D}_\star$ inconsistent with $\boldsymbol{B}_\star$ and forfeit the
+positive-definiteness it inherits from the latter.
 The regression coefficient vector is
 $\boldsymbol{b}_{\mathrm{reg}} = \boldsymbol{D}_\star^{-1}(0, A_{12}, A_{14})^T$
 and the conditional moments are
@@ -1695,17 +1744,19 @@ Relative to the single-color model, the 2color model adds the $g$-band mean
 structure ($\delta_g,\mu_g,\alpha_{k,g}$) and replaces the $r{-}z$/$g{-}r$
 product-form intrinsic-scatter parameters
 ($\gamma,\tau_c,\gamma_g,\tau_g,\sigma_{\mathrm{int},y},
-\sigma_{\mathrm{int},z},\sigma_{\mathrm{int},g}$) with the free intrinsic
-covariance $\boldsymbol{S}$ of Eq.~\eqref{eq:2c:S}, parameterized by the per-band
-scales $S_{\mathrm{scale}}$ and the correlation matrix $\boldsymbol{R}$:
+\sigma_{\mathrm{int},z},\sigma_{\mathrm{int},g}$) with the rank-2
+intrinsic covariance $\boldsymbol{S}$ of Eq.~\eqref{eq:2c:S}, parameterized by
+the free null direction $\hat{\boldsymbol{n}}$, the two scatter scales
+$S_{c,1},S_{c,2}$, and the $2\times2$ correlation matrix $\boldsymbol{R}_c$:
 
 \begin{center}
 \begin{tabular}{lll}
 \hline
 Parameter & Meaning & Prior \\
 \hline
-$S_{\mathrm{scale}}$ & intrinsic $(y,z,g)$ scatter std & $\mathrm{HalfCauchy}(0,1)$ \\
-$\boldsymbol{R}$ & intrinsic $(y,z,g)$ correlation & $\mathrm{LKJ}(2)$ \\
+$\hat{\boldsymbol{n}}$ & rank-2 null direction & uniform on $S^2$ \\
+$S_{c,1},S_{c,2}$ & scatter scales & $\mathrm{HalfCauchy}(0,1)$ \\
+$\boldsymbol{R}_c$ & $2\times2$ correlation & $\mathrm{LKJ}(2)$ \\
 $\delta_g$ & population $g{-}r$ color--velocity slope & $\mathcal{N}(0,1)$ \\
 $\mu_g$ & mean $g{-}r$ color at $x=\bar{x}$ & $\mathcal{N}(\bar{c}_{g,\mathrm{obs}},1)$ \\
 $\alpha_{k,g}$ & $g$-band $k$-correction slope & $\mathcal{N}(0,5)$ \\
@@ -1713,24 +1764,82 @@ $\alpha_{k,g}$ & $g$-band $k$-correction slope & $\mathcal{N}(0,5)$ \\
 \end{tabular}
 \end{center}
 
-The correlation matrix is sampled through its Cholesky factor
-($\boldsymbol{R}=\boldsymbol{L}\boldsymbol{L}^T$) with an $\mathrm{LKJ}(2)$ prior
-that mildly favors the identity without forcing any band pair to be
-uncorrelated. This free-covariance form is better conditioned than the product
-parameterization, which drove the per-band scatters to zero (and the correlation
-Cholesky to its boundary) because two independent color factors cannot reproduce
-a jointly high $y{-}z$, $y{-}g$, and $z{-}g$ correlation; the fitted
-$\boldsymbol{S}$ is instead dominated by a single near-achromatic mode that is
-$\sim\!99\%$ correlated across the three bands.
+The null direction $\hat{\boldsymbol{n}}$ is a unit vector with a uniform prior
+on the sphere, and $\boldsymbol{R}_c$ is sampled through its Cholesky factor (a
+single free element) with an $\mathrm{LKJ}(2)$ prior.  The total parameter count
+for $\boldsymbol{S}$ is 5 (two for $\hat{\boldsymbol{n}}$, two scales, one
+correlation), between the 3 of the fixed-null chromatic-only special case and the
+6 of an unconstrained free $3\times3$ parameterization.  The rank-2 restriction
+eliminates a near-degenerate ridge in the posterior that arises because
+photometry alone cannot distinguish intrinsic achromatic scatter from
+peculiar-velocity-induced scatter: with a free $3\times3$ $\boldsymbol{S}$, the
+fitted matrix is dominated by a single near-achromatic mode ($\sim\!99\%$
+correlated, $\sim\!0.4$~mag) that is degenerate with $C_{vv}$, degrading HMC
+efficiency (mean treedepth at maximum, ESS~$\sim$\!0) and causing Cholesky
+failures on $\boldsymbol{B}_i$ when the sampler explores the boundary of the
+degenerate ridge.  Restricting $\boldsymbol{S}$ to rank~2 places the sampler on a
+well-defined lower-dimensional manifold and removes this pathology, \emph{without}
+hard-coding which direction is excluded: the null direction is fit, so the
+achromatic axis $\boldsymbol{e}$ is no longer imposed but can be compared against
+the posterior of $\hat{\boldsymbol{n}}$.
 
-\subsection{Reduction to Single-Color Model}
+\paragraph{Achromatic variance and the downstream velocity model.}
+The three absolute magnitudes share a common distance modulus: any
+peculiar-velocity error shifts $(y_i,z_i,g_i)$ by an identical amount along the
+achromatic direction $\boldsymbol{e}=(1,1,1)/\!\sqrt{3}$.  The rank-2 model
+excludes exactly one direction from the intrinsic scatter
+($\boldsymbol{S}\,\hat{\boldsymbol{n}}=\boldsymbol{0}$; Eq.~\ref{eq:2c:S}), that
+direction being inferred.  If the fitted $\hat{\boldsymbol{n}}$ coincides with
+$\boldsymbol{e}$, the excluded direction is precisely the
+peculiar-velocity/distance-modulus mode: the calibration model then contains
+\emph{no} peculiar-velocity scatter, all achromatic variance is owned by the
+downstream velocity-covariance model $C_{vv}$ (which adds a coherent-flow prior to
+the per-galaxy distance-modulus posteriors of the prediction step,
+\S\ref{sec:2c:predict}), and the separation is clean --- $\boldsymbol{S}$ in the
+chromatic plane $\perp\boldsymbol{e}$, $C_{vv}$ along $\boldsymbol{e}$, no
+double-counting.  We report the posterior angle between $\hat{\boldsymbol{n}}$ and
+$\boldsymbol{e}$ as a diagnostic; a posterior concentrated near $0^\circ$
+\emph{measures} the alignment that the fixed-null chromatic-only model would
+otherwise assume.
+
+This design targets a specific risk: achromatic intrinsic scatter is only weakly
+identifiable from photometry alone --- it is degenerate with
+peculiar-velocity-induced scatter --- so fitting a full-rank $\boldsymbol{S}$
+lets an achromatic component absorb an unknown fraction of the PV signal and bias
+the downstream flow-field estimate.  The chromatic structure (intrinsic color
+scatter, color--velocity slope residuals), by contrast, is fully identifiable
+from the multi-band photometry and is precisely what the $g$-band extension is
+designed to measure.  Because the excluded direction is weakly constrained, the
+posterior on $\hat{\boldsymbol{n}}$ may be broad; that is itself the honest
+outcome, and a posterior-predictive check on the color residuals ($z{-}y$,
+$g{-}y$) validates the chromatic structure independently of it.
+
+\subsection{Relation to the Single-Color Model}
 \label{sec:2c:reduction}
 
-Setting the intrinsic $y{-}g$ and $z{-}g$ correlations to zero
-($S_{yg}=S_{zg}=0$, so $A_{14}=A_{zg}=0$) together with $\delta_g=0$ and
-$\alpha_{k,g}=0$ makes the $\hat{g}$ observation uninformative and decouples it
-from $(\hat{x},\hat{y},\hat{z})$, recovering the $3\times 3$ single-color model
-of \S\ref{sec:cc:marginalization}.
+The rank-2 model nests the fixed-null chromatic-only model as the special case
+$\hat{\boldsymbol{n}}=\boldsymbol{e}=(1,1,1)/\!\sqrt{3}$, but for a generic fitted
+null direction it does \emph{not} reduce to the single-color model of
+\S\ref{sec:cc:marginalization}.  The single-color model carries independent
+per-band intrinsic variances
+($\sigma_{\mathrm{int},y}^2,\sigma_{\mathrm{int},z}^2$) that include achromatic
+scatter, whereas $\boldsymbol{S}=\boldsymbol{V}\boldsymbol{\Sigma}_c
+\boldsymbol{V}^T$ is rank~2 and satisfies
+$\boldsymbol{S}\,\hat{\boldsymbol{n}}=\boldsymbol{0}$; it therefore cannot
+reproduce a full-rank (in particular, a generic diagonal) intrinsic covariance ---
+a rank-2 matrix cannot be full rank, whatever $\hat{\boldsymbol{n}}$.  The rank-2
+restriction is a deliberate modeling choice (\S\ref{sec:2c:priors}), not a
+special-case limit of the single-color model.
+
+Setting the second scale $S_{c,2}=0$ (so $\boldsymbol{\Sigma}_c$ is rank~1) makes
+$\boldsymbol{S}$ rank~1, $\boldsymbol{S}=S_{c,1}^2\,\boldsymbol{v}\boldsymbol{v}^T$
+for the surviving column $\boldsymbol{v}$ of $\boldsymbol{V}$ (a unit vector in the
+plane $\perp\hat{\boldsymbol{n}}$); additionally taking $\delta_g=0$ and
+$\alpha_{k,g}=0$ makes $\hat{g}$ uninformative.  This is the analog of the
+single-color model with a single intrinsic-scatter degree of freedom, but it still
+carries no scatter along $\hat{\boldsymbol{n}}$ --- the independent
+$\sigma_{\mathrm{int},y}^2$ and $\sigma_{\mathrm{int},z}^2$ diagonal terms of the
+single-color $\boldsymbol{B}_i$ have no counterpart here.
 
 
 \section{Redshift-Dependent Rotational-Velocity Correction}

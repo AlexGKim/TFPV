@@ -819,44 +819,27 @@ def ystar_pp_mean_sd_color_vectorized(
     return mean_y, sd_y
 
 
-# [2COLOR] posterior columns of the free intrinsic (y,z,g) covariance:
-# per-band scales + the lower-triangular correlation Cholesky entries read by
+# [2COLOR] posterior columns of the chromatic-only intrinsic covariance:
+# two chromatic scales + the 2x2 correlation Cholesky entries read by
 # _intrinsic_cov_entries. Use in read_cmdstan_posterior(keep=...) for 2color.
 _S_COV_COLS = [
-    "S_scale.1", "S_scale.2", "S_scale.3",
-    "S_Lcorr.1.1", "S_Lcorr.2.1", "S_Lcorr.2.2",
-    "S_Lcorr.3.1", "S_Lcorr.3.2", "S_Lcorr.3.3",
+    "S.1.1", "S.1.2", "S.1.3", "S.2.2", "S.2.3", "S.3.3",
 ]
 
 
 def _intrinsic_cov_entries(draws):
-    """Reconstruct the free intrinsic (y,z,g) covariance entries from a 2color
-    posterior. The model samples S = diag(S_scale) · R · diag(S_scale) with
-    R = L Lᵀ, L = S_Lcorr the correlation Cholesky (lower-triangular; index
-    1=y, 2=z, 3=g). Returns per-draw arrays (Syy, Syz, Syg, Szz, Szg, Sgg).
+    """Intrinsic (y,z,g) covariance entries read directly from the sampled S
+    matrix (a transformed parameter written to the CSV as S.i.j). This is
+    parameterization-independent: it works for the fixed-null and free-null
+    rank-2 models alike, since both expose the same 3x3 S. Returns per-draw
+    arrays (Syy, Syz, Syg, Szz, Szg, Sgg).
     """
-    s1 = draws["S_scale.1"].to_numpy(float)
-    s2 = draws["S_scale.2"].to_numpy(float)
-    s3 = draws["S_scale.3"].to_numpy(float)
-    L11 = draws["S_Lcorr.1.1"].to_numpy(float)
-    L21 = draws["S_Lcorr.2.1"].to_numpy(float)
-    L22 = draws["S_Lcorr.2.2"].to_numpy(float)
-    L31 = draws["S_Lcorr.3.1"].to_numpy(float)
-    L32 = draws["S_Lcorr.3.2"].to_numpy(float)
-    L33 = draws["S_Lcorr.3.3"].to_numpy(float)
-    # R = L Lᵀ (correlation matrix; diagonal ≈ 1)
-    R11 = L11 * L11
-    R22 = L21 * L21 + L22 * L22
-    R33 = L31 * L31 + L32 * L32 + L33 * L33
-    R21 = L21 * L11
-    R31 = L31 * L11
-    R32 = L31 * L21 + L32 * L22
-    Syy = s1 * s1 * R11
-    Szz = s2 * s2 * R22
-    Sgg = s3 * s3 * R33
-    Syz = s1 * s2 * R21
-    Syg = s1 * s3 * R31
-    Szg = s2 * s3 * R32
+    Syy = draws["S.1.1"].to_numpy(float)
+    Syz = draws["S.1.2"].to_numpy(float)
+    Syg = draws["S.1.3"].to_numpy(float)
+    Szz = draws["S.2.2"].to_numpy(float)
+    Szg = draws["S.2.3"].to_numpy(float)
+    Sgg = draws["S.3.3"].to_numpy(float)
     return Syy, Syz, Syg, Szz, Szg, Sgg
 
 
@@ -892,8 +875,8 @@ def ystar_pp_mean_sd_2color_vectorized(
     ----------
     draws : DataFrame
         MCMC posterior with columns: "slope", "intercept.1", "sigma_int_x",
-        the free intrinsic-covariance parameters "S_scale.1..3" and
-        "S_Lcorr.i.j" (i,j=1..3), "delta_c", "delta_g", "mu_c", "mu_g",
+        the rank-2 intrinsic-covariance entries "S.i.j" (i,j=1..3, the sampled
+        3x3 S), "delta_c", "delta_g", "mu_c", "mu_g",
         "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g".
     xhat_star : (G,) array — observed log-velocity
     sigma_x_star : (G,) array — uncertainty on x̂
@@ -933,8 +916,7 @@ def ystar_pp_mean_sd_2color_vectorized(
     alpha_d   = draws["slope"].to_numpy(float)
     beta_d    = draws["intercept.1"].to_numpy(float)
     six_d     = draws["sigma_int_x"].to_numpy(float)
-    # [2COLOR] free intrinsic (y,z,g) covariance S = diag(S_scale) R diag(S_scale),
-    # R = L L^T with L the sampled correlation Cholesky S_Lcorr (index 1=y,2=z,3=g).
+    # [2COLOR] rank-2 intrinsic covariance S entries, read directly from S.i.j.
     Syy_d, Syz_d, Syg_d, Szz_d, Szg_d, Sgg_d = _intrinsic_cov_entries(draws)
     dc_d      = draws["delta_c"].to_numpy(float)
     dg_d      = draws["delta_g"].to_numpy(float)
@@ -988,13 +970,17 @@ def ystar_pp_mean_sd_2color_vectorized(
         A22 = SzzMG + sigma_z_star[None, :] ** 2
         A44 = SggMG + sigma_g_star[None, :] ** 2
 
-        # D matrix (3×3 over x,z,g). D12 (z-g) is now the free intrinsic S_zg.
+        # D matrix (3×3 over x,z,g). D is the (x̂,ẑ,ĝ) sub-block of the 4×4 B, so
+        # its z-g entry is A_zg = S_zg + δc·δg·σ²_{int,x} (the free intrinsic S_zg
+        # PLUS the term induced by marginalizing the shared latent x, exactly as
+        # in B; see 2color.stan B_zg). Dropping the induced term makes D
+        # inconsistent with B and can break positive-definiteness.
         D00 = sigma1_sq
         D01 = -dcMG * sigma_intx_sq
         D02 = -dgMG * sigma_intx_sq
         D11 = A22 + dcMG**2 * sigma_intx_sq
         D22 = A44 + dgMG**2 * sigma_intx_sq
-        D12 = SzgMG
+        D12 = SzgMG + dcMG * dgMG * sigma_intx_sq
 
         # General symmetric 3×3 inverse (reduces to the old D12=0 formulas).
         det_D   = (D00 * (D11 * D22 - D12**2)
@@ -1176,9 +1162,10 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     alpha_k_r = draws["alpha_kcorr_r"].to_numpy(float)
 
     # Intrinsic y-band variance S_yy (excludes measurement σ_y). Handles both the
-    # 2color free-covariance parameterization and the legacy/single-color
-    # gamma/tau product parameterization (color.stan) for backward compatibility.
-    if "S_scale.1" in draws.columns:
+    # 2color rank-2 covariance parameterization (S written directly to the CSV)
+    # and the legacy/single-color gamma/tau product parameterization (color.stan)
+    # for backward compatibility.
+    if "S.1.1" in draws.columns:
         Syy_d = _intrinsic_cov_entries(draws)[0]        # [2COLOR] S_yy
     else:
         gamma = draws["gamma"].to_numpy(float)
@@ -2252,7 +2239,11 @@ def ystar_pp_cov_2color_vectorized(
         sigma_intx_sq = sixMG**2
         sigma1_sq = sigma_intx_sq + sigma_x_star[None, :]**2
 
-        # [2COLOR] A entries from the free covariance S (A12=S_yz, A14=S_yg, D12=S_zg)
+        # [2COLOR] A entries from the free covariance S (A12=S_yz, A14=S_yg).
+        # The D z-g entry is A_zg = S_zg + δc·δg·σ²_{int,x}: the free intrinsic
+        # S_zg PLUS the term induced by marginalizing the shared latent x, exactly
+        # as in the 4×4 B (see 2color.stan B_zg). Omitting the induced term makes
+        # D inconsistent with B and can break positive-definiteness.
         A11 = SyyMG + sigma_y_star[None, :]**2
         A12 = SyzMG
         A14 = SygMG
@@ -2264,7 +2255,7 @@ def ystar_pp_cov_2color_vectorized(
         D02 = -dgMG * sigma_intx_sq
         D11 = A22 + dcMG**2 * sigma_intx_sq
         D22 = A44 + dgMG**2 * sigma_intx_sq
-        D12 = SzgMG
+        D12 = SzgMG + dcMG * dgMG * sigma_intx_sq
 
         # General symmetric 3×3 inverse (reduces to old D12=0 formulas)
         det_D = (D00 * (D11 * D22 - D12**2)
@@ -2431,8 +2422,8 @@ def ystar_pp_cov_color_xonly_vectorized(
     beta_d = draws["intercept.1"].to_numpy(float)
     six_d = draws["sigma_int_x"].to_numpy(float)
     alpha_k_r_d = draws["alpha_kcorr_r"].to_numpy(float)
-    # Intrinsic y-band variance S_yy: 2color free covariance, else legacy gamma/tau.
-    if "S_scale.1" in draws.columns:
+    # Intrinsic y-band variance S_yy: 2color rank-2 covariance (S.i.j), else legacy gamma/tau.
+    if "S.1.1" in draws.columns:
         Syy_d = _intrinsic_cov_entries(draws)[0]
     else:
         gamma_d = draws["gamma"].to_numpy(float)

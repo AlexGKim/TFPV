@@ -1,17 +1,20 @@
-// 2color.stan — Two-Color TFR Model, free intrinsic-covariance parameterization
+// 2color.stan — Two-Color TFR Model, rank-2 intrinsic covariance
 //
 // Quadrivariate (x, y, z, g) model extending tophat.stan. The intrinsic (y,z,g)
-// scatter is a DIRECTLY-SAMPLED 3x3 covariance S (index 1=y, 2=z, 3=g):
-//   S_scale  — per-band intrinsic std (y, z, g)
-//   S_Lcorr  — Cholesky factor of the 3x3 intrinsic correlation (LKJ prior)
-// This replaces the earlier two-independent-latent-color-factor product
-// parameterization (gamma_tau_c/tau_c/sigma_int_y, gamma_tau_g/tau_g/sigma_int_g,
-// sigma_int_z) whose covariance forced the z-g coupling to zero. That constraint
-// drove the sigma_int -> 0 / tau-floor collapse in both the AbacusSummit mocks
-// and real DR2; the free covariance fits far better (DR2 MAP lp -11807 -> -11536)
-// and reveals a near-rank-1, ~0.4-mag, ~99%-correlated achromatic (PV/distance-
-// modulus) intrinsic-scatter mode. The mean-color structure (delta_c, mu_c,
-// delta_g, mu_g) and the band k-corrections (alpha_kcorr_{r,z,g}) are unchanged.
+// scatter is a RANK-2 covariance S = V Sigma_c V^T with a FREE null direction:
+//   n_null   — unit vector, the null direction of S (uniform-on-sphere prior)
+//   V        — 3x2 orthonormal basis of the plane orthogonal to n_null
+//   Sc_scale — two scatter scales (HalfCauchy(0,1) prior)
+//   Sc_Lcorr — Cholesky factor of the 2x2 correlation (LKJ(2) prior)
+// S has null space along n_null by construction (S n_null = 0), so exactly one
+// direction is excluded from the calibration scatter — but which direction is
+// inferred, not fixed. Setting n_null = e = (1,1,1)/sqrt(3) recovers the
+// chromatic-only model that excludes the achromatic (peculiar-velocity/distance
+// -modulus) direction and assigns it to the downstream velocity-covariance model
+// C_vv; here n_null is fit, so the data determine the excluded direction and
+// achromatic_angle_deg (generated quantities) reports how close it is to e.
+// The mean-color structure (delta_c, mu_c, delta_g, mu_g) and the band
+// k-corrections (alpha_kcorr_{r,z,g}) are unchanged.
 //
 // The 2D marginal likelihood of tophat.stan is replaced by a 1D numerical
 // integral of the quadrivariate N_4 density over y_TF, using the same
@@ -642,14 +645,16 @@ parameters {
          upper=-14 + slope_std * mean_x / sd_x>[N_bins] intercept_std;
   real<lower=0, upper=1> sigma_int_x;
 
-  // [2COLOR] The intrinsic (y,z,g) scatter covariance S is sampled DIRECTLY as
-  // a 3x3 covariance (scales + LKJ correlation Cholesky), replacing the curved,
-  // over-parameterized (gamma_tau_c, log_tau_c, gamma_tau_g, log_tau_g,
-  // sigma_int_y, log_sigma_int_z, log_sigma_int_g) product parameterization.
-  // This (a) removes the gamma*tau curvature/ridge, (b) frees the z-g coupling
-  // that the old factor model forced to zero. Index order: 1=y, 2=z, 3=g.
-  vector<lower=0>[3] S_scale;              // intrinsic scatter std in y,z,g
-  cholesky_factor_corr[3] S_Lcorr;         // Cholesky of the 3x3 correlation
+  // [2COLOR] Rank-2 intrinsic covariance S = V Sigma_c V^T with a FREE null
+  // direction n_null (unit vector, uniform on the sphere). V spans the plane
+  // orthogonal to n_null; S is rank-2 by construction (S n_null = 0) but the
+  // excluded direction is fit, not fixed to the achromatic axis. 5 DOF total:
+  // 2 (n_null) + 2 (Sc_scale) + 1 (Sc_Lcorr). The null direction is only
+  // identified up to sign (S is invariant under n_null -> -n_null) and the
+  // in-plane frame of V is a gauge absorbed by the full 2x2 Sigma_c.
+  unit_vector[3] n_null;                    // free null direction of S
+  vector<lower=0>[2] Sc_scale;             // rank-2 scatter scales
+  cholesky_factor_corr[2] Sc_Lcorr;        // Cholesky of 2x2 correlation
 
   // [COLOR] mean-color structure (kept: these define the MEAN, not the scatter)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
@@ -668,20 +673,31 @@ transformed parameters {
   // folded into S.
   real sigma_int_x_std = sigma_int_x / sd_x;
 
-  // [2COLOR] intrinsic (y,z,g) covariance from scales + correlation Cholesky.
-  matrix[3, 3] L_S = diag_pre_multiply(S_scale, S_Lcorr);
-  matrix[3, 3] S   = multiply_lower_tri_self_transpose(L_S);   // S = L_S L_Sᵀ
+  // [2COLOR] Rank-2 S = V Sigma_c V^T with a free null direction n_null.
+  // V = orthonormal basis of the plane orthogonal to n_null, built from a
+  // Householder reflector H with H*e1 = +/- n_null; columns 2:3 of H span the
+  // plane orthogonal to n_null. Using +sign(n1) avoids cancellation, so this is
+  // numerically stable for all n_null (including near coordinate axes).
+  real s_hh = n_null[1] >= 0 ? 1.0 : -1.0;
+  vector[3] v_hh = n_null;
+  v_hh[1] += s_hh;                                  // v = n_null + sign(n1)*e1
+  matrix[3, 3] H = diag_matrix(rep_vector(1.0, 3))
+                   - (2.0 / dot_self(v_hh)) * (v_hh * v_hh');
+  matrix[3, 2] V = H[ : , 2:3];
+  matrix[2, 2] L_Sc = diag_pre_multiply(Sc_scale, Sc_Lcorr);
+  matrix[2, 2] Sigma_c = multiply_lower_tri_self_transpose(L_Sc);
+  matrix[3, 3] S = V * Sigma_c * V';
 }
 model {
   // Priors — baseline
   sigma_int_x ~ cauchy(0, 1);
 
-  // [2COLOR] Priors on the intrinsic covariance S.
-  //   S_scale: weakly-informative half-Cauchy on the per-band intrinsic std.
-  //   S_Lcorr: LKJ(2) mildly favors the identity (weak shrinkage toward
-  //            uncorrelated bands) without forcing any coupling to zero.
-  S_scale ~ cauchy(0, 1);
-  S_Lcorr ~ lkj_corr_cholesky(2);
+  // [2COLOR] Priors on the rank-2 intrinsic covariance.
+  //   n_null:   uniform on the unit sphere (implicit via the unit_vector type).
+  //   Sc_scale: weakly-informative half-Cauchy on the two scatter scales.
+  //   Sc_Lcorr: LKJ(2) on the 2x2 correlation (1 free parameter).
+  Sc_scale ~ cauchy(0, 1);
+  Sc_Lcorr ~ lkj_corr_cholesky(2);
 
   // [COLOR] Priors for the mean-color structure (unchanged)
   delta_c ~ std_normal();
@@ -699,9 +715,9 @@ model {
   vector[N_total] sigma1_std   = sqrt(sigmasq1_std);
 
   if (y_TF_limits != 0) {
-    // [2COLOR] Intrinsic (y,z,g) covariance entries taken directly from S
-    // (index 1=y, 2=z, 3=g). These replace the old gamma*tau product entries;
-    // the z-g coupling S[2,3] is now a free parameter rather than forced 0.
+    // [2COLOR] Intrinsic (y,z,g) covariance entries from S = V Sigma_c V^T.
+    // S is rank-2 (null along the fitted n_null); entries are functions of
+    // n_null, Sc_scale, and Sc_Lcorr (5 DOF).
     real S_yy = S[1, 1];
     real S_yz = S[1, 2];
     real S_yg = S[1, 3];
@@ -740,11 +756,24 @@ model {
       B[3, 2] = S_yz;
       B[2, 4] = S_yg;
       B[4, 2] = S_yg;
-      B[3, 4] = S_zg;                                   // [2COLOR] now free (was 0)
-      B[4, 3] = S_zg;
+      // [2COLOR] Marginalizing x_i induces a delta_c*delta_g*sigma_int_x^2 term
+      // here. S is the intrinsic covariance CONDITIONAL on x_i, and the
+      // generative model has both z_i and g_i depend on x_i with slopes
+      // -delta_c and -delta_g, so integrating out x's intrinsic scatter
+      // correlates them: Cov(z,g) = (-dc)(-dg)Var(u) + S_zg. The same
+      // marginalization already supplies the -delta_c*sigma_intx^2 entries in
+      // row/column 1 and the +delta_c^2*sigma_intx^2 terms on the diagonal, so
+      // omitting it here makes B inconsistent with those entries -- and then B
+      // is not the marginal covariance of any generative model, so it can fail
+      // to be positive definite even though S is PD by construction (which is
+      // what the sporadic cholesky_decompose rejections were reporting).
+      real B_zg = S_zg + delta_c * delta_g * sigma_intx_sq;
+      B[3, 4] = B_zg;
+      B[4, 3] = B_zg;
       B[3, 3] = S_zz + square(delta_c) * sigma_intx_sq + sigma_z_sq[n];
       B[4, 4] = S_gg + square(delta_g) * sigma_intx_sq + sigma_g_sq[n];
 
+      for (k in 1:4) B[k, k] += 1e-10;
       matrix[4, 4] L_B = cholesky_decompose(B);
 
       // [2COLOR] Observed data vector for this galaxy (standardized x)
@@ -808,4 +837,15 @@ model {
 generated quantities {
   real slope = slope_std / sd_x;
   vector[N_bins] intercept = intercept_std - slope_std * mean_x / sd_x;
+
+  // [2COLOR] Report the fitted null direction with a fixed sign convention
+  // (n . e >= 0, since S is invariant under n_null -> -n_null) and the angle
+  // (deg) between it and the achromatic axis e = (1,1,1)/sqrt(3). A posterior
+  // for achromatic_angle_deg concentrated near 0 endorses the chromatic-only
+  // assumption; a broad or offset posterior means the data do not pin the null
+  // direction to the achromatic axis.
+  vector[3] e_achrom = rep_vector(inv_sqrt(3.0), 3);
+  real n_dot_e = dot_product(n_null, e_achrom);
+  vector[3] n_report = n_dot_e >= 0 ? n_null : -n_null;
+  real achromatic_angle_deg = acos(fmin(1.0, abs(n_dot_e))) * 180.0 / pi();
 }
