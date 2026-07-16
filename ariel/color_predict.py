@@ -182,33 +182,51 @@ def _write_cov_h5(out_path, all_mu_c, all_cond_var, v_dust=None, v_phot=None,
     return out_path
 
 
-def _get_holdout_mask(fits_path, main_mask, input_data):
-    """Return boolean mask (same length as ``main_mask``) for holdout galaxies.
+def _train_analysis_masks(sga_ids, input_data):
+    """Given SGA_IDs (in any index space) and input.json contents, return
+    ``(train_mask, analysis_mask)`` booleans in that same space.
 
-    Holdout = MAIN AND NOT in training set.
+    ``analysis_mask`` = NOT in ``train_sga_ids``; ``train_mask`` = in
+    ``train_sga_ids``. Both are restricted to ``subset_sga_ids`` when subset
+    partitioning is active (``n_subsets`` in ``input_data``). If no split was
+    requested (``train_sga_ids`` absent), ``train_mask`` is all-False and
+    ``analysis_mask`` is all-True — backward compatible with unsplit runs.
+
+    This is the single source of truth for train/analysis/subset membership;
+    callers should not reimplement this logic inline (see 2COLOR.md).
+    """
+    sga_ids = np.asarray(sga_ids, dtype=float)
+    if "train_sga_ids" not in input_data:
+        return (np.zeros(len(sga_ids), dtype=bool),
+                np.ones(len(sga_ids), dtype=bool))
+
+    train_ids = set(input_data["train_sga_ids"])
+    in_training = np.isin(sga_ids, list(train_ids))
+
+    if "n_subsets" in input_data:
+        in_subset = np.isin(sga_ids, list(input_data["subset_sga_ids"]))
+        return in_subset & in_training, in_subset & ~in_training
+
+    return in_training, ~in_training
+
+
+def _sga_ids_valid_for_mask(fits_path, main_mask):
+    """Return SGA_IDs in the same valid-row index space as ``main_mask``.
 
     Reads SGA_ID from the FITS catalog (applying the same V > 0 validity filter
-    used by ``load_xyz_and_uncertainties_from_desi``) to map training IDs back
-    to the valid-row index space of ``main_mask``.
-
-    If ``train_sga_ids`` is absent from ``input_data`` (no split requested),
-    returns the full MAIN mask unchanged — backward compatible.
+    used by ``load_xyz_and_uncertainties_from_desi``) to map IDs back to the
+    valid-row index space of ``main_mask``.
 
     Parameters
     ----------
     fits_path : str — path to the DESI FITS catalog
-    main_mask : array-like of bool — MAIN=True mask (length = N valid galaxies)
-    input_data : dict — contents of input.json
+    main_mask : array-like of bool — mask (length = N valid galaxies)
 
     Returns
     -------
-    holdout : bool ndarray, same length as ``main_mask``
+    sga_ids_valid : float ndarray, same length as ``main_mask``
     """
     main_mask = np.asarray(main_mask, dtype=bool)
-    if "train_sga_ids" not in input_data:
-        return main_mask   # backward compat: all MAIN galaxies
-
-    train_ids = set(input_data["train_sga_ids"])
 
     # Load SGA_IDs with the same validity filter as load_xyz_and_uncertainties_from_desi.
     # The caller is responsible for passing a main_mask whose length matches this filter:
@@ -246,27 +264,11 @@ def _get_holdout_mask(fits_path, main_mask, input_data):
 
     if len(sga_ids_valid) != len(main_mask):
         raise ValueError(
-            f"_get_holdout_mask: SGA_ID array length ({len(sga_ids_valid)}) "
+            f"_sga_ids_valid_for_mask: SGA_ID array length ({len(sga_ids_valid)}) "
             f"does not match main_mask length ({len(main_mask)}). "
             f"The validity filter may differ from load_xyz_and_uncertainties_from_desi."
         )
-
-    in_training = np.isin(sga_ids_valid, list(train_ids))
-
-    # Subset partition mode: predict on subset holdout (in subset but NOT in training)
-    if "n_subsets" in input_data:
-        subset_ids = set(input_data["subset_sga_ids"])
-        in_subset = np.isin(sga_ids_valid, list(subset_ids))
-        holdout = main_mask & in_subset & ~in_training
-        print(f"  Subset partition mode: {in_subset.sum()} subset galaxies, "
-              f"{in_training.sum()} training, {holdout.sum()} holdout")
-        return holdout
-
-    # Standard holdout mode: predict on MAIN galaxies NOT in training
-    holdout = main_mask & ~in_training
-    print(f"  Train/holdout split: {len(train_ids)} training, "
-          f"{holdout.sum()} holdout  (MAIN total: {main_mask.sum()})")
-    return holdout
+    return sga_ids_valid
 
 
 def _load_logV(data, names):
@@ -1380,10 +1382,12 @@ def DESI_color(
     mean_y = mean_pred - yhat_star
     sigma_y = sd_pred
 
-    # MAIN/holdout sample mask
+    # MAIN sample mask (union of training + analysis)
     rz_color_desi = _load_rz_color_from_desi(galaxy_fits)
     _main_all = _apply_main_cuts_with_zmax(cfg, xhat_star, yhat_star, zobs=zobs_star, rz_color=rz_color_desi)
-    main_mask = _get_holdout_mask(galaxy_fits, _main_all, input_data)
+    _sga_ids_valid = _sga_ids_valid_for_mask(galaxy_fits, _main_all)
+    _train_mask, _analysis_mask = _train_analysis_masks(_sga_ids_valid, input_data)
+    main_mask = _main_all & (_train_mask | _analysis_mask)
 
     xhat_main = xhat_star[main_mask]
     sigma_x_main = sigma_x_star[main_mask]
@@ -1628,7 +1632,12 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
       MU_ERR       = sd_pred  (sd_pred already includes σ_{y,★} via A₁₁)
       LOGDIST      = 0.2 * ((R_MAG_SB26 - R_ABSMAG_SB26) - MU_TF)
       LOGDIST_ERR  = 0.2 * MU_ERR
-      MAIN         = bool (True if passes selection cuts from config.json)
+      MAIN         = bool (True if passes selection cuts from config.json;
+                     the union of training + analysis when a train/analysis
+                     split is present in input.json)
+      ANALYSIS     = bool (True if MAIN and NOT in train_sga_ids; only
+                     meaningful where MAIN is True — MAIN & ~ANALYSIS marks
+                     training rows)
     """
     _p = lambda name: os.path.join(run_dir, name)
 
@@ -1769,16 +1778,15 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
             cfg = json.load(f)
 
     _main_valid = valid & _apply_main_cuts_with_zmax(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
-    # Apply train/holdout split in raw-catalog space (n_rows rows).
-    # _get_holdout_mask operates in validity-filtered space and cannot be used here.
-    if "train_sga_ids" in input_data:
-        _train_ids = set(input_data["train_sga_ids"])
-        names = [c.name for c in table_hdu.columns]
-        _sga_raw = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
-                    else np.arange(len(data), dtype=float))
-        main = _main_valid & ~np.isin(_sga_raw, list(_train_ids))
-    else:
-        main = _main_valid
+    # Apply train/analysis split in raw-catalog space (n_rows rows) via the
+    # shared helper — _train_analysis_masks operates on SGA_IDs directly, so
+    # it works in this (non-validity-filtered) index space too.
+    names = [c.name for c in table_hdu.columns]
+    _sga_raw = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
+                else np.arange(len(data), dtype=float))
+    _train_mask, _analysis_mask = _train_analysis_masks(_sga_raw, input_data)
+    main = _main_valid & (_train_mask | _analysis_mask)
+    analysis = main & _analysis_mask
 
     new_cols = [
         fits.Column(name="MU_TF", format="E", array=MU_TF.astype(np.float32)),
@@ -1786,6 +1794,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
         fits.Column(name="LOGDIST", format="E", array=LOGDIST.astype(np.float32)),
         fits.Column(name="LOGDIST_ERR", format="E", array=LOGDIST_ERR.astype(np.float32)),
         fits.Column(name="MAIN", format="L", array=main),
+        fits.Column(name="ANALYSIS", format="L", array=analysis),
     ]
     new_names = {c.name for c in new_cols}
     base_cols = [c for c in table_hdu.columns if c.name not in new_names]
@@ -1796,7 +1805,8 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
     out_hdul.writeto(out_path, overwrite=True)
 
     print(f"Written {n_rows} rows to {out_path}")
-    print(f"  MAIN: {main.sum()} objects pass selection cuts")
+    print(f"  MAIN: {main.sum()} objects pass selection cuts "
+          f"({analysis.sum()} analysis, {(main & ~analysis).sum()} training)")
     print(f"  MU_TF finite: {np.isfinite(MU_TF).sum()} objects")
 
 
@@ -1810,7 +1820,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     See paper/main.tex §sec:cc:x_only.
 
     New columns (same as color_catalog.fits):
-      MU_TF, MU_ERR, LOGDIST, LOGDIST_ERR, MAIN
+      MU_TF, MU_ERR, LOGDIST, LOGDIST_ERR, MAIN, ANALYSIS
     """
     _p = lambda name: os.path.join(run_dir, name)
 
@@ -1913,25 +1923,14 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
             cfg = json.load(f)
 
     _main_valid = valid & _apply_main_cuts_with_zmax(cfg, xhat, abs_mag, zobs=zobs, rz_color=rz_color)
-    # Apply train/holdout split in raw-catalog space (n_rows rows).
-    if "train_sga_ids" in input_data:
-        _train_ids = set(input_data["train_sga_ids"])
-        names = [c.name for c in table_hdu.columns]
-        _sga_raw = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
-                    else np.arange(len(data), dtype=float))
-        _in_training = np.isin(_sga_raw, list(_train_ids))
-        # Subset partition mode: restrict holdout to this partition's subset
-        # (mirrors _get_holdout_mask's subset handling).
-        if "n_subsets" in input_data:
-            _subset_ids = set(input_data["subset_sga_ids"])
-            _in_subset = np.isin(_sga_raw, list(_subset_ids))
-            main = _main_valid & _in_subset & ~_in_training
-            print(f"  Subset partition mode: {_in_subset.sum()} subset galaxies, "
-                  f"{_in_training.sum()} training, {main.sum()} holdout")
-        else:
-            main = _main_valid & ~_in_training
-    else:
-        main = _main_valid
+    # Apply train/analysis split in raw-catalog space (n_rows rows) via the
+    # shared helper.
+    names = [c.name for c in table_hdu.columns]
+    _sga_raw = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
+                else np.arange(len(data), dtype=float))
+    _train_mask, _analysis_mask = _train_analysis_masks(_sga_raw, input_data)
+    main = _main_valid & (_train_mask | _analysis_mask)
+    analysis = main & _analysis_mask
 
     new_cols = [
         fits.Column(name="MU_TF", format="E", array=MU_TF.astype(np.float32)),
@@ -1939,6 +1938,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         fits.Column(name="LOGDIST", format="E", array=LOGDIST.astype(np.float32)),
         fits.Column(name="LOGDIST_ERR", format="E", array=LOGDIST_ERR.astype(np.float32)),
         fits.Column(name="MAIN", format="L", array=main),
+        fits.Column(name="ANALYSIS", format="L", array=analysis),
     ]
     new_names = {c.name for c in new_cols}
     base_cols = [c for c in table_hdu.columns if c.name not in new_names]
@@ -1949,7 +1949,8 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     out_hdul.writeto(out_path, overwrite=True)
 
     print(f"Written {n_rows} rows to {out_path}")
-    print(f"  MAIN: {main.sum()} objects pass selection cuts")
+    print(f"  MAIN: {main.sum()} objects pass selection cuts "
+          f"({analysis.sum()} analysis, {(main & ~analysis).sum()} training)")
     print(f"  MU_TF finite: {np.isfinite(MU_TF).sum()} objects")
 
 
@@ -2525,6 +2526,15 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
 
     Outputs:
       output/<run>/color_xonly_cov.fits  — full (G, G) float32 covariance matrix
+                                            over the train+analysis union
+      output/<run>/color_xonly_cov_analysis.npy — boolean array (same row/col
+                                            order as the cov matrix), True for
+                                            analysis (non-training) rows;
+                                            recover the analysis-only
+                                            covariance via
+                                            cov[np.ix_(analysis, analysis)]
+      (2color model writes color_xonly_cov.h5 instead, with an 'analysis'
+       dataset alongside 'cov')
     """
     from predict import plot_cov
 
@@ -2581,23 +2591,11 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
 
     _main_valid = _valid & _apply_main_cuts_with_zmax(cfg, _xhat, _abs_mag,
                                             zobs=_zobs_raw, rz_color=_rz)
-    if "train_sga_ids" in input_data:
-        _train_ids = set(input_data["train_sga_ids"])
-        _in_training = np.isin(_sga_raw, list(_train_ids))
-        # Subset partition mode: restrict holdout to this partition's subset
-        # (mirrors _get_holdout_mask's subset handling).
-        if "n_subsets" in input_data:
-            _subset_ids = set(input_data["subset_sga_ids"])
-            _in_subset = np.isin(_sga_raw, list(_subset_ids))
-            main = _main_valid & _in_subset & ~_in_training
-            print(f"  Subset partition mode: {_in_subset.sum()} subset galaxies, "
-                  f"{_in_training.sum()} training, {main.sum()} holdout")
-        else:
-            main = _main_valid & ~_in_training
-    else:
-        main = _main_valid
-    print(f"  Train/holdout split: {len(input_data.get('train_sga_ids', []))} training, "
-          f"{main.sum()} holdout  (MAIN total: {_main_valid.sum()})")
+    _train_mask, _analysis_mask = _train_analysis_masks(_sga_raw, input_data)
+    main = _main_valid & (_train_mask | _analysis_mask)
+    analysis = main & _analysis_mask
+    print(f"  Train/analysis split: {(main & ~analysis).sum()} training, "
+          f"{analysis.sum()} analysis  (MAIN total: {main.sum()})")
 
     xhat_star     = _xhat[main]
     sigma_x_star  = _sigma_x[main]
@@ -2605,6 +2603,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     zobs_star     = _zobs_raw[main]
     ba_star       = _ba_raw[main]
     photsys_star  = _photsys_raw[main]
+    analysis_star = analysis[main]
 
     keep_cols = ["slope", "intercept.1", "sigma_int_x", "alpha_kcorr_r"]
     if model == "2color":
@@ -2637,7 +2636,12 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
             mean_log1pz=mean_log1pz,
             out_h5=h5_out, v_dust=v_dust, v_phot=v_phot,
         )
-        print(f"Saved xonly covariance HDF5 to {h5_out}")
+        with h5py.File(h5_out, 'a') as _hf:
+            if 'analysis' in _hf:
+                del _hf['analysis']
+            _hf.create_dataset('analysis', data=analysis_star)
+        print(f"Saved xonly covariance HDF5 to {h5_out} "
+              f"(with 'analysis' dataset for analysis-only reconstruction)")
         with h5py.File(h5_out, 'r') as _hf:
             cov_sub = _hf['cov'][idx, :][:, idx]
         plot_cov(cov_sub, _p("color_xonly_cov_sub.png"))
@@ -2653,11 +2657,15 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         fits_out = _p("color_xonly_cov.fits")
         hdr = fits.Header()
         hdr["COMMENT"] = "Posterior predictive covariance matrix (float32), x-hat only"
-        hdr["COMMENT"] = f"Row/col order: MAIN=True rows of color_xonly_catalog.fits"
+        hdr["COMMENT"] = "Row/col order: MAIN=True rows of color_xonly_catalog.fits (train + analysis union)"
         hdr["MODEL"] = "color_xonly"
         hdr["RUN"] = os.path.basename(run_dir)
         fits.writeto(fits_out, cov.astype(np.float32), header=hdr, overwrite=True)
+        analysis_out = _p("color_xonly_cov_analysis.npy")
+        np.save(analysis_out, analysis_star)
         print(f"Saved xonly covariance FITS to {fits_out}")
+        print(f"Saved analysis-row mask to {analysis_out} "
+              f"(cov[np.ix_(analysis, analysis)] gives the analysis-only covariance)")
         cov_sub = cov[np.ix_(idx, idx)]
         plot_cov(cov_sub, _p("color_xonly_cov_sub.png"))
 
@@ -2668,9 +2676,18 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
 
     Outputs:
       output/<run>/color_cov.fits         — full (G, G) float32 covariance matrix
+                                             over the train+analysis union
+      output/<run>/color_cov_analysis.npy — boolean array (same row/col order
+                                             as the cov matrix), True for
+                                             analysis (non-training) rows;
+                                             recover the analysis-only
+                                             covariance via
+                                             cov[np.ix_(analysis, analysis)]
       output/<run>/color_cov.png          — covariance + correlation visualization
       output/<run>/color_cov_sub.png      — same for a random subset ≤512 galaxies
       output/<run>/color_cov_sub_noobs.png — subset without obs-magnitude diagonal
+      (2color model writes color_cov.h5 instead, with an 'analysis' dataset
+       alongside 'cov')
     """
     from predict import plot_cov
 
@@ -2708,7 +2725,16 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
 
     rz_color_full = _load_rz_color_from_desi(fits_path)
     _main_all = _apply_main_cuts_with_zmax(cfg, xhat_full, yhat_full, zobs=zobs_full, rz_color=rz_color_full)
-    main = _get_holdout_mask(fits_path, _main_all, input_data)
+    with fits.open(fits_path) as _hdul_ids:
+        _data_all = _hdul_ids[1].data  # type: ignore[union-attr]
+        _sga_raw_all = (np.asarray(_data_all["SGA_ID"], dtype=float)
+                        if "SGA_ID" in _data_all.dtype.names
+                        else np.arange(len(_data_all), dtype=float))
+    _sga_ids_valid = _sga_raw_all[valid_mask]
+    _train_mask, _analysis_mask = _train_analysis_masks(_sga_ids_valid, input_data)
+    main = _main_all & (_train_mask | _analysis_mask)
+    analysis = main & _analysis_mask
+    analysis_star = analysis[main]
     xhat_star = xhat_full[main]
     sigma_x_star = sigma_x_full[main]
     sigma_y_star = sigma_y_full[main]
@@ -2756,7 +2782,12 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
             mean_log1pz=mean_log1pz,
             out_h5=h5_out, v_dust=v_dust, v_phot=v_phot,
         )
-        print(f"Saved covariance HDF5 to {h5_out}")
+        with h5py.File(h5_out, 'a') as _hf:
+            if 'analysis' in _hf:
+                del _hf['analysis']
+            _hf.create_dataset('analysis', data=analysis_star)
+        print(f"Saved covariance HDF5 to {h5_out} "
+              f"(with 'analysis' dataset for analysis-only reconstruction)")
         # Read back diagnostic sub-matrices for plots.
         with h5py.File(h5_out, 'r') as _hf:
             cov_sub = _hf['cov'][idx, :][:, idx]
@@ -2788,11 +2819,15 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
         fits_out = _p("color_cov.fits")
         hdr = fits.Header()
         hdr["COMMENT"] = "Posterior predictive covariance matrix (float32)"
-        hdr["COMMENT"] = f"Row/col order: MAIN=True rows of color_catalog.fits"
+        hdr["COMMENT"] = "Row/col order: MAIN=True rows of color_catalog.fits (train + analysis union)"
         hdr["MODEL"] = "color"
         hdr["RUN"] = os.path.basename(run_dir)
         fits.writeto(fits_out, cov.astype(np.float32), header=hdr, overwrite=True)
+        analysis_out = _p("color_cov_analysis.npy")
+        np.save(analysis_out, analysis_star)
         print(f"Saved covariance FITS to {fits_out}")
+        print(f"Saved analysis-row mask to {analysis_out} "
+              f"(cov[np.ix_(analysis, analysis)] gives the analysis-only covariance)")
 
         plot_cov(cov, _p("color_cov.png"))
 

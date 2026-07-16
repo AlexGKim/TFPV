@@ -29,6 +29,83 @@ export CONFIG=configs/dr1_v6_2color.json              # pipeline config
 
 ---
 
+## Two-population runs (Spiral / Irregular)
+
+`SGA-2020_loa_Vrot_VI_v0.fits` is fit as **two independent populations**, each
+with its own selection, its own MCMC, and its own prediction run:
+
+| Population | Predicate | Rows |
+|---|---|---|
+| Spiral | `MORPHTYPE_AI == 'Spiral'` and not VI-rejected | 23,422 |
+| Irregular | `MORPHTYPE_AI == 'Irregular'` and not VI-rejected | 8,409 |
+
+`JOHN_VI` is a masked column whose only unmasked value is `'reject'`, so
+"not VI-rejected" means `JOHN_VI.mask == True`. It applies to **both**
+populations.
+
+The population cut is applied **once, upstream**, by pre-filtering the catalog
+into one FITS file per population. Each population is then an ordinary
+single-FITS run and the rest of the pipeline is unchanged. This is deliberate:
+the validity mask is re-derived independently in `desi_data.py`,
+`color_predict.py` (each catalog/covariance writer builds its own validity
+mask, then calls the shared `_train_analysis_masks` helper for train/analysis
+membership) and `explore_residuals.py`, so a population predicate threaded
+through all of them could be applied in one place and missed in another —
+silently fitting one population while validating against another. A
+pre-filtered file cannot disagree with itself.
+
+```bash
+python make_population_subsets.py     # writes data/<stem>_spiral.fits, _irregular.fits
+```
+
+Then, **for each population**, run the full workflow with its own run/config:
+
+```bash
+export FITS=data/SGA-2020_loa_Vrot_VI_v0_spiral.fits   # or _irregular.fits
+export RUN=DR2_v0_2color_spiral                        # or _irregular
+export CONFIG=configs/dr2_v0_2color_spiral.json        # or _irregular
+```
+
+Each population needs **its own selection** — complete [DR1.md](DR1.md)
+Steps 1–3b separately for each. The parallelogram fit to the blended sample is
+centred on the spiral-dominated mix (it keeps 82% of z-selected spirals but only
+72% of irregulars, which sit ~0.05 dex slower and ~0.3 mag fainter), and
+`2color.stan` integrates over the selection region, so the config must describe
+the cut actually applied to that population. Note `set_fiducial.py` and
+`export_config.py` are interactive.
+
+### Training sample size
+
+The per-population configs set `train_fraction` rather than `n_objects`:
+
+```json
+"train_fraction": 0.40
+```
+
+`n_objects` is an absolute count, which silently stops meaning "40%" once the
+selection is re-derived and the post-selection count moves. `train_fraction`
+resolves against the post-selection count at data-prep time
+(`n_objects = round(train_fraction * N_after_cuts)`) and the resolved value is
+recorded in `input.json`. The two are mutually exclusive; if both are given,
+`n_objects` wins and a warning is printed.
+
+This only chooses *how many*. The galaxies chosen are still recorded explicitly
+as `train_sga_ids` in `input.json` — `color_predict.py` never sees the
+fraction, only the IDs.
+
+`color_predict.py` predicts on the **union** of training and analysis
+galaxies: `MAIN` marks every galaxy that passes selection cuts (training and
+analysis both), and a separate boolean column `ANALYSIS` marks the subset
+*not* in `train_sga_ids` (i.e. `MAIN & ANALYSIS` = analysis rows,
+`MAIN & ~ANALYSIS` = training rows). This is written into
+`color_catalog.fits`/`color_xonly_catalog.fits` by `write_desi_catalog_color`/
+`write_desi_catalog_color_xonly`, and the same union is used for the
+posterior-predictive covariance matrices (`write_cov_color`,
+`write_cov_color_xonly`). See "Analysis-only covariance matrix" below for how
+to recover the analysis-only covariance from the union output.
+
+---
+
 ## Step 4: Prepare data
 
 Convert the FITS file to Stan JSON format. Both z-band and g-band magnitudes are
@@ -111,8 +188,8 @@ RUN = os.environ['RUN']
 df = pd.read_csv(f'output/{RUN}/2color.csv', comment='#')
 sampling_params = [
     'slope_std', 'intercept_std.1', 'sigma_int_x',
-    'S_scale.1', 'S_scale.2', 'S_scale.3',            # intrinsic (y,z,g) scatter std
-    'S_Lcorr.2.1', 'S_Lcorr.3.1', 'S_Lcorr.3.2',      # free correlation-Cholesky entries
+    'Sc_scale.1', 'Sc_scale.2',                        # chromatic scatter scales
+    'Sc_Lcorr.2.1',                                    # 2x2 correlation Cholesky (1 free entry)
     'delta_c', 'mu_c', 'delta_g', 'mu_g',
     'alpha_kcorr_r', 'alpha_kcorr_z', 'alpha_kcorr_g'
 ]
@@ -173,12 +250,11 @@ open output/$RUN/2color.png
 
 Key parameters to check:
 - `slope` — TFR slope
-- `S_scale.1/2/3` — intrinsic (y,z,g) scatter std. The free intrinsic-covariance
-  parameterization (replacing the old `gamma`/`tau_c`/`gamma_g`/`tau_g`/`sigma_int_*`
-  product form) fits far better and reveals a near-rank-1, ~0.4-mag, ~99%-correlated
-  achromatic (PV/distance-modulus) scatter mode (DR2 MAP: ~0.42/0.39/0.44).
-- `S_Lcorr` — intrinsic-correlation Cholesky; implied band correlations are high
-  (DR2 MAP: y-z ≈ y-g ≈ 0.99, z-g ≈ 0.97).
+- `Sc_scale.1/2` — chromatic scatter scales. The chromatic-only covariance
+  S = V Σ_c Vᵀ excludes the achromatic (PV/distance-modulus) direction by
+  construction; all achromatic scatter is owned by the downstream C_vv model.
+- `Sc_Lcorr.2.1` — the single free entry of the 2×2 chromatic correlation
+  Cholesky (controls the correlation between the two chromatic modes).
 - `delta_c`, `delta_g` — color–velocity slopes (mean structure)
 - `alpha_kcorr_r`, `alpha_kcorr_z`, `alpha_kcorr_g` — band k-corrections
 
@@ -219,10 +295,27 @@ Outputs produced:
 | `output/$RUN/gr_color_xonly.png` | Residual vs. g−r color (x-only) |
 | `output/$RUN/variance_redshift_color.png` | Prediction variance vs. redshift |
 | `output/$RUN/variance_redshift_color_xonly.png` | Prediction variance vs. redshift (x-only) |
-| `output/$RUN/color_catalog.fits` | DESI catalog with MU_TF, LOGDIST (full model) |
-| `output/$RUN/color_xonly_catalog.fits` | DESI catalog with MU_TF, LOGDIST (x-only) |
-| `output/$RUN/color_cov.h5` | (G,G) covariance matrix HDF5, dataset `cov` (full model) |
-| `output/$RUN/color_xonly_cov.h5` | (G,G) covariance matrix HDF5, dataset `cov` (x-only) |
+| `output/$RUN/color_catalog.fits` | DESI catalog with MU_TF, LOGDIST, MAIN, ANALYSIS (full model) |
+| `output/$RUN/color_xonly_catalog.fits` | DESI catalog with MU_TF, LOGDIST, MAIN, ANALYSIS (x-only) |
+| `output/$RUN/color_cov.h5` | (G,G) covariance matrix HDF5, datasets `cov`, `analysis` (full model) |
+| `output/$RUN/color_xonly_cov.h5` | (G,G) covariance matrix HDF5, datasets `cov`, `analysis` (x-only) |
+
+`MAIN` marks every galaxy passing selection cuts — the union of training and
+analysis. `ANALYSIS` marks the non-training subset (`MAIN & ANALYSIS` =
+analysis rows, `MAIN & ~ANALYSIS` = training rows). The (G,G) covariance
+matrices are computed over the same union, in the row/col order of the
+`MAIN`-selected rows; the `analysis` dataset (or, for non-2color models,
+`color_cov_analysis.npy`/`color_xonly_cov_analysis.npy`) is a boolean array
+in that same row/col order, so the analysis-only covariance is recoverable
+without re-deriving any masks:
+
+```python
+import h5py, numpy as np
+with h5py.File("output/$RUN/color_xonly_cov.h5", "r") as f:
+    cov = f["cov"][:]                    # full (G, G) union covariance
+    analysis = f["analysis"][:]          # bool, True = analysis (non-training) row
+cov_analysis = cov[np.ix_(analysis, analysis)]
+```
 
 > **Note:** For the 2color model the covariance matrices are written as gzip-compressed
 > HDF5 files (`color_cov.h5`, `color_xonly_cov.h5`), not FITS, to allow row-chunked
@@ -233,6 +326,10 @@ Outputs produced:
 >     cov = f["cov"][:]          # full matrix (G×G float32)
 >     row = f["cov"][0, :]       # single row without loading all
 > ```
+> For non-2color models, the same matrices are written as FITS
+> (`color_cov.fits`, `color_xonly_cov.fits`) with a sidecar
+> `color_cov_analysis.npy`/`color_xonly_cov_analysis.npy` boolean array in
+> place of the `analysis` dataset.
 
 ---
 
