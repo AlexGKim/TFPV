@@ -171,11 +171,12 @@ covariance as the initial metric raises the stepsize ~40× and brings treedepth 
 a practical range.
 
 ```bash
-# Short 1-chain run — metric.json does NOT exist yet; Stan learns dense metric
-# from scratch during warmup. metric.json is created by the Python snippet below.
+# Short 1-chain run — metric.json does NOT exist yet, so metric_file is
+# omitted; Stan learns a dense metric from scratch (identity start) during
+# warmup. metric.json is created by the Python snippet below, from this run's
+# raw posterior draws — not from Stan's own adapted-metric output.
 ./2color sample num_warmup=100 num_samples=100 num_chains=1 \
     algorithm=hmc metric=dense_e \
-    metric_file=output/$RUN/metric.json \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
     output file=output/$RUN/2color.csv
@@ -227,6 +228,44 @@ This produces `2color_1.csv` … `2color_4.csv` in `output/$RUN/`. The adapted
 per-chain metrics are saved as `2color_metric_1.json` … `2color_metric_4.json`.
 
 Actual timing for DR1_v6_2color: warmup ~5.5 hours, sampling ~8.9 hours (4 chains).
+
+### Running the 4 chains in parallel (local multi-core machines)
+
+The `num_chains=4` invocation above runs the 4 chains **sequentially** within
+one process — the CPU `2color` binary isn't built with `STAN_THREADS`, so
+there's no internal parallelism across chains. On a machine with several free
+cores, launch 4 separate single-chain processes in the background instead
+(the same pattern `slurm/step6_node.sh` uses on NERSC, one chain per GPU
+there — this is the CPU-only, no-SLURM equivalent, one chain per core):
+
+```bash
+PIDS=()
+for CHAIN_ID in 1 2 3 4; do
+    ./2color sample num_warmup=250 num_samples=1000 \
+        adapt save_metric=1 \
+        algorithm=hmc engine=nuts metric=dense_e \
+        metric_file=output/$RUN/metric.json \
+        id=$CHAIN_ID \
+        data file=output/$RUN/input.json \
+        init=output/$RUN/init_MAP.json \
+        output file=output/$RUN/2color_${CHAIN_ID}.csv &
+    PIDS+=($!)
+done
+
+FAIL=0
+for PID in "${PIDS[@]}"; do
+    wait "$PID" || FAIL=1
+done
+[ "$FAIL" = "1" ] && echo "ERROR: one or more chains failed" || echo "DONE: all 4 chains"
+```
+
+`id=$CHAIN_ID` is required — it gives each chain a distinct RNG seed/offset,
+whereas 4 identical invocations without it risk seed collisions. Output files
+are still `2color_1.csv` … `2color_4.csv`, matching the `2color_?.csv` glob
+used by `stansummary`/`diagnose`/`corner.py`/`color_predict.py`, so nothing
+downstream changes. Only run as many chains concurrently as you have free
+cores — each chain is single-threaded, so 4-way parallelism needs ≥4 free
+cores to actually be faster than the sequential command above.
 
 ---
 
