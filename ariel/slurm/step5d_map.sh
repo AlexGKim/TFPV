@@ -41,10 +41,10 @@ python3 make_map_init.py --run $RUN || true
 
 # Guarantee a usable, well-conditioned init_MAP.json. On degenerate data (e.g.
 # mocks whose per-band noise is perfectly correlated) the near-rank-1 MAP makes
-# the optimizer diverge, driving S_scale to 0 (finite but SINGULAR -> step6's
+# the optimizer diverge, driving Sc_scale to 0 (finite but SINGULAR -> step6's
 # Cholesky fails). If init_MAP.json is missing, non-finite, or has a degenerate
-# S_scale, replace it with a moderate well-conditioned start (S_scale=0.3,
-# intrinsic correlation 0.7); NUTS warmup adapts from there, so a converged MAP
+# Sc_scale, replace it with a moderate well-conditioned start (Sc_scale=0.3,
+# chromatic correlation 0.7); NUTS warmup adapts from there, so a converged MAP
 # is not required.
 python3 - "$RUN" <<'PYEOF'
 import json, math, sys, numpy as np
@@ -52,7 +52,7 @@ run = sys.argv[1]
 mapf = f'output/{run}/init_MAP.json'
 def bad():
     try:
-        d = json.load(open(mapf)); s = d['S_scale']; L = d['S_Lcorr']
+        d = json.load(open(mapf)); s = d['Sc_scale']; L = d['Sc_Lcorr']
         vals = list(s) + [x for row in L for x in row]
         if not all(math.isfinite(v) for v in vals): return True
         if min(s) < 1e-2: return True          # degenerate / singular scatter
@@ -62,12 +62,12 @@ def bad():
 if bad():
     print('step5d: init_MAP.json missing/non-finite/degenerate -> moderate fallback init')
     d = json.load(open(f'output/{run}/init.json'))
-    R = np.full((3, 3), 0.7); np.fill_diagonal(R, 1.0)
-    d['S_scale'] = [0.3, 0.3, 0.3]
-    d['S_Lcorr'] = np.linalg.cholesky(R).tolist()
+    R = np.full((2, 2), 0.7); np.fill_diagonal(R, 1.0)
+    d['Sc_scale'] = [0.3, 0.3]
+    d['Sc_Lcorr'] = np.linalg.cholesky(R).tolist()
     json.dump(d, open(mapf, 'w'), indent=2)
 else:
-    print('step5d: MAP init_MAP.json OK (S_scale =', json.load(open(mapf))['S_scale'], ')')
+    print('step5d: MAP init_MAP.json OK (Sc_scale =', json.load(open(mapf))['Sc_scale'], ')')
 PYEOF
 
 touch output/$RUN/.step5d_done

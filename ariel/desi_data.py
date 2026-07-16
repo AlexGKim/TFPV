@@ -13,6 +13,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
 
+# Training sample size used when neither n_objects nor train_fraction is given.
+_DEFAULT_N_OBJECTS = 5000
+_DEFAULT_RANDOM_SEED = 42
+
 
 def process_desi_tf_data(
     fits_file,
@@ -24,10 +28,11 @@ def process_desi_tf_data(
     slope_plane=None,
     intercept_plane=None,
     intercept_plane2=None,
-    n_objects=5000,
-    random_seed=42,
+    n_objects=None,
+    random_seed=_DEFAULT_RANDOM_SEED,
     n_subsets=None,
     subset_index=None,
+    train_fraction=None,
     *,
     z_col="Z_DESI",
     z_col_candidates=(
@@ -319,6 +324,29 @@ def process_desi_tf_data(
 
     N_after_cuts = len(x)
 
+    # Resolve a fractional training size against the post-selection count. An
+    # absolute n_objects silently stops meaning "40%" whenever the selection is
+    # re-derived and N_after_cuts moves, so populations with their own selection
+    # ellipse specify train_fraction instead. This only picks the number; the
+    # chosen galaxies are still recorded explicitly as train_sga_ids below.
+    if train_fraction is not None and not (0.0 < train_fraction <= 1.0):
+        raise ValueError(f"train_fraction must be in (0, 1], got {train_fraction}")
+
+    if train_fraction is not None and n_objects is not None:
+        print(
+            f"  WARNING: both n_objects={n_objects} and train_fraction={train_fraction} "
+            f"given; using the explicit n_objects and ignoring train_fraction."
+        )
+        train_fraction = None
+    elif train_fraction is not None:
+        n_objects = int(round(train_fraction * N_after_cuts))
+        print(
+            f"  train_fraction={train_fraction} of {N_after_cuts} selected "
+            f"-> n_objects={n_objects}"
+        )
+    elif n_objects is None:
+        n_objects = _DEFAULT_N_OBJECTS  # legacy default when neither is specified
+
     # Partition into disjoint subsets, or subsample randomly
     if n_subsets is not None and subset_index is not None:
         rng = np.random.default_rng(random_seed)
@@ -433,6 +461,16 @@ def process_desi_tf_data(
         stan_data["sigma_g"] = sigma_g_absmag_data
         stan_data["c_bar_g_obs"] = float(np.mean(y - g_absmag)) if N_total > 0 else 0.0
 
+    # [SPLIT] Partition provenance. These are what the staleness check below
+    # compares against, so they must round-trip through input.json -- previously
+    # they were never written, so _old_partition read back as all-None and the
+    # warning fired on every regeneration regardless of whether anything changed.
+    # Stan ignores JSON keys that are not declared data variables.
+    stan_data["n_objects"] = n_objects
+    stan_data["random_seed"] = random_seed
+    if train_fraction is not None:
+        stan_data["train_fraction"] = train_fraction
+
     # [SPLIT] record training galaxy IDs so color_predict.py can identify holdout
     if train_sga_ids is not None:
         stan_data["train_sga_ids"] = train_sga_ids
@@ -458,11 +496,13 @@ def process_desi_tf_data(
     if os.path.exists(data_output_file):
         with open(data_output_file) as f:
             _old = json.load(f)
-        _partition_keys = ["n_subsets", "subset_index", "n_objects", "random_seed"]
+        _partition_keys = ["n_subsets", "subset_index", "n_objects", "random_seed",
+                           "train_fraction"]
         _old_partition = {k: _old.get(k) for k in _partition_keys}
         _new_partition = {
             "n_subsets": n_subsets, "subset_index": subset_index,
             "n_objects": n_objects, "random_seed": random_seed,
+            "train_fraction": train_fraction,
         }
         if _old_partition != _new_partition:
             print(f"  WARNING: overwriting {data_output_file} whose partition "
@@ -520,22 +560,18 @@ def process_desi_tf_data(
     }
 
     # [2COLOR] g-band init parameters.
-    # The 2color model (2color.stan) samples the intrinsic (y,z,g) scatter as a
-    # free 3x3 covariance: S_scale (per-band std) + S_Lcorr (correlation
-    # Cholesky), replacing the old gamma_tau_g / log_tau_g / log_sigma_int_g
-    # product parameters. Start from a moderate, uncorrelated covariance
-    # (identity correlation); step5d MAP optimization refines it. The base
-    # gamma_tau_c / log_tau_c / sigma_int_y / log_sigma_int_z entries above are
-    # retained for the single-color color.stan model and are ignored by 2color.
+    # The 2color model (2color.stan) uses a chromatic-only intrinsic covariance
+    # S = V Sigma_c V^T with Sc_scale (2 chromatic scales) + Sc_Lcorr (2x2
+    # correlation Cholesky). Start from moderate, uncorrelated chromatic scatter;
+    # step5d MAP optimization refines it.
     if g_absmag is not None:
         init_data["delta_g"] = 0.0
         init_data["mu_g"] = float(np.mean(y - g_absmag)) if N_total > 0 else 0.0
         init_data["alpha_kcorr_g"] = -0.5
-        init_data["S_scale"] = [0.2, 0.2, 0.2]
-        init_data["S_Lcorr"] = [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0],
+        init_data["Sc_scale"] = [0.2, 0.2]
+        init_data["Sc_Lcorr"] = [
+            [1.0, 0.0],
+            [0.0, 1.0],
         ]
 
     with open(init_output_file, "w") as f:
@@ -771,14 +807,26 @@ if __name__ == "__main__":
         default=None,
         help="Lower apparent magnitude selection limit",
     )
+    # default=None is required for config_utils.apply_config to fill these from
+    # --config (it only fills slots that are still None). They previously carried
+    # hard defaults, which silently shadowed the "n_objects"/"random_seed" keys in
+    # every config file. The documented defaults are applied after apply_config.
     parser.add_argument(
-        "--n_objects", type=int, default=5000, help="Training sample size (default 5000)"
+        "--n_objects", type=int, default=None,
+        help=f"Training sample size (default {_DEFAULT_N_OBJECTS}; "
+             f"mutually exclusive with --train_fraction)",
+    )
+    parser.add_argument(
+        "--train_fraction", type=float, default=None,
+        help="Training sample size as a fraction of the post-selection count, e.g. 0.4. "
+             "Use instead of --n_objects when the selection is re-derived and an "
+             "absolute count would stop meaning the intended fraction.",
     )
     parser.add_argument(
         "--random_seed",
         type=int,
-        default=42,
-        help="Random seed for reproducible subsampling",
+        default=None,
+        help=f"Random seed for reproducible subsampling (default {_DEFAULT_RANDOM_SEED})",
     )
     parser.add_argument(
         "--n_subsets", type=int, default=None,
@@ -812,6 +860,11 @@ if __name__ == "__main__":
 
     from config_utils import apply_config
     cfg = apply_config(args)
+    # Applied after apply_config so a config's "random_seed" still wins over it.
+    # n_objects is deliberately left as None here: process_desi_tf_data needs to
+    # tell "unset" from "explicitly set" to resolve --train_fraction precedence.
+    if args.random_seed is None:
+        args.random_seed = _DEFAULT_RANDOM_SEED
     if cfg.get("fits_file") and not args.input:
         args.input = cfg["fits_file"]
     if cfg.get("run") and not args.run:
@@ -836,6 +889,7 @@ if __name__ == "__main__":
             "haty_max": args.haty_max,
             "haty_min": args.haty_min,
             "n_objects": args.n_objects,
+            "train_fraction": args.train_fraction,
             "random_seed": args.random_seed,
             "z_obs_min": args.z_obs_min,
             "z_obs_max": args.z_obs_max,
@@ -874,6 +928,7 @@ if __name__ == "__main__":
         intercept_plane=args.intercept_plane,
         intercept_plane2=args.intercept_plane2,
         n_objects=args.n_objects,
+        train_fraction=args.train_fraction,
         random_seed=args.random_seed,
         n_subsets=args.n_subsets,
         subset_index=args.subset_index,

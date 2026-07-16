@@ -35,13 +35,13 @@ def main():
             cols = sorted([c for c in df.columns if c.startswith('intercept_std.')],
                           key=lambda s: int(s.split('.')[1]))
             new[k] = [float(row[c]) for c in cols]
-        elif k == 'S_scale' and 'S_scale.1' in df.columns:
-            # [2COLOR] free intrinsic-covariance scales -> length-3 vector
-            new[k] = [float(row[f'S_scale.{i}']) for i in (1, 2, 3)]
-        elif k == 'S_Lcorr' and 'S_Lcorr.1.1' in df.columns:
-            # [2COLOR] intrinsic-correlation Cholesky -> 3x3 (row-major) matrix
-            new[k] = [[float(row[f'S_Lcorr.{i}.{j}']) for j in (1, 2, 3)]
-                      for i in (1, 2, 3)]
+        elif k == 'Sc_scale' and 'Sc_scale.1' in df.columns:
+            # [2COLOR] chromatic scatter scales -> length-2 vector
+            new[k] = [float(row[f'Sc_scale.{i}']) for i in (1, 2)]
+        elif k == 'Sc_Lcorr' and 'Sc_Lcorr.1.1' in df.columns:
+            # [2COLOR] chromatic-correlation Cholesky -> 2x2 (row-major) matrix
+            new[k] = [[float(row[f'Sc_Lcorr.{i}.{j}']) for j in (1, 2)]
+                      for i in (1, 2)]
         elif k in df.columns:
             new[k] = float(row[k])
         else:

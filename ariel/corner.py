@@ -83,10 +83,10 @@ def load_params(file_pattern):
         r"$\delta_g$":                    ["delta_g"],
         r"$\mu_g$":                       ["mu_g"],
         r"$\tau_g$":                      ["tau_g"],
-        # [2COLOR] free intrinsic-covariance parameters (skipped if absent)
-        r"$S_{\rm scale,y}$":             ["S_scale.1"],
-        r"$S_{\rm scale,z}$":             ["S_scale.2"],
-        r"$S_{\rm scale,g}$":             ["S_scale.3"],
+        # [2COLOR] chromatic-only covariance parameters (skipped if absent)
+        r"$S_{c,1}$":                     ["Sc_scale.1"],
+        r"$S_{c,2}$":                     ["Sc_scale.2"],
+        r"$\rho_c$":                      ["Sc_Lcorr.2.1"],
     }
 
     params = {}
