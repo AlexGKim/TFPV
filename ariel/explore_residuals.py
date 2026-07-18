@@ -272,14 +272,16 @@ def main():
         )
         mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat, sigma_x)
     else:  # 2color (rank-2 intrinsic covariance, free or fixed null direction)
-        # S.1.1 is the transformed parameter (= S_yy) written directly to the
-        # CSV; ystar_pp_mean_sd_color_xonly_vectorized reads it via
-        # _intrinsic_cov_entries, which is parameterization-independent (works
-        # for both the fixed-null and free-null models). Do not substitute
-        # Sc_scale/Sc_Lcorr here — those alone aren't S_yy under the free-null
-        # model, since S also depends on n_null.
+        # S.i.j are the transformed parameters (full 3x3 intrinsic covariance)
+        # written directly to the CSV; ystar_pp_mean_sd_color_xonly_vectorized
+        # reads all six entries via _intrinsic_cov_entries (even though only
+        # S.1.1 = S_yy ends up used for x-only prediction), which is
+        # parameterization-independent (works for both the fixed-null and
+        # free-null models). Do not substitute Sc_scale/Sc_Lcorr here — those
+        # alone aren't S_yy under the free-null model, since S also depends on
+        # n_null. Matches color_predict.py's _S_COV_COLS.
         keep_cols = ["slope", "intercept.1", "sigma_int_x", "alpha_kcorr_r",
-                     "S.1.1"]
+                     "S.1.1", "S.1.2", "S.1.3", "S.2.2", "S.2.3", "S.3.3"]
         draws = read_cmdstan_posterior(
             os.path.join(run_dir, "2color_?.csv"),
             keep=keep_cols,

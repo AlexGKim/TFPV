@@ -25,6 +25,14 @@
 #   --from-step N                     clear sentinels for step N onward and
 #                                      rerun from there (N in: 1 2 3 3b 4 5 5d 6 7 8)
 #   --chains N                        number of parallel Step 6 chains (default 4)
+#   --warmup N                        Step 6 num_warmup (default 1000; raised from
+#                                      250 after an abacus-mock experiment showed a
+#                                      non-trivial divergence/max-treedepth rate and
+#                                      a systematic residual bias at 250)
+#   --max-depth N                     Step 6 max_depth (default 10, Stan's own
+#                                      default; lowering to 8 roughly halves the
+#                                      worst-case per-iteration cost but was found
+#                                      to cut off trajectories prematurely)
 #
 # Resumable: each step is guarded by a sentinel file under output/$RUN/
 # (.step{N}_done, matching slurm/check_status.sh's convention). Re-running
@@ -36,7 +44,7 @@ set -e
 STEP_ORDER=(1 2 3 3b 4 5 5d 6 7 8)
 
 usage() {
-    echo "Usage: $0 --population {spiral,irregular} --fits PATH [--run-suffix NAME] [--from-step N] [--chains N]"
+    echo "Usage: $0 --population {spiral,irregular} --fits PATH [--run-suffix NAME] [--from-step N] [--chains N] [--warmup N] [--max-depth N]"
     exit 1
 }
 
@@ -45,6 +53,8 @@ PARENT_FITS=""
 RUN_SUFFIX=""
 FROM_STEP=""
 N_CHAINS=4
+N_WARMUP=1000
+MAX_DEPTH=10
 PHASE2=0
 
 while [ $# -gt 0 ]; do
@@ -54,6 +64,8 @@ while [ $# -gt 0 ]; do
         --run-suffix) RUN_SUFFIX="$2"; shift 2 ;;
         --from-step) FROM_STEP="$2"; shift 2 ;;
         --chains) N_CHAINS="$2"; shift 2 ;;
+        --warmup) N_WARMUP="$2"; shift 2 ;;
+        --max-depth) MAX_DEPTH="$2"; shift 2 ;;
         --phase2) PHASE2=1; shift ;;
         -h|--help) usage ;;
         *) echo "Unknown argument: $1"; usage ;;
@@ -143,8 +155,8 @@ if [ "$PHASE2" -eq 0 ]; then
     fi
 
     if ! skip_if_done 2; then
-        echo "=== Step 2: select_v2.py ==="
-        python select_v2.py --run "$RUN" --fits_file "$FITS" --exe ./2color \
+        echo "=== Step 2: select_v2.py (always uses tophat, not the final model) ==="
+        python select_v2.py --run "$RUN" --fits_file "$FITS" --exe ./tophat \
             --z_obs_min 0.01 --z_obs_max 0.065
         mark_done 2
         echo "Inspect: open $RUN_DIR/select_v2_pull.png"
@@ -162,6 +174,17 @@ if [ "$PHASE2" -eq 0 ]; then
         echo "=== Step 3b: export_config.py — INTERACTIVE ==="
         echo "Suggested answers: exe=2color, source=DESI, model=2color, n_sigma=3.0"
         python export_config.py --run "$RUN" --out "$CONFIG"
+        # export_config.py only picks up the correct fits_file from
+        # output/$RUN/config.json, which desi_data.py (Step 4) hasn't
+        # written yet at this point -- it silently falls back to a
+        # hardcoded placeholder otherwise. Force-correct it here.
+        python -c "
+import json
+cfg = json.load(open('$CONFIG'))
+cfg['fits_file'] = '$FITS'
+json.dump(cfg, open('$CONFIG', 'w'), indent=2)
+print('fits_file set to', cfg['fits_file'])
+"
         mark_done 3b
         echo "Config written: $CONFIG (commit it to git)"
         echo "Optional: add \"train_fraction\": 0.4 / \"dust_pickle\": \"...\" to $CONFIG now if needed."
@@ -170,7 +193,8 @@ if [ "$PHASE2" -eq 0 ]; then
     echo ""
     echo "=== Steps 1-3b complete. Backgrounding Steps 4-8 (this takes hours). ==="
     nohup "$0" --population "$POPULATION" --fits "$PARENT_FITS" \
-        ${RUN_SUFFIX:+--run-suffix "$RUN_SUFFIX"} --chains "$N_CHAINS" --phase2 \
+        ${RUN_SUFFIX:+--run-suffix "$RUN_SUFFIX"} --chains "$N_CHAINS" \
+        --warmup "$N_WARMUP" --max-depth "$MAX_DEPTH" --phase2 \
         > "$RUN_DIR/run_dr2_phase2.log" 2>&1 &
     echo "Backgrounded as PID $!. Follow progress with:"
     echo "  tail -f $RUN_DIR/run_dr2_phase2.log"
@@ -212,9 +236,9 @@ if ! skip_if_done 6; then
             echo "  chain $CHAIN_ID: already done, skipping"
             continue
         fi
-        ./2color sample num_warmup=250 num_samples=1000 \
+        ./2color sample num_warmup="$N_WARMUP" num_samples=1000 \
             adapt save_metric=1 \
-            algorithm=hmc engine=nuts max_depth=8 metric=dense_e \
+            algorithm=hmc engine=nuts max_depth="$MAX_DEPTH" metric=dense_e \
             id=$CHAIN_ID \
             data file="$RUN_DIR/input.json" \
             init="$RUN_DIR/init_MAP.json" \

@@ -100,9 +100,15 @@ open output/$RUN/selection_ellipse.png
 ## Step 2: MLE fit and pull-profile diagnostic
 
 ```bash
-python select_v2.py --run $RUN --fits_file $FITS --exe ./2color \
+python select_v2.py --run $RUN --fits_file $FITS --exe ./tophat \
     --z_obs_min 0.01 --z_obs_max 0.065
 ```
+
+`select_v2.py` always uses the `tophat` binary here regardless of which
+final model you'll fit later — this step is a diagnostic 2D (x̂, ŷ) MLE fit
+to produce the pull-profile plot, not the full quadrivariate 2color model
+(passing `--exe ./2color` fails: 2color.stan's data block declares
+variables like `z` that this step's data prep never populates).
 
 Inspect the pull profile — this is what informs Step 3's choices:
 
@@ -145,7 +151,24 @@ python export_config.py --run $RUN --out $CONFIG
 
 Prompts for the remaining pipeline settings — stable values for this
 workflow: `exe=2color`, `source=DESI`, `model=2color`, `n_sigma=3.0`.
-`fits_file` is picked up automatically from `output/$RUN/config.json`.
+
+`export_config.py` tries to pick up `fits_file` from `output/$RUN/config.json`,
+but that file is only written by `desi_data.py` (Step 4) — which hasn't run
+yet at this point unless you already ran it once before (e.g. via flags).
+If `output/$RUN/config.json` doesn't exist yet, `export_config.py` silently
+falls back to a hardcoded placeholder (`data/DESI-DR1_TF_pv_cat_v15.fits`),
+which is wrong. **Always force-correct it after this step:**
+
+```bash
+python -c "
+import json
+cfg = json.load(open('$CONFIG'))
+cfg['fits_file'] = '$FITS'
+json.dump(cfg, open('$CONFIG', 'w'), indent=2)
+print('fits_file set to', cfg['fits_file'])
+"
+```
+
 Commit the resulting `$CONFIG` to git.
 
 **Optional**: add `"train_fraction": 0.4` to `$CONFIG` (see 2COLOR.md's
@@ -207,9 +230,9 @@ free cores):
 ```bash
 PIDS=()
 for CHAIN_ID in 1 2 3 4; do
-    ./2color sample num_warmup=250 num_samples=1000 \
+    ./2color sample num_warmup=1000 num_samples=1000 \
         adapt save_metric=1 \
-        algorithm=hmc engine=nuts max_depth=8 metric=dense_e \
+        algorithm=hmc engine=nuts max_depth=10 metric=dense_e \
         id=$CHAIN_ID \
         data file=output/$RUN/input.json \
         init=output/$RUN/init_MAP.json \
@@ -224,24 +247,31 @@ done
 [ "$FAIL" = "1" ] && echo "ERROR: one or more chains failed" || echo "DONE: all 4 chains"
 ```
 
-`max_depth=8` (vs. Stan's default 10): the free-covariance posterior is
-near-singular and NUTS saturates treedepth, so depth 10 costs up to 1023
-leapfrog steps/iteration (~4x depth 8) for little extra mixing — same
-rationale as `slurm/step6_chain.sh`. `id=$CHAIN_ID` is required (distinct
-RNG seed/offset per chain). This produces `2color_1.csv` … `2color_4.csv` in
-`output/$RUN/`, matching the `2color_?.csv` glob used downstream.
+`num_warmup=1000` (up from 250) and `max_depth=10` (Stan's default, up from
+8): an initial abacus-mock experiment at 250/8 showed a non-trivial fraction
+of transitions hitting the max-treedepth cap (14.75%) and diverging (2.5%),
+alongside a systematic residual bias in the fit — raising warmup gives the
+dense-metric adaptation more iterations to converge, and removing the
+treedepth cap lets NUTS actually reach its natural trajectory length instead
+of being cut off (at the cost of up to 1023 leapfrog steps/iteration in the
+worst case, vs. 255 at depth 8, so this is meaningfully slower per iteration
+— expect substantially longer runs than the timing note below, which
+predates this change). `id=$CHAIN_ID` is required (distinct RNG seed/offset
+per chain). This produces `2color_1.csv` … `2color_4.csv` in `output/$RUN/`,
+matching the `2color_?.csv` glob used downstream.
 
-For the spiral DR2_v0 run: warmup ≈87 min per chain (all 4 run
-concurrently), so ~1.5–2 hours total including sampling — actual timing will
-vary with N and core availability.
+For the spiral DR2_v0 run (at the original num_warmup=250/max_depth=8
+settings): warmup ≈87 min per chain (all 4 run concurrently), so ~1.5–2
+hours total including sampling — actual timing at num_warmup=1000/max_depth=10
+will vary with N and core availability, but expect several times longer.
 
 If you have fewer than 4 free cores, only run as many chains concurrently as
 you have cores, or fall back to the sequential single-invocation form:
 
 ```bash
-./2color sample num_warmup=250 num_samples=1000 num_chains=4 \
+./2color sample num_warmup=1000 num_samples=1000 num_chains=4 \
     adapt save_metric=1 \
-    algorithm=hmc engine=nuts max_depth=8 metric=dense_e \
+    algorithm=hmc engine=nuts max_depth=10 metric=dense_e \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
     output file=output/$RUN/2color.csv

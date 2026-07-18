@@ -2763,9 +2763,9 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
         import h5py
         draws = read_cmdstan_posterior(
             _p(f"{model}_?.csv"),
-            keep=["slope", "intercept.1", "sigma_int_x", "sigma_int_y",
-                  "sigma_int_z", "sigma_int_g", "gamma", "gamma_g",
-                  "delta_c", "delta_g", "mu_c", "mu_g", "tau_c", "tau_g",
+            keep=["slope", "intercept.1", "sigma_int_x",
+                  *_S_COV_COLS,
+                  "delta_c", "delta_g", "mu_c", "mu_g",
                   "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g"],
             drop_diagnostics=True,
         )
