@@ -187,19 +187,41 @@ import pandas as pd, numpy as np, json, os
 
 RUN = os.environ['RUN']
 df = pd.read_csv(f'output/{RUN}/2color.csv', comment='#')
-sampling_params = [
-    'slope_std', 'intercept_std.1', 'sigma_int_x',
+
+# Declaration order in 2color.stan's parameters block (unconstrained dims):
+#   slope_std(1), intercept_std[N_bins](1), sigma_int_x(1), n_null(3, unit_vector),
+#   Sc_scale(2), Sc_Lcorr(1 free), delta_c(1), mu_c(1), delta_g(1), mu_g(1),
+#   alpha_kcorr_r(1), alpha_kcorr_z(1), alpha_kcorr_g(1)  =  16 total.
+# metric_file (dense_e) requires a matrix matching this full 16-dim count, or
+# Step 6 fails with "dims declared=(16,16); dims found=(13,13)".
+before_null = ['slope_std', 'intercept_std.1', 'sigma_int_x']
+after_null = [
     'Sc_scale.1', 'Sc_scale.2',                        # chromatic scatter scales
     'Sc_Lcorr.2.1',                                    # 2x2 correlation Cholesky (1 free entry)
     'delta_c', 'mu_c', 'delta_g', 'mu_g',
-    'alpha_kcorr_r', 'alpha_kcorr_z', 'alpha_kcorr_g'
+    'alpha_kcorr_r', 'alpha_kcorr_z', 'alpha_kcorr_g',
 ]
+sampling_params = before_null + after_null
 X = df[sampling_params].values
-cov = np.cov(X.T)
+cov13 = np.cov(X.T)
+
+# Embed into a 16x16 identity, inserting an uninformative identity block for
+# n_null's 3 unconstrained dims at its declared position (index 3:6). The CSV
+# only has n_null's constrained unit-sphere coordinates, not its unconstrained
+# values, so its true covariance can't be recovered here -- but n_null isn't
+# the source of the ~2M condition number, so identity is a reasonable
+# warm-start guess; NUTS's own warmup adapts it further in Step 6.
+n_before = len(before_null)
+new_idx = list(range(n_before)) + list(range(n_before + 3, 16))
+cov = np.eye(16)
+for i, oi in enumerate(new_idx):
+    for j, oj in enumerate(new_idx):
+        cov[oi, oj] = cov13[i, j]
+
 metric = {"inv_metric": cov.tolist()}
 with open(f'output/{RUN}/metric.json', 'w') as f:
     json.dump(metric, f)
-print(f'Metric written to output/{RUN}/metric.json')
+print(f'Metric written to output/{RUN}/metric.json (16x16)')
 print(f'Condition number: {np.linalg.cond(cov):.1f}')
 EOF
 ```
