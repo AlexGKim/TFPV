@@ -231,12 +231,12 @@ Key parameters to check:
 
 ## Step 8: Predict absolute magnitudes (color model)
 
-```bash
-# via config
-python color_predict.py --run-dir output/$RUN --xonly
+x-only is the unconditional default (no `--xonly` flag needed/accepted
+anymore); pass `--full` to additionally get the full model's outputs:
 
-# via flags (if no config available)
-python color_predict.py --run-dir output/$RUN --xonly
+```bash
+python color_predict.py --run-dir output/$RUN            # x-only only
+python color_predict.py --run-dir output/$RUN --full      # + full model
 ```
 
 The script reads:
@@ -244,16 +244,25 @@ The script reads:
 - `output/$RUN/input.json` — bounds (y_min, y_max), mean_x, and z-band data
 - `output/$RUN/color_?.csv` — posterior MCMC draws
 
-Per run, the following diagnostic plots are written:
+Per run, the following diagnostic plots are written (always, x-only):
 
 | File | Description |
 |------|-------------|
-| `output/$RUN/color_grid.png` | mean residual on (x̂, ŷ) grid — MAIN sample |
-| `output/$RUN/color_grid_full.png` | mean residual on (x̂, ŷ) grid — full input |
-| `output/$RUN/redshift_grid_color.png` | mean redshift on (x̂, ŷ) grid |
-| `output/$RUN/redshift_color.png` | residual vs. redshift scatter |
-| `output/$RUN/variance_redshift_color.png` | prediction variance vs. redshift |
-| `output/$RUN/variance_xhat_color.png` | prediction variance vs. x̂ |
+| `output/$RUN/color_grid_xonly.png` | mean residual on (x̂, ŷ) grid — MAIN sample, x-only |
+| `output/$RUN/color_grid_xonly_full.png` | mean residual on (x̂, ŷ) grid — full input, x-only |
+| `output/$RUN/redshift_grid_color.png` | mean redshift on (x̂, ŷ) grid (data-space, model-independent) |
+| `output/$RUN/redshift_color_xonly.png` | residual vs. redshift scatter, x-only |
+| `output/$RUN/variance_redshift_color_xonly.png` | prediction variance vs. redshift, x-only |
+
+With `--full`, additionally:
+
+| File | Description |
+|------|-------------|
+| `output/$RUN/color_grid.png` | mean residual on (x̂, ŷ) grid — MAIN sample, full model |
+| `output/$RUN/color_grid_full.png` | mean residual on (x̂, ŷ) grid — full input, full model |
+| `output/$RUN/redshift_color.png` | residual vs. redshift scatter, full model |
+| `output/$RUN/variance_redshift_color.png` | prediction variance vs. redshift, full model |
+| `output/$RUN/variance_xhat_color.png` | prediction variance vs. x̂, full model |
 
 See [color_predict.py](color_predict.py) for implementation details.
 

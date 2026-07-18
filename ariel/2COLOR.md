@@ -328,12 +328,18 @@ Residual plots (x-only prediction conditioned on x̂) are written to
 
 ---
 
-## Step 8: Predict absolute magnitudes (full 2color model)
+## Step 8: Predict absolute magnitudes
 
-Run all outputs (diagnostic plots, catalog, covariance, and x-only variants):
+x-only (conditioning on x̂ and z_obs, marginalizing ẑ and ĝ) is the
+unconditional default — it doesn't depend on the z/g-band k-corrections and
+D-matrix coupling that the full model needs, which were found (on an
+abacus-mock experiment) to introduce a dust-correlated systematic bias
+absent from the x-only predictions. Add `--full` to additionally compute the
+full quadrivariate (x̂, ẑ, ĝ)-conditioned model for comparison:
 
 ```bash
-python color_predict.py --config $CONFIG --model 2color --xonly
+python color_predict.py --config $CONFIG --model 2color            # x-only only
+python color_predict.py --config $CONFIG --model 2color --full     # + full model
 ```
 
 The script reads:
@@ -341,25 +347,29 @@ The script reads:
 - `output/$RUN/input.json` — bounds, mean_x, z-band and g-band data
 - `output/$RUN/2color_?.csv` — posterior MCMC draws
 
-The full model conditions on (x̂, ẑ, ĝ) using the 3×3 D matrix to predict ŷ.
-The `--xonly` flag additionally produces predictions conditioned on x̂ alone
-(marginalizing ẑ and ĝ), with A₁₁ = γ²τ²_c + γ²_g τ²_g + σ²_{int,y} + σ²_{y,★}.
-
-Outputs produced:
+Outputs produced (always, x-only):
 
 | File | Description |
 |------|-------------|
-| `output/$RUN/color_grid.png` | Mean residual on (x̂, ŷ) grid (MAIN sample) |
-| `output/$RUN/color_grid_full.png` | Mean residual on (x̂, ŷ) grid (full sample) |
-| `output/$RUN/redshift_color.png` | Residual vs. redshift scatter |
+| `output/$RUN/color_grid_xonly.png` | Mean residual on (x̂, ŷ) grid (MAIN sample, x-only) |
+| `output/$RUN/color_grid_xonly_full.png` | Mean residual on (x̂, ŷ) grid (full sample, x-only) |
 | `output/$RUN/redshift_color_xonly.png` | Residual vs. redshift (x-only) |
 | `output/$RUN/gr_color_xonly.png` | Residual vs. g−r color (x-only) |
-| `output/$RUN/variance_redshift_color.png` | Prediction variance vs. redshift |
 | `output/$RUN/variance_redshift_color_xonly.png` | Prediction variance vs. redshift (x-only) |
-| `output/$RUN/color_catalog.fits` | DESI catalog with MU_TF, LOGDIST, MAIN, ANALYSIS (full model) |
+| `output/$RUN/redshift_grid_color.png` | Mean redshift on (x̂, ŷ) grid (data-space, independent of model) |
 | `output/$RUN/color_xonly_catalog.fits` | DESI catalog with MU_TF, LOGDIST, MAIN, ANALYSIS (x-only) |
-| `output/$RUN/color_cov.h5` | (G,G) covariance matrix HDF5, datasets `cov`, `analysis` (full model) |
 | `output/$RUN/color_xonly_cov.h5` | (G,G) covariance matrix HDF5, datasets `cov`, `analysis` (x-only) |
+
+With `--full`, additionally:
+
+| File | Description |
+|------|-------------|
+| `output/$RUN/color_grid.png` | Mean residual on (x̂, ŷ) grid (MAIN sample, full model) |
+| `output/$RUN/color_grid_full.png` | Mean residual on (x̂, ŷ) grid (full sample, full model) |
+| `output/$RUN/redshift_color.png` | Residual vs. redshift scatter (full model) |
+| `output/$RUN/variance_redshift_color.png` | Prediction variance vs. redshift (full model) |
+| `output/$RUN/color_catalog.fits` | DESI catalog with MU_TF, LOGDIST, MAIN, ANALYSIS (full model) |
+| `output/$RUN/color_cov.h5` | (G,G) covariance matrix HDF5, datasets `cov`, `analysis` (full model) |
 
 `MAIN` marks every galaxy passing selection cuts — the union of training and
 analysis. `ANALYSIS` marks the non-training subset (`MAIN & ANALYSIS` =
@@ -396,25 +406,21 @@ cov_analysis = cov[np.ix_(analysis, analysis)]
 
 ## Step 8 variants
 
-To run diagnostics and catalogs only (no covariance — much faster):
+x-only always runs; `--full` is purely additive (there's no flag to disable
+x-only). To run diagnostics and catalogs only (no covariance — much faster):
 
 ```bash
-python color_predict.py --config $CONFIG --model 2color --xonly --no-cov
+python color_predict.py --config $CONFIG --model 2color --no-cov
 ```
 
-To run only the x-only covariance (skip full cov and all catalogs):
+To skip the catalog too (diagnostic plots only):
 
 ```bash
-python color_predict.py --config $CONFIG --model 2color --xonly --no-cov --no-catalog
-# then separately if you also need the full cov:
-python color_predict.py --config $CONFIG --model 2color --no-catalog
+python color_predict.py --config $CONFIG --model 2color --no-cov --no-catalog
 ```
 
-To run only the full covariance (skip x-only and catalog):
-
-```bash
-python color_predict.py --config $CONFIG --model 2color --no-catalog
-```
+Add `--full` to any of the above to also get the full model's outputs
+(`color_catalog.fits`, `color_cov.h5`, `color_grid.png`, etc.).
 
 ---
 

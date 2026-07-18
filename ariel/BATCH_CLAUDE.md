@@ -14,9 +14,15 @@ data using Stan (CmdStan). It has 8 steps; only steps 4–8 run on NERSC.
 **Model:** `2color.stan` — quadrivariate (x̂, ŷ, ẑ, ĝ) TFR with two independent
 latent color factors (r–z and g–r). 17 sampling parameters.
 
-**Key constraint:** The model has condition number ~2.7M, so a pre-computed mass
-matrix (`metric.json`) is essential. Without it, stepsize ~0.002 and every step
-hits max treedepth (10). With it, stepsize ~0.08 and treedepth 4–6.
+**Key constraint:** The model has condition number ~2.7M. `step6_node.sh`/
+`step6_chain.sh` handle this by running from the identity metric with
+in-warmup dense-metric adaptation (`metric=dense_e adapt save_metric=1`, no
+pre-built `metric_file=`) and `NUM_WARMUP=1000`/`MAX_DEPTH=10` (both
+env-overridable). A separate pre-built-metric step (5e, below) exists but is
+**not** read by step6 and is optional/historical — an empirical local A/B
+test found it ~2.7x slower overall to obtain than just letting step6 adapt
+from scratch, with no quality gain (its own metric-building method is a
+crude 100-draw short-chain `np.cov`, prone to the same fragility).
 
 ---
 
@@ -26,10 +32,10 @@ hits max treedepth (10). With it, stepsize ~0.08 and treedepth 4–6.
 |------|--------|--------|---------|------|-------|
 | 4 | `slurm/step4_data.sh` | config JSON, FITS file | `input.json`, `init.json` | <5 min | debug |
 | 5d | `slurm/step5d_map.sh` | `input.json`, `init.json` | `optimize.csv`, `init_MAP.json` | ~5 min | debug GPU |
-| 5e | `slurm/step5e_metric.sh` | `input.json`, `init_MAP.json` | `2color_metric_build.csv`, `metric.json` | ~7 h | regular GPU |
-| 6 | `slurm/step6_node.sh` (1 node, 4 GPUs, 4 chains) | `input.json`, `init_MAP.json`, `metric.json` | `2color_{1..4}.csv`, `2color_metric_{1..4}.json` | ~14 h (parallel) | regular GPU |
+| 5e *(optional, unused by step6)* | `slurm/step5e_metric.sh` | `input.json`, `init_MAP.json` | `2color_metric_build.csv`, `metric.json` | ~7 h | regular GPU |
+| 6 | `slurm/step6_node.sh` (1 node, 4 GPUs, 4 chains, identity metric + adapt) | `input.json`, `init_MAP.json` | `2color_{1..4}.csv`, `2color_metric_{1..4}.json` (each chain's own adapted metric, `save_metric=1`) | dataset-dependent (`NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure, don't assume a fixed figure) | regular GPU |
 | 7 | `slurm/step7_diagnose.sh` | `2color_?.csv` | `stansummary.txt`, `diagnose.txt`, `2color.png` | ~15 min | debug CPU |
-| 8 | `slurm/step8_predict.sh` | config, `input.json`, `2color_?.csv` | `color_catalog.fits`, `color_cov.fits` | 1–4 h | regular CPU |
+| 8 | `slurm/step8_predict.sh` | config, `input.json`, `2color_?.csv` | `color_xonly_catalog.fits`, `color_xonly_cov.h5` (x-only default; `--full` adds `color_catalog.fits`/`color_cov.h5`) | 1–4 h | regular CPU |
 
 **Sentinel files:** Each step writes `output/$RUN/.step<N>_done` on success.
 Check completion with: `bash slurm/check_status.sh $CONFIG`
@@ -46,23 +52,22 @@ FITS catalog
                     └── step5d (2color_g optimize)
                             ├── optimize.csv
                             └── init_MAP.json
-                                    └── step5e (2color_g sample, 1 chain)
-                                            ├── 2color_metric_build.csv
-                                            └── metric.json ──────────────┐
-                                                                           │
-                                            ┌──────────────────────────────┘
-                                            └── step6 (1 node, 4 GPUs, 4 chains via CUDA_VISIBLE_DEVICES)
-                                                    ├── 2color_1.csv
-                                                    ├── 2color_2.csv
-                                                    ├── 2color_3.csv
-                                                    └── 2color_4.csv
-                                                            └── step7 (stansummary, corner.py)
-                                                                    └── step8 (color_predict.py)
+                                    └── step6 (1 node, 4 GPUs, 4 chains via CUDA_VISIBLE_DEVICES,
+                                        identity metric + in-warmup adapt -- step5e not required)
+                                            ├── 2color_1.csv
+                                            ├── 2color_2.csv
+                                            ├── 2color_3.csv
+                                            └── 2color_4.csv
+                                                    └── step7 (stansummary, corner.py)
+                                                            └── step8 (color_predict.py)
 ```
 
-`metric.json` is reusable **within the same data type** — copy it to a new run
-directory to skip step5e. It is **not** transferable across data types (e.g.
-the DR1 metric must not be used for AbacusSummit mocks; see failure mode below).
+Step 5e (`2color_g sample`, 1 chain → `metric.json`) exists as an optional
+side branch off `init_MAP.json`, not on the critical path — step6 never
+reads its output. Historically, when metric-seeding *was* used, a metric was
+reusable only **within the same data type** (the DR1 metric must not be used
+for AbacusSummit mocks; see failure mode below) — that caveat is now moot
+for the standard workflow since step6 doesn't consume `metric.json` at all.
 
 ---
 
@@ -110,49 +115,42 @@ and inspect `output/$RUN/data.png`.
 
 ---
 
-### Step 5e / Step 6: MCMC chain produces no samples
+### Step 6: MCMC chain produces no samples
 
 **Symptom:** CSV file exists but has only comment lines (no data rows).
 
-**Diagnosis:** Check SLURM log (`slurm/logs/step5e_*.out`). Common cause:
+**Diagnosis:** Check SLURM log (`slurm/logs/step6_node_*.out`). Common cause:
 - Stan segfault: `input.json` has wrong array lengths (check `N_total`)
 - Time limit exceeded: extend `#SBATCH -t`
 - `init_MAP.json` has out-of-range values: re-run step5d
 
 ---
 
-### Step 6: Metric incompatible with data type (cholesky failures + timeout)
-
-**Symptom:** Repeated `cholesky_decompose: Matrix m is not positive definite`
-warnings in the step6 SLURM log. `stepsize__` in the CSV is ~0.002 (vs. ~0.08
-with a good metric). Each iteration takes ~50s. The chain does not reach 1000
-samples within the 18h time limit.
-
-**Diagnosis:** The `metric.json` in `output/$RUN/` was built from a different
-data type (e.g. DR1 metric copied to a mock run). The posterior geometry differs
-enough that the mass matrix is invalid for the new data.
-
-**Fix:** Build a metric from this data type via step5e:
-```bash
-sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh   # ~7h
-```
-Then resubmit the step6 chains. For subsequent files of the same data type, copy
-the new metric instead of re-running step5e.
-
----
-
 ### Step 6: High divergences or max treedepth
 
 **Symptom:** `diagnose.txt` reports many divergences or `% transitions hitting
-max treedepth` > 20%.
+max treedepth` > 20%. `stepsize__` in the CSV stays tiny (~0.002) instead of
+adapting to something reasonable (~0.05-0.1), or each iteration takes ~50s.
 
-**Diagnosis:** Check whether `metric.json` was used. If `stepsize__` in the CSV
-is near 0.002, the metric was not applied or is incompatible (see failure mode
-above).
+**Diagnosis:** `step6_node.sh`/`step6_chain.sh` run from the identity metric
+with in-warmup adaptation (no pre-built `metric.json` — that path is
+optional/unused, see Pipeline Overview). A tiny stepsize / heavy treedepth
+usually means either `NUM_WARMUP` is too short for the adaptation to
+converge, or the posterior geometry for this dataset is unusually
+ill-conditioned even for depth 10.
 
-**Fix:** Confirm `metric.json` exists in `output/$RUN/` and was built from the
-same data type as this run. If missing, run step5e. Do not copy the DR1 metric
-to a mock run (or vice versa).
+**Fix:** First try increasing `NUM_WARMUP` (default 1000):
+```bash
+sbatch --export=CONFIG=$CONFIG,NUM_WARMUP=2000 slurm/step6_node.sh
+```
+If treedepth saturation (not divergences) dominates, `MAX_DEPTH` (default 10)
+is already at Stan's own ceiling — the model's near-singular free-covariance
+posterior is genuinely expensive there; consider whether the dataset's
+selection cuts or training-sample size are unusually degenerate for this
+run. Building a metric via the optional `step5e_metric.sh` is not expected
+to help — its own metric-building method has the same fragility (see
+Pipeline Overview) and an empirical A/B test found it slower overall with no
+quality gain.
 
 ---
 
@@ -183,7 +181,7 @@ completed but R̂ is still high, increase `num_warmup` (edit
 ```bash
 sbatch --export=CONFIG=$CONFIG slurm/step8_predict.sh
 # or manually:
-python color_predict.py --config $CONFIG --model 2color --xonly --no-cov
+python color_predict.py --config $CONFIG --model 2color --no-cov
 ```
 
 ---
@@ -236,14 +234,20 @@ sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
 
 From `stansummary.txt` or corner plot `2color.png`:
 
-| Parameter | Expected (DR1_v6) | Meaning |
-|-----------|-------------------|---------|
-| `slope` | ~−8 | TFR slope |
-| `gamma` | −0.70 ± 0.20 | r–z luminosity–color slope |
-| `gamma_g` | −1.1 ± 0.05 | g–r luminosity–color slope |
-| `alpha_kcorr_r` | ~−5.7 | r-band k-correction slope |
-| `alpha_kcorr_z` | ~−5.3 | z-band k-correction slope |
-| `alpha_kcorr_g` | ~−6.3 | g-band k-correction slope |
+| Parameter | Meaning |
+|-----------|---------|
+| `slope` | TFR slope |
+| `Sc_scale.1`, `Sc_scale.2` | Rank-2 chromatic intrinsic scatter scales |
+| `Sc_Lcorr.2.1` | The single free entry of the 2×2 chromatic correlation Cholesky |
+| `n_null.1/.2/.3` | Free null direction of the rank-2 intrinsic covariance |
+| `delta_c`, `delta_g` | Color–velocity slopes (mean structure) |
+| `alpha_kcorr_r`, `alpha_kcorr_z`, `alpha_kcorr_g` | Band k-correction slopes |
+
+(`gamma`/`gamma_g`/`tau_c`/`tau_g` from the old gamma-tau parameterization no
+longer exist in the current `2color.stan` — see `2color.stan`'s header
+comment for the free-null rank-2 covariance model.) No "expected" reference
+values are recorded here since they're dataset-dependent — compare against a
+previous successful run of the *same* dataset/config, not a fixed table.
 
 Good convergence: R̂ < 1.01 for all parameters, ESS > 100 per chain.
 
@@ -266,7 +270,7 @@ Good convergence: R̂ < 1.01 for all parameters, ESS > 100 per chain.
 # Any single step:
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step4_data.sh
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5d_map.sh
-sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5e_metric.sh
+sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5e_metric.sh    # optional, unused by step6
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step6_node.sh       # all 4 chains, 1 node/4 GPUs
 sbatch --export=CONFIG=configs/dr1_v6_2color.json,CHAIN_ID=1 slurm/step6_chain.sh  # just chain 1
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step7_diagnose.sh

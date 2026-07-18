@@ -23,12 +23,14 @@ RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
 echo "Step 8: color_predict.py for run=$RUN"
+# x-only is the unconditional default (color_predict.py no longer takes
+# --xonly -- pass --full to additionally get the full z/g-conditioned model).
 # DEBUG=1: skip the covariance (can take hours for large mock catalogs).
 if [ "${DEBUG:-0}" = "1" ]; then
-    python3 color_predict.py --config $CONFIG --model 2color --xonly --no-cov
+    python3 color_predict.py --config $CONFIG --model 2color --no-cov
 else
-    python3 color_predict.py --config $CONFIG --model 2color --xonly
+    python3 color_predict.py --config $CONFIG --model 2color
 fi
 
 touch output/$RUN/.step8_done
-echo "DONE: step8 → color_catalog.fits, color_xonly_catalog.fits, color_cov.fits"
+echo "DONE: step8 → color_xonly_catalog.fits, color_xonly_cov.h5 (pass --full for color_catalog.fits/color_cov.h5)"

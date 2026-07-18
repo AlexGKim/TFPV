@@ -11,6 +11,13 @@
 #SBATCH -o slurm/logs/step5e_metric_%j.out
 
 # Step 5e: Short MCMC run to build the pre-computed mass matrix (metric.json).
+# OPTIONAL / not part of the standard workflow: step6_node.sh and
+# step6_chain.sh do not read metric.json (both run from the identity metric
+# with in-warmup adaptation). Kept for manual experimentation only. Note this
+# script's own metric-building method (100 post-warmup draws, np.cov over 17
+# parameters, no regularization) was found -- via a local CPU A/B test -- to
+# produce a metric no better (and ~2.7x slower overall to obtain) than just
+# letting step6 adapt from scratch, so there's little reason to use it.
 # ONE-TIME SETUP: metric.json can be reused across different FITS inputs.
 # To reuse an existing metric, copy it: cp output/DR1_v6_2color/metric.json output/$RUN/
 # Usage: sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5e_metric.sh

@@ -43,10 +43,10 @@ export CONFIG=configs/dr1_v6_2color.json
 | `data/SGA-2020_iron_Vrot_VI_corr_v6.fits` | **no** | Raw DESI galaxy catalog (~9 MB) | Must be present on NERSC scratch; only needed if re-running step 4 |
 | `output/DR1_v6_2color/input.json` | yes | Stan data arrays: x, σ_x, y, σ_y, z_obs, g, σ_g for ~4728 selected galaxies, plus bounds and mean_x/sd_x | Output of step 4; committed to allow skipping step 4 |
 | `output/DR1_v6_2color/init_MAP.json` | yes | Stan parameter starting values at the MAP optimum: slope, intercept, scatter terms, color slopes, k-corrections | Output of step 5d; committed to allow skipping step 5d |
-| `output/DR1_v6_2color/metric.json` | yes | 17×17 inverse mass matrix (parameter covariance) for HMC | Output of step 5e; committed to allow skipping step 5e (~7h) |
+| `output/DR1_v6_2color/metric.json` | yes | 17×17 inverse mass matrix (parameter covariance) for HMC | Output of step 5e — **not actually read by `step6_node.sh`/`step6_chain.sh`** (neither passes `metric_file=`; both run from the identity metric with in-warmup adaptation). Step 5e is optional/vestigial, kept only for `step6_chain.sh --debug`-style manual experiments. |
 | `2color_g` (binary) | **no** | Compiled Stan GPU executable | Must be built on Perlmutter; see One-Time Setup below |
 
-For the initial test run with `DR1_v6_2color`, the three committed output files mean **steps 4, 5d, and 5e can all be skipped** — go straight to step 6.
+For the initial test run with `DR1_v6_2color`, the two committed output files mean **steps 4 and 5d can be skipped** — go straight to step 6. Step 5e was never a real prerequisite (see above).
 
 ### Obtaining the FITS file
 
@@ -104,31 +104,23 @@ Wait for it to complete, then verify:
 ls -lh 2color_g
 ```
 
-### Build the metric (one-time per data type, reusable within that type)
+### Build the metric — optional, not part of the standard workflow
 
-The metric captures the parameter covariance and dramatically improves HMC
-efficiency. It only needs to be built once per **data type** — the result can
-be copied to any new run of the same type.
+**`step6_node.sh` and `step6_chain.sh` do not read `metric.json`** — both run
+every chain from the identity metric with in-warmup adaptation
+(`metric=dense_e`, no `metric_file=`). Step 5e (below) and this section are
+kept only for manual experimentation; skip them for a normal run. An
+abacus-mock A/B test found the identity-start approach ~2.7x faster overall
+than a Step-5e-built metric with no quality loss (the metric's own
+short-chain/`np.cov` method is fragile — see the warning this section used
+to lead with, now folded into `step5e_metric.sh`'s own comments).
+
+If you do want to experiment with a pre-built metric manually (not needed
+for `step6_node.sh`):
 
 ```bash
-# First complete step 4 and 5d (see below), then:
-sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh
+sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh   # ~7h
 ```
-
-This takes ~7 hours. Once done, `output/DR1_v6_2color/metric.json` exists and
-can be reused for future runs **of the same data type**:
-
-```bash
-cp output/DR1_v6_2color/metric.json output/<new_run>/metric.json
-```
-
-> **Warning — metric is NOT transferable across data types.** The DR1 metric
-> (`output/DR1_v6_2color/metric.json`) **must not** be copied to AbacusSummit
-> mock runs. Confirmed empirically: doing so causes repeated
-> `cholesky_decompose: Matrix m is not positive definite` warnings, stepsize
-> collapses to ~0.002 (from ~0.08), each iteration takes ~50s, and 18h is
-> insufficient for 1000 samples. Mock runs need their own metric built from a
-> mock file via step5e, then that mock metric can be reused for other mocks.
 
 ---
 
@@ -154,20 +146,19 @@ sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh
 
 Produces: `output/$RUN/optimize.csv`, `output/$RUN/init_MAP.json`
 
-### Step 5e — Build metric (if not reusing)
+### Step 5e — Build metric (optional, not needed for step6_node.sh)
 
-Requires step 5d to be complete. Skip if you are copying an existing `metric.json`.
+Skip this — `step6_node.sh` doesn't read `metric.json` (see "Build the
+metric" above). Kept only for manual experimentation:
 
 ```bash
 sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh
 ```
 
-Produces: `output/$RUN/metric.json`  (~7 hours)
-
 ### Step 6 — MCMC sampling (4 independent chains, 1 node)
 
-Requires steps 5d and 5e to be complete. This script submits a single
-`step6_node.sh` job (1 node, 4 GPUs, one chain per GPU via
+Requires only step 5d to be complete (not step 5e — see above). This script
+submits a single `step6_node.sh` job (1 node, 4 GPUs, one chain per GPU via
 `CUDA_VISIBLE_DEVICES`) and automatically chains step 7 and step 8 as
 dependencies:
 
@@ -183,8 +174,11 @@ each — 3 idle GPUs and ~127 idle CPU cores per job. `step6_node.sh` runs all
 4 chains as backgrounded processes within the one node SLURM already grants
 it, so it's both faster (one queue wait instead of four, and avoids QOS
 submit-count limits when running many runs in a batch — see `BATCH_MOCKS.md`)
-and uses hardware that would otherwise sit idle. Each chain still runs
-independently (~14 hours each, in parallel on its own GPU).
+and uses hardware that would otherwise sit idle. Each chain runs
+independently, in parallel on its own GPU — timing depends on
+`NUM_WARMUP`/`MAX_DEPTH` (now default 1000/10, up from 250/8; re-measure
+actual wall-clock for your dataset rather than trusting older ~14h figures
+quoted for the previous 250/8 defaults).
 Step 7 (diagnostics) starts automatically after all 4 chains complete.
 Step 8 (predictions) starts automatically after step 7.
 
@@ -221,12 +215,11 @@ whole node:
 sbatch --export=CONFIG=$CONFIG,CHAIN_ID=2 slurm/step6_chain.sh
 ```
 
-### Step 4 / 5d / 5e failure
+### Step 4 / 5d failure
 
 ```bash
 sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
 sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh
-sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh
 ```
 
 ### Step 7 / 8 failure (after all chains done)
@@ -252,15 +245,16 @@ After the full pipeline completes:
 |------|-------------|
 | `output/$RUN/input.json` | Stan data (N galaxies, z- and g-band) |
 | `output/$RUN/init_MAP.json` | MAP warm start for MCMC |
-| `output/$RUN/metric.json` | Pre-computed inverse mass matrix |
 | `output/$RUN/2color_1.csv` … `2color_4.csv` | Posterior MCMC draws (4 chains) |
 | `output/$RUN/stansummary.txt` | Convergence summary (R̂, ESS) |
 | `output/$RUN/diagnose.txt` | Divergence and treedepth diagnostics |
 | `output/$RUN/2color.png` | Corner plot |
 | `output/$RUN/explore_residuals/` | Residual-vs-galaxy-property diagnostic plots |
-| `output/$RUN/color_catalog.fits` | Catalog with MU_TF, LOGDIST (full model) |
-| `output/$RUN/color_xonly_catalog.fits` | Catalog (x-only model) |
-| `output/$RUN/color_cov.fits` | (G,G) posterior predictive covariance |
+| `output/$RUN/color_xonly_catalog.fits` | Catalog (x-only model, the default — pass `--full` to step8 for `color_catalog.fits`/`color_cov.fits` too) |
+| `output/$RUN/color_xonly_cov.h5` | (G,G) posterior predictive covariance (x-only) |
+
+`output/$RUN/metric.json` is **not** produced by the standard workflow
+(Step 5e is optional/skipped — see above).
 
 ---
 
@@ -271,7 +265,8 @@ After the full pipeline completes:
 | compile | debug | ~5 min |
 | step4 (data prep) | debug | <5 min |
 | step5d (MAP) | debug | ~5 min |
-| step5e (metric) | regular | ~7 hours |
-| step6 (4 chains, 1 node) | regular | ~14 hours (all 4 in parallel on 1 node's 4 GPUs) |
+| step6 (4 chains, 1 node) | regular | depends on dataset size and the `NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure per dataset rather than assuming a fixed figure (walltime is set to 24h; adjust if insufficient) |
 | step7 (diagnose) | debug | ~15 min |
 | step8 (predict) | regular | ~1–4 hours |
+
+Step 5e is optional (not part of the standard workflow) — skip it.

@@ -2,7 +2,7 @@
 #SBATCH -A desi_g
 #SBATCH -C gpu
 #SBATCH -q regular
-#SBATCH -t 18:00:00
+#SBATCH -t 24:00:00
 #SBATCH -N 1
 #SBATCH --gpus-per-node=4
 #SBATCH -J step6_node
@@ -34,7 +34,18 @@
 # (metric=dense_e adapt save_metric=1) -- no pre-built metric.json / step 5e
 # needed. The free-covariance 2color model samples cleanly with in-warmup
 # adaptation, and a metric.json from a different model version has the wrong
-# dimension anyway.
+# dimension anyway. Confirmed step5e_metric.sh's own metric-building method
+# (100 post-warmup draws, 17-param np.cov, no regularization) is the same
+# crude approach found -- on a local CPU A/B test -- to be ~2.7x slower
+# overall than identity+adapt with no quality gain, so it's correctly unused
+# here despite BATCH_NERSC.md/BATCH_MOCKS.md/BATCH_CLAUDE.md prose still
+# describing step6 as requiring it.
+#
+# NUM_WARMUP defaults to 1000 (up from 250) and MAX_DEPTH defaults to 10
+# (Stan's own default, up from a hardcoded 8): an abacus-mock run at the old
+# 250/8 settings showed 14.75% of transitions hitting max treedepth and 2.5%
+# divergent, alongside a systematic residual bias in the fit. Override either
+# via --export=...,NUM_WARMUP=N,MAX_DEPTH=N.
 #
 # DEBUG mode: set DEBUG=1 to run tiny 0+15 chains (no adaptation, fixed
 # stepsize) -- see step6_chain.sh for the rationale. Submit with
@@ -58,13 +69,11 @@ if [ "${DEBUG:-0}" = "1" ]; then
     echo "Step 6 (node): DEBUG mode — no adaptation, max_depth=1, fixed stepsize ${STEPSIZE:-0.08}, "\
 "$NUM_SAMPLES samples (results not science-grade)"
 else
-    NUM_WARMUP=${NUM_WARMUP:-250}
+    NUM_WARMUP=${NUM_WARMUP:-1000}
     NUM_SAMPLES=${NUM_SAMPLES:-1000}
+    MAX_DEPTH=${MAX_DEPTH:-10}
     ADAPT_ARGS="adapt save_metric=1"
-    # max_depth=8 (vs Stan's default 10): the free-covariance posterior is
-    # near-singular and NUTS saturates treedepth, so depth 10 costs up to
-    # 1023 leapfrog steps/iteration (~4x depth 8) for little extra mixing.
-    ENGINE_ARGS="engine=nuts max_depth=8"
+    ENGINE_ARGS="engine=nuts max_depth=$MAX_DEPTH"
     STEPSIZE_ARG=""
 fi
 
