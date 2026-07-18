@@ -275,8 +275,8 @@ if ! skip_if_done 7; then
 fi
 
 if ! skip_if_done 8; then
-    echo "=== Step 8: prediction ==="
-    python color_predict.py --config "$CONFIG" --model 2color --xonly
+    echo "=== Step 8: prediction (x-only, the default model; pass --full for the full model too) ==="
+    python color_predict.py --config "$CONFIG" --model 2color
     mark_done 8
 fi
 

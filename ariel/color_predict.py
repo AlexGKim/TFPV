@@ -1299,11 +1299,19 @@ def DESI_color(
     grid_resolution_y=50,
     make_residual_grid=True,
     make_redshift_grid=True,
-    xonly=False,
+    full=False,
     model="color",
 ):
     """
     Run color-correction model predictions and produce diagnostic plots.
+
+    x-only (marginalizing z-band and g-band) is always computed -- it's the
+    default model, since it doesn't depend on the z/g k-corrections and
+    D-matrix coupling that the full model needs (which are poorly
+    constrained on some datasets and were found to introduce a dust-
+    correlated bias absent from the x-only predictions). Pass full=True to
+    additionally compute the full quadrivariate (x̂, ẑ, ĝ)-conditioned
+    predictions and their diagnostic plots/catalogs.
     """
     _p = lambda name: os.path.join(run_dir, name) if run_dir else name
 
@@ -1336,7 +1344,9 @@ def DESI_color(
     if x_bar is None:
         x_bar = float(np.mean(input_data["x"]))
 
-    # Load posterior draws and compute predictions
+    # Load posterior draws. keep_cols already covers what the x-only
+    # prediction needs (S.1.1/alpha_kcorr_r or the legacy gamma/tau_c
+    # fallback) as a subset, so this read happens regardless of `full`.
     if model == "2color":
         draws = read_cmdstan_posterior(
             _p(f"{model}_?.csv"),
@@ -1347,16 +1357,6 @@ def DESI_color(
                 "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g",
             ],
             drop_diagnostics=True,
-        )
-
-        mean_pred, sd_pred = _batched_mean_sd(
-            ystar_pp_mean_sd_2color_vectorized,
-            draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
-            ghat_star, sigma_g_star,
-            sigma_y_star=sigma_y_star, x_bar=x_bar,
-            y_min=y_min, y_max=y_max,
-            zobs_star=zobs_star, mean_log1pz=mean_log1pz,
-            on_bad_Z="floor", Z_floor=1e-300,
         )
     else:
         draws = read_cmdstan_posterior(
@@ -1370,17 +1370,29 @@ def DESI_color(
         )
         ghat_star = sigma_g_star = None
 
-        mean_pred, sd_pred = _batched_mean_sd(
-            ystar_pp_mean_sd_color_vectorized,
-            draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
-            sigma_y_star=sigma_y_star, x_bar=x_bar,
-            y_min=y_min, y_max=y_max,
-            zobs_star=zobs_star, mean_log1pz=mean_log1pz,
-            on_bad_Z="floor", Z_floor=1e-300,
-        )
-
-    mean_y = mean_pred - yhat_star
-    sigma_y = sd_pred
+    # --- Full model (x̂, ẑ, ĝ)-conditioned predictions: opt-in via full=True ---
+    if full:
+        if model == "2color":
+            mean_pred, sd_pred = _batched_mean_sd(
+                ystar_pp_mean_sd_2color_vectorized,
+                draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
+                ghat_star, sigma_g_star,
+                sigma_y_star=sigma_y_star, x_bar=x_bar,
+                y_min=y_min, y_max=y_max,
+                zobs_star=zobs_star, mean_log1pz=mean_log1pz,
+                on_bad_Z="floor", Z_floor=1e-300,
+            )
+        else:
+            mean_pred, sd_pred = _batched_mean_sd(
+                ystar_pp_mean_sd_color_vectorized,
+                draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
+                sigma_y_star=sigma_y_star, x_bar=x_bar,
+                y_min=y_min, y_max=y_max,
+                zobs_star=zobs_star, mean_log1pz=mean_log1pz,
+                on_bad_Z="floor", Z_floor=1e-300,
+            )
+        mean_y = mean_pred - yhat_star
+        sigma_y = sd_pred
 
     # MAIN sample mask (union of training + analysis)
     rz_color_desi = _load_rz_color_from_desi(galaxy_fits)
@@ -1397,59 +1409,97 @@ def DESI_color(
     sigma_z_main = sigma_z_star[main_mask]
     zobs_main = zobs_star[main_mask]
 
-    if model == "2color":
-        ghat_main = ghat_star[main_mask]
-        sigma_g_main = sigma_g_star[main_mask]
-        mean_pred_main, _ = _batched_mean_sd(
-            ystar_pp_mean_sd_2color_vectorized,
-            draws, xhat_main, sigma_x_main, zhat_main, sigma_z_main,
-            ghat_main, sigma_g_main,
-            sigma_y_star=sigma_y_main, x_bar=x_bar,
-            y_min=y_min, y_max=y_max,
-            zobs_star=zobs_main, mean_log1pz=mean_log1pz,
-            on_bad_Z="floor", Z_floor=1e-300,
-        )
-    else:
-        mean_pred_main, _ = _batched_mean_sd(
-            ystar_pp_mean_sd_color_vectorized,
-            draws, xhat_main, sigma_x_main, zhat_main, sigma_z_main,
-            sigma_y_star=sigma_y_main, x_bar=x_bar,
-            y_min=y_min, y_max=y_max,
-            zobs_star=zobs_main, mean_log1pz=mean_log1pz,
-            on_bad_Z="floor", Z_floor=1e-300,
-        )
-    mean_y_main = mean_pred_main - yhat_main
+    # --- Full model diagnostics: opt-in via full=True ---
+    if full:
+        if model == "2color":
+            ghat_main = ghat_star[main_mask]
+            sigma_g_main = sigma_g_star[main_mask]
+            mean_pred_main, _ = _batched_mean_sd(
+                ystar_pp_mean_sd_2color_vectorized,
+                draws, xhat_main, sigma_x_main, zhat_main, sigma_z_main,
+                ghat_main, sigma_g_main,
+                sigma_y_star=sigma_y_main, x_bar=x_bar,
+                y_min=y_min, y_max=y_max,
+                zobs_star=zobs_main, mean_log1pz=mean_log1pz,
+                on_bad_Z="floor", Z_floor=1e-300,
+            )
+        else:
+            mean_pred_main, _ = _batched_mean_sd(
+                ystar_pp_mean_sd_color_vectorized,
+                draws, xhat_main, sigma_x_main, zhat_main, sigma_z_main,
+                sigma_y_star=sigma_y_main, x_bar=x_bar,
+                y_min=y_min, y_max=y_max,
+                zobs_star=zobs_main, mean_log1pz=mean_log1pz,
+                on_bad_Z="floor", Z_floor=1e-300,
+            )
+        mean_y_main = mean_pred_main - yhat_main
 
-    # --- Residual grid: MAIN sample ---
-    if make_residual_grid:
-        fig, ax, img = create_average_grid_image(
-            xhat_main,
-            yhat_main,
-            mean_y_main,
-            grid_resolution_x=grid_resolution_x,
-            grid_resolution_y=grid_resolution_y,
-        )
-        ax.set_xlabel(r"$\log{V/V_0}$")
-        ax.set_ylabel(r"$M$")
-        fig.colorbar(img, ax=ax, label="Average Magnitude Difference")
-        fig.savefig(_p("color_grid.png"), dpi=300)
-        plt.close(fig)
+        # --- Residual grid: MAIN sample ---
+        if make_residual_grid:
+            fig, ax, img = create_average_grid_image(
+                xhat_main,
+                yhat_main,
+                mean_y_main,
+                grid_resolution_x=grid_resolution_x,
+                grid_resolution_y=grid_resolution_y,
+            )
+            ax.set_xlabel(r"$\log{V/V_0}$")
+            ax.set_ylabel(r"$M$")
+            fig.colorbar(img, ax=ax, label="Average Magnitude Difference")
+            fig.savefig(_p("color_grid.png"), dpi=300)
+            plt.close(fig)
 
-        # Full sample
-        fig, ax, img = create_average_grid_image(
-            xhat_star,
-            yhat_star,
-            mean_y,
-            grid_resolution_x=grid_resolution_x,
-            grid_resolution_y=grid_resolution_y,
-        )
-        ax.set_xlabel(r"$\log{V/V_0}$")
-        ax.set_ylabel(r"$M$")
-        fig.colorbar(img, ax=ax, label="Average Magnitude Difference")
-        fig.savefig(_p("color_grid_full.png"), dpi=300)
-        plt.close(fig)
+            # Full sample
+            fig, ax, img = create_average_grid_image(
+                xhat_star,
+                yhat_star,
+                mean_y,
+                grid_resolution_x=grid_resolution_x,
+                grid_resolution_y=grid_resolution_y,
+            )
+            ax.set_xlabel(r"$\log{V/V_0}$")
+            ax.set_ylabel(r"$M$")
+            fig.colorbar(img, ax=ax, label="Average Magnitude Difference")
+            fig.savefig(_p("color_grid_full.png"), dpi=300)
+            plt.close(fig)
 
-    # --- Redshift grid ---
+        # --- Redshift scatter plot ---
+        plt.scatter(zobs_star, mean_y, marker=".", alpha=0.2, label="DR2 PV Spirals")
+        plt.scatter(zobs_main, mean_y_main, marker=".", alpha=0.2, label="Main Sample")
+        plt.xscale("log")
+        plt.xlabel(r"$z_{\text{obs}}$")
+        plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*, \hat{z}_*] - \hat{y}_{\text{obs}}$ (mag)")
+        plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
+        plt.legend()
+        # Set y-limits based on MAIN sample range with 10% padding
+        y_min_main, y_max_main = np.min(mean_y_main), np.max(mean_y_main)
+        y_range = y_max_main - y_min_main
+        y_pad = 0.1 * y_range if y_range > 0 else 1.0
+        plt.ylim((y_min_main - y_pad, y_max_main + y_pad))
+        plt.savefig(_p("redshift_color.png"), dpi=300)
+        plt.clf()
+
+        # --- Variance vs redshift ---
+        var_pred = sd_pred**2
+        plt.scatter(zobs_star, var_pred, marker=".", alpha=0.15, s=4, label="Prediction")
+        plt.xscale("log")
+        plt.yscale("log")
+        plt.xlabel(r"$z_{\text{obs}}$")
+        plt.ylabel(r"Magnitude variance (mag$^2$)")
+        plt.legend()
+        plt.savefig(_p("variance_redshift_color.png"), dpi=300)
+        plt.clf()
+
+        # --- Variance vs xhat ---
+        plt.scatter(xhat_star, var_pred, marker=".", alpha=0.15, s=4, label="Prediction")
+        plt.yscale("log")
+        plt.xlabel(r"$\log(V/V_0)$")
+        plt.ylabel(r"Magnitude variance (mag$^2$)")
+        plt.legend()
+        plt.savefig(_p("variance_xhat_color.png"), dpi=300)
+        plt.clf()
+
+    # --- Redshift grid (data-space only, independent of full/x-only) ---
     if make_redshift_grid:
         fig, ax, img = create_average_grid_image(
             xhat_star,
@@ -1464,162 +1514,156 @@ def DESI_color(
         fig.savefig(_p("redshift_grid_color.png"), dpi=300)
         plt.close(fig)
 
-    # --- Redshift scatter plot ---
-    plt.scatter(zobs_star, mean_y, marker=".", alpha=0.2, label="DR2 PV Spirals")
-    plt.scatter(zobs_main, mean_y_main, marker=".", alpha=0.2, label="Main Sample")
+    # --- x-only diagnostic plots: always computed (the default model) ---
+    mean_pred_xo, sd_pred_xo = _batched_mean_sd(
+        ystar_pp_mean_sd_color_xonly_vectorized,
+        draws,
+        xhat_star,
+        sigma_x_star,
+        sigma_y_star=sigma_y_star,
+        y_min=y_min,
+        y_max=y_max,
+        zobs_star=zobs_star,
+        mean_log1pz=mean_log1pz,
+    )
+    mean_pred_main_xo, sd_pred_main_xo = _batched_mean_sd(
+        ystar_pp_mean_sd_color_xonly_vectorized,
+        draws,
+        xhat_main,
+        sigma_x_main,
+        sigma_y_star=sigma_y_main,
+        y_min=y_min,
+        y_max=y_max,
+        zobs_star=zobs_main,
+        mean_log1pz=mean_log1pz,
+    )
+    mean_y_xo = mean_pred_xo - yhat_star
+    mean_y_main_xo = mean_pred_main_xo - yhat_main
+
+    # --- Residual grid: MAIN sample, x-only ---
+    if make_residual_grid:
+        fig, ax, img = create_average_grid_image(
+            xhat_main,
+            yhat_main,
+            mean_y_main_xo,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r"$\log{V/V_0}$")
+        ax.set_ylabel(r"$M$")
+        fig.colorbar(img, ax=ax, label="Average Magnitude Difference")
+        fig.savefig(_p("color_grid_xonly.png"), dpi=300)
+        plt.close(fig)
+
+        # Full sample
+        fig, ax, img = create_average_grid_image(
+            xhat_star,
+            yhat_star,
+            mean_y_xo,
+            grid_resolution_x=grid_resolution_x,
+            grid_resolution_y=grid_resolution_y,
+        )
+        ax.set_xlabel(r"$\log{V/V_0}$")
+        ax.set_ylabel(r"$M$")
+        fig.colorbar(img, ax=ax, label="Average Magnitude Difference")
+        fig.savefig(_p("color_grid_xonly_full.png"), dpi=300)
+        plt.close(fig)
+
+    # Inverse-variance-weighted average of the Main Sample, in 10 equal
+    # log-bins from 1e-2 to 0.065 (the training z_obs range).
+    bin_edges_xo = np.logspace(np.log10(1e-2), np.log10(0.065), 11)
+    bin_centers_xo = np.sqrt(bin_edges_xo[:-1] * bin_edges_xo[1:])
+    weights_xo = 1.0 / sd_pred_main_xo**2
+    bin_idx_xo = np.digitize(zobs_main, bin_edges_xo) - 1
+    weighted_mean_xo = np.full(10, np.nan)
+    weighted_sem_xo = np.full(10, np.nan)
+    for i in range(10):
+        sel = bin_idx_xo == i
+        if not np.any(sel):
+            continue
+        w = weights_xo[sel]
+        wsum = w.sum()
+        weighted_mean_xo[i] = np.sum(w * mean_y_main_xo[sel]) / wsum
+        weighted_sem_xo[i] = 1.0 / np.sqrt(wsum)
+
+    # Redshift scatter — x-only
+    plt.scatter(zobs_star, mean_y_xo, marker=".", alpha=0.2, label="DR2 PV Spirals")
+    plt.scatter(zobs_main, mean_y_main_xo, marker=".", alpha=0.2, label="Main Sample")
+    plt.errorbar(
+        bin_centers_xo, weighted_mean_xo, yerr=weighted_sem_xo,
+        fmt="o-", color="black", markersize=5, linewidth=1.5, capsize=3,
+        label="Weighted average (Main, 10 log-bins, $10^{-2}$-0.065)",
+        zorder=5,
+    )
     plt.xscale("log")
+    plt.xlim(0.005, 0.1)
     plt.xlabel(r"$z_{\text{obs}}$")
-    plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*, \hat{z}_*] - \hat{y}_{\text{obs}}$ (mag)")
+    plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*] - \hat{y}_{\text{obs}}$ (mag)")
     plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
-    plt.legend()
-    # Set y-limits based on MAIN sample range with 10% padding
-    y_min_main, y_max_main = np.min(mean_y_main), np.max(mean_y_main)
-    y_range = y_max_main - y_min_main
-    y_pad = 0.1 * y_range if y_range > 0 else 1.0
-    plt.ylim((y_min_main - y_pad, y_max_main + y_pad))
-    plt.savefig(_p("redshift_color.png"), dpi=300)
+    plt.legend(fontsize=8, loc="lower right", framealpha=1.0)
+    y_min_xo, y_max_xo = np.min(mean_y_main_xo), np.max(mean_y_main_xo)
+    y_range_xo = y_max_xo - y_min_xo
+    y_pad_xo = 0.1 * y_range_xo if y_range_xo > 0 else 1.0
+    plt.ylim((y_min_xo - y_pad_xo, y_max_xo + y_pad_xo))
+
+    # Inset: weighted-average points only, on an expanded y-scale
+    axins = plt.gca().inset_axes([0.08, 0.56, 0.4, 0.4], zorder=10)
+    axins.set_facecolor("white")
+    axins.patch.set_alpha(1.0)
+    axins.errorbar(
+        bin_centers_xo, weighted_mean_xo, yerr=weighted_sem_xo,
+        fmt="o-", color="black", markersize=4, linewidth=1.2, capsize=2,
+        zorder=5,
+    )
+    axins.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.0)
+    axins.set_xscale("log")
+    axins.set_xlim(0.005, 0.1)
+    axins.set_ylim(-0.05, 0.05)
+    axins.tick_params(labelsize=6)
+
+    plt.savefig(_p("redshift_color_xonly.png"), dpi=300)
     plt.clf()
 
-    # --- Variance vs redshift ---
-    var_pred = sd_pred**2
-    plt.scatter(zobs_star, var_pred, marker=".", alpha=0.15, s=4, label="Prediction")
+    # g-r color residual — x-only
+    gr_color = _load_gr_color_from_desi(galaxy_fits)
+    if gr_color is not None:
+        gr_main = gr_color[main_mask]
+        plt.scatter(gr_color, mean_y_xo, marker=".", alpha=0.2, label="DR2 PV Spirals")
+        plt.scatter(gr_main, mean_y_main_xo, marker=".", alpha=0.2, label="Main Sample")
+        plt.xlabel(r"$g - r$ (mag)")
+        plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*] - \hat{y}_{\rm obs}$ (mag)")
+        plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
+        plt.legend()
+        y_min_xo2, y_max_xo2 = np.nanmin(mean_y_main_xo), np.nanmax(mean_y_main_xo)
+        y_range_xo2 = y_max_xo2 - y_min_xo2
+        y_pad_xo2 = 0.1 * y_range_xo2 if y_range_xo2 > 0 else 1.0
+        plt.ylim((y_min_xo2 - y_pad_xo2, y_max_xo2 + y_pad_xo2))
+        plt.savefig(_p("gr_color_xonly.png"), dpi=300)
+        plt.clf()
+
+    # Variance vs redshift — x-only
+    var_pred_xo = sd_pred_xo**2
+    plt.scatter(zobs_star, var_pred_xo, marker=".", alpha=0.15, s=4, label="Prediction")
     plt.xscale("log")
     plt.yscale("log")
     plt.xlabel(r"$z_{\text{obs}}$")
     plt.ylabel(r"Magnitude variance (mag$^2$)")
     plt.legend()
-    plt.savefig(_p("variance_redshift_color.png"), dpi=300)
+    plt.savefig(_p("variance_redshift_color_xonly.png"), dpi=300)
     plt.clf()
 
-    # --- Variance vs xhat ---
-    plt.scatter(xhat_star, var_pred, marker=".", alpha=0.15, s=4, label="Prediction")
+    # Variance vs xhat — x-only
+    plt.scatter(xhat_star, var_pred_xo, marker=".", alpha=0.15, s=4, label="Prediction")
     plt.yscale("log")
     plt.xlabel(r"$\log(V/V_0)$")
     plt.ylabel(r"Magnitude variance (mag$^2$)")
     plt.legend()
-    plt.savefig(_p("variance_xhat_color.png"), dpi=300)
+    plt.savefig(_p("variance_xhat_color_xonly.png"), dpi=300)
     plt.clf()
 
-    # --- x-only diagnostic plots (reuse loaded data and draws) ---
-    if xonly:
-        mean_pred_xo, sd_pred_xo = _batched_mean_sd(
-            ystar_pp_mean_sd_color_xonly_vectorized,
-            draws,
-            xhat_star,
-            sigma_x_star,
-            sigma_y_star=sigma_y_star,
-            y_min=y_min,
-            y_max=y_max,
-            zobs_star=zobs_star,
-            mean_log1pz=mean_log1pz,
-        )
-        mean_pred_main_xo, sd_pred_main_xo = _batched_mean_sd(
-            ystar_pp_mean_sd_color_xonly_vectorized,
-            draws,
-            xhat_main,
-            sigma_x_main,
-            sigma_y_star=sigma_y_main,
-            y_min=y_min,
-            y_max=y_max,
-            zobs_star=zobs_main,
-            mean_log1pz=mean_log1pz,
-        )
-        mean_y_xo = mean_pred_xo - yhat_star
-        mean_y_main_xo = mean_pred_main_xo - yhat_main
-
-        # Inverse-variance-weighted average of the Main Sample, in 10 equal
-        # log-bins from 1e-2 to 0.065 (the training z_obs range).
-        bin_edges_xo = np.logspace(np.log10(1e-2), np.log10(0.065), 11)
-        bin_centers_xo = np.sqrt(bin_edges_xo[:-1] * bin_edges_xo[1:])
-        weights_xo = 1.0 / sd_pred_main_xo**2
-        bin_idx_xo = np.digitize(zobs_main, bin_edges_xo) - 1
-        weighted_mean_xo = np.full(10, np.nan)
-        weighted_sem_xo = np.full(10, np.nan)
-        for i in range(10):
-            sel = bin_idx_xo == i
-            if not np.any(sel):
-                continue
-            w = weights_xo[sel]
-            wsum = w.sum()
-            weighted_mean_xo[i] = np.sum(w * mean_y_main_xo[sel]) / wsum
-            weighted_sem_xo[i] = 1.0 / np.sqrt(wsum)
-
-        # Redshift scatter — x-only
-        plt.scatter(zobs_star, mean_y_xo, marker=".", alpha=0.2, label="DR2 PV Spirals")
-        plt.scatter(zobs_main, mean_y_main_xo, marker=".", alpha=0.2, label="Main Sample")
-        plt.errorbar(
-            bin_centers_xo, weighted_mean_xo, yerr=weighted_sem_xo,
-            fmt="o-", color="black", markersize=5, linewidth=1.5, capsize=3,
-            label="Weighted average (Main, 10 log-bins, $10^{-2}$-0.065)",
-            zorder=5,
-        )
-        plt.xscale("log")
-        plt.xlim(0.005, 0.1)
-        plt.xlabel(r"$z_{\text{obs}}$")
-        plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*] - \hat{y}_{\text{obs}}$ (mag)")
-        plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
-        plt.legend(fontsize=8, loc="lower right", framealpha=1.0)
-        y_min_xo, y_max_xo = np.min(mean_y_main_xo), np.max(mean_y_main_xo)
-        y_range_xo = y_max_xo - y_min_xo
-        y_pad_xo = 0.1 * y_range_xo if y_range_xo > 0 else 1.0
-        plt.ylim((y_min_xo - y_pad_xo, y_max_xo + y_pad_xo))
-
-        # Inset: weighted-average points only, on an expanded y-scale
-        axins = plt.gca().inset_axes([0.08, 0.56, 0.4, 0.4], zorder=10)
-        axins.set_facecolor("white")
-        axins.patch.set_alpha(1.0)
-        axins.errorbar(
-            bin_centers_xo, weighted_mean_xo, yerr=weighted_sem_xo,
-            fmt="o-", color="black", markersize=4, linewidth=1.2, capsize=2,
-            zorder=5,
-        )
-        axins.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.0)
-        axins.set_xscale("log")
-        axins.set_xlim(0.005, 0.1)
-        axins.set_ylim(-0.05, 0.05)
-        axins.tick_params(labelsize=6)
-
-        plt.savefig(_p("redshift_color_xonly.png"), dpi=300)
-        plt.clf()
-
-        # g-r color residual — x-only
-        gr_color = _load_gr_color_from_desi(galaxy_fits)
-        if gr_color is not None:
-            gr_main = gr_color[main_mask]
-            plt.scatter(gr_color, mean_y_xo, marker=".", alpha=0.2, label="DR2 PV Spirals")
-            plt.scatter(gr_main, mean_y_main_xo, marker=".", alpha=0.2, label="Main Sample")
-            plt.xlabel(r"$g - r$ (mag)")
-            plt.ylabel(r"$\mathbb{E}[\hat{y}_* | \hat{x}_*] - \hat{y}_{\rm obs}$ (mag)")
-            plt.axhline(y=0, color="gray", linestyle="dashed", linewidth=1.5)
-            plt.legend()
-            y_min_xo2, y_max_xo2 = np.nanmin(mean_y_main_xo), np.nanmax(mean_y_main_xo)
-            y_range_xo2 = y_max_xo2 - y_min_xo2
-            y_pad_xo2 = 0.1 * y_range_xo2 if y_range_xo2 > 0 else 1.0
-            plt.ylim((y_min_xo2 - y_pad_xo2, y_max_xo2 + y_pad_xo2))
-            plt.savefig(_p("gr_color_xonly.png"), dpi=300)
-            plt.clf()
-
-        # Variance vs redshift — x-only
-        var_pred_xo = sd_pred_xo**2
-        plt.scatter(zobs_star, var_pred_xo, marker=".", alpha=0.15, s=4, label="Prediction")
-        plt.xscale("log")
-        plt.yscale("log")
-        plt.xlabel(r"$z_{\text{obs}}$")
-        plt.ylabel(r"Magnitude variance (mag$^2$)")
-        plt.legend()
-        plt.savefig(_p("variance_redshift_color_xonly.png"), dpi=300)
-        plt.clf()
-
-        # Variance vs xhat — x-only
-        plt.scatter(xhat_star, var_pred_xo, marker=".", alpha=0.15, s=4, label="Prediction")
-        plt.yscale("log")
-        plt.xlabel(r"$\log(V/V_0)$")
-        plt.ylabel(r"Magnitude variance (mag$^2$)")
-        plt.legend()
-        plt.savefig(_p("variance_xhat_color_xonly.png"), dpi=300)
-        plt.clf()
-
-    return mean_y, sigma_y, zobs_star
+    if full:
+        return mean_y, sigma_y, zobs_star
+    return mean_y_xo, sd_pred_xo, zobs_star
 
 
 def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
@@ -2873,10 +2917,13 @@ if __name__ == "__main__":
         help="Skip computing and writing color_cov.fits posterior predictive covariance matrix",
     )
     parser.add_argument(
-        "--xonly",
+        "--full",
         action="store_true",
-        default=True,
-        help="Also write color_xonly_catalog.fits using x̂ and redshift (no z-band)",
+        default=False,
+        help="Also compute the full (x̂, ẑ, ĝ)-conditioned model (color_catalog.fits, "
+             "color_cov.fits/h5, color_grid.png, etc.). x-only is always computed "
+             "and is the default model -- pass this to additionally get the full "
+             "quadrivariate predictions.",
     )
     parser.add_argument(
         "--model",
@@ -2900,18 +2947,17 @@ if __name__ == "__main__":
         run_dir=args.run_dir,
         grid_resolution_x=args.grid_resolution,
         grid_resolution_y=args.grid_resolution,
-        xonly=args.xonly,
+        full=args.full,
         model=args.model,
     )
 
     if not args.no_catalog:
-        write_desi_catalog_color(_run_dir, _fits_path, cfg=_cfg, model=args.model)
-
+        write_desi_catalog_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)
     if not args.no_cov:
-        write_cov_color(_run_dir, _fits_path, cfg=_cfg, model=args.model)
+        write_cov_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)
 
-    if args.xonly:
+    if args.full:
         if not args.no_catalog:
-            write_desi_catalog_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)
+            write_desi_catalog_color(_run_dir, _fits_path, cfg=_cfg, model=args.model)
         if not args.no_cov:
-            write_cov_color_xonly(_run_dir, _fits_path, cfg=_cfg, model=args.model)
+            write_cov_color(_run_dir, _fits_path, cfg=_cfg, model=args.model)

@@ -315,17 +315,38 @@ Residual plots land in `output/$RUN/explore_residuals/`.
 ## Step 8: Predict absolute magnitudes
 
 ```bash
-python color_predict.py --config $CONFIG --model 2color --xonly
+python color_predict.py --config $CONFIG --model 2color
 ```
 
-Key outputs:
+x-only (conditioning on x̂ and z_obs only, marginalizing ẑ and ĝ) is always
+computed — it's the default model here, since it doesn't depend on the
+z/g-band k-corrections and D-matrix coupling that the full model needs. On
+the abacus-mock experiment, the full model showed a systematic ~0.05 mag
+distance-modulus bias correlated with intrinsic dust (`A_INT_{G,R,Z}`); the
+x-only model's bias was roughly half that (~0.027 mag) and *not*
+significantly correlated with dust — pointing at the full model's z/g
+machinery as the main (though not sole) source. Add `--full` to additionally
+compute the full quadrivariate model's outputs for comparison:
+
+```bash
+python color_predict.py --config $CONFIG --model 2color --full
+```
+
+Key outputs (always written):
 
 | File | Description |
 |------|-------------|
-| `output/$RUN/color_catalog.fits` | DESI catalog with MU_TF, LOGDIST, MAIN, ANALYSIS (full model) |
-| `output/$RUN/color_xonly_catalog.fits` | Same, x-only |
-| `output/$RUN/color_cov.h5` | (G,G) covariance HDF5, datasets `cov`, `analysis` (full model) |
-| `output/$RUN/color_xonly_cov.h5` | Same, x-only |
+| `output/$RUN/color_xonly_catalog.fits` | DESI catalog with MU_TF, LOGDIST, MAIN, ANALYSIS (x-only) |
+| `output/$RUN/color_xonly_cov.h5` | (G,G) covariance HDF5, datasets `cov`, `analysis` (x-only) |
+| `output/$RUN/color_grid_xonly.png` / `_full.png` | Mean residual on (x̂, ŷ) grid, x-only (MAIN / full sample) |
+
+With `--full`, additionally:
+
+| File | Description |
+|------|-------------|
+| `output/$RUN/color_catalog.fits` | Same, full model |
+| `output/$RUN/color_cov.h5` | Same, full model |
+| `output/$RUN/color_grid.png` / `_full.png` | Same, full model |
 
 `MAIN` marks every galaxy passing selection cuts (training + analysis
 union); `ANALYSIS` marks the non-training subset. Recover the analysis-only
