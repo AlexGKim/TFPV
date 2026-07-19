@@ -26,13 +26,16 @@ RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
 echo "Step 5d: MAP optimize for run=$RUN"
-# The free-covariance 2color MAP is near-singular (the achromatic mode drives the
-# intrinsic correlations to ~0.99), which makes lbfgs line-search fail and Newton
-# eventually overshoot into a non-PD region. Newton from the well-conditioned cold
-# init.json climbs fast and cleanly for the first ~20 iterations, reaching
-# essentially the MAP (validated: lp within ~25 of the true MAP), so cap it there.
+# Plain optimize (LBFGS default, unbounded) -- matches what was validated
+# locally on the current free-null rank-2 model (n_null/Sc_scale/Sc_Lcorr),
+# which converges normally. The previous algorithm=newton iter=20 override
+# here was tuned for an older model version (its comment described the
+# achromatic mode driving correlations to ~0.99, which doesn't describe the
+# current free-null parameterization) and was found on NERSC to sometimes
+# produce zero usable output rows for this model, silently falling through
+# to the generic fallback init below instead of an actual MAP.
 # '|| true' keeps set -e from aborting if the optimizer still exits nonzero.
-./2color_g optimize algorithm=newton iter=20 \
+./2color_g optimize \
     data file=output/$RUN/input.json \
     init=output/$RUN/init.json \
     output file=output/$RUN/optimize.csv || echo "step5d: optimizer exited nonzero (using best iterate / fallback)"
