@@ -231,7 +231,7 @@ free cores):
 PIDS=()
 for CHAIN_ID in 1 2 3 4; do
     ./2color sample num_warmup=1000 num_samples=1000 \
-        adapt delta=0.95 save_metric=1 \
+        adapt delta=0.9 save_metric=1 \
         algorithm=hmc engine=nuts max_depth=10 metric=dense_e \
         id=$CHAIN_ID \
         data file=output/$RUN/input.json \
@@ -256,14 +256,19 @@ treedepth cap lets NUTS actually reach its natural trajectory length instead
 of being cut off (at the cost of up to 1023 leapfrog steps/iteration in the
 worst case, vs. 255 at depth 8, so this is meaningfully slower per iteration
 — expect substantially longer runs than the timing note below, which
-predates this change). `adapt delta=0.95` (up from Stan's default 0.8): the
+predates this change). `adapt delta=0.9` (up from Stan's default 0.8): the
 rank-2 `S` / Householder null-direction geometry produces tight posterior
 curvature that drove a non-trivial divergence rate at the default (1.9% on
 DR2_v0 spiral, 8.4% on DR2_TF_spirals_v5 spiral); a higher target acceptance
-statistic shrinks the adapted stepsize and suppresses those divergences (at
-some cost in per-iteration speed). Raise further toward 0.99 if `diagnose.txt`
-still reports divergences. `id=$CHAIN_ID` is required (distinct RNG seed/offset
-per chain). This produces `2color_1.csv` … `2color_4.csv` in `output/$RUN/`,
+statistic shrinks the adapted stepsize and suppresses those divergences. This
+comes at a real wall-clock cost, and the cost is steeply non-linear in the
+irregular population: at `delta=0.95` the irregular warmup was so slow it was
+impractical locally (~135 min per 100 warmup iterations, i.e. ~20+ h/chain),
+so `0.9` is the compromise used here — well above the 0.8 default for
+divergence control, without the 0.95 blow-up. If `diagnose.txt` still reports
+too many divergences at `0.9`, raise toward `0.95`, but budget for the much
+longer run (or move to slurm/NERSC). `id=$CHAIN_ID` is required (distinct RNG
+seed/offset per chain). This produces `2color_1.csv` … `2color_4.csv` in `output/$RUN/`,
 matching the `2color_?.csv` glob used downstream.
 
 For the spiral DR2_v0 run (at the original num_warmup=250/max_depth=8
@@ -276,7 +281,7 @@ you have cores, or fall back to the sequential single-invocation form:
 
 ```bash
 ./2color sample num_warmup=1000 num_samples=1000 num_chains=4 \
-    adapt delta=0.95 save_metric=1 \
+    adapt delta=0.9 save_metric=1 \
     algorithm=hmc engine=nuts max_depth=10 metric=dense_e \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
