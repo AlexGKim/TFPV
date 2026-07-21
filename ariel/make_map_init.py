@@ -35,13 +35,9 @@ def main():
             cols = sorted([c for c in df.columns if c.startswith('intercept_std.')],
                           key=lambda s: int(s.split('.')[1]))
             new[k] = [float(row[c]) for c in cols]
-        elif k == 'Sc_scale' and 'Sc_scale.1' in df.columns:
-            # [2COLOR] chromatic scatter scales -> length-2 vector
-            new[k] = [float(row[f'Sc_scale.{i}']) for i in (1, 2)]
-        elif k == 'Sc_Lcorr' and 'Sc_Lcorr.1.1' in df.columns:
-            # [2COLOR] chromatic-correlation Cholesky -> 2x2 (row-major) matrix
-            new[k] = [[float(row[f'Sc_Lcorr.{i}.{j}']) for j in (1, 2)]
-                      for i in (1, 2)]
+        elif k == 'w' and 'w.1' in df.columns:
+            # [2COLOR] rank-1 scatter loading -> length-3 vector (S = w w^T)
+            new[k] = [float(row[f'w.{i}']) for i in (1, 2, 3)]
         elif k in df.columns:
             new[k] = float(row[k])
         else:

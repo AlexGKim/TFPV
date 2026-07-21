@@ -1,18 +1,14 @@
 // 2color.stan — Two-Color TFR Model, rank-2 intrinsic covariance
 //
 // Quadrivariate (x, y, z, g) model extending tophat.stan. The intrinsic (y,z,g)
-// scatter is a RANK-2 covariance S = V Sigma_c V^T with a FREE null direction:
-//   n_null   — unit vector, the null direction of S (uniform-on-sphere prior)
-//   V        — 3x2 orthonormal basis of the plane orthogonal to n_null
-//   Sc_scale — two scatter scales (HalfCauchy(0,1) prior)
-//   Sc_Lcorr — Cholesky factor of the 2x2 correlation (LKJ(2) prior)
-// S has null space along n_null by construction (S n_null = 0), so exactly one
-// direction is excluded from the calibration scatter — but which direction is
-// inferred, not fixed. Setting n_null = e = (1,1,1)/sqrt(3) recovers the
-// chromatic-only model that excludes the achromatic (peculiar-velocity/distance
-// -modulus) direction and assigns it to the downstream velocity-covariance model
-// C_vv; here n_null is fit, so the data determine the excluded direction and
-// achromatic_angle_deg (generated quantities) reports how close it is to e.
+// scatter is a RANK-1 covariance S = w w^T:
+//   w — loading vector; scatter direction w/|w|, magnitude |w| (N(0,0.5) prior)
+// S is rank-1 by construction, so two directions carry no intrinsic scatter.
+// The data support a single scatter axis (the rank-2 model's second scale
+// collapsed to ~0). scatter_angle_deg (generated quantities) reports the angle
+// between the scatter direction and the achromatic axis e = (1,1,1)/sqrt(3):
+// ~90 deg means purely chromatic scatter (achromatic/PV direction carries none,
+// so it is owned by the downstream velocity model C_vv).
 // The mean-color structure (delta_c, mu_c, delta_g, mu_g) and the band
 // k-corrections (alpha_kcorr_{r,z,g}) are unchanged.
 //
@@ -645,16 +641,12 @@ parameters {
          upper=-14 + slope_std * mean_x / sd_x>[N_bins] intercept_std;
   real<lower=0, upper=1> sigma_int_x;
 
-  // [2COLOR] Rank-2 intrinsic covariance S = V Sigma_c V^T with a FREE null
-  // direction n_null (unit vector, uniform on the sphere). V spans the plane
-  // orthogonal to n_null; S is rank-2 by construction (S n_null = 0) but the
-  // excluded direction is fit, not fixed to the achromatic axis. 5 DOF total:
-  // 2 (n_null) + 2 (Sc_scale) + 1 (Sc_Lcorr). The null direction is only
-  // identified up to sign (S is invariant under n_null -> -n_null) and the
-  // in-plane frame of V is a gauge absorbed by the full 2x2 Sigma_c.
-  unit_vector[3] n_null;                    // free null direction of S
-  vector<lower=0>[2] Sc_scale;             // rank-2 scatter scales
-  cholesky_factor_corr[2] Sc_Lcorr;        // Cholesky of 2x2 correlation
+  // [2COLOR] Rank-1 intrinsic covariance S = w w^T over (y,z,g). A single
+  // loading vector w gives one scatter direction (w/|w|) with magnitude |w|;
+  // S is rank-1 by construction. 3 DOF. Replaces the rank-2 V Sigma_c V^T /
+  // free-null unit_vector parameterization, whose vanishing second scale and
+  // sphere-constrained null direction produced the warmup funnel.
+  vector[3] w;                             // rank-1 scatter loading; S = w w^T
 
   // [COLOR] mean-color structure (kept: these define the MEAN, not the scatter)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
@@ -673,31 +665,17 @@ transformed parameters {
   // folded into S.
   real sigma_int_x_std = sigma_int_x / sd_x;
 
-  // [2COLOR] Rank-2 S = V Sigma_c V^T with a free null direction n_null.
-  // V = orthonormal basis of the plane orthogonal to n_null, built from a
-  // Householder reflector H with H*e1 = +/- n_null; columns 2:3 of H span the
-  // plane orthogonal to n_null. Using +sign(n1) avoids cancellation, so this is
-  // numerically stable for all n_null (including near coordinate axes).
-  real s_hh = n_null[1] >= 0 ? 1.0 : -1.0;
-  vector[3] v_hh = n_null;
-  v_hh[1] += s_hh;                                  // v = n_null + sign(n1)*e1
-  matrix[3, 3] H = diag_matrix(rep_vector(1.0, 3))
-                   - (2.0 / dot_self(v_hh)) * (v_hh * v_hh');
-  matrix[3, 2] V = H[ : , 2:3];
-  matrix[2, 2] L_Sc = diag_pre_multiply(Sc_scale, Sc_Lcorr);
-  matrix[2, 2] Sigma_c = multiply_lower_tri_self_transpose(L_Sc);
-  matrix[3, 3] S = V * Sigma_c * V';
+  // [2COLOR] Rank-1 S = w w^T (PSD, rank 1). Single nonzero eigenvalue |w|^2,
+  // eigenvector w/|w| = the intrinsic-scatter direction.
+  matrix[3, 3] S = w * w';
 }
 model {
   // Priors — baseline
   sigma_int_x ~ cauchy(0, 1);
 
-  // [2COLOR] Priors on the rank-2 intrinsic covariance.
-  //   n_null:   uniform on the unit sphere (implicit via the unit_vector type).
-  //   Sc_scale: weakly-informative half-Cauchy on the two scatter scales.
-  //   Sc_Lcorr: LKJ(2) on the 2x2 correlation (1 free parameter).
-  Sc_scale ~ cauchy(0, 1);
-  Sc_Lcorr ~ lkj_corr_cholesky(2);
+  // [2COLOR] Prior on the rank-1 loading. |w| ~ 0.35 mag expected; N(0,0.5)
+  // per component is diffuse relative to that. S = w w^T is even in w.
+  w ~ normal(0, 0.5);
 
   // [COLOR] Priors for the mean-color structure (unchanged)
   delta_c ~ std_normal();
@@ -715,9 +693,7 @@ model {
   vector[N_total] sigma1_std   = sqrt(sigmasq1_std);
 
   if (y_TF_limits != 0) {
-    // [2COLOR] Intrinsic (y,z,g) covariance entries from S = V Sigma_c V^T.
-    // S is rank-2 (null along the fitted n_null); entries are functions of
-    // n_null, Sc_scale, and Sc_Lcorr (5 DOF).
+    // [2COLOR] Intrinsic (y,z,g) covariance entries from S = w w^T (rank-1).
     real S_yy = S[1, 1];
     real S_yz = S[1, 2];
     real S_yg = S[1, 3];
@@ -838,14 +814,14 @@ generated quantities {
   real slope = slope_std / sd_x;
   vector[N_bins] intercept = intercept_std - slope_std * mean_x / sd_x;
 
-  // [2COLOR] Report the fitted null direction with a fixed sign convention
-  // (n . e >= 0, since S is invariant under n_null -> -n_null) and the angle
-  // (deg) between it and the achromatic axis e = (1,1,1)/sqrt(3). A posterior
-  // for achromatic_angle_deg concentrated near 0 endorses the chromatic-only
-  // assumption; a broad or offset posterior means the data do not pin the null
-  // direction to the achromatic axis.
+  // [2COLOR] Report the rank-1 scatter direction w (sign-fixed w.e >= 0, since
+  // S = w w^T is invariant under w -> -w), its magnitude, and the angle (deg)
+  // to the achromatic axis e = (1,1,1)/sqrt(3). scatter_angle_deg ~ 90 means
+  // the single scatter axis is chromatic (achromatic/PV direction has no
+  // intrinsic scatter -> owned by the downstream velocity model C_vv).
   vector[3] e_achrom = rep_vector(inv_sqrt(3.0), 3);
-  real n_dot_e = dot_product(n_null, e_achrom);
-  vector[3] n_report = n_dot_e >= 0 ? n_null : -n_null;
-  real achromatic_angle_deg = acos(fmin(1.0, abs(n_dot_e))) * 180.0 / pi();
+  real w_norm = sqrt(dot_self(w));
+  real w_dot_e = dot_product(w, e_achrom) / (w_norm + 1e-12);
+  vector[3] w_report = w_dot_e >= 0 ? w : -w;
+  real scatter_angle_deg = acos(fmin(1.0, abs(w_dot_e))) * 180.0 / pi();
 }

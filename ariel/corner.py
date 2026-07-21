@@ -83,10 +83,12 @@ def load_params(file_pattern):
         r"$\delta_g$":                    ["delta_g"],
         r"$\mu_g$":                       ["mu_g"],
         r"$\tau_g$":                      ["tau_g"],
-        # [2COLOR] chromatic-only covariance parameters (skipped if absent)
-        r"$S_{c,1}$":                     ["Sc_scale.1"],
-        r"$S_{c,2}$":                     ["Sc_scale.2"],
-        r"$\rho_c$":                      ["Sc_Lcorr.2.1"],
+        # [2COLOR] rank-1 covariance loading S = w w^T (skipped if absent)
+        r"$w_1$":                         ["w.1"],
+        r"$w_2$":                         ["w.2"],
+        r"$w_3$":                         ["w.3"],
+        r"$|w|$":                         ["w_norm"],
+        r"$\theta_S$":                    ["scatter_angle_deg"],
     }
 
     params = {}

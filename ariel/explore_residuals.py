@@ -276,10 +276,11 @@ def main():
         # written directly to the CSV; ystar_pp_mean_sd_color_xonly_vectorized
         # reads all six entries via _intrinsic_cov_entries (even though only
         # S.1.1 = S_yy ends up used for x-only prediction), which is
-        # parameterization-independent (works for both the fixed-null and
-        # free-null models). Do not substitute Sc_scale/Sc_Lcorr here — those
-        # alone aren't S_yy under the free-null model, since S also depends on
-        # n_null. Matches color_predict.py's _S_COV_COLS.
+        # parameterization-independent: it reads the assembled S regardless of
+        # how S is built (the rank-1 S = w w^T, or the earlier rank-2 /
+        # free-null forms). Do not substitute the loading parameter w here —
+        # S_yy = S.1.1 = w_1^2 must come from the assembled S column.
+        # Matches color_predict.py's _S_COV_COLS.
         keep_cols = ["slope", "intercept.1", "sigma_int_x", "alpha_kcorr_r",
                      "S.1.1", "S.1.2", "S.1.3", "S.2.2", "S.2.3", "S.3.3"]
         draws = read_cmdstan_posterior(

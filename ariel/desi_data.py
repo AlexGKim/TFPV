@@ -560,19 +560,14 @@ def process_desi_tf_data(
     }
 
     # [2COLOR] g-band init parameters.
-    # The 2color model (2color.stan) uses a chromatic-only intrinsic covariance
-    # S = V Sigma_c V^T with Sc_scale (2 chromatic scales) + Sc_Lcorr (2x2
-    # correlation Cholesky). Start from moderate, uncorrelated chromatic scatter;
-    # step5d MAP optimization refines it.
+    # The 2color model (2color.stan) uses a rank-1 intrinsic covariance
+    # S = w w^T over (y,z,g) with a single loading vector w (|w| ~ 0.35 mag).
+    # Start from a moderate isotropic loading; step5d MAP optimization refines it.
     if g_absmag is not None:
         init_data["delta_g"] = 0.0
         init_data["mu_g"] = float(np.mean(y - g_absmag)) if N_total > 0 else 0.0
         init_data["alpha_kcorr_g"] = -0.5
-        init_data["Sc_scale"] = [0.2, 0.2]
-        init_data["Sc_Lcorr"] = [
-            [1.0, 0.0],
-            [0.0, 1.0],
-        ]
+        init_data["w"] = [0.2, 0.2, 0.2]
 
     with open(init_output_file, "w") as f:
         json.dump(init_data, f, indent=2)

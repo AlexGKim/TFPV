@@ -1501,7 +1501,7 @@ $\delta_c,\delta_g$ the color--velocity slopes, and $\Delta_{r,i},\Delta_{z,i},
 \Delta_{g,i}$ the band residual $k$-corrections
 [$\Delta_{b,i}\equiv\alpha_{k,b}(\ln(1+z_{\mathrm{obs},i})-\overline{\ln(1+z)})$].
 The latent absolute magnitudes $(y_i,z_i,g_i)$ scatter about these means with a
-\emph{rank-2} $3\times3$ intrinsic covariance,
+\emph{rank-1} $3\times3$ intrinsic covariance,
 \begin{equation}
   \begin{pmatrix} y_i\\ z_i\\ g_i \end{pmatrix}
   \Bigm|\, y_{\mathrm{TF},i}, x_i
@@ -1511,39 +1511,37 @@ The latent absolute magnitudes $(y_i,z_i,g_i)$ scatter about these means with a
     \boldsymbol{S}
   \right),
   \qquad
-  \boldsymbol{S} = \boldsymbol{V}\,\boldsymbol{\Sigma}_c\,\boldsymbol{V}^T,
+  \boldsymbol{S} = \boldsymbol{w}\,\boldsymbol{w}^T,
   \label{eq:2c:S}
 \end{equation}
-where $\boldsymbol{V}$ is a $3\times2$ matrix with orthonormal columns spanning
-the plane orthogonal to a \emph{free} unit null direction $\hat{\boldsymbol{n}}$,
-and $\boldsymbol{\Sigma}_c$ is a free $2\times2$ symmetric positive-definite
-matrix.
-[There should be a mention that runs with a rank-3 covariance 
-showed near degeneracy, which led to slow convergence.  This is 
-why we go with rank-2.  Could this be true since \sigma_{x,int}
-is another free parameter?]
-  By construction $\boldsymbol{S}\,\hat{\boldsymbol{n}}=\boldsymbol{0}$:
-$\boldsymbol{S}$ is rank~2, with a null space along $\hat{\boldsymbol{n}}$, so
-exactly one direction in $(y,z,g)$ space carries no intrinsic scatter --- but
-\emph{which} direction is inferred from the data, not fixed in advance.  The unit
-vector $\hat{\boldsymbol{n}}$ is assigned a uniform prior on the sphere, and
-$\boldsymbol{V}$ is constructed as an orthonormal basis of its orthogonal
-complement (via a Householder reflector, so the map is smooth in
-$\hat{\boldsymbol{n}}$).
-The $2\times2$ covariance is parameterized as
-$\boldsymbol{\Sigma}_c = \boldsymbol{D}_c\,\boldsymbol{R}_c\,\boldsymbol{D}_c$
-with $\boldsymbol{D}_c=\mathrm{diag}(S_{c,1},S_{c,2})$ (two scatter
-scales) and $\boldsymbol{R}_c$ a $2\times2$ correlation matrix (one free
-parameter).  The intrinsic scatter therefore has 5 free parameters in total ---
-two for $\hat{\boldsymbol{n}}$, two scales, and one correlation --- which is
-exactly the dimension of a general rank-2 positive-semidefinite $3\times3$
-matrix; it sits strictly between the fixed-null chromatic-only form (3
-parameters) and an unconstrained full-rank covariance (6).  Only the plane
-$\mathrm{span}(\boldsymbol{V})$, equivalently $\hat{\boldsymbol{n}}$ up to sign,
-is identified: the in-plane orientation of the columns of $\boldsymbol{V}$ is a
-gauge freedom absorbed by the full $2\times2$ $\boldsymbol{\Sigma}_c$.
+where $\boldsymbol{w}\in\mathbb{R}^3$ is a free loading vector.  By construction
+$\boldsymbol{S}$ is positive semi-definite of rank~1: the intrinsic scatter lies
+entirely along a single direction $\hat{\boldsymbol{w}}=\boldsymbol{w}/\lVert
+\boldsymbol{w}\rVert$ with magnitude $\lVert\boldsymbol{w}\rVert$, and the two
+orthogonal directions in $(y,z,g)$ space carry no intrinsic scatter.  The scatter
+direction and amplitude are both inferred from the data, not fixed in advance.
+The intrinsic scatter therefore has 3 free parameters (the three components of
+$\boldsymbol{w}$); $\boldsymbol{S}$ is invariant under $\boldsymbol{w}\to
+-\boldsymbol{w}$, so only $\hat{\boldsymbol{w}}$ up to sign and
+$\lVert\boldsymbol{w}\rVert$ are identified.  We assign a weakly-informative
+$\boldsymbol{w}\sim\mathcal{N}(\boldsymbol{0},0.5^2\boldsymbol{I})$ prior on the
+loading.
+
+The rank-1 form is the endpoint of a sequence forced by the data.  A free
+full-rank $3\times3$ $\boldsymbol{S}$ is dominated by a single near-achromatic
+mode ($\sim\!99\%$ correlated, $\sim\!0.4$~mag) that is degenerate with the
+peculiar-velocity scatter $C_{vv}$ (\S\ref{sec:2c:priors}), degrading sampling
+badly; restricting the rank removes that degeneracy.  Fitting an intermediate
+rank-2 covariance $\boldsymbol{S}=\boldsymbol{V}\boldsymbol{\Sigma}_c
+\boldsymbol{V}^T$ (a free unit null direction plus a $2\times2$ in-plane
+covariance) then found that one of its two in-plane scatter scales collapses to
+$\lesssim0.01$~mag while the other holds at $\sim\!0.35$~mag: the data support a
+\emph{single} scatter axis.  Carrying the unsupported second scale also created
+a boundary funnel (a vanishing scale whose orientation is unidentified) that made
+warmup pathologically slow.  Rank~1 both matches what the data prefer and removes
+the funnel, so we adopt it.
 Writing $S_{yy},S_{yz},S_{yg},S_{zz},S_{zg},S_{gg}$ for the entries of
-$\boldsymbol{S}=\boldsymbol{V}\boldsymbol{\Sigma}_c\boldsymbol{V}^T$,
+$\boldsymbol{S}=\boldsymbol{w}\boldsymbol{w}^T$ (so $S_{ab}=w_a w_b$),
 the measurement equations are
 $\hat{y}_i\mid y_i\sim\mathcal{N}(y_i,\sigma_{y,i}^2)$ and likewise for
 $\hat{z}_i,\hat{g}_i$, and the intrinsic (measurement-free) covariance of
@@ -1596,12 +1594,11 @@ $\boldsymbol{S}$ (Eq.~\ref{eq:2c:S}),
   A_{44} &= S_{gg} + \sigma_{g,i}^2,\\
   A_{zg} &= S_{zg} + \delta_c\delta_g\sigma_{\mathrm{int},x}^2. \label{eq:2c:A44}
 \end{align}
-[In the following there is no need to describe this in the context of the earlier parameterization.]
-The $(3,4)$ entry has two contributions. $S_{zg}$ is a \emph{free} parameter [is this true in this parameterization?]: the
-intrinsic $\hat{z}$--$\hat{g}$ covariance is no longer forced to zero, so
-$\hat{z}$ and $\hat{g}$ are not required to be conditionally independent given
-$(y_{\mathrm{TF},i}, x_i)$. Fixing $S_{zg}=0$ recovers the earlier
-two-independent-latent-color-factor model. The second term is \emph{induced} by
+The $(3,4)$ entry has two contributions. The first, $S_{zg}=w_z w_g$, is the
+intrinsic $\hat{z}$--$\hat{g}$ covariance; under the rank-1 loading it is not a
+free parameter but a product of two components of $\boldsymbol{w}$, and it is
+generically nonzero, so $\hat{z}$ and $\hat{g}$ are not conditionally independent
+given $(y_{\mathrm{TF},i}, x_i)$. The second term is \emph{induced} by
 the marginalization rather than free: because $m_{z,i}$ and $m_{g,i}$ both depend
 on $x_i$ with slopes $-\delta_c$ and $-\delta_g$
 (Eqs.~\ref{eq:2c:S}~ff.), integrating $x_i$ over its intrinsic scatter
@@ -1611,9 +1608,9 @@ marginalization produces the $-\delta_c\sigma_{\mathrm{int},x}^2$ entries in the
 first row and column and the $\delta_c^2\sigma_{\mathrm{int},x}^2$,
 $\delta_g^2\sigma_{\mathrm{int},x}^2$ terms on the diagonal. Retaining it is what makes $\boldsymbol{B}_i$ the marginal covariance of the
 generative model, and hence positive definite by construction: $\boldsymbol{S}$
-is positive semi-definite (rank~2, null along $\hat{\boldsymbol{n}}$) and the
-strictly positive per-band measurement variances
-$(\sigma_{y,i}^2,\sigma_{z,i}^2,\sigma_{g,i}^2)$ fill the null direction,
+is positive semi-definite (rank~1, with scatter only along $\hat{\boldsymbol{w}}$)
+and the strictly positive per-band measurement variances
+$(\sigma_{y,i}^2,\sigma_{z,i}^2,\sigma_{g,i}^2)$ fill the two null directions,
 guaranteeing that $\boldsymbol{B}_i$ is strictly positive definite.  Dropping the
 induced term admits parameter values for which $\boldsymbol{B}_i$ has a negative
 eigenvalue and the Cholesky factorization fails.
@@ -1743,19 +1740,16 @@ Relative to the single-color model, the 2color model adds the $g$-band mean
 structure ($\delta_g,\mu_g,\alpha_{k,g}$) and replaces the $r{-}z$/$g{-}r$
 product-form intrinsic-scatter parameters
 ($\gamma,\tau_c,\gamma_g,\tau_g,\sigma_{\mathrm{int},y},
-\sigma_{\mathrm{int},z},\sigma_{\mathrm{int},g}$) with the rank-2
-intrinsic covariance $\boldsymbol{S}$ of Eq.~\eqref{eq:2c:S}, parameterized by
-the free null direction $\hat{\boldsymbol{n}}$, the two scatter scales
-$S_{c,1},S_{c,2}$, and the $2\times2$ correlation matrix $\boldsymbol{R}_c$:
+\sigma_{\mathrm{int},z},\sigma_{\mathrm{int},g}$) with the rank-1
+intrinsic covariance $\boldsymbol{S}=\boldsymbol{w}\boldsymbol{w}^T$ of
+Eq.~\eqref{eq:2c:S}, parameterized by the single loading vector $\boldsymbol{w}$:
 
 \begin{center}
 \begin{tabular}{lll}
 \hline
 Parameter & Meaning & Prior \\
 \hline
-$\hat{\boldsymbol{n}}$ & rank-2 null direction & uniform on $S^2$ \\
-$S_{c,1},S_{c,2}$ & scatter scales & $\mathrm{HalfCauchy}(0,1)$ \\
-$\boldsymbol{R}_c$ & $2\times2$ correlation & $\mathrm{LKJ}(2)$ \\
+$\boldsymbol{w}$ & rank-1 scatter loading ($\boldsymbol{S}=\boldsymbol{w}\boldsymbol{w}^T$) & $\mathcal{N}(\boldsymbol{0},0.5^2\boldsymbol{I})$ \\
 $\delta_g$ & population $g{-}r$ color--velocity slope & $\mathcal{N}(0,1)$ \\
 $\mu_g$ & mean $g{-}r$ color at $x=\bar{x}$ & $\mathcal{N}(\bar{c}_{g,\mathrm{obs}},1)$ \\
 $\alpha_{k,g}$ & $g$-band $k$-correction slope & $\mathcal{N}(0,5)$ \\
@@ -1763,43 +1757,38 @@ $\alpha_{k,g}$ & $g$-band $k$-correction slope & $\mathcal{N}(0,5)$ \\
 \end{tabular}
 \end{center}
 
-The null direction $\hat{\boldsymbol{n}}$ is a unit vector with a uniform prior
-on the sphere, and $\boldsymbol{R}_c$ is sampled through its Cholesky factor (a
-single free element) with an $\mathrm{LKJ}(2)$ prior.  The total parameter count
-for $\boldsymbol{S}$ is 5 (two for $\hat{\boldsymbol{n}}$, two scales, one
-correlation), between the 3 of the fixed-null chromatic-only special case and the
-6 of an unconstrained free $3\times3$ parameterization.  The rank-2 restriction
-eliminates a near-degenerate ridge in the posterior that arises because
-photometry alone cannot distinguish intrinsic achromatic scatter from
-peculiar-velocity-induced scatter: with a free $3\times3$ $\boldsymbol{S}$, the
-fitted matrix is dominated by a single near-achromatic mode ($\sim\!99\%$
-correlated, $\sim\!0.4$~mag) that is degenerate with $C_{vv}$, degrading HMC
-efficiency (mean treedepth at maximum, ESS~$\sim$\!0) and causing Cholesky
-failures on $\boldsymbol{B}_i$ when the sampler explores the boundary of the
-degenerate ridge.  Restricting $\boldsymbol{S}$ to rank~2 places the sampler on a
-well-defined lower-dimensional manifold and removes this pathology, \emph{without}
-hard-coding which direction is excluded: the null direction is fit, so the
-achromatic axis $\boldsymbol{e}$ is no longer imposed but can be compared against
-the posterior of $\hat{\boldsymbol{n}}$.
+The total parameter count for $\boldsymbol{S}$ is 3 (the three components of
+$\boldsymbol{w}$), down from the 6 of an unconstrained free $3\times3$
+covariance.  The rank restriction eliminates a near-degenerate ridge in the
+posterior that arises because photometry alone cannot distinguish intrinsic
+achromatic scatter from peculiar-velocity-induced scatter: with a free $3\times3$
+$\boldsymbol{S}$, the fitted matrix is dominated by a single near-achromatic mode
+($\sim\!99\%$ correlated, $\sim\!0.4$~mag) that is degenerate with $C_{vv}$,
+degrading HMC efficiency (mean treedepth at maximum, ESS~$\sim$\!0) and causing
+Cholesky failures on $\boldsymbol{B}_i$ when the sampler explores the boundary of
+the degenerate ridge.  A rank-2 covariance already suppresses this, but the data
+then drive one of its two scatter scales to $\lesssim0.01$~mag, so the rank-2
+model carries an unsupported direction whose vanishing scale re-introduces a
+boundary funnel.  Rank~1 fits the single scatter direction the data actually
+support, placing the sampler on a well-defined manifold with no residual funnel;
+the scatter direction $\hat{\boldsymbol{w}}$ is inferred rather than fixed.
 
 \paragraph{Achromatic variance and the downstream velocity model.}
 The three absolute magnitudes share a common distance modulus: any
 peculiar-velocity error shifts $(y_i,z_i,g_i)$ by an identical amount along the
-achromatic direction $\boldsymbol{e}=(1,1,1)/\!\sqrt{3}$.  The rank-2 model
-excludes exactly one direction from the intrinsic scatter
-($\boldsymbol{S}\,\hat{\boldsymbol{n}}=\boldsymbol{0}$; Eq.~\ref{eq:2c:S}), that
-direction being inferred.  If the fitted $\hat{\boldsymbol{n}}$ coincides with
-$\boldsymbol{e}$, the excluded direction is precisely the
-peculiar-velocity/distance-modulus mode: the calibration model then contains
-\emph{no} peculiar-velocity scatter, all achromatic variance is owned by the
-downstream velocity-covariance model $C_{vv}$ (which adds a coherent-flow prior to
-the per-galaxy distance-modulus posteriors of the prediction step,
-\S\ref{sec:2c:predict}), and the separation is clean --- $\boldsymbol{S}$ in the
-chromatic plane $\perp\boldsymbol{e}$, $C_{vv}$ along $\boldsymbol{e}$, no
-double-counting.  We report the posterior angle between $\hat{\boldsymbol{n}}$ and
-$\boldsymbol{e}$ as a diagnostic; a posterior concentrated near $0^\circ$
-\emph{measures} the alignment that the fixed-null chromatic-only model would
-otherwise assume.
+achromatic direction $\boldsymbol{e}=(1,1,1)/\!\sqrt{3}$.  The rank-1 model
+confines the intrinsic scatter to a single direction $\hat{\boldsymbol{w}}$
+(Eq.~\ref{eq:2c:S}), that direction being inferred.  If $\hat{\boldsymbol{w}}$ is
+orthogonal to $\boldsymbol{e}$, the scatter is purely chromatic and the
+achromatic/distance-modulus mode carries \emph{no} intrinsic scatter: all
+achromatic variance is then owned by the downstream velocity-covariance model
+$C_{vv}$ (which adds a coherent-flow prior to the per-galaxy distance-modulus
+posteriors of the prediction step, \S\ref{sec:2c:predict}), and the separation is
+clean --- $\boldsymbol{S}$ in the chromatic plane $\perp\boldsymbol{e}$, $C_{vv}$
+along $\boldsymbol{e}$, no double-counting.  We report the posterior angle between
+$\hat{\boldsymbol{w}}$ and $\boldsymbol{e}$ as a diagnostic; a posterior
+concentrated near $90^\circ$ \emph{measures} the purely-chromatic structure that
+a fixed achromatic-null model would otherwise assume.
 
 This design targets a specific risk: achromatic intrinsic scatter is only weakly
 identifiable from photometry alone --- it is degenerate with
@@ -1808,37 +1797,30 @@ lets an achromatic component absorb an unknown fraction of the PV signal and bia
 the downstream flow-field estimate.  The chromatic structure (intrinsic color
 scatter, color--velocity slope residuals), by contrast, is fully identifiable
 from the multi-band photometry and is precisely what the $g$-band extension is
-designed to measure.  Because the excluded direction is weakly constrained, the
-posterior on $\hat{\boldsymbol{n}}$ may be broad; that is itself the honest
-outcome, and a posterior-predictive check on the color residuals ($z{-}y$,
-$g{-}y$) validates the chromatic structure independently of it.
+designed to measure.  A posterior-predictive check on the color residuals
+($z{-}y$, $g{-}y$) validates the chromatic structure independently.
 
 \subsection{Relation to the Single-Color Model}
 \label{sec:2c:reduction}
 
-The rank-2 model nests the fixed-null chromatic-only model as the special case
-$\hat{\boldsymbol{n}}=\boldsymbol{e}=(1,1,1)/\!\sqrt{3}$, but for a generic fitted
-null direction it does \emph{not} reduce to the single-color model of
+The rank-1 model does \emph{not} reduce to the single-color model of
 \S\ref{sec:cc:marginalization}.  The single-color model carries independent
 per-band intrinsic variances
 ($\sigma_{\mathrm{int},y}^2,\sigma_{\mathrm{int},z}^2$) that include achromatic
-scatter, whereas $\boldsymbol{S}=\boldsymbol{V}\boldsymbol{\Sigma}_c
-\boldsymbol{V}^T$ is rank~2 and satisfies
-$\boldsymbol{S}\,\hat{\boldsymbol{n}}=\boldsymbol{0}$; it therefore cannot
-reproduce a full-rank (in particular, a generic diagonal) intrinsic covariance ---
-a rank-2 matrix cannot be full rank, whatever $\hat{\boldsymbol{n}}$.  The rank-2
-restriction is a deliberate modeling choice (\S\ref{sec:2c:priors}), not a
-special-case limit of the single-color model.
+scatter, whereas $\boldsymbol{S}=\boldsymbol{w}\boldsymbol{w}^T$ is rank~1 and
+confines all intrinsic scatter to the single direction $\hat{\boldsymbol{w}}$; it
+therefore cannot reproduce a full-rank (in particular, a generic diagonal)
+intrinsic covariance.  The rank-1 restriction is a deliberate modeling choice
+supported by the data (\S\ref{sec:2c:priors}), not a special-case limit of the
+single-color model.
 
-Setting the second scale $S_{c,2}=0$ (so $\boldsymbol{\Sigma}_c$ is rank~1) makes
-$\boldsymbol{S}$ rank~1, $\boldsymbol{S}=S_{c,1}^2\,\boldsymbol{v}\boldsymbol{v}^T$
-for the surviving column $\boldsymbol{v}$ of $\boldsymbol{V}$ (a unit vector in the
-plane $\perp\hat{\boldsymbol{n}}$); additionally taking $\delta_g=0$ and
-$\alpha_{k,g}=0$ makes $\hat{g}$ uninformative.  This is the analog of the
-single-color model with a single intrinsic-scatter degree of freedom, but it still
-carries no scatter along $\hat{\boldsymbol{n}}$ --- the independent
-$\sigma_{\mathrm{int},y}^2$ and $\sigma_{\mathrm{int},z}^2$ diagonal terms of the
-single-color $\boldsymbol{B}_i$ have no counterpart here.
+Taking $\delta_g=0$ and $\alpha_{k,g}=0$ makes $\hat{g}$ uninformative, leaving a
+single intrinsic-scatter degree of freedom along $\hat{\boldsymbol{w}}$ in the
+$(y,z)$ block --- the analog of the single-color model's one scatter direction,
+but still with no scatter in the two directions orthogonal to
+$\hat{\boldsymbol{w}}$, so the independent $\sigma_{\mathrm{int},y}^2$ and
+$\sigma_{\mathrm{int},z}^2$ diagonal terms of the single-color $\boldsymbol{B}_i$
+have no counterpart here.
 
 
 \section{Redshift-Dependent Rotational-Velocity Correction}
