@@ -1,0 +1,16 @@
+{
+  "run": "DR2_TF_irrs_v5_2color_irregular",
+  "fits_file": "data/DR2_TF_irrs_v5_irregular.fits",
+  "exe": "2color",
+  "source": "DESI",
+  "model": "2color",
+  "n_sigma": 3.0,
+  "haty_min": -21.5,
+  "haty_max": -17.8,
+  "slope_plane": -6.8854196579046105,
+  "intercept_plane": -20.129745578172937,
+  "intercept_plane2": -18.20112456047953,
+  "n_sigma_perp": 3.0,
+  "z_obs_min": 0.01,
+  "z_obs_max": 0.065
+}

@@ -1,0 +1,16 @@
+{
+  "run": "DR2_TF_spirals_v5_2color_spiral",
+  "fits_file": "data/DR2_TF_spirals_v5_spiral.fits",
+  "exe": "2color",
+  "source": "DESI",
+  "model": "2color",
+  "n_sigma": 3.0,
+  "haty_min": -21.8,
+  "haty_max": -17.8,
+  "slope_plane": -6.784677739514527,
+  "intercept_plane": -20.26103096727041,
+  "intercept_plane2": -17.950151362978964,
+  "n_sigma_perp": 3.0,
+  "z_obs_min": 0.01,
+  "z_obs_max": 0.065
+}

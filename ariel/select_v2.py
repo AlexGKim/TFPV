@@ -293,11 +293,18 @@ def _compute_pull_stats(raw_data, params, y_min, y_max, n_bins):
 
 
 def _save_grid_plot(
-    run_dir, run_name, x, y, delta, haty_lines=None, filename="select_v2_grid.png"
+    run_dir, run_name, x, y, delta, haty_lines=None, plane_lines=None,
+    filename="select_v2_grid.png"
 ):
     """Draw and save a phase-space residual grid plot.
 
     Analogous to the grid plots generated in predict.py.
+
+    haty_lines:  optional dict {label -> M_abs} drawn as horizontal lines
+                 (the top/bottom of the trapezoid selection region).
+    plane_lines: optional dict with "slope_plane", "intercept_plane",
+                 "intercept_plane2" — drawn as the two slanted sides of the
+                 trapezoid, y = slope_plane * x + intercept_{plane,plane2}.
     """
     fig, ax, img = create_average_grid_image(
         x,
@@ -311,6 +318,7 @@ def _save_grid_plot(
     ax.set_title(f"Average Magnitude Difference — {run_name}")
     fig.colorbar(img, ax=ax, label="Average Magnitude Difference")
 
+    drew_line = False
     if haty_lines:
         for label, val in haty_lines.items():
             ax.axhline(
@@ -320,6 +328,31 @@ def _save_grid_plot(
                 linestyle="--",
                 label=f"{label} = {val:.2f}",
             )
+        drew_line = True
+
+    if plane_lines:
+        # Two slanted sides of the trapezoid: y = slope_plane * x + intercept.
+        # Drawn across the current x-range without letting them rescale the axes.
+        s = plane_lines["slope_plane"]
+        xlo, xhi = ax.get_xlim()
+        ylo, yhi = ax.get_ylim()
+        xr = np.array([xlo, xhi])
+        for key in ("intercept_plane", "intercept_plane2"):
+            c = plane_lines[key]
+            ax.plot(
+                xr,
+                s * xr + c,
+                color="limegreen",
+                linewidth=1.2,
+                linestyle="--",
+                label=f"{key} = {c:.2f}",
+            )
+        # keep the view on the data; the slanted lines otherwise rescale the axes
+        ax.set_xlim(xlo, xhi)
+        ax.set_ylim(ylo, yhi)
+        drew_line = True
+
+    if drew_line:
         ax.legend(fontsize=8)
 
     out_path = os.path.join(run_dir, filename)
@@ -465,8 +498,9 @@ def main():
     parser.add_argument(
         "--n_max",
         type=int,
-        default=10000,
-        help="Maximum number of galaxies to use (random subsample); 0 = no limit",
+        default=0,
+        help="Maximum number of galaxies to use (random subsample); 0 = no limit "
+        "(default: use the entire sample)",
     )
     args = parser.parse_args()
 
@@ -690,6 +724,11 @@ def main():
         raw_data_z["x"],
         raw_data_z["y"],
         delta,
+        plane_lines={
+            "slope_plane": cuts["slope_plane"],
+            "intercept_plane": cuts["intercept_plane"],
+            "intercept_plane2": cuts["intercept_plane2"],
+        },
         filename="select_v2_mle_grid.png",
     )
 
