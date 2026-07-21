@@ -567,7 +567,10 @@ def process_desi_tf_data(
         init_data["delta_g"] = 0.0
         init_data["mu_g"] = float(np.mean(y - g_absmag)) if N_total > 0 else 0.0
         init_data["alpha_kcorr_g"] = -0.5
-        init_data["w"] = [0.2, 0.2, 0.2]
+        # Asymmetric start: a perfectly symmetric w = [c,c,c] gives a degenerate
+        # gradient for S = w wᵀ that can make the MAP optimizer report a
+        # non-finite gradient and stall (seen on the spiral population).
+        init_data["w"] = [0.15, 0.20, 0.25]
 
     with open(init_output_file, "w") as f:
         json.dump(init_data, f, indent=2)

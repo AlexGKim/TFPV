@@ -47,14 +47,17 @@ interactive fiducial choice).
 The official DR2 FITS file is fit as **two independent populations**, each
 with its own selection, its own MCMC, and its own prediction run:
 
-| Population | Predicate | Rows (DR2_v0 spiral run) |
+| Population | Predicate | Rows (DR2_TF v5 run) |
 |---|---|---|
-| Spiral | `MORPHTYPE_AI == 'Spiral'` and not VI-rejected | 23,422 |
-| Irregular | `MORPHTYPE_AI == 'Irregular'` and not VI-rejected | 8,409 |
+| Spiral | `MORPHTYPE == 'Spiral'` and not VI-rejected | 24,813 |
+| Irregular | `MORPHTYPE == 'Irregular'` and not VI-rejected | 6,555 |
 
-`JOHN_VI` is a masked column whose only unmasked value is `'reject'`, so
-"not VI-rejected" means `JOHN_VI.mask == True`. It applies to **both**
-populations.
+The population split is on the authoritative **`MORPHTYPE`** column, *not*
+`MORPHTYPE_AI`: the AI classification disagrees for a subset (it tags ~1,600
+`MORPHTYPE == 'Spiral'` galaxies as Irregular/Undecided/etc.), which would
+wrongly drop them from the spiral population. `JOHN_VI` is a masked column whose
+only unmasked value is `'reject'`, so "not VI-rejected" means
+`JOHN_VI.mask == True`. It applies to **both** populations.
 
 The population cut is applied **once, upstream**, by pre-filtering the
 catalog into one FITS file per population, so the rest of the pipeline is an
