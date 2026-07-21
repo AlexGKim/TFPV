@@ -1517,21 +1517,19 @@ The latent absolute magnitudes $(y_i,z_i,g_i)$ scatter about these means with a
 where $\boldsymbol{V}$ is a $3\times2$ matrix with orthonormal columns spanning
 the plane orthogonal to a \emph{free} unit null direction $\hat{\boldsymbol{n}}$,
 and $\boldsymbol{\Sigma}_c$ is a free $2\times2$ symmetric positive-definite
-matrix.  By construction $\boldsymbol{S}\,\hat{\boldsymbol{n}}=\boldsymbol{0}$:
+matrix.
+[There should be a mention that runs with a rank-3 covariance 
+showed near degeneracy, which led to slow convergence.  This is 
+why we go with rank-2.  Could this be true since \sigma_{x,int}
+is another free parameter?]
+  By construction $\boldsymbol{S}\,\hat{\boldsymbol{n}}=\boldsymbol{0}$:
 $\boldsymbol{S}$ is rank~2, with a null space along $\hat{\boldsymbol{n}}$, so
 exactly one direction in $(y,z,g)$ space carries no intrinsic scatter --- but
 \emph{which} direction is inferred from the data, not fixed in advance.  The unit
 vector $\hat{\boldsymbol{n}}$ is assigned a uniform prior on the sphere, and
 $\boldsymbol{V}$ is constructed as an orthonormal basis of its orthogonal
 complement (via a Householder reflector, so the map is smooth in
-$\hat{\boldsymbol{n}}$).  The special case
-$\hat{\boldsymbol{n}}=\boldsymbol{e}=(1,1,1)/\!\sqrt{3}$ recovers the
-\emph{chromatic-only} model, in which the excluded direction is exactly the
-achromatic (peculiar-velocity/distance-modulus) mode $(1,1,1)$ and all achromatic
-variance is deferred to the downstream velocity-covariance model $C_{vv}$
-(\S\ref{sec:2c:priors}); by fitting $\hat{\boldsymbol{n}}$ we instead let the
-data determine the excluded direction and \emph{test} whether it coincides with
-$\boldsymbol{e}$ rather than assuming it does.
+$\hat{\boldsymbol{n}}$).
 The $2\times2$ covariance is parameterized as
 $\boldsymbol{\Sigma}_c = \boldsymbol{D}_c\,\boldsymbol{R}_c\,\boldsymbol{D}_c$
 with $\boldsymbol{D}_c=\mathrm{diag}(S_{c,1},S_{c,2})$ (two scatter
@@ -1598,7 +1596,8 @@ $\boldsymbol{S}$ (Eq.~\ref{eq:2c:S}),
   A_{44} &= S_{gg} + \sigma_{g,i}^2,\\
   A_{zg} &= S_{zg} + \delta_c\delta_g\sigma_{\mathrm{int},x}^2. \label{eq:2c:A44}
 \end{align}
-The $(3,4)$ entry has two contributions. $S_{zg}$ is a \emph{free} parameter: the
+[In the following there is no need to describe this in the context of the earlier parameterization.]
+The $(3,4)$ entry has two contributions. $S_{zg}$ is a \emph{free} parameter [is this true in this parameterization?]: the
 intrinsic $\hat{z}$--$\hat{g}$ covariance is no longer forced to zero, so
 $\hat{z}$ and $\hat{g}$ are not required to be conditionally independent given
 $(y_{\mathrm{TF},i}, x_i)$. Fixing $S_{zg}=0$ recovers the earlier
