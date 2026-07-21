@@ -49,12 +49,15 @@ if [ "${DEBUG:-0}" = "1" ]; then
 else
     NUM_WARMUP=${NUM_WARMUP:-250}
     NUM_SAMPLES=${NUM_SAMPLES:-1000}
-    # delta=0.95 (up from Stan's default 0.8): the rank-2 S / Householder
+    # delta=0.9 (up from Stan's default 0.8): the rank-2 S / Householder
     # null-direction geometry produces tight posterior curvature that drives
     # a non-trivial divergence/rejection rate at the default delta -- can
     # otherwise stall warmup for hours near a boundary (see step6_node.sh).
-    # Matches the local DR2_2COLOR.md fix.
-    ADAPT_ARGS="adapt delta=0.95 save_metric=1"
+    # delta=0.95 was tried first but found impractically slow for the
+    # irregular population locally (steeply non-linear wall-clock cost), so
+    # 0.9 is the compromise. Matches the local DR2_2COLOR.md fix.
+    DELTA=${DELTA:-0.9}
+    ADAPT_ARGS="adapt delta=$DELTA save_metric=1"
     # max_depth=8 (vs Stan's default 10): the free-covariance posterior is
     # near-singular and NUTS saturates treedepth, so depth 10 costs up to
     # 1023 leapfrog steps/iteration (~4x depth 8) for little extra mixing.

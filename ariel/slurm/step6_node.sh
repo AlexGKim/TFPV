@@ -47,13 +47,18 @@
 # divergent, alongside a systematic residual bias in the fit. Override either
 # via --export=...,NUM_WARMUP=N,MAX_DEPTH=N.
 #
-# adapt delta=0.95 (up from Stan's default 0.8): the rank-2 S / Householder
+# adapt delta=0.9 (up from Stan's default 0.8): the rank-2 S / Householder
 # null-direction geometry produces tight posterior curvature that drives a
 # non-trivial divergence/rejection rate at the default delta -- on NERSC this
 # showed up as warmup getting stuck for hours near a boundary, spamming
 # "lkj_corr_cholesky_lpdf: Random variable[2] is 0, but must be positive!"
 # and never advancing past iteration 1. Matches the local DR2_2COLOR.md fix
-# (validated there against 1.9%-8.4% divergence rates at delta=0.8).
+# (validated there against 1.9%-8.4% divergence rates at delta=0.8). delta=0.95
+# was tried first but found impractically slow for the irregular population
+# locally (~135 min/100 warmup iterations, ~20+ h/chain) -- its wall-clock
+# cost is steeply non-linear, so 0.9 is the compromise: well above the 0.8
+# default for divergence control, without the 0.95 blow-up. Override via
+# --export=...,DELTA=N if a run still shows too many divergences at 0.9.
 #
 # DEBUG mode: set DEBUG=1 to run tiny 0+15 chains (no adaptation, fixed
 # stepsize) -- see step6_chain.sh for the rationale. Submit with
@@ -80,7 +85,8 @@ else
     NUM_WARMUP=${NUM_WARMUP:-1000}
     NUM_SAMPLES=${NUM_SAMPLES:-1000}
     MAX_DEPTH=${MAX_DEPTH:-10}
-    ADAPT_ARGS="adapt delta=0.95 save_metric=1"
+    DELTA=${DELTA:-0.9}
+    ADAPT_ARGS="adapt delta=$DELTA save_metric=1"
     ENGINE_ARGS="engine=nuts max_depth=$MAX_DEPTH"
     STEPSIZE_ARG=""
 fi
