@@ -235,11 +235,18 @@ MAP drove near its 0 boundary (default floor 0.01, via `--sigma-floor`).
 ./2color pathfinder num_paths=1 history_size=30 max_lbfgs_iters=100 \
     num_draws=200 num_elbo_draws=10 num_psis_draws=200 \
     data file=output/$RUN/input.json \
-    init=output/$RUN/init_MAP.json \
+    init=output/$RUN/init.json \
     output file=output/$RUN/pathfinder.csv
 
 python3 make_pf_metric.py --run $RUN
 ```
+
+Pathfinder inits from `init.json` (the pre-MAP starting point), **not**
+`init_MAP.json`: starting Pathfinder's L-BFGS exactly at the MAP mode (near-zero
+gradient, very flat) can make every L-BFGS iteration fail with ELBO `-inf`
+("None of the LBFGS iterations completed successfully" — seen on the spiral
+population). Starting from `init.json` lets Pathfinder run its own optimization
+normally.
 
 The 2color posterior is badly conditioned — parameter standard deviations span
 ~10^5 across the 13 sampling dimensions (magnitudes ~1e-3, band k-corrections
