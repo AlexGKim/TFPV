@@ -189,7 +189,8 @@ def combine(spiral_run, irregular_run, out_run, catalog_name="color_xonly_catalo
     else:
         print("SKIP: cross-term spot-check (no North-flagged pair found)")
 
-    cov_out = os.path.join(out_dir, "color_xonly_cov.h5")
+    cov_name = os.path.splitext(catalog_name)[0] + "_cov.h5"
+    cov_out = os.path.join(out_dir, cov_name)
     with h5py.File(cov_out, "w") as hf:
         hf.create_dataset(
             "cov", data=cov_combined, compression="gzip", compression_opts=3,
@@ -200,7 +201,7 @@ def combine(spiral_run, irregular_run, out_run, catalog_name="color_xonly_catalo
         hf.create_dataset("sga_id", data=sga_id_all)
         hf.attrs["population_labels"] = "0=spiral, 1=irregular"
         hf.attrs["row_order"] = (
-            "MAIN=True rows of color_xonly_catalog.fits in this directory, "
+            f"MAIN=True rows of {catalog_name} in this directory, "
             "spiral rows first (in spiral catalog order), then irregular "
             "rows (in irregular catalog order)"
         )
