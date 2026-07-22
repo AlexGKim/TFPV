@@ -79,7 +79,7 @@ def load_population_main(run_dir):
     return table_main, cov, analysis, d_err_r
 
 
-def combine(spiral_run, irregular_run, out_run):
+def combine(spiral_run, irregular_run, out_run, catalog_name="color_xonly_catalog.fits"):
     out_dir = os.path.join("output", out_run)
     os.makedirs(out_dir, exist_ok=True)
 
@@ -116,7 +116,7 @@ def combine(spiral_run, irregular_run, out_run):
     t_ir["POPULATION"] = np.full(n_ir, "irregular", dtype="U9")
     combined_table = vstack([t_sp, t_ir], metadata_conflicts="silent")
 
-    cat_out = os.path.join(out_dir, "color_xonly_catalog.fits")
+    cat_out = os.path.join(out_dir, catalog_name)
     combined_table.write(cat_out, overwrite=True)
     print(f"Written {n_tot} rows to {cat_out}")
 
@@ -212,8 +212,9 @@ def main():
     parser.add_argument("--spiral-run", default="DR2_TF_spirals_v5_2color_spiral")
     parser.add_argument("--irregular-run", default="DR2_TF_irrs_v5_2color_irregular")
     parser.add_argument("--out-run", default="DR2_TF_v5_2color_combined")
+    parser.add_argument("--catalog-name", default="DESI-DR2_TF_pv_cat_v5b.fits")
     args = parser.parse_args()
-    combine(args.spiral_run, args.irregular_run, args.out_run)
+    combine(args.spiral_run, args.irregular_run, args.out_run, args.catalog_name)
 
 
 if __name__ == "__main__":
