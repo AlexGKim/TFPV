@@ -343,9 +343,8 @@ def fit_truncated_gmm(x, y, sigma_x, sigma_y, n_init, x_hi, y_lo):
 
 
 def core_component(gmm):
-    """Return index of the component with the smaller covariance determinant."""
-    dets = [np.linalg.det(C) for C in gmm.covariances_]
-    return int(np.argmin(dets))
+    """Return index of the component with the larger weight (more objects)."""
+    return int(np.argmax(gmm.weights_))
 
 
 # ---------------------------------------------------------------------------
