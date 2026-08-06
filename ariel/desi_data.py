@@ -407,6 +407,19 @@ def process_desi_tf_data(
             print(f"  Training subsample: {n_objects} from {N_subset} subset galaxies")
         else:
             train_sga_ids = subset_sga_ids
+            if n_objects is not None:
+                # Every cut-passing galaxy in this slice becomes training, so
+                # there is NO holdout: step8's ANALYSIS set will be empty and
+                # its predictions are all in-sample. Easy to miss in a 625-run
+                # batch, hence a loud warning rather than silent degradation.
+                print(
+                    f"  WARNING: requested n_objects={n_objects} >= the "
+                    f"{N_subset} cut-passing galaxies in slice "
+                    f"{subset_index}/{n_subsets}, so ALL of them are training "
+                    f"and this run has NO holdout (empty ANALYSIS set; step8 "
+                    f"predictions will be in-sample). Lower n_objects, lower "
+                    f"n_subsets, or widen the selection cuts for this file."
+                )
     elif n_objects is not None and n_objects < N_after_cuts:
         rng = np.random.default_rng(random_seed)
         idx = rng.choice(N_after_cuts, size=n_objects, replace=False)
@@ -533,7 +546,8 @@ def process_desi_tf_data(
                   f"metadata differs from this run: old={_old_partition} "
                   f"new={_new_partition}. Any existing MCMC chains/init/metric "
                   f"in this run dir were fit to the OLD partition and must be "
-                  f"regenerated (step5d/step6) before further use.")
+                  f"regenerated (step6; also step5d if this config has no "
+                  f"fixed_init) before further use.")
 
     with open(data_output_file, "w") as f:
         json.dump(stan_data, f, indent=2)

@@ -132,13 +132,25 @@ No metric-seeding step — `step6_node.sh`/`step6_chain.sh` don't read
 
 ## Step 0 — Validate on a single mock (recommended before any batch)
 
+Use a **sliced** config, not the bare base config:
+
 ```bash
-sbatch --export=CONFIG=configs/abacus_2color.json slurm/step4_data.sh
-# verify output/abacus_2color/input.json (N up to 5000, sane ranges), data.png,
-# and init_MAP.json (finite, no NaN — written directly by step4 since the
-# config sets "fixed_init"; no step5d needed)
-bash slurm/step6_submit.sh configs/abacus_2color.json   # 4 chains + auto step7/8
+export CONFIG=configs/abacus_subsets/abacus_2color_s00.json
+sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
+# verify output/abacus_2color_s00/input.json (N up to 5000, sane ranges),
+# data.png, and init_MAP.json (finite, no NaN — written directly by step4
+# since the config sets "fixed_init"; no step5d needed)
+bash slurm/step6_submit.sh $CONFIG   # 4 chains + auto step7/8
 ```
+
+> **Do not run Step 0 with `configs/abacus_2color.json` itself.** It carries no
+> `n_subsets`/`subset_index`, so nothing is slice-scoped and step8's covariance
+> dimension becomes the whole file's MAIN count — G ≈ 91,000 for the reference
+> mock, i.e. a **67 GB** dense matrix that will not finish inside step8's 30-min
+> debug walltime (and the same run's O(M×G) prediction temporaries are ~5.5 GB
+> each). The base config exists to be cloned by `make_batch_configs.py` /
+> `configs/abacus_subsets/`, which add the partition fields. Validate with a
+> sliced config so Step 0 exercises the same code path as the batch.
 
 After it completes, check `output/abacus_2color/stansummary.txt` (R̂ < 1.01,
 ESS > 100/chain) and `output/abacus_2color/diagnose.txt` (divergences,
