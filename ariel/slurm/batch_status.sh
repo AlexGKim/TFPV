@@ -1,6 +1,6 @@
 #!/bin/bash
 # Aggregate pipeline completion across every config in a batch directory.
-# Reports, per run, which of the 9 sentinel steps are done, and a summary count.
+# Reports, per run, which of the 7 sentinel steps are done, and a summary count.
 #
 # Usage:
 #   bash slurm/batch_status.sh <config_dir> [--verbose]
@@ -17,7 +17,7 @@ if [ -z "$CONFIG_DIR" ] || [ ! -d "$CONFIG_DIR" ]; then
     exit 1
 fi
 
-STEPS=(step4 step5d step6_chain1 step6_chain2 step6_chain3 step6_chain4 step7 step8)
+STEPS=(step4 step6_chain1 step6_chain2 step6_chain3 step6_chain4 step7 step8)
 NSTEPS=${#STEPS[@]}
 
 total=0; complete=0; inprogress=0; notstarted=0

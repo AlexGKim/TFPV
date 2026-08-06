@@ -25,4 +25,4 @@ echo "Step 4: desi_data.py for run=$RUN config=$CONFIG"
 python3 desi_data.py --config $CONFIG
 
 touch output/$RUN/.step4_done
-echo "DONE: step4 → output/$RUN/input.json, init.json"
+echo "DONE: step4 → output/$RUN/input.json, init.json (+ init_MAP.json if the config sets fixed_init)"

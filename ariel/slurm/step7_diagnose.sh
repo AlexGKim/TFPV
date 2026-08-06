@@ -10,7 +10,8 @@
 #SBATCH --mail-type=FAIL
 #SBATCH -o slurm/logs/step7_diagnose_%j.out
 
-# Step 7: Stan diagnostics + corner plot + residuals.
+# Step 7: Stan diagnostics + corner plot.
+# (explore_residuals.py runs in step8, after color_predict.py — see step8_predict.sh.)
 # Usage: sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step7_diagnose.sh
 # Requires: output/$RUN/2color_1.csv … 2color_4.csv (all 4 chains done)
 
@@ -30,7 +31,6 @@ echo "--- stansummary ---"
 cat output/$RUN/stansummary.txt
 
 python3 corner.py --run $RUN --model 2color
-python3 explore_residuals.py --config $CONFIG --kind 2color
 
 touch output/$RUN/.step7_done
 echo "DONE: step7 → stansummary.txt, diagnose.txt, 2color.png"

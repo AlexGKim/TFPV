@@ -134,11 +134,16 @@ All jobs are submitted from the `ariel/` directory. Jobs write logs to `slurm/lo
 sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
 ```
 
-Produces: `output/$RUN/input.json`, `output/$RUN/init.json`
+Produces: `output/$RUN/input.json`, `output/$RUN/init.json`, and —
+when the config sets `"fixed_init"` (frozen physical-unit init values,
+transformed into this run's own standardized coordinates) —
+`output/$RUN/init_MAP.json` directly, superseding Step 5d below.
 
-### Step 5d — MAP optimization
+### Step 5d — MAP optimization (skip if the config sets `fixed_init`)
 
-Requires step 4 to be complete.
+**Only needed for a config that does NOT set `"fixed_init"`** — those configs
+already get `init_MAP.json` written directly by step 4. Requires step 4 to be
+complete.
 
 ```bash
 sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh
@@ -157,7 +162,9 @@ sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh
 
 ### Step 6 — MCMC sampling (4 independent chains, 1 node)
 
-Requires only step 5d to be complete (not step 5e — see above). This script
+Requires `output/$RUN/init_MAP.json` to exist (written directly by step 4
+when `fixed_init` is set; otherwise by step 5d — not step 5e, see above).
+This script
 submits a single `step6_node.sh` job (1 node, 4 GPUs, one chain per GPU via
 `CUDA_VISIBLE_DEVICES`) and automatically chains step 7 and step 8 as
 dependencies:
@@ -215,10 +222,16 @@ whole node:
 sbatch --export=CONFIG=$CONFIG,CHAIN_ID=2 slurm/step6_chain.sh
 ```
 
-### Step 4 / 5d failure
+### Step 4 failure
 
 ```bash
 sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
+```
+
+If the config sets `fixed_init`, this alone regenerates `init_MAP.json` — no
+step5d needed. For a config without `fixed_init`, follow step 4 with:
+
+```bash
 sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh
 ```
 
@@ -264,9 +277,20 @@ After the full pipeline completes:
 |------|-------|------|
 | compile | debug | ~5 min |
 | step4 (data prep) | debug | <5 min |
-| step5d (MAP) | debug | ~5 min |
+| step5d (MAP) | debug | ~5 min — **skipped** for any config with `fixed_init` set (step4 writes `init_MAP.json` directly) |
 | step6 (4 chains, 1 node) | regular | depends on dataset size and the `NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure per dataset rather than assuming a fixed figure (walltime is set to 24h; adjust if insufficient) |
 | step7 (diagnose) | debug | ~15 min |
-| step8 (predict) | regular | ~1–4 hours |
+| step8 (predict) | debug | ~5–10 min per slice-scoped run (both scripts request `-q debug -t 0:30:00`) |
 
 Step 5e is optional (not part of the standard workflow) — skip it.
+
+**On step8's runtime.** The earlier "~1–4 hours on the regular queue" figure
+predated slice partitioning, when step8's posterior-predictive computation ran
+over every valid row of the whole catalog. It is now scoped to the run's slice
+(`_slice_mask`, see `BATCH_MOCKS.md`), which measured ~5 min end-to-end on a
+laptop for a 34,156-row slice of the 170k-row reference mock. Most of that is
+the O(G²) covariance, not the prediction: with G ≈ 18,200 MAIN galaxies the
+dense matrix is ~2.6 GB in float64 and lands as a **~1.17 GB gzipped float32
+`.h5`** per run — budget roughly **730 GB of scratch for a 625-run batch**
+(plus ~33 GB of catalogs). Pass `--no-cov` to skip it if that footprint is a
+problem for a given batch.

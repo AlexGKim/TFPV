@@ -11,6 +11,12 @@
 #SBATCH -o slurm/logs/step5d_map_%j.out
 
 # Step 5d: MAP optimization → init_MAP.json
+# NOT part of the standard batch chain (slurm/batch_submit.sh) for any config
+# that sets "fixed_init" -- step4 (desi_data.py) writes init_MAP.json directly
+# in that case, from frozen physical-unit init values transformed into this
+# run's own standardized coordinates, skipping this GPU job entirely. Kept
+# here for manual/standalone use on any dataset that does NOT have a
+# fixed_init (e.g. deriving a brand-new fixed_init in the first place).
 # Usage: sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5d_map.sh
 # Requires: output/$RUN/input.json, init.json (step4 must be done)
 

@@ -8,7 +8,7 @@ RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
 echo "Status for run: $RUN"
 echo "---"
 
-STEPS=(step4 step5d step5e step6_chain1 step6_chain2 step6_chain3 step6_chain4 step7 step8)
+STEPS=(step4 step5e step6_chain1 step6_chain2 step6_chain3 step6_chain4 step7 step8)
 ALL_DONE=true
 for step in "${STEPS[@]}"; do
     if [ -f "output/$RUN/.${step}_done" ]; then

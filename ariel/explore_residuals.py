@@ -32,6 +32,7 @@ from predict import (
 from color_predict import (
     _load_logV,
     _logV_to_x,
+    _slice_mask,
     ystar_pp_mean_sd_color_xonly_vectorized,
 )
 
@@ -182,6 +183,11 @@ def main():
 
     xhat_raw, sigma_x_raw = _logV_to_x(logV, logV_err, V0)
 
+    # Loaded here (rather than just before its y_min/y_max use further down)
+    # because the slice restriction on the validity mask needs it first.
+    with open(os.path.join(run_dir, "input.json"), "r") as f:
+        input_data = json.load(f)
+
     # validity mask (mirrors load_xyz_and_uncertainties_from_desi / _get_holdout_mask)
     mask = (
         np.isfinite(logV)
@@ -195,6 +201,14 @@ def main():
         & np.isfinite(zobs_raw)
         & (sigma_y_raw >= 0)
     )
+
+    # [SLICE] Restrict to this run's slice, so the "Full sample" curve in the
+    # plots below is this slice's own full sample. desi_data.py partitions the
+    # valid *pre-selection-cut* rows, so a slice still contains cut-failing
+    # galaxies and the Full-sample-vs-MAIN contrast survives — while the
+    # O(draws x galaxies) residual computation stays scoped to the slice
+    # instead of the whole catalog (which OOMs at ~170k-galaxy mock scale).
+    mask = mask & _slice_mask(sga_id, input_data)
 
     def _m(arr):
         return arr[mask]
@@ -235,9 +249,7 @@ def main():
     with np.errstate(invalid="ignore", divide="ignore"):
         sma_ratio = np.where(sma_sb22 > 0, sma_sb26 / sma_sb22, np.nan)
 
-    # load bounds from input.json
-    with open(os.path.join(run_dir, "input.json"), "r") as f:
-        input_data = json.load(f)
+    # bounds from input.json (loaded above, before the validity/slice mask)
     y_min = input_data.get("y_min", -22.6)
     y_max = input_data.get("y_max", -18.4)
 

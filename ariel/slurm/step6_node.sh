@@ -29,7 +29,9 @@
 # step6_chain.sh, so check_status.sh/batch_status.sh need no changes.
 #
 # Usage: sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step6_node.sh
-# Requires: output/$RUN/input.json, init_MAP.json (step 5d done).
+# Requires: output/$RUN/input.json, init_MAP.json (step 4 done -- step4 writes
+# init_MAP.json directly when the config sets "fixed_init"; step5d_map.sh is
+# only needed for configs without a fixed_init).
 # Each chain adapts its own dense metric from identity during warmup
 # (metric=dense_e adapt save_metric=1) -- no pre-built metric.json / step 5e
 # needed. The free-covariance 2color model samples cleanly with in-warmup

@@ -32,5 +32,12 @@ else
     python3 color_predict.py --config $CONFIG --model 2color
 fi
 
+# Residual diagnostics run here, after the predictions. Ordering it after
+# color_predict.py also means a plotting failure can no longer destroy the
+# run's science output: under `set -e` this script's catalog/covariance are
+# already written and committed by the time these plots are attempted.
+echo "Step 8b: explore_residuals.py for run=$RUN"
+python3 explore_residuals.py --config $CONFIG --kind 2color
+
 touch output/$RUN/.step8_done
-echo "DONE: step8 → color_xonly_catalog.fits, color_xonly_cov.h5 (pass --full for color_catalog.fits/color_cov.h5)"
+echo "DONE: step8 → color_xonly_catalog.fits, color_xonly_cov.h5 (pass --full for color_catalog.fits/color_cov.h5), explore_residuals/"

@@ -210,6 +210,28 @@ def _train_analysis_masks(sga_ids, input_data):
     return in_training, ~in_training
 
 
+def _slice_mask(sga_ids, input_data):
+    """Given SGA_IDs (in any index space) and input.json contents, return a
+    boolean mask selecting this run's *slice*: every valid catalog row assigned
+    to it, whether or not it passes the selection cuts.
+
+    ``desi_data.py`` partitions the valid, pre-selection-cut sample, so a slice
+    stands in for a standalone FITS file — it carries both cut-passing and
+    cut-failing galaxies, giving each run its own full-sample-vs-MAIN contrast.
+    Prediction and diagnostic steps restrict to this mask so their
+    O(draws x galaxies) work is scoped to the slice instead of the whole
+    catalog (~5x smaller for n_subsets=5, and the per-run predictions outside
+    the slice were never used).
+
+    Returns all-True when slice partitioning is not active (``slice_sga_ids``
+    absent), so unsliced and pre-existing runs are unaffected.
+    """
+    sga_ids = np.asarray(sga_ids, dtype=float)
+    if "slice_sga_ids" not in input_data:
+        return np.ones(len(sga_ids), dtype=bool)
+    return np.isin(sga_ids, list(input_data["slice_sga_ids"]))
+
+
 def _sga_ids_valid_for_mask(fits_path, main_mask):
     """Return SGA_IDs in the same valid-row index space as ``main_mask``.
 
@@ -1765,6 +1787,12 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
     x_bar = input_data.get("mean_x", float(np.mean(input_data["x"])))
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
+    # [SLICE] Scope to this run's slice — same reasoning as in
+    # write_desi_catalog_color_xonly (see _slice_mask).
+    _sga_for_slice = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
+                      else np.arange(n_rows, dtype=float))
+    valid = valid & _slice_mask(_sga_for_slice, input_data)
+
     if model == "2color":
         draws = read_cmdstan_posterior(
             _p(f"{model}_?.csv"),
@@ -1937,6 +1965,16 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
+
+    # [SLICE] Scope the posterior-predictive computation to this run's slice.
+    # Without this it runs over every valid row of the whole catalog against
+    # every posterior draw — a dense O(draws x galaxies) temporary per
+    # intermediate, which OOMs at ~170k-galaxy mock scale. Rows outside the
+    # slice would be discarded anyway: MAIN/ANALYSIS below are slice-scoped,
+    # and combine_color_xonly.py reads only MAIN rows.
+    _sga_for_slice = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
+                      else np.arange(n_rows, dtype=float))
+    valid = valid & _slice_mask(_sga_for_slice, input_data)
 
     mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_color_xonly_vectorized(
         draws,

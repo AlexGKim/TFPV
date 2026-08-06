@@ -371,12 +371,6 @@ Key parameters to check:
 - `delta_c`, `delta_g` — color–velocity slopes (mean structure)
 - `alpha_kcorr_r`, `alpha_kcorr_z`, `alpha_kcorr_g` — band k-corrections
 
-```bash
-python explore_residuals.py --config $CONFIG --kind 2color
-```
-
-Residual plots land in `output/$RUN/explore_residuals/`.
-
 ---
 
 ## Step 8: Predict absolute magnitudes
@@ -429,6 +423,12 @@ cov_analysis = cov[np.ix_(analysis, analysis)]
 
 Faster variants (skip covariance and/or catalog steps) and full column/output
 documentation: see [2COLOR.md](2COLOR.md) Step 8 / Step 8 variants.
+
+```bash
+python explore_residuals.py --config $CONFIG --kind 2color
+```
+
+Residual plots land in `output/$RUN/explore_residuals/`.
 
 ---
 

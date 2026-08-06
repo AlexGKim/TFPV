@@ -2,7 +2,12 @@
 # Submit the full per-file 2COLOR pipeline for every config in a directory.
 #
 # For each configs/<dir>/<run>.json it submits a SLURM dependency chain:
-#   step4 -> step5d -> step6 (1 node, 4 chains/4 GPUs) -> step7 -> step8
+#   step4 -> step6 (1 node, 4 chains/4 GPUs) -> step7 -> step8
+# step4 writes init_MAP.json directly when the config sets "fixed_init"
+# (frozen physical-unit init values, transformed into this run's own
+# standardized coordinates) — step5d's GPU MAP-optimize job is no longer part
+# of the chain in that case. step5d_map.sh remains available to run manually
+# for any config that does NOT set "fixed_init".
 # (step5e is NOT included here — run it separately once per data type to build
 # a metric.json, then pass it via --metric so this script seeds each run dir.)
 #
@@ -59,7 +64,7 @@ fi
 mkdir -p slurm/logs batch
 TRACKER="batch/job_tracker.csv"
 if [ ! -f "$TRACKER" ]; then
-    echo "run,config,step4,step5d,step6,step7,step8,debug" > "$TRACKER"
+    echo "run,config,step4,step6,step7,step8,debug" > "$TRACKER"
 fi
 
 # step6 queue/time override for debug mode (command-line overrides in-script SBATCH).
@@ -99,10 +104,8 @@ for CFG in "$CONFIG_DIR"/*.json; do
 
     echo "Submitting chain for run=$RUN (config=$CFG)"
     JID4=$(sbatch --parsable --export=CONFIG=$CFG slurm/step4_data.sh)
-    JID5D=$(sbatch --parsable --dependency=afterok:$JID4 \
-            --export=CONFIG=$CFG slurm/step5d_map.sh)
 
-    JID6=$(sbatch --parsable --dependency=afterok:$JID5D \
+    JID6=$(sbatch --parsable --dependency=afterok:$JID4 \
            "${STEP6_OVERRIDE[@]}" \
            --export=CONFIG=$CFG$STEP6_EXPORT_EXTRA \
            slurm/step6_node.sh)
@@ -112,8 +115,8 @@ for CFG in "$CONFIG_DIR"/*.json; do
     JID8=$(sbatch --parsable --dependency=afterok:$JID7 \
            --export=CONFIG=$CFG,DEBUG=$DEBUG slurm/step8_predict.sh)
 
-    echo "$RUN,$CFG,$JID4,$JID5D,$JID6,$JID7,$JID8,$DEBUG" >> "$TRACKER"
-    echo "  step4=$JID4 step5d=$JID5D step6=$JID6 step7=$JID7 step8=$JID8"
+    echo "$RUN,$CFG,$JID4,$JID6,$JID7,$JID8,$DEBUG" >> "$TRACKER"
+    echo "  step4=$JID4 step6=$JID6 step7=$JID7 step8=$JID8"
     n_submitted=$((n_submitted + 1))
 done
 

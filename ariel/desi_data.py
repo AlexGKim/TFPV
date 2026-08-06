@@ -47,6 +47,7 @@ def process_desi_tf_data(
     ),
     z_obs_min=None,  # <<< NEW: Minimum redshift for inclusion
     z_obs_max=None,
+    fixed_init=None,
 ):
     """
     Process DESI TF data: convert to Stan JSON format and create initial conditions.
@@ -349,27 +350,44 @@ def process_desi_tf_data(
 
     # Partition into disjoint subsets, or subsample randomly
     if n_subsets is not None and subset_index is not None:
+        # [SLICE] Partition the *valid, pre-selection-cut* sample, so each
+        # subset behaves like a standalone FITS file: it carries both
+        # cut-passing and cut-failing galaxies, and therefore has its own
+        # genuine MAIN-vs-full-sample contrast. (Partitioning the post-cut
+        # sample instead would put 100% of every subset inside MAIN and leave
+        # every cut-failing galaxy outside all subsets, making that contrast
+        # degenerate and forcing the diagnostic/prediction steps to compute
+        # over the whole file to find any.)
         rng = np.random.default_rng(random_seed)
-        perm = rng.permutation(N_after_cuts)
-        chunk_size = N_after_cuts // n_subsets
+        perm = rng.permutation(valid_rows)
+        chunk_size = valid_rows // n_subsets
         start = subset_index * chunk_size
-        end = (subset_index + 1) * chunk_size if subset_index < n_subsets - 1 else N_after_cuts
-        idx = np.sort(perm[start:end])
-        x = x[idx]
-        y = y[idx]
-        sigma_x = sigma_x[idx]
-        sigma_y = sigma_y[idx]
-        z_obs = z_obs[idx]
-        z_absmag = z_absmag[idx]
-        sigma_z_absmag = sigma_z_absmag[idx]
+        end = (subset_index + 1) * chunk_size if subset_index < n_subsets - 1 else valid_rows
+        slice_pos = np.sort(perm[start:end])
+        slice_sga_ids = sga_id_all[slice_pos]
+
+        # Restrict the post-cut galaxies to this slice. sga_id_all is the
+        # pipeline's galaxy identity key everywhere else (train_sga_ids,
+        # subset_sga_ids, _train_analysis_masks all match on it), so member-
+        # ship by ID is consistent with the rest of the design.
+        in_slice = np.isin(sga_ids_main, slice_sga_ids)
+        x = x[in_slice]
+        y = y[in_slice]
+        sigma_x = sigma_x[in_slice]
+        sigma_y = sigma_y[in_slice]
+        z_obs = z_obs[in_slice]
+        z_absmag = z_absmag[in_slice]
+        sigma_z_absmag = sigma_z_absmag[in_slice]
         if g_absmag is not None:
-            g_absmag = g_absmag[idx]
-            sigma_g_absmag = sigma_g_absmag[idx]
-        subset_sga_ids = sga_ids_main[idx].tolist()
-        N_subset = len(idx)
+            g_absmag = g_absmag[in_slice]
+            sigma_g_absmag = sigma_g_absmag[in_slice]
+        subset_sga_ids = sga_ids_main[in_slice].tolist()
+        N_subset = len(subset_sga_ids)
         print(
-            f"  Partition {subset_index}/{n_subsets}: {N_subset} objects from {N_after_cuts} "
-            f"(random_seed={random_seed})"
+            f"  Slice {subset_index}/{n_subsets}: {len(slice_sga_ids)} valid rows "
+            f"from {valid_rows} (random_seed={random_seed}); of those "
+            f"{N_subset} pass the selection cuts "
+            f"({len(slice_sga_ids) - N_subset} fail -> MAIN contrast population)"
         )
         # Subsample within the subset for training (holdout = remainder)
         if n_objects is not None and n_objects < N_subset:
@@ -478,6 +496,12 @@ def process_desi_tf_data(
             stan_data["n_subsets"] = n_subsets
             stan_data["subset_index"] = subset_index
             stan_data["subset_sga_ids"] = subset_sga_ids
+            # [SLICE] All valid rows in this slice, cut-passing or not. This is
+            # the "standalone FITS file" this run stands in for: the diagnostic
+            # and prediction steps restrict to it, so their full-sample-vs-MAIN
+            # comparison and their O(draws x galaxies) cost are both scoped to
+            # this slice rather than the entire catalog.
+            stan_data["slice_sga_ids"] = slice_sga_ids.tolist()
             print(f"  Train/holdout split: {len(train_sga_ids)} training, "
                   f"{len(subset_sga_ids) - len(train_sga_ids)} holdout within subset")
         else:
@@ -517,15 +541,32 @@ def process_desi_tf_data(
     # ============================================================================
     # SECTION 4: CALCULATE STANDARDIZATION AND LINEAR REGRESSION
     # ============================================================================
+    fixed_init_data = None
     if N_total > 0:
         mean_x = np.mean(x)
         sd_x = np.std(x, ddof=1)
 
         x_std = (x - mean_x) / sd_x
-        slope_std, intercept_std = np.polyfit(x_std, y, deg=1)
 
-        slope_orig = slope_std / sd_x
-        intercept_orig = intercept_std - slope_std * mean_x / sd_x
+        if fixed_init is not None:
+            # Unit conversion only, not a re-fit: slope_orig/intercept_orig are
+            # frozen, data-independent physical-unit values (see fixed_init
+            # file); slope_std/intercept_std are this run's own local
+            # standardized-coordinate representation of that same fixed line,
+            # derived via the exact inverse of the transform below. Bound-safe
+            # by construction — see 2color.stan's slope_std/intercept_std
+            # bounds, which reduce to slope_orig in [-9,-4] and intercept_orig
+            # in [-24,-14] regardless of sd_x/mean_x.
+            with open(fixed_init) as f:
+                fixed_init_data = json.load(f)
+            slope_orig = fixed_init_data["slope_orig"]
+            intercept_orig = fixed_init_data["intercept_orig"]
+            slope_std = slope_orig * sd_x
+            intercept_std = intercept_orig + slope_orig * mean_x
+        else:
+            slope_std, intercept_std = np.polyfit(x_std, y, deg=1)
+            slope_orig = slope_std / sd_x
+            intercept_orig = intercept_std - slope_std * mean_x / sd_x
         intercept_std_vec = [float(intercept_std)]
     else:
         slope_std = 0.0
@@ -572,8 +613,31 @@ def process_desi_tf_data(
         # non-finite gradient and stall (seen on the spiral population).
         init_data["w"] = [0.15, 0.20, 0.25]
 
+    if fixed_init_data is not None:
+        # Overlay every other frozen physical-unit key verbatim (all
+        # unconstrained/fixed-range in 2color.stan, so no per-run bound risk).
+        # slope_orig/intercept_orig are excluded: already consumed above to
+        # derive this run's own slope_std/intercept_std.
+        for k, v in fixed_init_data.items():
+            if k in ("slope_orig", "intercept_orig"):
+                continue
+            init_data[k] = v
+        print(
+            f"  fixed_init: {fixed_init} -> slope_std={slope_std:.6g} "
+            f"intercept_std={intercept_std:.6g} (from slope_orig={slope_orig:.6g} "
+            f"intercept_orig={intercept_orig:.6g}, mean_x={mean_x:.6g}, sd_x={sd_x:.6g})"
+        )
+
     with open(init_output_file, "w") as f:
         json.dump(init_data, f, indent=2)
+
+    if fixed_init_data is not None:
+        map_init_output_file = os.path.join(
+            os.path.dirname(init_output_file), "init_MAP.json"
+        )
+        with open(map_init_output_file, "w") as f:
+            json.dump(init_data, f, indent=2)
+        print(f"MAP-quality init file (from fixed_init): {map_init_output_file}")
 
     # ============================================================================
     # SECTION 6: PRINT SUMMARY STATISTICS
@@ -853,6 +917,19 @@ if __name__ == "__main__":
         default=None,
         help="Intercept of upper oblique cut (c2)",
     )
+    parser.add_argument(
+        "--fixed_init",
+        type=str,
+        default=None,
+        help="Path to a JSON file of fixed physical-unit init values "
+             "(slope_orig, intercept_orig, sigma_int_x, w, ...). When set, "
+             "skips the per-run np.polyfit regression: mean_x/sd_x are still "
+             "computed fresh from this run's own training x, but "
+             "slope_std/intercept_std are derived from the fixed "
+             "slope_orig/intercept_orig via the exact inverse of the usual "
+             "transform. Also writes output/<run>/init_MAP.json directly, "
+             "skipping the need for step5d's MAP optimization.",
+    )
 
     args = parser.parse_args()
 
@@ -894,6 +971,7 @@ if __name__ == "__main__":
             "slope_plane": args.slope_plane,
             "intercept_plane": args.intercept_plane,
             "intercept_plane2": args.intercept_plane2,
+            "fixed_init": args.fixed_init,
 
         }
     else:
@@ -932,6 +1010,7 @@ if __name__ == "__main__":
         subset_index=args.subset_index,
         z_obs_min=args.z_obs_min,
         z_obs_max=args.z_obs_max,
+        fixed_init=args.fixed_init,
 
     )
 

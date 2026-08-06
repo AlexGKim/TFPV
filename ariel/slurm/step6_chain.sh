@@ -12,7 +12,10 @@
 
 # Step 6: Single MCMC chain. Submit 4 of these independently via step6_submit.sh.
 # Usage: sbatch --export=CONFIG=configs/dr1_v6_2color.json,CHAIN_ID=1 slurm/step6_chain.sh
-# Requires: output/$RUN/input.json, init_MAP.json, metric.json (steps 5d+5e done)
+# Requires: output/$RUN/input.json, init_MAP.json (step 4 done -- step4 writes
+# init_MAP.json directly when the config sets "fixed_init"; step5d_map.sh is
+# only needed for configs without a fixed_init). metric.json (step 5e) is
+# optional/unused by default -- see step6_node.sh's header comment.
 #
 # DEBUG mode: set DEBUG=1 (e.g. --export=...,DEBUG=1) to run a tiny 10+10 chain
 # that still writes the standard 2color_${CHAIN_ID}.csv so step7/step8 can consume

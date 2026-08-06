@@ -30,12 +30,12 @@ crude 100-draw short-chain `np.cov`, prone to the same fragility).
 
 | Step | Script | Inputs | Outputs | Time | Queue |
 |------|--------|--------|---------|------|-------|
-| 4 | `slurm/step4_data.sh` | config JSON, FITS file | `input.json`, `init.json` | <5 min | debug |
-| 5d | `slurm/step5d_map.sh` | `input.json`, `init.json` | `optimize.csv`, `init_MAP.json` | ~5 min | debug GPU |
+| 4 | `slurm/step4_data.sh` | config JSON, FITS file | `input.json`, `init.json`, and (if config sets `fixed_init`) `init_MAP.json` directly | <5 min | debug |
+| 5d *(skipped if config sets `fixed_init`)* | `slurm/step5d_map.sh` | `input.json`, `init.json` | `optimize.csv`, `init_MAP.json` | ~5 min | debug GPU |
 | 5e *(optional, unused by step6)* | `slurm/step5e_metric.sh` | `input.json`, `init_MAP.json` | `2color_metric_build.csv`, `metric.json` | ~7 h | regular GPU |
 | 6 | `slurm/step6_node.sh` (1 node, 4 GPUs, 4 chains, identity metric + adapt) | `input.json`, `init_MAP.json` | `2color_{1..4}.csv`, `2color_metric_{1..4}.json` (each chain's own adapted metric, `save_metric=1`) | dataset-dependent (`NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure, don't assume a fixed figure) | regular GPU |
 | 7 | `slurm/step7_diagnose.sh` | `2color_?.csv` | `stansummary.txt`, `diagnose.txt`, `2color.png` | ~15 min | debug CPU |
-| 8 | `slurm/step8_predict.sh` | config, `input.json`, `2color_?.csv` | `color_xonly_catalog.fits`, `color_xonly_cov.h5` (x-only default; `--full` adds `color_catalog.fits`/`color_cov.h5`) | 1–4 h | regular CPU |
+| 8 | `slurm/step8_predict.sh` (`color_predict.py`, then `explore_residuals.py`) | config, `input.json`, `2color_?.csv` | `color_xonly_catalog.fits`, `color_xonly_cov.h5` (x-only default; `--full` adds `color_catalog.fits`/`color_cov.h5`), `explore_residuals/` | ~5–10 min per slice-scoped run (mostly the O(G²) covariance; ~1.17 GB `.h5` each) | debug CPU |
 
 **Sentinel files:** Each step writes `output/$RUN/.step<N>_done` on success.
 Check completion with: `bash slurm/check_status.sh $CONFIG`
@@ -48,18 +48,24 @@ Check completion with: `bash slurm/check_status.sh $CONFIG`
 FITS catalog
     └── step4 (desi_data.py)
             ├── input.json
-            └── init.json
-                    └── step5d (2color_g optimize)
-                            ├── optimize.csv
-                            └── init_MAP.json
-                                    └── step6 (1 node, 4 GPUs, 4 chains via CUDA_VISIBLE_DEVICES,
-                                        identity metric + in-warmup adapt -- step5e not required)
-                                            ├── 2color_1.csv
-                                            ├── 2color_2.csv
-                                            ├── 2color_3.csv
-                                            └── 2color_4.csv
-                                                    └── step7 (stansummary, corner.py)
-                                                            └── step8 (color_predict.py)
+            ├── init.json
+            └── init_MAP.json  (written directly IF config sets "fixed_init" --
+                 |               transforms frozen physical-unit values into
+                 |               this run's own standardized coordinates)
+                 |
+                 |   (config WITHOUT "fixed_init" instead goes:
+                 |    init.json -> step5d (2color_g optimize) -> optimize.csv
+                 |    -> init_MAP.json)
+                 |
+                 └── step6 (1 node, 4 GPUs, 4 chains via CUDA_VISIBLE_DEVICES,
+                     identity metric + in-warmup adapt -- step5e not required)
+                             ├── 2color_1.csv
+                             ├── 2color_2.csv
+                             ├── 2color_3.csv
+                             └── 2color_4.csv
+                                     └── step7 (stansummary, corner.py)
+                                             └── step8 (color_predict.py,
+                                                 then explore_residuals.py)
 ```
 
 Step 5e (`2color_g sample`, 1 chain → `metric.json`) exists as an optional
@@ -102,7 +108,9 @@ GPU SLURM scripts, but must also be set if compiling manually on the login node.
 
 ---
 
-### Step 5d: `init_MAP.json` looks wrong
+### Step 5d / step4: `init_MAP.json` looks wrong
+
+**For a config WITHOUT `fixed_init`** (still uses step5d):
 
 **Symptom:** `init_MAP.json` exists but has NaN values or all zeros.
 
@@ -113,6 +121,21 @@ all `lp__` values are identical, the optimizer did not converge.
 issues (e.g. N_total = 0, extreme y_min/y_max). Run `python desi_data.py` locally
 and inspect `output/$RUN/data.png`.
 
+**For a config WITH `fixed_init`** (step4 writes `init_MAP.json` directly, no
+step5d in the chain): this failure mode should be structurally impossible —
+`2color.stan`'s only data-dependent bounds (`slope_std`/`intercept_std`)
+reduce to fixed physical-unit ranges (`slope_orig ∈ [-9,-4]`,
+`intercept_orig ∈ [-24,-14]`) independent of any run's own `mean_x`/`sd_x`,
+so a valid `fixed_init` file is bound-safe for every run by construction. If
+`init_MAP.json` still looks wrong, check instead: (1) `configs/fixed_init_2color.json`
+was read correctly (see the `fixed_init: ... -> slope_std=... intercept_std=...`
+line step4 prints to its log), (2) `mean_x`/`sd_x` in `output/$RUN/init_MAP.json`
+came out sane for this run's actual data (not NaN/zero from an empty selection),
+and (3) `configs/fixed_init_2color.json` itself hasn't been edited to contain a
+value outside `2color.stan`'s bounds for some *other* parameter that isn't
+data-dependent but is still constrained (currently none are, per `2color.stan`'s
+`parameters` block — re-verify if the model changes).
+
 ---
 
 ### Step 6: MCMC chain produces no samples
@@ -122,7 +145,9 @@ and inspect `output/$RUN/data.png`.
 **Diagnosis:** Check SLURM log (`slurm/logs/step6_node_*.out`). Common cause:
 - Stan segfault: `input.json` has wrong array lengths (check `N_total`)
 - Time limit exceeded: extend `#SBATCH -t`
-- `init_MAP.json` has out-of-range values: re-run step5d
+- `init_MAP.json` has out-of-range values: re-run step5d (config without
+  `fixed_init`) or see "Step 5d / step4: `init_MAP.json` looks wrong" above
+  (config with `fixed_init` — this should not normally happen)
 
 ---
 
@@ -188,9 +213,9 @@ python color_predict.py --config $CONFIG --model 2color --no-cov
 
 ### Step 7: `corner.py` fails with `ModuleNotFoundError: No module named 'chainconsumer'`
 
-**Symptom:** `step7_diagnose.sh` (which runs `corner.py` and `explore_residuals.py`
-right after `stansummary`/`diagnose`) dies with this traceback, and `set -e`
-aborts the rest of the script — no `2color.png`, and (if this happens inside
+**Symptom:** `step7_diagnose.sh` (which runs `corner.py` right after
+`stansummary`/`diagnose`) dies with this traceback, and `set -e` aborts the rest
+of the script — no `2color.png`, and (if this happens inside
 `step6_submit.sh`'s auto-chained step7→step8) step8 never runs either, even
 though the MCMC chains themselves finished cleanly.
 
@@ -220,13 +245,23 @@ were changed in a config but the run's actual training rows didn't change.
 check `slurm/logs/step4_data_*.out` for a `WARNING: overwriting ... whose
 partition metadata differs` line. If step 4 was never re-run after a config
 edit, `input.json`/`init_MAP.json`/the MCMC chains are all still fit to the old
-config and must be regenerated (step4 → step5d → step6) before trusting step 8.
+config and must be regenerated (step4 → step6, or step4 → step5d → step6 for
+a config without `fixed_init`) before trusting step 8.
 
 **Fix:** Always re-run step4 after editing a config, even if you think only an
 unrelated field changed:
 ```bash
 sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
 ```
+
+**Note — this warning cannot catch a partition-*code* change.** It compares
+config metadata only. The partition point moved from post-selection-cut to
+pre-selection-cut (see `BATCH_MOCKS.md` "Subset Partition Mode"), so any
+`input.json` written before that change has identical metadata
+(`n_subsets`/`subset_index`/`n_objects`/`random_seed`) but *different actual
+membership* — and no warning will fire. Any run dir predating the change must
+be regenerated from step4, and its `input.json` is recognizable by the absence
+of a `slice_sga_ids` key.
 
 ---
 
@@ -269,7 +304,7 @@ Good convergence: R̂ < 1.01 for all parameters, ESS > 100 per chain.
 ```bash
 # Any single step:
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step4_data.sh
-sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5d_map.sh
+sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5d_map.sh       # only if config has no fixed_init
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5e_metric.sh    # optional, unused by step6
 sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step6_node.sh       # all 4 chains, 1 node/4 GPUs
 sbatch --export=CONFIG=configs/dr1_v6_2color.json,CHAIN_ID=1 slurm/step6_chain.sh  # just chain 1
