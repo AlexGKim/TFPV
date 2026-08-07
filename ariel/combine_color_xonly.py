@@ -26,14 +26,35 @@ import h5py
 import numpy as np
 from astropy.table import Table, vstack
 
-from color_predict import _systematic_offdiag_terms, _load_d_err_r, _D_ERR_R
+from color_predict import _systematic_offdiag_terms, resolve_d_err_r
 
 
-def _resolve_d_err_r(run_dir):
+def _resolve_d_err_r(run_dir, cov_path=None):
+    """Return the d_err_r that step 8 actually used for this population.
+
+    Prefers the ``d_err_r`` attribute step 8 records on the covariance HDF5.
+    That is authoritative: the per-population blocks of this combined matrix
+    already have that value baked in, so the cross-population terms computed
+    here must match it exactly. Re-deriving it independently is what left the
+    v5b product with loa dust (0.2173) in the population blocks and iron dust
+    (0.1768) in the cross terms.
+
+    Falls back to re-resolving from the run's config/FITS header for
+    covariances written before the attribute existed, and says so.
+    """
+    if cov_path and os.path.exists(cov_path):
+        with h5py.File(cov_path, "r") as hf:
+            if "d_err_r" in hf.attrs:
+                val = float(hf.attrs["d_err_r"])
+                print(f"  d_err_r={val:.8f} (from {os.path.basename(cov_path)} attrs — "
+                      f"as used by step 8)")
+                return val
+        print(f"  WARNING: {os.path.basename(cov_path)} has no 'd_err_r' attribute "
+              f"(written before step 8 recorded it) — re-deriving, which may not "
+              f"match what its blocks were built with. Re-run step 8 to be sure.")
     with open(os.path.join(run_dir, "config.json")) as f:
         cfg = json.load(f)
-    dust_pickle = cfg.get("dust_pickle")
-    return _load_d_err_r(dust_pickle) if dust_pickle else _D_ERR_R
+    return resolve_d_err_r(cfg, cfg.get("fits_file"))
 
 
 def load_population_main(run_dir):
@@ -75,7 +96,7 @@ def load_population_main(run_dir):
             f"MAIN row count {len(table_main)}"
         )
 
-    d_err_r = _resolve_d_err_r(run_dir)
+    d_err_r = _resolve_d_err_r(run_dir, cov_path)
     return table_main, cov, analysis, d_err_r
 
 

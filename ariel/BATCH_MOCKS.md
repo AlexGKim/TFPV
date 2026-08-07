@@ -42,6 +42,28 @@ workflow. The following decisions are fixed; do not re-derive them:
    `intercept_orig ∈ [-24,-14]`, independent of `mean_x`/`sd_x`) and removes
    step5d's GPU MAP-optimize job from the chain entirely (see #5).
 
+2c. **The dust uncertainty `d_err_r` is read per file from the FITS header, and
+   is deliberately *not* frozen.** Unlike the selection cuts and the init, this
+   one varies file to file, so each mock carries its own value as a `HIERARCH`
+   card on HDU 1. `color_predict.resolve_d_err_r()` resolves, first hit wins:
+
+   | Source | Applies to |
+   |---|---|
+   | `cfg["dust_pickle"]` | DR2 (its FITS files carry no dust metadata) |
+   | header `A_R_ERR` | the mocks produced for this batch |
+   | header `DSTCFF_R_ERR` | earlier mocks, e.g. `..._zsnap0.20_zmax0.11.fits` (0.20456262) |
+   | `_D_ERR_R` = 0.17680325 | built-in iron fallback — **wrong for mocks** |
+
+   It always logs which source won, and warns loudly on the fallback. Check
+   `slurm/logs/step8_predict_*.out` for a `Loaded d_err_r = … from FITS header
+   A_R_ERR` line; a `WARNING: no dust_pickle … falling back to the built-in
+   iron default` line means the header keyword was missing and the covariance
+   is wrong. Step 8 also records the value it used as a `d_err_r` attribute on
+   `color_xonly_cov.h5`, which is what any downstream combine must read rather
+   than re-deriving — re-deriving is how a combined product previously ended up
+   with one dust value in its per-population blocks and another in its
+   cross-population terms.
+
 3. **Step 5e (metric build) is optional and NOT part of the standard chain.**
    `slurm/batch_submit.sh` already excludes it (see its own header comment),
    and `slurm/step6_node.sh`/`step6_chain.sh` don't read `metric.json` at

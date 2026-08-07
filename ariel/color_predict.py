@@ -76,6 +76,54 @@ def _load_d_err_r(pickle_path):
     return d_err_r
 
 
+def resolve_d_err_r(cfg, fits_path=None):
+    """Resolve the internal-dust slope uncertainty d_err_r for a run.
+
+    Resolution order (first hit wins), always logged:
+
+    1. ``cfg["dust_pickle"]`` — an explicit per-run override. Required for the
+       DR2 catalogs, whose FITS files carry no dust metadata; the loa MCMC
+       gives d_err_r = 0.21734862.
+    2. FITS header ``A_R_ERR`` — the canonical keyword in the AbacusSummit
+       mocks produced for the NERSC batch.
+    3. FITS header ``DSTCFF_R_ERR`` — the older spelling, present in
+       TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits
+       (0.20456262) and other early mocks. Both are HIERARCH cards on HDU 1,
+       since the keywords exceed FITS's 8-character limit.
+    4. ``_D_ERR_R`` — the built-in iron default, 0.17680325.
+
+    Each mock file carries its own value, so this must be read per file rather
+    than frozen into a shared batch config.
+
+    Always prints the resolved value and its source. Silence is what let two
+    separate bugs through: the DR2 covariances were built on the iron default
+    because "dust_pickle" never reached this code, and the mock batch was on
+    it because nothing read the header — neither produced any output to notice.
+    """
+    dust_pickle = cfg.get("dust_pickle") if cfg else None
+    if dust_pickle:
+        return _load_d_err_r(dust_pickle)
+
+    if fits_path:
+        try:
+            with fits.open(fits_path) as _hdul:
+                hdr = _hdul[1].header
+                for key in ("A_R_ERR", "DSTCFF_R_ERR"):
+                    if key in hdr:
+                        val = float(hdr[key])
+                        print(f"Loaded d_err_r = {val:.8f} mag from FITS header "
+                              f"{key} of {fits_path}")
+                        return val
+        except Exception as exc:
+            print(f"WARNING: could not read dust keywords from {fits_path}: {exc}")
+
+    print(f"WARNING: no dust_pickle in config and no A_R_ERR/DSTCFF_R_ERR in the "
+          f"FITS header — falling back to the built-in iron default "
+          f"d_err_r = {_D_ERR_R:.8f}. If this run should use a measured dust "
+          f"uncertainty, this value is wrong.")
+    return _D_ERR_R
+
+
 def _systematic_offdiag_terms(ba, photsys, d_err_r=_D_ERR_R):
     """Per-galaxy systematic sensitivity vectors (MU / mag units).
 
@@ -2626,9 +2674,9 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json")) as f:
             cfg = json.load(f)
 
-    # Load d_err_r from dust pickle if specified; fall back to iron default
-    _dust_pickle = cfg.get("dust_pickle")
-    _d_err_r = _load_d_err_r(_dust_pickle) if _dust_pickle else _D_ERR_R
+    # Resolve d_err_r: config dust_pickle -> FITS header A_R_ERR /
+    # DSTCFF_R_ERR -> iron default. See resolve_d_err_r().
+    _d_err_r = resolve_d_err_r(cfg, fits_path)
 
     with open(_p("input.json")) as f:
         input_data = json.load(f)
@@ -2722,6 +2770,13 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
             if 'analysis' in _hf:
                 del _hf['analysis']
             _hf.create_dataset('analysis', data=analysis_star)
+            # Record the dust slope uncertainty actually used, so downstream
+            # consumers (combine_color_xonly.py) reproduce this exact value for
+            # cross-population terms instead of re-deriving it and risking
+            # drift. Re-deriving is how the combined v5b product ended up with
+            # loa dust in the per-population blocks and iron dust in the
+            # cross terms.
+            _hf.attrs['d_err_r'] = float(_d_err_r)
         print(f"Saved xonly covariance HDF5 to {h5_out} "
               f"(with 'analysis' dataset for analysis-only reconstruction)")
         with h5py.File(h5_out, 'r') as _hf:
@@ -2779,9 +2834,9 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
         with open(_p("config.json")) as f:
             cfg = json.load(f)
 
-    # Load d_err_r from dust pickle if specified; fall back to iron default
-    _dust_pickle = cfg.get("dust_pickle")
-    _d_err_r = _load_d_err_r(_dust_pickle) if _dust_pickle else _D_ERR_R
+    # Resolve d_err_r: config dust_pickle -> FITS header A_R_ERR /
+    # DSTCFF_R_ERR -> iron default. See resolve_d_err_r().
+    _d_err_r = resolve_d_err_r(cfg, fits_path)
 
     with open(_p("input.json")) as f:
         input_data = json.load(f)
@@ -2868,6 +2923,13 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
             if 'analysis' in _hf:
                 del _hf['analysis']
             _hf.create_dataset('analysis', data=analysis_star)
+            # Record the dust slope uncertainty actually used, so downstream
+            # consumers (combine_color_xonly.py) reproduce this exact value for
+            # cross-population terms instead of re-deriving it and risking
+            # drift. Re-deriving is how the combined v5b product ended up with
+            # loa dust in the per-population blocks and iron dust in the
+            # cross terms.
+            _hf.attrs['d_err_r'] = float(_d_err_r)
         print(f"Saved covariance HDF5 to {h5_out} "
               f"(with 'analysis' dataset for analysis-only reconstruction)")
         # Read back diagnostic sub-matrices for plots.
@@ -2979,6 +3041,22 @@ if __name__ == "__main__":
     _run_dir = args.run_dir or "."
     with open(os.path.join(_run_dir, "config.json")) as _f:
         _cfg = _json.load(_f)
+
+    # output/<run>/config.json is desi_data.py's record of the run. Keys added
+    # to the pipeline config *after* step 4 last ran are absent from it, so
+    # overlay the explicitly-passed --config on top for keys the run-dir copy
+    # lacks. Without this, adding "dust_pickle" to a config had no effect here
+    # unless step 4 was re-run -- which is how the DR2 covariances ended up on
+    # the iron default d_err_r. Run-dir values still win where both are set, so
+    # the record of what was actually fit is not overridden.
+    if args.config and os.path.exists(args.config):
+        with open(args.config) as _f:
+            _pipeline_cfg = _json.load(_f)
+        for _k, _v in _pipeline_cfg.items():
+            if _cfg.get(_k) is None and _v is not None:
+                _cfg[_k] = _v
+                print(f"  config overlay: {_k} = {_v}  (from {args.config})")
+
     _fits_path = _cfg["fits_file"]
 
     DESI_color(

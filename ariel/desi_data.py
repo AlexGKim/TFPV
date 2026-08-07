@@ -986,6 +986,12 @@ if __name__ == "__main__":
             "intercept_plane": args.intercept_plane,
             "intercept_plane2": args.intercept_plane2,
             "fixed_init": args.fixed_init,
+            # Propagated so color_predict.py can see it: that script builds its
+            # cfg from output/<run>/config.json (this dict), not from --config,
+            # so a "dust_pickle" set only in the pipeline config never reached
+            # the covariance code and the DR2 runs silently used the iron
+            # default d_err_r. See color_predict.resolve_d_err_r().
+            "dust_pickle": cfg.get("dust_pickle"),
 
         }
     else:
