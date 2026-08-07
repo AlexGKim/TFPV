@@ -56,7 +56,7 @@ Z_OBS_MIN = 0.01
 Z_OBS_MAX = 0.065
 N_SIGMA_PERP = 3.0
 
-# Step 1's loose pre-filter (not the final cut) -- matches DR2_2COLOR.md.
+# Step 1's loose pre-filter (not the final cut) -- matches DR2_TWOPOP.md.
 LOOSE_HATY_MIN = -23.0
 LOOSE_HATY_MAX = -18.0
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a dense_e warmup metric for 2color.stan from a Pathfinder run.
 
-Step 5e of DR2_2COLOR.md. Pathfinder (Stan's L-BFGS variational method) gives a
+Step 5e of DR2_TWOPOP.md. Pathfinder (Stan's L-BFGS variational method) gives a
 cheap approximate posterior in ~1 min; its draws estimate the posterior scale
 and correlations of the sampling parameters. The 2color posterior is badly
 conditioned, so HMC started from the identity metric spends warmup at max

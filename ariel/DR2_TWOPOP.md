@@ -1,4 +1,22 @@
-# DR2 Two-Color Run: Spiral / Irregular (Steps 1–8, self-contained)
+# DR2 Run, Two Populations: Spiral / Irregular (Steps 1–8, self-contained)
+
+**Which DR2 doc do I want?** Both use the 2color model; they differ in how the
+catalog is partitioned:
+
+| Doc | Fits | Input |
+|---|---|---|
+| **DR2_TWOPOP.md** (this file) | disk galaxies as two populations, fit independently | `DR2_TF_{spirals,irrs}_v5_*.fits` — 24,813 `Spiral` + 6,555 `Irregular` |
+| [DR2_SINGLE.md](DR2_SINGLE.md) | the whole catalog as one population | `SGA-2020_loa_Vrot_VI_v0.fits`, 35,666 galaxies |
+
+The inputs here are a morphology-classified subset of that same parent
+catalog: every galaxy in these two files is present in the loa catalog, and
+the 4,298 loa galaxies missing from them are the early types and non-galaxy
+morphologies (`E`, `S0`, `PSF`, `REX`, …) that are neither spiral nor
+irregular. "Two populations" here means two *morphology* classes — not the
+train/holdout split (`[SPLIT]` in `desi_data.py`) and not the slice
+partitioning used for the mock batch (see [BATCH_MOCKS.md](BATCH_MOCKS.md)).
+
+---
 
 This is the complete, self-contained command sequence for the DR2
 two-population ("2color") TFR fit — the exact procedure that produced the
@@ -36,7 +54,7 @@ correct for other workflows (single-population runs, non-2color models, the
 DR1 dataset) and are linked here as background only — you shouldn't need to
 open them to run this procedure.
 
-See also: [run_dr2.sh](run_dr2.sh), a script that automates everything below
+See also: [run_dr2_onepop.sh](run_dr2_onepop.sh), a script that automates everything below
 end-to-end for one population per invocation (pausing only for Step 3's
 interactive fiducial choice).
 
@@ -87,7 +105,7 @@ export RUN=$(basename ${PARENT_FITS%.fits})_2color_${POPULATION}
 export CONFIG=configs/$(echo $RUN | tr '[:upper:]' '[:lower:]').json
 ```
 
-(`run_dr2.sh` computes these the same way — see its `--fits`/`--population`
+(`run_dr2_onepop.sh` computes these the same way — see its `--fits`/`--population`
 flags.)
 
 ---
@@ -465,7 +483,7 @@ Residual plots land in `output/$RUN/explore_residuals/`.
 
 | File | Purpose |
 |------|---------|
-| [run_dr2.sh](run_dr2.sh) | Automates Steps 1–8 above, one population per invocation |
+| [run_dr2_onepop.sh](run_dr2_onepop.sh) | Automates Steps 1–8 above, one population per invocation |
 | [2COLOR.md](2COLOR.md) | Background: full 2color model docs, single-population form, the old short-MCMC-run "Step 5e" (superseded here by Pathfinder) |
 | [DR1.md](DR1.md) | Background: original selection workflow this doc's Steps 1–3b are adapted from |
 | `2color.stan` | Stan model: quadrivariate TFR with two independent color factors |

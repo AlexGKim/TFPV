@@ -54,7 +54,7 @@
 # non-trivial divergence/rejection rate at the default delta -- on NERSC this
 # showed up as warmup getting stuck for hours near a boundary, spamming
 # "lkj_corr_cholesky_lpdf: Random variable[2] is 0, but must be positive!"
-# and never advancing past iteration 1. Matches the local DR2_2COLOR.md fix
+# and never advancing past iteration 1. Matches the local DR2_TWOPOP.md fix
 # (validated there against 1.9%-8.4% divergence rates at delta=0.8). delta=0.95
 # was tried first but found impractically slow for the irregular population
 # locally (~135 min/100 warmup iterations, ~20+ h/chain) -- its wall-clock

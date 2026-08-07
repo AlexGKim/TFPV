@@ -143,6 +143,29 @@ First end-to-end run on real DESI data using the
 
 → See [DR1.md](DR1.md) for the full command sequence and output file listing.
 
+### DR2 — run locally, two variants
+
+Both use the 2color model; they differ in how the catalog is partitioned.
+
+| Doc | Fits | Input |
+|---|---|---|
+| [DR2_SINGLE.md](DR2_SINGLE.md) | the whole catalog as one population | `SGA-2020_loa_Vrot_VI_v0.fits`, 35,666 galaxies |
+| [DR2_TWOPOP.md](DR2_TWOPOP.md) | its disk galaxies as two populations, fit independently | `DR2_TF_{spirals,irrs}_v5_*.fits`, 24,813 + 6,555 |
+
+The two-population inputs are a morphology-classified subset of the same
+parent catalog. [run_dr2_onepop.sh](run_dr2_onepop.sh) automates the
+two-population workflow, one population per invocation.
+
+### Mocks — run in batch at NERSC
+
+AbacusSummit mock files are run as a SLURM batch on Perlmutter, not locally.
+
+| Doc | Role |
+|---|---|
+| [BATCH_MOCKS.md](BATCH_MOCKS.md) | **start here** — design decisions for the mock batch (frozen selection cuts and init, slice partitioning, per-file dust), config generation, full-batch submission |
+| [BATCH_NERSC.md](BATCH_NERSC.md) | mechanics of running on Perlmutter: prerequisites, GPU compile, per-step commands, resubmission, runtimes |
+| [BATCH_CLAUDE.md](BATCH_CLAUDE.md) | troubleshooting: step map, dependency graph, and a symptom → diagnosis → fix catalog of failure modes |
+
 ---
 
 ## Claude Code Skills

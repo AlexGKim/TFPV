@@ -58,7 +58,7 @@ else
     # otherwise stall warmup for hours near a boundary (see step6_node.sh).
     # delta=0.95 was tried first but found impractically slow for the
     # irregular population locally (steeply non-linear wall-clock cost), so
-    # 0.9 is the compromise. Matches the local DR2_2COLOR.md fix.
+    # 0.9 is the compromise. Matches the local DR2_TWOPOP.md fix.
     DELTA=${DELTA:-0.9}
     ADAPT_ARGS="adapt delta=$DELTA save_metric=1"
     # max_depth=8 (vs Stan's default 10): the free-covariance posterior is

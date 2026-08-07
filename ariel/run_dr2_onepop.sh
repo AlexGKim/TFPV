@@ -1,8 +1,8 @@
 #!/bin/bash
-# run_dr2.sh — Automates DR2_2COLOR.md Steps 1-8 for one population.
+# run_dr2_onepop.sh — Automates DR2_TWOPOP.md Steps 1-8 for one population.
 #
 # Usage:
-#   ./run_dr2.sh --population {spiral,irregular} --fits data/<official_dr2>.fits [options]
+#   ./run_dr2_onepop.sh --population {spiral,irregular} --fits data/<official_dr2>.fits [options]
 #
 # Steps 1-3b run synchronously in the foreground, including Step 3's
 # interactive set_fiducial.py prompts (stdin is your real terminal). Once
@@ -10,7 +10,7 @@
 # (nohup) to run Steps 4-8 unattended in the background -- that phase takes
 # hours (mainly Step 6's MCMC sampling).
 #
-# See DR2_2COLOR.md for the full narrative / rationale (in particular why
+# See DR2_TWOPOP.md for the full narrative / rationale (in particular why
 # Step 6 runs from the identity metric directly, with no separate metric
 # warm-start step -- an empirical test found that ~2.7x slower overall than
 # just letting Step 6 adapt from scratch).

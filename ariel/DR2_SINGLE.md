@@ -1,7 +1,21 @@
-# DR2 Run: SGA-2020 loa
+# DR2 Run, Single Population: the whole SGA-2020 loa catalog
 
-This document records the full command sequence for the DR2 run on the
-`SGA-2020_loa_Vrot_VI_v0.fits` dataset using the two-color TFR model.
+This document records the full command sequence for fitting the DR2 catalog
+`SGA-2020_loa_Vrot_VI_v0.fits` (35,666 galaxies) as **one population**, using
+the two-color TFR model.
+
+**Which DR2 doc do I want?** Both use the 2color model; they differ in how the
+catalog is partitioned:
+
+| Doc | Fits | Input |
+|---|---|---|
+| **DR2_SINGLE.md** (this file) | the whole catalog as one population | `SGA-2020_loa_Vrot_VI_v0.fits`, 35,666 galaxies, raw Hubble-type `MORPHTYPE` |
+| [DR2_TWOPOP.md](DR2_TWOPOP.md) | its disk galaxies as two populations, fit independently | `DR2_TF_{spirals,irrs}_v5_*.fits` — 24,813 `Spiral` + 6,555 `Irregular` |
+
+The two-population inputs are a morphology-classified subset of this same
+parent catalog: every v5 galaxy is present here, and the 4,298 loa galaxies
+absent from them are the early types and non-galaxy morphologies (`E`, `S0`,
+`PSF`, `REX`, …) that are neither spiral nor irregular.
 
 ## Setup
 
