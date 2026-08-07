@@ -85,6 +85,21 @@ def main():
                 source_default = cfg["source"]
             break
 
+    # Carry through any key this script does not itself manage, so re-exporting
+    # never silently discards hand-added settings. Historically it wrote only
+    # the managed keys, so a re-export dropped things like "dust_pickle" with
+    # no warning — that is how both DR2 v5 populations ended up computing their
+    # covariance with the iron-default d_err_r (0.1768) instead of the intended
+    # loa value (0.2173). Keyed off args.out only: output/<run>/config.json is
+    # desi_data.py's record and holds derived fields (n_total_fits, n_training)
+    # that do not belong in a pipeline config.
+    preserved = {}
+    if args.out and os.path.exists(args.out):
+        with open(args.out) as f:
+            existing = json.load(f)
+        managed = {"run", "fits_file", "exe", "source", "model", "n_sigma"} | set(fiducial)
+        preserved = {k: v for k, v in existing.items() if k not in managed}
+
     print()
     print(f"Fiducial parameters from {fiducial_path}:")
     for k, v in fiducial.items():
@@ -107,6 +122,7 @@ def main():
         "model":    model,
         "n_sigma":  n_sigma,
         **fiducial,
+        **preserved,
     }
 
     out_dir = os.path.dirname(args.out)
@@ -118,6 +134,10 @@ def main():
 
     print()
     print(f"Config written to {args.out}")
+    if preserved:
+        print("Preserved from the previous config (not managed by this script):")
+        for k, v in preserved.items():
+            print(f"  {k} = {v}")
     print("Commit this file to git to version-control your parameter choices.")
 
 

@@ -181,11 +181,40 @@ print('fits_file set to', cfg['fits_file'])
 
 Commit the resulting `$CONFIG` to git.
 
+**Required for DR2: `dust_pickle`.** The internal-dust slope uncertainty
+`d_err_r` sets the dust off-diagonal term of the step-8 covariance
+(`v_dust = d_err_r × (BA − 1)`, see `color_predict.py::_systematic_offdiag_terms`).
+For the DR2 catalogs it must come from the loa internal-dust MCMC, **not** the
+built-in iron default:
+
+```json
+"dust_pickle": "data/loa_internalDust_nokcorr_mcmc.pickle"
+```
+
+| Source | `d_err_r` |
+|---|---|
+| Built-in default (`_D_ERR_R`, iron) — used when the key is **absent** | 0.17680325 |
+| `data/loa_internalDust_nokcorr_mcmc.pickle` (loa) — correct for DR2 | 0.21734862 |
+
+Getting this wrong is silent: with the key absent, `color_predict.py` simply
+uses the iron default and prints nothing. Both DR2 v5 populations were
+originally run this way, leaving the dust contribution low by a factor of
+`(0.2173/0.1768)² ≈ 1.5`. **Verify it took effect** — step 8 prints a
+`Loaded d_err_r = 0.21734862 mag from …` line whenever the pickle is read, and
+its absence from the log means the default was used:
+
+```bash
+grep "Loaded d_err_r" output/$RUN/step8.log
+```
+
 **Optional**: add `"train_fraction": 0.4` to `$CONFIG` (see 2COLOR.md's
 "Training sample size" section) to hold out an analysis sample distinct from
-training; add `"dust_pickle": "data/<...>.pickle"` if a dust correction
-pickle applies to this dataset. Neither is prompted for by `export_config.py`
-— edit `$CONFIG` directly after this step if needed.
+training. Neither `dust_pickle` nor `train_fraction` is prompted for by
+`export_config.py` — add them to `$CONFIG` by hand. As of the fix in this
+repo, `export_config.py` *preserves* any key it does not itself manage on
+re-export (and prints what it kept), so they survive a repeat of this step;
+earlier versions dropped them silently, which is how the v5 covariances ended
+up on the iron default.
 
 ---
 
@@ -444,4 +473,5 @@ Residual plots land in `output/$RUN/explore_residuals/`.
 | `make_pf_metric.py` | Step 5e: builds the Pathfinder warmup metric `pf_metric.json` |
 | `make_population_subsets.py` | Splits an official FITS file into per-population subsets |
 | `color_predict.py --model 2color` | Posterior predictive computation |
+| `data/loa_internalDust_nokcorr_mcmc.pickle` | Internal-dust MCMC for DR2; `"dust_pickle"` in `$CONFIG` points here to give `d_err_r = 0.21734862` instead of the iron default `0.17680325` (see Step 3b) |
 | [Predict.md](Predict.md) | Full prediction-step argument reference |
