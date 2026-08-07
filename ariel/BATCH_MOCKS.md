@@ -391,18 +391,22 @@ bash slurm/step6_submit.sh $CONFIG
 
 ### Running locally without SLURM
 
-`run_subsets.sh` runs subsets s01–s04 end-to-end (step4 → step5d → step6 →
-step7 → step8) directly via the `./2color` binary, for machines without SLURM
-access. It still runs its own local MAP-optimize step regardless of a
-config's `fixed_init` — it predates this change and is out of scope for it;
-only the SLURM-driven `slurm/batch_submit.sh` path (and the manual command
-above) skip step5d when `fixed_init` is set.
-It intentionally skips `s00`, which is meant to be run standalone first (e.g. via
-the manual commands above with `CONFIG=configs/abacus_subsets/abacus_2color_s00.json`,
-substituting direct `python`/`./2color` calls for the `sbatch` wrappers):
+`run_subsets.sh` is the no-scheduler counterpart to `slurm/batch_submit.sh`,
+mirroring the same chain (step4 → step6 ×4 → step7 → step8, with step5d
+skipped when the config sets `fixed_init`) via the CPU `./2color` binary, with
+the 4 chains as background processes instead of one per GPU. Its sampler
+settings track `slurm/step6_node.sh`'s non-debug defaults
+(`num_warmup=1000`, `max_depth=10`, `delta=0.9`, no metric seeding), so local
+results stay comparable to batch results; override via `NUM_WARMUP`,
+`NUM_SAMPLES`, `MAX_DEPTH`, `DELTA`, or `NO_COV=1` in the environment.
+
+It takes an optional subset list and defaults to s01–s04, skipping `s00`
+because that one is normally run standalone first as the Step 0 validation:
 
 ```bash
-zsh run_subsets.sh
+zsh run_subsets.sh                 # s01 s02 s03 s04 (default)
+zsh run_subsets.sh 00              # just s00
+zsh run_subsets.sh 00 01 02 03 04  # all five
 ```
 
 ### Predictions (plots only, no covariance)
