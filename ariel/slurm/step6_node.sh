@@ -32,16 +32,20 @@
 # Requires: output/$RUN/input.json, init_MAP.json (step 4 done -- step4 writes
 # init_MAP.json directly when the config sets "fixed_init"; step5d_map.sh is
 # only needed for configs without a fixed_init).
-# Each chain adapts its own dense metric from identity during warmup
-# (metric=dense_e adapt save_metric=1) -- no pre-built metric.json / step 5e
-# needed. The free-covariance 2color model samples cleanly with in-warmup
-# adaptation, and a metric.json from a different model version has the wrong
-# dimension anyway. Confirmed step5e_metric.sh's own metric-building method
-# (100 post-warmup draws, 17-param np.cov, no regularization) is the same
-# crude approach found -- on a local CPU A/B test -- to be ~2.7x slower
-# overall than identity+adapt with no quality gain, so it's correctly unused
-# here despite BATCH_NERSC.md/BATCH_MOCKS.md/BATCH_CLAUDE.md prose still
-# describing step6 as requiring it.
+# Each chain starts from the IDENTITY metric and adapts its own dense metric
+# during warmup (metric=dense_e adapt save_metric=1). There is no pre-built
+# metric step in this pipeline: the scripts that built one (step5e_metric.sh,
+# make_metric.py) have been removed. A local CPU A/B test found that approach
+# ~2.7x slower overall to obtain than identity+adapt with no quality gain, its
+# builder was a crude 100-draw np.cov over a parameter list that no longer
+# matches the model, and a metric from a different data type or model version
+# is actively harmful (wrong dimension, or Cholesky failures).
+#
+# The local real-data workflow does still seed a Pathfinder-built metric --
+# see DR2_TWOPOP.md Step 5e and make_pf_metric.py. That is deliberate and
+# separate; the batch relies on NUM_WARMUP=1000 being enough from identity,
+# which the validated abacus run confirmed (warmup completed in ~4.4 h/chain
+# on CPU without stalling at max treedepth).
 #
 # NUM_WARMUP defaults to 1000 (up from 250) and MAX_DEPTH defaults to 10
 # (Stan's own default, up from a hardcoded 8): an abacus-mock run at the old

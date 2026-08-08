@@ -72,9 +72,12 @@ Two things worth stating explicitly, because both changed:
   `fixed_init`, so step 5d is not in the chain. See `BATCH_MOCKS.md` decision
   #2b, and the Step 5d section below for the fallback when a config has no
   `fixed_init`.
-- **No `metric.json` is required.** `step6_node.sh`/`step6_chain.sh` never pass
-  `metric_file=`; both run from the identity metric with in-warmup adaptation.
-  Step 5e is optional/vestigial.
+- **No metric file is involved at all.** `step6_node.sh`/`step6_chain.sh` never
+  pass `metric_file=`; both start from the identity metric and adapt a dense one
+  during warmup (`NUM_WARMUP=1000`). The scripts that built a metric
+  (`step5e_metric.sh`, `make_metric.py`) have been removed. The local real-data
+  workflow does still seed a Pathfinder metric — see [DR2_TWOPOP.md](DR2_TWOPOP.md)
+  Step 5e — which is deliberate and separate from the batch.
 
 ### Obtaining the FITS file
 
@@ -144,24 +147,6 @@ Wait for it to complete, then verify:
 ls -lh 2color_g
 ```
 
-### Build the metric — optional, not part of the standard workflow
-
-**`step6_node.sh` and `step6_chain.sh` do not read `metric.json`** — both run
-every chain from the identity metric with in-warmup adaptation
-(`metric=dense_e`, no `metric_file=`). Step 5e (below) and this section are
-kept only for manual experimentation; skip them for a normal run. An
-abacus-mock A/B test found the identity-start approach ~2.7x faster overall
-than a Step-5e-built metric with no quality loss (the metric's own
-short-chain/`np.cov` method is fragile — see `step5e_metric.sh`'s own
-comments).
-
-If you do want to experiment with a pre-built metric manually (not needed
-for `step6_node.sh`):
-
-```bash
-sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh   # ~7h
-```
-
 ---
 
 ## Per-Run Workflow
@@ -191,20 +176,10 @@ sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh
 
 Produces: `output/$RUN/optimize.csv`, `output/$RUN/init_MAP.json`
 
-### Step 5e — Build metric (optional, not needed for step6_node.sh)
-
-Skip this — `step6_node.sh` doesn't read `metric.json` (see "Build the
-metric" above). Kept only for manual experimentation:
-
-```bash
-sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh
-```
-
 ### Step 6 — MCMC sampling (4 independent chains, 1 node)
 
 Requires `output/$RUN/init_MAP.json` to exist (written directly by step 4
-when `fixed_init` is set; otherwise by step 5d — not step 5e, see above).
-This script
+when `fixed_init` is set; otherwise by step 5d). This script
 submits a single `step6_node.sh` job (1 node, 4 GPUs, one chain per GPU via
 `CUDA_VISIBLE_DEVICES`) and automatically chains step 7 and step 8 as
 dependencies:
@@ -322,8 +297,9 @@ After the full pipeline completes:
 | `output/$RUN/color_xonly_catalog.fits` | Catalog (x-only model, the default — pass `--full` to step8 for `color_catalog.fits`/`color_cov.h5` too) |
 | `output/$RUN/color_xonly_cov.h5` | (G,G) posterior predictive covariance (x-only). Carries a `d_err_r` HDF5 attribute recording the dust slope uncertainty used — downstream consumers must read that rather than re-deriving it |
 
-`output/$RUN/metric.json` is **not** produced by the standard workflow
-(Step 5e is optional/skipped — see above).
+No `metric.json` is produced: the batch has no metric-building step. Each
+chain's own adapted metric is saved as `output/$RUN/2color_{1..4}_metric.json`
+(`save_metric=1`) for inspection only — nothing reads it back.
 
 ---
 
@@ -334,11 +310,12 @@ After the full pipeline completes:
 | compile | debug | ~5 min |
 | step4 (data prep) | debug | <5 min |
 | step5d (MAP) | debug | ~5 min — **skipped** for any config with `fixed_init` set (step4 writes `init_MAP.json` directly) |
-| step6 (4 chains, 1 node) | regular | depends on dataset size and the `NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure per dataset rather than assuming a fixed figure (walltime is set to 24h; adjust if insufficient) |
+| step6 (4 chains, 1 node) | regular | depends on dataset size and the `NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure per dataset rather than assuming a fixed figure (walltime is set to 24h; adjust if insufficient). For reference, the validated abacus slice took ~6.4 h/chain on **CPU** from the identity metric: ~4.4 h warmup, ~2.1 h sampling |
 | step7 (diagnose) | debug | ~15 min |
-| step8 (predict) | debug | ~5–10 min per slice-scoped run (both scripts request `-q debug -t 0:30:00`) |
+| step8 (predict) | debug | ~5–10 min per slice-scoped run (step7 and step8 both request `-q debug -t 0:30:00`) |
 
-Step 5e is optional (not part of the standard workflow) — skip it.
+There is no step 5e. Warmup from the identity metric is the whole adaptation
+budget, which is why `NUM_WARMUP` dominates step6's wall clock.
 
 **On step8's runtime.** The earlier "~1–4 hours on the regular queue" figure
 predated slice partitioning, when step8's posterior-predictive computation ran

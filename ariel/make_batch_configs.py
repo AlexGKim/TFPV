@@ -27,10 +27,9 @@ whole file's MAIN count, G ~ 91,000 — a ~67 GB dense matrix that cannot finish
 inside step8's 30-minute walltime. Keep --n-subsets at 5 and narrow with
 --subsets.
 
-Optionally seeds each (file, subset) run's output directory with a reusable
-metric.json so step5e (the ~7h metric build) can be skipped entirely — metric.json
-is data-type-level, not per-file or per-subset, so the same one is copied to every
-run dir generated here.
+There is no metric-seeding step: every chain starts from the identity metric and
+adapts a dense one during warmup (see slurm/step6_node.sh). The scripts that
+built a metric have been removed from the batch.
 
 Usage:
     python3 make_batch_configs.py \
@@ -45,7 +44,6 @@ import glob
 import json
 import os
 import re
-import shutil
 import sys
 
 # Run-name token shared with fullmocks_data.py: c<NN>_ph<NN>_r<NN>
@@ -79,11 +77,6 @@ def main():
                              "range(--n-subsets).")
     parser.add_argument("--n-objects", type=int, default=5000,
                         help="Training sample size within each subset (default: 5000)")
-    parser.add_argument("--metric", default=None,
-                        help="Optional metric.json to copy into each output/<run>/ "
-                             "(skips step5e). Typically output/abacus_2color/metric.json. "
-                             "One metric is shared across every file and every subset "
-                             "of the same data type — see BATCH_MOCKS.md decision #3.")
     parser.add_argument("--pattern", default="*.fits",
                         help="Glob pattern for FITS files within --dir (default: *.fits)")
     parser.add_argument("--run-suffix", default="",
@@ -117,9 +110,6 @@ def main():
           f"{subset_indices}")
     with open(args.base) as f:
         base_cfg = json.load(f)
-
-    if args.metric is not None and not os.path.isfile(args.metric):
-        sys.exit(f"ERROR: --metric not found: {args.metric}")
 
     fits_files = sorted(glob.glob(os.path.join(args.dir, args.pattern)))
     if not fits_files:
@@ -163,22 +153,18 @@ def main():
                     json.dump(cfg, f, indent=2)
                 n_written += 1
 
-            # Seed the run's output dir + metric so step5e can be skipped.
+            # Create the run's output dir so step4 has somewhere to write.
             run_dir = os.path.join(args.output_root, run)
             os.makedirs(run_dir, exist_ok=True)
-            if args.metric is not None:
-                dst = os.path.join(run_dir, "metric.json")
-                shutil.copyfile(args.metric, dst)
 
-    n_runs = len(seen_tokens) * args.n_subsets
+    n_runs = len(seen_tokens) * len(subset_indices)
     print("---")
     print(f"FITS files found : {len(fits_files)}")
-    print(f"subsets per file : {args.n_subsets}")
-    print(f"runs (file×subset): {n_runs}")
+    print(f"slice size       : 1/{args.n_subsets} of each file's valid rows")
+    print(f"slices run       : {subset_indices}")
+    print(f"runs (file×slice): {n_runs}")
     print(f"configs written  : {n_written}  (in {args.outdir})")
     print(f"skipped          : {n_skipped}")
-    if args.metric is not None:
-        print(f"metric seeded    : {args.metric} -> {args.output_root}/<run>/metric.json")
 
 
 if __name__ == "__main__":

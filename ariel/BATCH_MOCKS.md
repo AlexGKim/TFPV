@@ -80,19 +80,33 @@ workflow. The following decisions are fixed; do not re-derive them:
    with one dust value in its per-population blocks and another in its
    cross-population terms.
 
-3. **Step 5e (metric build) is optional and NOT part of the standard chain.**
-   `slurm/batch_submit.sh` already excludes it (see its own header comment),
-   and `slurm/step6_node.sh`/`step6_chain.sh` don't read `metric.json` at
-   all — both run every chain from the identity metric with in-warmup
-   adaptation. The `--metric`-seeding steps described below are historical
-   and optional; skip them for a normal run. (The DR1 metric was also never
-   transferable to mocks when metric-seeding *was* used — confirmed
-   empirically: using it caused repeated `cholesky_decompose` failures and
-   ~50s/iteration vs. ~1–2s with a matched metric. Separately, a local CPU
-   A/B test found even a *matched* short-chain-built metric ~2.7x slower
-   overall to obtain than just letting step6 adapt from identity, with no
-   quality gain — reinforcing that metric-seeding isn't worth doing at all
-   now that step6 doesn't need it.)
+3. **There is no metric-building step.** Every chain starts from the
+   **identity metric** and adapts a dense one during warmup
+   (`metric=dense_e adapt save_metric=1`, no `metric_file=`), with
+   `NUM_WARMUP=1000` as the entire adaptation budget. The scripts that built a
+   metric — `slurm/step5e_metric.sh` and `make_metric.py` — have been
+   **deleted**, and `--metric` has been removed from `batch_submit.sh` and
+   `make_batch_configs.py`. This is a deliberate simplification, resting on
+   three findings:
+
+   - A local CPU A/B test found a pre-built metric ~2.7× slower *overall to
+     obtain* than letting step6 adapt from identity, with no quality gain.
+   - The builder was crude (100 post-warmup draws, `np.cov`, no
+     regularization) over a parameter list that no longer matched the model.
+   - A metric from a different data type was actively harmful: the DR1 metric
+     on mocks caused repeated `cholesky_decompose` failures and
+     ~50 s/iteration vs. ~1–2 s with a matched one.
+
+   Warmup from identity is known to be sufficient here: the validated abacus
+   slice completed warmup in ~4.4 h/chain on CPU without stalling at max
+   treedepth. That is only true for the **rank-1** model (`S = w wᵀ`) — the
+   earlier rank-2 parameterization did funnel, which is what Pathfinder
+   seeding was introduced to fix.
+
+   > The **local real-data** workflow still seeds a Pathfinder-built metric —
+   > see [DR2_TWOPOP.md](DR2_TWOPOP.md) Step 5e and `make_pf_metric.py`. That
+   > is retained deliberately and is separate from the batch; only the crude
+   > short-chain builder was removed.
 
 4. **Every mock file is split into `n_subsets` disjoint slices** (see "Subset
    Partition Mode" below) — this isn't just for the one oversized 170k-galaxy
@@ -123,7 +137,7 @@ workflow. The following decisions are fixed; do not re-derive them:
    > 30-minute walltime. Keep `--n-subsets 5` and narrow with `--subsets`.
 
 5. **Per-(file, slice) chain:** `step4 → step6 ×4 → step7 → step8`
-   (no step5d — see #2b; no step5e — see #3). **Cost implication:** with
+   (no step5d — see #2b; no metric step — see #3). **Cost implication:** with
    `--subsets 0` the totals are `n_files` runs and `n_files × 4` step6 chains
    — for 125 files, **125 runs and 500 step6 chains**. (Running all five
    slices would be 625 runs / 2500 chains; see "Runtime / cost notes".)
@@ -157,7 +171,7 @@ sizes so far are comparable to the `base` family's single-subset scale).
 |----------|------|
 | `configs/abacus_2color.json` | Base config: frozen selection cuts + `fixed_init` + test fits file. |
 | `configs/fixed_init_2color.json` | Frozen physical-unit init values (`slope_orig`, `intercept_orig`, `sigma_int_x`, `w`, ...) from a hand-validated MAP fit; transformed per-run into standardized coordinates by `desi_data.py`, skipping step5d. |
-| `make_batch_configs.py` | Generate per-(file, subset) configs from a mock dir (`--n-subsets`, default 5) for the `base`/fullmocks family. `--metric` is accepted but no longer needed (step6 doesn't read it). |
+| `make_batch_configs.py` | Generate per-(file, slice) configs from a mock dir. `--n-subsets` sets the slice size (5), `--subsets` which slices run (`0`). |
 | `make_spec_batch_configs.py` | Generate per-file configs for the `spec`/DESI-source family, re-deriving slope_plane/intercepts per file from its own MLE fit. |
 | `slurm/batch_submit.sh` | Submit the full dependency chain per run (`--debug` for plumbing test). |
 | `slurm/batch_status.sh` | Aggregate sentinel completion across all runs in a config dir. |
@@ -179,8 +193,8 @@ export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 #   sbatch slurm/compile_2color_gpu.sh
 ```
 
-No metric-seeding step — `step6_node.sh`/`step6_chain.sh` don't read
-`metric.json` (see Mock Batch Overview decision #3).
+No metric-seeding step — chains start from the identity metric and adapt
+during warmup (see Mock Batch Overview decision #3).
 
 ---
 
@@ -278,7 +292,9 @@ is safe to re-run to pick up failed/incomplete (file, subset) runs.
 `color_xonly_cov.h5` (x-only is the default; pass `--full` to step8 for
 `color_catalog.fits`/`color_cov.h5` too), `explore_residuals/`, and the
 `.step*_done` sentinels.
-No `metric.json` (step5e is optional/skipped — see Mock Batch Overview).
+No `metric.json` — there is no metric-building step (see decision #3). Each
+chain's own adapted metric is saved as `2color_{1..4}_metric.json` for
+inspection; nothing reads it back.
 
 Step 8 runs `color_predict.py` first and `explore_residuals.py` second, so the
 catalog and covariance are already written before any residual plot is
@@ -352,8 +368,9 @@ Totals below assume the `--subsets 0` mode: **125 runs** for 125 mock files.
   `explore_residuals.py`, dominated by the O(G²) covariance) — per (file,
   subset). Each run's `color_xonly_cov.h5` is ~1.17 GB, so budget ~150 GB of
   scratch for a 125-run batch; `--no-cov` skips it.
-- **step5e is optional and skipped by default** (see decision #3 above) — it
-  is not part of the GPU-hour budget for a normal batch.
+- **There is no metric-building step** (see decision #3), so nothing beyond
+  step4/6/7/8 contributes to the budget. Warmup from identity is the whole
+  adaptation cost, which is why `NUM_WARMUP` dominates step6's wall clock.
 
 ---
 

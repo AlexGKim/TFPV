@@ -20,7 +20,8 @@ map, dependency graph, and a symptom → diagnosis → fix catalogue.
 The pipeline fits a two-color Tully-Fisher Relation (TFR) model to DESI galaxy
 data using Stan (CmdStan). Of its numbered steps, only **4, 6, 7, 8** run on
 NERSC in the current chain — step 5d is skipped whenever a config sets
-`fixed_init`, and step 5e is vestigial.
+`fixed_init`, and there is no step 5e (the metric-building scripts were
+removed).
 
 **Model:** `2color.stan` — quadrivariate (x̂, ŷ, ẑ, ĝ) TFR with two independent
 latent color factors (r–z and g–r), and a **rank-1** intrinsic covariance
@@ -33,11 +34,15 @@ dense metric.)
 `step6_chain.sh` handle this by running from the identity metric with
 in-warmup dense-metric adaptation (`metric=dense_e adapt save_metric=1`, no
 pre-built `metric_file=`) and `NUM_WARMUP=1000`/`MAX_DEPTH=10` (both
-env-overridable). A separate pre-built-metric step (5e, below) exists but is
-**not** read by step6 and is optional/historical — an empirical local A/B
-test found it ~2.7x slower overall to obtain than just letting step6 adapt
-from scratch, with no quality gain (its own metric-building method is a
-crude 100-draw short-chain `np.cov`, prone to the same fragility).
+env-overridable). There is **no pre-built-metric step in the batch** — the
+scripts that built one (`step5e_metric.sh`, `make_metric.py`) have been
+deleted. A local A/B test found that approach ~2.7x slower overall to obtain
+than letting step6 adapt from scratch, with no quality gain, and its builder
+was a crude 100-draw `np.cov` over a stale parameter list. Warmup from
+identity suffices for the rank-1 model: the validated abacus slice finished
+warmup in ~4.4 h/chain on CPU without stalling at max treedepth. (The local
+real-data workflow does still seed a Pathfinder metric — DR2_TWOPOP.md
+Step 5e — which is separate from the batch.)
 
 ---
 
@@ -47,7 +52,6 @@ crude 100-draw short-chain `np.cov`, prone to the same fragility).
 |------|--------|--------|---------|------|-------|
 | 4 | `slurm/step4_data.sh` | config JSON, FITS file | `input.json`, `init.json`, and (if config sets `fixed_init`) `init_MAP.json` directly | <5 min | debug |
 | 5d *(skipped if config sets `fixed_init`)* | `slurm/step5d_map.sh` | `input.json`, `init.json` | `optimize.csv`, `init_MAP.json` | ~5 min | debug GPU |
-| 5e *(optional, unused by step6)* | `slurm/step5e_metric.sh` | `input.json`, `init_MAP.json` | `2color_metric_build.csv`, `metric.json` | ~7 h | regular GPU |
 | 6 | `slurm/step6_node.sh` (1 node, 4 GPUs, 4 chains, identity metric + adapt) | `input.json`, `init_MAP.json` | `2color_{1..4}.csv`, `2color_metric_{1..4}.json` (each chain's own adapted metric, `save_metric=1`) | dataset-dependent (`NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure, don't assume a fixed figure) | regular GPU |
 | 7 | `slurm/step7_diagnose.sh` | `2color_?.csv` | `stansummary.txt`, `diagnose.txt`, `2color.png` | ~15 min | debug CPU |
 | 8 | `slurm/step8_predict.sh` (`color_predict.py`, then `explore_residuals.py`) | config, `input.json`, `2color_?.csv` | `color_xonly_catalog.fits`, `color_xonly_cov.h5` (x-only default; `--full` adds `color_catalog.fits`/`color_cov.h5`), `explore_residuals/` | ~5–10 min per slice-scoped run (mostly the O(G²) covariance; ~1.17 GB `.h5` each) | debug CPU |
@@ -73,7 +77,7 @@ FITS catalog
                  |    -> init_MAP.json)
                  |
                  └── step6 (1 node, 4 GPUs, 4 chains via CUDA_VISIBLE_DEVICES,
-                     identity metric + in-warmup adapt -- step5e not required)
+                     identity metric + in-warmup adapt -- no metric file)
                              ├── 2color_1.csv
                              ├── 2color_2.csv
                              ├── 2color_3.csv
@@ -83,12 +87,10 @@ FITS catalog
                                                  then explore_residuals.py)
 ```
 
-Step 5e (`2color_g sample`, 1 chain → `metric.json`) exists as an optional
-side branch off `init_MAP.json`, not on the critical path — step6 never
-reads its output. Historically, when metric-seeding *was* used, a metric was
-reusable only **within the same data type** (the DR1 metric must not be used
-for AbacusSummit mocks; see failure mode below) — that caveat is now moot
-for the standard workflow since step6 doesn't consume `metric.json` at all.
+There is no metric side branch: the batch has no metric-building step at all
+(see BATCH_MOCKS.md decision #3). Each chain saves its own adapted metric as
+`2color_{1..4}_metric.json` via `save_metric=1`, for inspection only —
+nothing reads it back.
 
 ---
 
@@ -198,8 +200,8 @@ If treedepth saturation (not divergences) dominates, `MAX_DEPTH` (default 10)
 is already at Stan's own ceiling — the model's near-singular free-covariance
 posterior is genuinely expensive there; consider whether the dataset's
 selection cuts or training-sample size are unusually degenerate for this
-run. Building a metric via the optional `step5e_metric.sh` is not expected
-to help — its own metric-building method has the same fragility (see
+run. Pre-building a metric is not an option here (those scripts were
+removed) and would not be expected to help — see
 Pipeline Overview) and an empirical A/B test found it slower overall with no
 quality gain.
 
@@ -368,7 +370,6 @@ Good convergence: R̂ < 1.01 for all parameters, ESS > 100 per chain.
 | Script | Purpose |
 |--------|---------|
 | `make_map_init.py --run $RUN` | Parse `optimize.csv` → `init_MAP.json` |
-| `make_metric.py --run $RUN` | Compute covariance from short CSV → `metric.json` |
 | `slurm/check_status.sh $CONFIG` | Show which steps are done/missing |
 | `slurm/step6_submit.sh $CONFIG` | Submit step6_node.sh (4 chains, 1 node) + auto-chain steps 7 and 8 |
 
@@ -380,7 +381,6 @@ Good convergence: R̂ < 1.01 for all parameters, ESS > 100 per chain.
 # Any single step:
 sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
 sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh       # only if config has no fixed_init
-sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh    # optional, unused by step6
 sbatch --export=CONFIG=$CONFIG slurm/step6_node.sh       # all 4 chains, 1 node/4 GPUs
 sbatch --export=CONFIG=$CONFIG,CHAIN_ID=1 slurm/step6_chain.sh  # just chain 1
 sbatch --export=CONFIG=$CONFIG slurm/step7_diagnose.sh

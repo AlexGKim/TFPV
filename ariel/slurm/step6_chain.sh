@@ -14,8 +14,8 @@
 # Usage: sbatch --export=CONFIG=configs/dr1_v6_2color.json,CHAIN_ID=1 slurm/step6_chain.sh
 # Requires: output/$RUN/input.json, init_MAP.json (step 4 done -- step4 writes
 # init_MAP.json directly when the config sets "fixed_init"; step5d_map.sh is
-# only needed for configs without a fixed_init). metric.json (step 5e) is
-# optional/unused by default -- see step6_node.sh's header comment.
+# only needed for configs without a fixed_init). No pre-built metric file is
+# needed or accepted -- see step6_node.sh's header comment.
 #
 # DEBUG mode: set DEBUG=1 (e.g. --export=...,DEBUG=1) to run a tiny 10+10 chain
 # that still writes the standard 2color_${CHAIN_ID}.csv so step7/step8 can consume
@@ -50,21 +50,22 @@ if [ "${DEBUG:-0}" = "1" ]; then
     echo "Step 6: DEBUG mode — no adaptation, max_depth=1, fixed stepsize ${STEPSIZE:-0.08}, "\
 "$NUM_SAMPLES samples (results not science-grade)"
 else
-    NUM_WARMUP=${NUM_WARMUP:-250}
+    # These MUST match step6_node.sh's non-debug defaults. This script exists to
+    # resubmit a single failed chain alongside three that step6_node.sh already
+    # produced, so different settings here would yield a chain that is not
+    # comparable to its siblings and would corrupt the combined posterior. They
+    # previously diverged (250 warmup / max_depth=8 here vs 1000 / 10 there).
+    NUM_WARMUP=${NUM_WARMUP:-1000}
     NUM_SAMPLES=${NUM_SAMPLES:-1000}
-    # delta=0.9 (up from Stan's default 0.8): the rank-2 S / Householder
-    # null-direction geometry produces tight posterior curvature that drives
-    # a non-trivial divergence/rejection rate at the default delta -- can
-    # otherwise stall warmup for hours near a boundary (see step6_node.sh).
-    # delta=0.95 was tried first but found impractically slow for the
-    # irregular population locally (steeply non-linear wall-clock cost), so
-    # 0.9 is the compromise. Matches the local DR2_TWOPOP.md fix.
+    MAX_DEPTH=${MAX_DEPTH:-10}
+    # delta=0.9 (up from Stan's default 0.8): tight posterior curvature drives a
+    # non-trivial divergence/rejection rate at the default delta, and can stall
+    # warmup for hours near a boundary (see step6_node.sh). delta=0.95 was tried
+    # and found impractically slow (steeply non-linear wall-clock cost), so 0.9
+    # is the compromise. Matches the local DR2_TWOPOP.md fix.
     DELTA=${DELTA:-0.9}
     ADAPT_ARGS="adapt delta=$DELTA save_metric=1"
-    # max_depth=8 (vs Stan's default 10): the free-covariance posterior is
-    # near-singular and NUTS saturates treedepth, so depth 10 costs up to
-    # 1023 leapfrog steps/iteration (~4x depth 8) for little extra mixing.
-    ENGINE_ARGS="engine=nuts max_depth=8"
+    ENGINE_ARGS="engine=nuts max_depth=$MAX_DEPTH"
     STEPSIZE_ARG=""
 fi
 
