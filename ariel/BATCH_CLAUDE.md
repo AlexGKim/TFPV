@@ -2,17 +2,32 @@
 
 This file provides structured context for a Claude session on NERSC to understand
 the 2COLOR batch pipeline, debug failures, and assist with re-runs — without
-needing to re-read all source files.
+needing to re-read all source files. It is the **troubleshooting layer**: step
+map, dependency graph, and a symptom → diagnosis → fix catalogue.
+
+| You are running | Where | Doc |
+|---|---|---|
+| AbacusSummit mocks, as a batch | NERSC | [BATCH_MOCKS.md](BATCH_MOCKS.md) — design decisions, config generation, submission. **Start there.** |
+| the mechanics of one run's steps | NERSC | [BATCH_NERSC.md](BATCH_NERSC.md) |
+| diagnosing a failure | NERSC | **this file** |
+| real DR2 data, whole catalog | locally | [DR2_SINGLE.md](DR2_SINGLE.md) |
+| real DR2 data, split by morphology | locally | [DR2_TWOPOP.md](DR2_TWOPOP.md) |
 
 ---
 
 ## Pipeline Overview
 
 The pipeline fits a two-color Tully-Fisher Relation (TFR) model to DESI galaxy
-data using Stan (CmdStan). It has 8 steps; only steps 4–8 run on NERSC.
+data using Stan (CmdStan). Of its numbered steps, only **4, 6, 7, 8** run on
+NERSC in the current chain — step 5d is skipped whenever a config sets
+`fixed_init`, and step 5e is vestigial.
 
 **Model:** `2color.stan` — quadrivariate (x̂, ŷ, ẑ, ĝ) TFR with two independent
-latent color factors (r–z and g–r). 17 sampling parameters.
+latent color factors (r–z and g–r), and a **rank-1** intrinsic covariance
+`S = w wᵀ` over (y,z,g). **13 sampling parameters**: `slope_std`,
+`intercept_std`, `sigma_int_x`, `w[3]`, `delta_c`, `mu_c`, `delta_g`, `mu_g`,
+and three `alpha_kcorr_*`. (`make_pf_metric.py` accordingly builds a 13×13
+dense metric.)
 
 **Key constraint:** The model has condition number ~2.7M. `step6_node.sh`/
 `step6_chain.sh` handle this by running from the identity metric with
@@ -79,15 +94,26 @@ for the standard workflow since step6 doesn't consume `metric.json` at all.
 
 ## Config File
 
-Location: `configs/dr1_v6_2color.json`
+Referred to as `$CONFIG` throughout. Mock-batch configs are generated into
+`configs/batch_*/` by `make_batch_configs.py`; the reference validation config
+is `configs/abacus_subsets/abacus_2color_s00.json`.
 
 Key fields:
-- `"run"`: output directory name → `output/DR1_v6_2color/`
-- `"fits_file"`: input FITS path (relative to ariel/)
+- `"run"`: output directory name → `output/<run>/`
+- `"fits_file"`: input FITS path (relative to ariel/, or absolute for CFS mocks)
 - `"exe"`: Stan binary name (base; GPU variant is `2color_g`)
 - `"haty_min"`, `"haty_max"`: magnitude selection window
 - `"z_obs_min"`, `"z_obs_max"`: redshift window
-
+- `"slope_plane"`, `"intercept_plane"`, `"intercept_plane2"`: oblique cut geometry
+- `"fixed_init"`: path to frozen physical-unit init values. **When present,
+  step 4 writes `init_MAP.json` itself and step 5d is not run.**
+- `"n_subsets"`, `"subset_index"`: slice partitioning. `n_subsets` sets the
+  slice *size*; `subset_index` picks which slice. The mock batch uses
+  `n_subsets=5, subset_index=0`.
+- `"n_objects"`: training sample size within the slice (5000)
+- `"random_seed"`: 42 — fixes both the slice split and the training draw
+- `"dust_pickle"`: DR2 only. Mocks instead carry `d_err_r` in the FITS header
+  (`A_R_ERR` / `DSTCFF_R_ERR`), read per file.
 
 All pipeline scripts accept `--config $CONFIG` or `--run $RUN`.
 
@@ -188,25 +214,70 @@ and have 1000 samples each:
 ```bash
 grep -c "^[^#]" output/$RUN/2color_?.csv
 ```
-Expected output: `1000` for each file (plus 1 for the header).
+Expected output: `1001` for each file — 1000 draws plus the CSV header row.
 
 **Fix:** If chains are truncated (time limit), re-run step6 for missing chains
 (`sbatch --export=CONFIG=$CONFIG slurm/step6_node.sh` for all 4, or
 `slurm/step6_chain.sh` with `CHAIN_ID=N` for just one). If all 4 chains
 completed but R̂ is still high, increase `num_warmup` (edit
-`slurm/step6_node.sh`'s default, or pass `NUM_WARMUP=500` via `--export`).
+`slurm/step6_node.sh`'s default, or pass e.g. `NUM_WARMUP=2000` via
+`--export`). Note the default is already **1000**, so `NUM_WARMUP=500` would
+be a decrease — that suggestion dates from the old 250 default.
 
 ---
 
 ### Step 8: Memory error in `color_predict.py`
 
-**Symptom:** Python OOM error during covariance matrix computation.
+**Symptom:** Python OOM error (or SIGKILL / exit 137) during the posterior
+predictive or covariance computation.
 
-**Fix:** Run without covariance first:
+**Diagnosis:** Check the galaxy count the run is working over. Both the
+O(draws × galaxies) prediction and the O(G²) covariance must be **scoped to the
+run's slice**. If the config lacks `n_subsets`/`subset_index`, nothing is
+scoped: G becomes the whole file's MAIN count (≈91,000 for the reference mock →
+a ~67 GB dense matrix). `color_predict._slice_mask()` does the scoping, keyed on
+`slice_sga_ids` in `input.json` — if that key is absent, step 4 was run by code
+predating slice partitioning and must be re-run.
+
+**Fix:** Confirm the config carries the partition fields, re-run step 4, then
+step 8. To skip the covariance entirely:
 ```bash
-sbatch --export=CONFIG=$CONFIG slurm/step8_predict.sh
-# or manually:
 python color_predict.py --config $CONFIG --model 2color --no-cov
+```
+
+---
+
+### Step 8: covariance built with the wrong dust value
+
+**Symptom:** No error — the run completes and the covariance looks fine, but its
+dust off-diagonal term is wrong. This is the silent failure
+`color_predict.resolve_d_err_r()` exists to prevent.
+
+**Diagnosis:** Step 8 logs which source supplied `d_err_r`:
+```bash
+grep -E "Loaded d_err_r|WARNING: no dust_pickle" slurm/logs/step8_predict_*.out
+```
+- `Loaded d_err_r = … mag from FITS header A_R_ERR of …` — correct for mocks.
+- `Loaded d_err_r = … mag from data/loa_internalDust_…pickle` — correct for DR2.
+- `WARNING: no dust_pickle in config and no A_R_ERR/DSTCFF_R_ERR in the FITS
+  header …` — **fell through to the built-in iron default 0.17680325, which is
+  wrong for both mocks and DR2.** Getting it wrong by the DR2 margin
+  (0.1768 vs 0.2173) scales the dust variance by ~1.5.
+
+**Fix:** For a mock, confirm the FITS header actually carries `A_R_ERR` or
+`DSTCFF_R_ERR` on HDU 1. For DR2, confirm the config sets `dust_pickle` *and*
+that it reached `color_predict.py` — it reads `output/$RUN/config.json`, so a
+key added to the pipeline config after step 4 last ran needs either a step-4
+re-run or the `--config` overlay (which logs `config overlay: dust_pickle = …`).
+Then re-run step 8.
+
+Step 8 records the value it used as a `d_err_r` attribute on
+`color_xonly_cov.h5`. `combine_color_xonly.py` reads that attribute rather than
+re-deriving it — re-deriving is how a combined product once ended up with one
+dust value in its per-population blocks and another in its cross-population
+terms. Inspect it with:
+```bash
+python3 -c "import h5py,sys; f=h5py.File(sys.argv[1]); print(dict(f.attrs))" output/$RUN/color_xonly_cov.h5
 ```
 
 ---
@@ -271,18 +342,22 @@ From `stansummary.txt` or corner plot `2color.png`:
 
 | Parameter | Meaning |
 |-----------|---------|
-| `slope` | TFR slope |
-| `Sc_scale.1`, `Sc_scale.2` | Rank-2 chromatic intrinsic scatter scales |
-| `Sc_Lcorr.2.1` | The single free entry of the 2×2 chromatic correlation Cholesky |
-| `n_null.1/.2/.3` | Free null direction of the rank-2 intrinsic covariance |
+| `slope` | TFR slope (physical units; `slope_std` is its standardized form) |
+| `sigma_int_x` | Intrinsic scatter in x |
+| `w.1/.2/.3` | Rank-1 intrinsic-scatter loading over (y,z,g); `S = w wᵀ` |
+| `w_norm` | \|w\| — magnitude of the single scatter axis (~0.35 mag) |
+| `scatter_angle_deg` | Angle between the scatter direction and the achromatic axis |
 | `delta_c`, `delta_g` | Color–velocity slopes (mean structure) |
+| `mu_c`, `mu_g` | Mean colors at `x = x_bar` |
 | `alpha_kcorr_r`, `alpha_kcorr_z`, `alpha_kcorr_g` | Band k-correction slopes |
 
-(`gamma`/`gamma_g`/`tau_c`/`tau_g` from the old gamma-tau parameterization no
-longer exist in the current `2color.stan` — see `2color.stan`'s header
-comment for the free-null rank-2 covariance model.) No "expected" reference
-values are recorded here since they're dataset-dependent — compare against a
-previous successful run of the *same* dataset/config, not a fixed table.
+Two earlier parameterizations are gone and their names will not appear:
+`gamma`/`gamma_g`/`tau_c`/`tau_g` (the gamma-tau form), and
+`Sc_scale.1/.2`/`Sc_Lcorr.2.1`/`n_null.1/.2/.3` (the rank-2 free-null
+covariance, replaced by the rank-1 `S = w wᵀ` in `2color.stan`). If you see
+those in a `stansummary.txt`, the chains predate the current model. No
+"expected" reference values are recorded here since they're dataset-dependent —
+compare against a previous successful run of the *same* dataset/config.
 
 Good convergence: R̂ < 1.01 for all parameters, ESS > 100 per chain.
 
@@ -303,17 +378,17 @@ Good convergence: R̂ < 1.01 for all parameters, ESS > 100 per chain.
 
 ```bash
 # Any single step:
-sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step4_data.sh
-sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5d_map.sh       # only if config has no fixed_init
-sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step5e_metric.sh    # optional, unused by step6
-sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step6_node.sh       # all 4 chains, 1 node/4 GPUs
-sbatch --export=CONFIG=configs/dr1_v6_2color.json,CHAIN_ID=1 slurm/step6_chain.sh  # just chain 1
-sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step7_diagnose.sh
-sbatch --export=CONFIG=configs/dr1_v6_2color.json slurm/step8_predict.sh
+sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
+sbatch --export=CONFIG=$CONFIG slurm/step5d_map.sh       # only if config has no fixed_init
+sbatch --export=CONFIG=$CONFIG slurm/step5e_metric.sh    # optional, unused by step6
+sbatch --export=CONFIG=$CONFIG slurm/step6_node.sh       # all 4 chains, 1 node/4 GPUs
+sbatch --export=CONFIG=$CONFIG,CHAIN_ID=1 slurm/step6_chain.sh  # just chain 1
+sbatch --export=CONFIG=$CONFIG slurm/step7_diagnose.sh
+sbatch --export=CONFIG=$CONFIG slurm/step8_predict.sh
 
 # All 4 chains + auto-chain steps 7 and 8:
-bash slurm/step6_submit.sh configs/dr1_v6_2color.json
+bash slurm/step6_submit.sh $CONFIG
 
 # Clear a sentinel to force re-run:
-rm output/DR1_v6_2color/.step6_chain2_done
+rm output/$RUN/.step6_chain2_done
 ```

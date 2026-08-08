@@ -1,8 +1,23 @@
 # Running the 2COLOR Pipeline on NERSC Perlmutter
 
-This runbook covers Phase B of the 2COLOR workflow — the batch steps that run on
-Perlmutter. Phase A (selection ellipse, fiducial setting, config export) is done
-locally and results in a committed config file such as `configs/dr1_v6_2color.json`.
+This runbook is the **mechanics layer**: how to run the batch steps on
+Perlmutter for *any* config. It is deliberately dataset-agnostic — everything
+below is expressed in terms of `$CONFIG`.
+
+Where configs come from, and which doc owns what:
+
+| You are running | Where | Doc |
+|---|---|---|
+| AbacusSummit mocks, as a batch | NERSC | [BATCH_MOCKS.md](BATCH_MOCKS.md) — design decisions, config generation, submission. **Start there**; it defines the frozen cuts/init, slice partitioning, and the s00-only mode. |
+| the mechanics of one run's steps | NERSC | **this file** |
+| diagnosing a failure | NERSC | [BATCH_CLAUDE.md](BATCH_CLAUDE.md) — step map, dependency graph, failure catalog |
+| real DR2 data, whole catalog | locally | [DR2_SINGLE.md](DR2_SINGLE.md) |
+| real DR2 data, split by morphology | locally | [DR2_TWOPOP.md](DR2_TWOPOP.md) |
+
+Phase A (selection ellipse, fiducial setting, config export) is a local,
+human-in-the-loop step and is **not** part of this runbook. For the mock batch
+it does not happen at all — the cuts are frozen and shared
+(`BATCH_MOCKS.md` decision #2). For real data see the two DR2 docs.
 
 ---
 
@@ -32,44 +47,69 @@ on Perlmutter (otherwise `make` fails with a missing `libOpenCL` error).
 ### 3. Set your config
 
 ```bash
-export CONFIG=configs/dr1_v6_2color.json
+export CONFIG=configs/<your_run>.json
 ```
 
-### 4. Data file prerequisites
+For a mock batch these are generated — see `BATCH_MOCKS.md` "Full Batch Run".
+For the reference validation run it is
+`configs/abacus_subsets/abacus_2color_s00.json`.
 
-| File | In repo? | Contents | Notes |
-|------|----------|----------|-------|
-| `configs/dr1_v6_2color.json` | yes | Selection cuts (magnitude window, redshift range, color limit, ellipse geometry) produced by Phase A | Already committed |
-| `data/SGA-2020_iron_Vrot_VI_corr_v6.fits` | **no** | Raw DESI galaxy catalog (~9 MB) | Must be present on NERSC scratch; only needed if re-running step 4 |
-| `output/DR1_v6_2color/input.json` | yes | Stan data arrays: x, σ_x, y, σ_y, z_obs, g, σ_g for ~4728 selected galaxies, plus bounds and mean_x/sd_x | Output of step 4; committed to allow skipping step 4 |
-| `output/DR1_v6_2color/init_MAP.json` | yes | Stan parameter starting values at the MAP optimum: slope, intercept, scatter terms, color slopes, k-corrections | Output of step 5d; committed to allow skipping step 5d |
-| `output/DR1_v6_2color/metric.json` | yes | 17×17 inverse mass matrix (parameter covariance) for HMC | Output of step 5e — **not actually read by `step6_node.sh`/`step6_chain.sh`** (neither passes `metric_file=`; both run from the identity metric with in-warmup adaptation). Step 5e is optional/vestigial, kept only for `step6_chain.sh --debug`-style manual experiments. |
-| `2color_g` (binary) | **no** | Compiled Stan GPU executable | Must be built on Perlmutter; see One-Time Setup below |
+### 4. Prerequisites, by step
 
-For the initial test run with `DR1_v6_2color`, the two committed output files mean **steps 4 and 5d can be skipped** — go straight to step 6. Step 5e was never a real prerequisite (see above).
+| Needed by | What | In repo? |
+|---|---|---|
+| step 4 | `$CONFIG` | yes — generated or committed |
+| step 4 | the FITS file at the config's `fits_file` | **no** — must exist on NERSC (CFS path or `data/`; see "Obtaining the FITS file") |
+| step 4 | `configs/fixed_init_2color.json`, if the config sets `fixed_init` | yes |
+| step 4 | the config's `dust_pickle`, if set (DR2 only; mocks read the value from the FITS header instead) | yes |
+| step 6 | `output/$RUN/input.json` + `init_MAP.json` | no — produced by step 4 |
+| step 6 | `2color_g` (compiled Stan GPU binary) | **no** — build on Perlmutter, see One-Time Setup |
+| step 7/8 | `output/$RUN/2color_?.csv` | no — produced by step 6 |
+
+Two things worth stating explicitly, because both changed:
+
+- **step 4 now produces `init_MAP.json` itself** whenever the config sets
+  `fixed_init`, so step 5d is not in the chain. See `BATCH_MOCKS.md` decision
+  #2b, and the Step 5d section below for the fallback when a config has no
+  `fixed_init`.
+- **No `metric.json` is required.** `step6_node.sh`/`step6_chain.sh` never pass
+  `metric_file=`; both run from the identity metric with in-warmup adaptation.
+  Step 5e is optional/vestigial.
 
 ### Obtaining the FITS file
 
-The FITS file is not in the repo. Transfer it to NERSC scratch before running step 4:
+FITS files are not in the repo. Mock batches usually read them straight from
+CFS (`make_batch_configs.py --dir …` writes absolute paths into each config, so
+no copying is needed). For anything else, transfer it to the repo's `data/`
+before running step 4:
 
 ```bash
 # From your local Mac:
-scp data/SGA-2020_iron_Vrot_VI_corr_v6.fits \
-    perlmutter.nersc.gov:$SCRATCH/TFPV/ariel/data/
+scp data/<catalog>.fits perlmutter.nersc.gov:<repo>/data/
 ```
 
-Or if it is already on NERSC from a previous run, confirm it is in place:
+Then confirm it is in place and matches:
 
 ```bash
-ls -lh $SCRATCH/TFPV/ariel/data/SGA-2020_iron_Vrot_VI_corr_v6.fits
+ls -lh <repo>/data/<catalog>.fits
+md5sum <repo>/data/<catalog>.fits     # compare against the local md5
 ```
 
 ### Obtaining the config file (Phase A)
 
-The config file encodes the selection cuts chosen interactively on your local Mac.
-For `DR1_v6_2color` this is already done and committed — no action needed.
+The config encodes selection cuts chosen interactively on your local Mac.
 
-For a **new dataset**, Phase A must be run locally first:
+**For the mock batch this section does not apply** — cuts and init are frozen
+and shared, configs are generated by `make_batch_configs.py`, and Phase A is
+explicitly not part of that pipeline (`BATCH_MOCKS.md` decisions #2, #2b).
+
+For a **new real dataset**, Phase A must be run locally first. Note that
+`export_config.py` prompts only for the keys it manages: `dust_pickle`,
+`train_fraction`, `fixed_init`, and the partition fields
+(`n_subsets`/`subset_index`/`n_objects`) must be added by hand. It does
+preserve keys it does not manage on a *re-*export. See
+[DR2_TWOPOP.md](DR2_TWOPOP.md) Step 3b, which also documents the `fits_file`
+placeholder that must be force-corrected after export.
 
 ```bash
 # On local Mac, from ariel/:
@@ -112,8 +152,8 @@ every chain from the identity metric with in-warmup adaptation
 kept only for manual experimentation; skip them for a normal run. An
 abacus-mock A/B test found the identity-start approach ~2.7x faster overall
 than a Step-5e-built metric with no quality loss (the metric's own
-short-chain/`np.cov` method is fragile — see the warning this section used
-to lead with, now folded into `step5e_metric.sh`'s own comments).
+short-chain/`np.cov` method is fragile — see `step5e_metric.sh`'s own
+comments).
 
 If you do want to experiment with a pre-built metric manually (not needed
 for `step6_node.sh`):
@@ -242,6 +282,22 @@ sbatch --export=CONFIG=$CONFIG slurm/step7_diagnose.sh
 sbatch --export=CONFIG=$CONFIG slurm/step8_predict.sh
 ```
 
+Step 8 runs `color_predict.py` then `explore_residuals.py`, in that order, so a
+residual-plot failure cannot cost the run its catalog and covariance.
+
+**Always check step 8's dust line.** The covariance's dust term depends on
+`d_err_r`, resolved by `color_predict.resolve_d_err_r()` from the config's
+`dust_pickle`, else the FITS header `A_R_ERR` / `DSTCFF_R_ERR`, else a built-in
+iron default that is wrong for both mocks and DR2:
+
+```bash
+grep -E "Loaded d_err_r|WARNING: no dust_pickle" slurm/logs/step8_predict_*.out
+```
+
+A `Loaded d_err_r = …` line names the source that won. A
+`WARNING: no dust_pickle …` line means it fell through to the iron default and
+the covariance is wrong — see `BATCH_MOCKS.md` decision #2c.
+
 ### Check which steps are missing
 
 ```bash
@@ -262,9 +318,9 @@ After the full pipeline completes:
 | `output/$RUN/stansummary.txt` | Convergence summary (R̂, ESS) |
 | `output/$RUN/diagnose.txt` | Divergence and treedepth diagnostics |
 | `output/$RUN/2color.png` | Corner plot |
-| `output/$RUN/explore_residuals/` | Residual-vs-galaxy-property diagnostic plots |
-| `output/$RUN/color_xonly_catalog.fits` | Catalog (x-only model, the default — pass `--full` to step8 for `color_catalog.fits`/`color_cov.fits` too) |
-| `output/$RUN/color_xonly_cov.h5` | (G,G) posterior predictive covariance (x-only) |
+| `output/$RUN/explore_residuals/` | Residual-vs-galaxy-property diagnostic plots — produced by **step 8**, after `color_predict.py` (not step 7) |
+| `output/$RUN/color_xonly_catalog.fits` | Catalog (x-only model, the default — pass `--full` to step8 for `color_catalog.fits`/`color_cov.h5` too) |
+| `output/$RUN/color_xonly_cov.h5` | (G,G) posterior predictive covariance (x-only). Carries a `d_err_r` HDF5 attribute recording the dust slope uncertainty used — downstream consumers must read that rather than re-deriving it |
 
 `output/$RUN/metric.json` is **not** produced by the standard workflow
 (Step 5e is optional/skipped — see above).
@@ -291,6 +347,6 @@ over every valid row of the whole catalog. It is now scoped to the run's slice
 laptop for a 34,156-row slice of the 170k-row reference mock. Most of that is
 the O(G²) covariance, not the prediction: with G ≈ 18,200 MAIN galaxies the
 dense matrix is ~2.6 GB in float64 and lands as a **~1.17 GB gzipped float32
-`.h5`** per run — budget roughly **730 GB of scratch for a 625-run batch**
-(plus ~33 GB of catalogs). Pass `--no-cov` to skip it if that footprint is a
-problem for a given batch.
+`.h5`** per run — budget roughly **150 GB of scratch for a 125-run batch**
+(one slice per file, plus ~7 GB of catalogs). Pass `--no-cov` to skip it if that
+footprint is a problem for a given batch.

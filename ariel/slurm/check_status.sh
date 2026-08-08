@@ -8,7 +8,11 @@ RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
 echo "Status for run: $RUN"
 echo "---"
 
-STEPS=(step4 step5e step6_chain1 step6_chain2 step6_chain3 step6_chain4 step7 step8)
+# step5d and step5e are deliberately absent: step5d is skipped whenever the
+# config sets "fixed_init" (step4 writes init_MAP.json itself) and step5e is
+# vestigial (step6 never reads metric.json). Listing either made a fully
+# complete run report MISSING forever. Matches batch_status.sh.
+STEPS=(step4 step6_chain1 step6_chain2 step6_chain3 step6_chain4 step7 step8)
 ALL_DONE=true
 for step in "${STEPS[@]}"; do
     if [ -f "output/$RUN/.${step}_done" ]; then

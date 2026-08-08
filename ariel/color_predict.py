@@ -88,8 +88,10 @@ def resolve_d_err_r(cfg, fits_path=None):
        mocks produced for the NERSC batch.
     3. FITS header ``DSTCFF_R_ERR`` — the older spelling, present in
        TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits
-       (0.20456262) and other early mocks. Both are HIERARCH cards on HDU 1,
-       since the keywords exceed FITS's 8-character limit.
+       (0.20456262) and other early mocks. This one is a HIERARCH card on
+       HDU 1, since 12 characters exceeds FITS's 8-character keyword limit;
+       ``A_R_ERR`` is 7 characters and so is an ordinary card. ``in hdr``
+       matches either form, so the lookup below needs no special casing.
     4. ``_D_ERR_R`` — the built-in iron default, 0.17680325.
 
     Each mock file carries its own value, so this must be read per file rather

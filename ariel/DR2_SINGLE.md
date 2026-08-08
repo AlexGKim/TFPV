@@ -99,11 +99,15 @@ open output/$RUN/select_v2_fiducial_pull.png
 python export_config.py --run $RUN --out $CONFIG
 ```
 
-> **Note:** `export_config.py` does not preserve the `dust_pickle` key.
-> After running it, re-add the following to `$CONFIG`:
+> **Note:** `export_config.py` prompts only for the keys it manages, so
+> `dust_pickle` must be added to `$CONFIG` by hand the first time:
 > ```json
 > "dust_pickle": "data/loa_internalDust_nokcorr_mcmc.pickle"
 > ```
+> It does now *preserve* any key it does not manage on re-export (and prints
+> what it kept), so a repeat of this step will not drop it. Earlier versions
+> discarded it silently — which is how the DR2 v5 covariances were built on the
+> iron-default `d_err_r`.
 
 ---
 

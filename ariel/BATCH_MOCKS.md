@@ -1,11 +1,22 @@
 # Running the 2COLOR Pipeline on AbacusSummit Mocks (Batch)
 
 This document covers running the 2COLOR Tully-Fisher pipeline over a **set of
-AbacusSummit mock FITS files**. It is both a runbook (for a person submitting the
-jobs) and an initial-condition brief (for a future Claude session resuming this
-work). For the mechanics of the individual pipeline steps, see `BATCH_NERSC.md`
-(runbook) and `BATCH_CLAUDE.md` (step map, failure modes); this file only covers
-what is *different* for the mock batch and does not duplicate them.
+AbacusSummit mock FITS files**, as a SLURM batch on NERSC. It is both a runbook
+(for a person submitting the jobs) and an initial-condition brief (for a future
+Claude session resuming this work). **Start here** for anything mock-related.
+
+| You are running | Where | Doc |
+|---|---|---|
+| AbacusSummit mocks, as a batch | NERSC | **this file** — design decisions, config generation, submission |
+| the mechanics of one run's steps | NERSC | [BATCH_NERSC.md](BATCH_NERSC.md) |
+| diagnosing a failure | NERSC | [BATCH_CLAUDE.md](BATCH_CLAUDE.md) — step map, dependency graph, failure catalog |
+| real DR2 data, whole catalog | locally | [DR2_SINGLE.md](DR2_SINGLE.md) |
+| real DR2 data, split by morphology | locally | [DR2_TWOPOP.md](DR2_TWOPOP.md) |
+
+This file covers what is *different* for the mock batch rather than duplicating
+the other two. Two exceptions, because they are defined here and referenced from
+elsewhere: **slice partitioning** (decisions #4/#4b) and **per-file dust
+resolution** (#2c) are general pipeline mechanics that apply to DR2 too.
 
 ---
 
@@ -44,21 +55,26 @@ workflow. The following decisions are fixed; do not re-derive them:
 
 2c. **The dust uncertainty `d_err_r` is read per file from the FITS header, and
    is deliberately *not* frozen.** Unlike the selection cuts and the init, this
-   one varies file to file, so each mock carries its own value as a `HIERARCH`
-   card on HDU 1. `color_predict.resolve_d_err_r()` resolves, first hit wins:
+   one varies file to file, so each mock carries its own value on HDU 1.
+   `color_predict.resolve_d_err_r()` resolves, first hit wins:
 
    | Source | Applies to |
    |---|---|
-   | `cfg["dust_pickle"]` | DR2 (its FITS files carry no dust metadata) |
+   | `cfg["dust_pickle"]` | DR2 (its FITS files carry no dust keywords) |
    | header `A_R_ERR` | the mocks produced for this batch |
    | header `DSTCFF_R_ERR` | earlier mocks, e.g. `..._zsnap0.20_zmax0.11.fits` (0.20456262) |
    | `_D_ERR_R` = 0.17680325 | built-in iron fallback — **wrong for mocks** |
 
+   (`DSTCFF_R_ERR` is a `HIERARCH` card, being 12 characters; `A_R_ERR` is 7
+   and so is an ordinary card. The lookup handles both without special casing.)
+
    It always logs which source won, and warns loudly on the fallback. Check
-   `slurm/logs/step8_predict_*.out` for a `Loaded d_err_r = … from FITS header
-   A_R_ERR` line; a `WARNING: no dust_pickle … falling back to the built-in
-   iron default` line means the header keyword was missing and the covariance
-   is wrong. Step 8 also records the value it used as a `d_err_r` attribute on
+   `slurm/logs/step8_predict_*.out` for a line of the form
+   `Loaded d_err_r = 0.20456262 mag from FITS header DSTCFF_R_ERR of <path>`
+   — the keyword named will be whichever one that file actually carries. A
+   `WARNING: no dust_pickle in config and no A_R_ERR/DSTCFF_R_ERR in the FITS
+   header …` line means neither keyword was found and the covariance is wrong.
+   Step 8 also records the value it used as a `d_err_r` attribute on
    `color_xonly_cov.h5`, which is what any downstream combine must read rather
    than re-deriving — re-deriving is how a combined product previously ended up
    with one dust value in its per-population blocks and another in its
@@ -88,13 +104,29 @@ workflow. The following decisions are fixed; do not re-derive them:
    (regex `c\d+_ph\d+_r\d+`) plus a `_s<NN>` subset suffix, e.g.
    `TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits` → runs
    `c000_ph000_r001_s00` … `c000_ph000_r001_s04` (for `n_subsets=5`). Outputs
-   go to `output/<run>/`, one independent run dir per (file, subset) pair.
+   go to `output/<run>/`, one independent run dir per (file, slice) pair.
 
-5. **Per-(file, subset) chain:** `step4 → step6 ×4 → step7 → step8`
-   (no step5d — see #2b; no step5e — see #3). **Cost implication:** total
-   step6 chains submitted = `n_files × n_subsets × 4`, not `n_files × 4` —
-   factor in `n_subsets` (default 5) when estimating GPU-hours (see
-   "Runtime / cost notes" below).
+4b. **Only slice `s00` is run.** `--n-subsets` and `--subsets` are independent:
+   the first sets the slice *size*, the second says which slices actually run.
+   The batch keeps `--n-subsets 5` and passes `--subsets 0`, so each file
+   contributes exactly one run — **125 runs, not 625**. What this gives up is
+   explicit: of each file's ~90,756 cut-passing galaxies, only slice 0's
+   ~18,167 are fit and ~13,167 predicted; the other four slices are simply not
+   run. The 5-way mechanism remains available (it is what makes the slice size
+   meaningful, and `--subsets 0,1` etc. widens coverage later) but is not the
+   operating mode.
+
+   > **Never express "one slice" as `--n-subsets 1`.** That makes the single
+   > slice the whole file (~170,781 valid rows for the reference mock), and
+   > step 8's covariance dimension becomes the file's full MAIN count,
+   > G ≈ 91,000 — a **67 GB** dense matrix that cannot finish inside step8's
+   > 30-minute walltime. Keep `--n-subsets 5` and narrow with `--subsets`.
+
+5. **Per-(file, slice) chain:** `step4 → step6 ×4 → step7 → step8`
+   (no step5d — see #2b; no step5e — see #3). **Cost implication:** with
+   `--subsets 0` the totals are `n_files` runs and `n_files × 4` step6 chains
+   — for 125 files, **125 runs and 500 step6 chains**. (Running all five
+   slices would be 625 runs / 2500 chains; see "Runtime / cost notes".)
 
 **Target mock set:** `v0.5.7`
 (`/global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7/`),
@@ -127,7 +159,7 @@ sizes so far are comparable to the `base` family's single-subset scale).
 | `configs/fixed_init_2color.json` | Frozen physical-unit init values (`slope_orig`, `intercept_orig`, `sigma_int_x`, `w`, ...) from a hand-validated MAP fit; transformed per-run into standardized coordinates by `desi_data.py`, skipping step5d. |
 | `make_batch_configs.py` | Generate per-(file, subset) configs from a mock dir (`--n-subsets`, default 5) for the `base`/fullmocks family. `--metric` is accepted but no longer needed (step6 doesn't read it). |
 | `make_spec_batch_configs.py` | Generate per-file configs for the `spec`/DESI-source family, re-deriving slope_plane/intercepts per file from its own MLE fit. |
-| `slurm/batch_submit.sh` | Submit the full dependency chain per (file, subset) run (`--debug` for plumbing test). |
+| `slurm/batch_submit.sh` | Submit the full dependency chain per run (`--debug` for plumbing test). |
 | `slurm/batch_status.sh` | Aggregate sentinel completion across all runs in a config dir. |
 | `slurm/step6_node.sh` | All 4 MCMC chains, 1 node/4 GPUs (`CUDA_VISIBLE_DEVICES`); honors `DEBUG=1` (15 samples, no adaptation). `step6_chain.sh` still exists for resubmitting a single failed chain. |
 | `batch/job_tracker.csv` | Appended log of submitted SLURM job IDs per run. |
@@ -174,8 +206,8 @@ bash slurm/step6_submit.sh $CONFIG   # 4 chains + auto step7/8
 > `configs/abacus_subsets/`, which add the partition fields. Validate with a
 > sliced config so Step 0 exercises the same code path as the batch.
 
-After it completes, check `output/abacus_2color/stansummary.txt` (R̂ < 1.01,
-ESS > 100/chain) and `output/abacus_2color/diagnose.txt` (divergences,
+After it completes, check `output/abacus_2color_s00/stansummary.txt` (R̂ < 1.01,
+ESS > 100/chain) and `output/abacus_2color_s00/diagnose.txt` (divergences,
 max-treedepth %).
 
 ---
@@ -195,14 +227,19 @@ python3 make_batch_configs.py \
     --dir /global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7 \
     --base configs/abacus_2color.json \
     --outdir configs/batch_debug \
-    --n-subsets 5 --n-objects 5000
+    --n-subsets 5 --subsets 0 --n-objects 5000 --run-suffix _dbg
 bash slurm/batch_submit.sh configs/batch_debug --debug
 watch bash slurm/batch_status.sh configs/batch_debug   # all sentinels in ~10-15 min
 ```
 
-This generates `n_files × n_subsets` configs/runs (5 per file by default), so a
-debug run against even a handful of mock files fans out to dozens of tiny
-plumbing-test chains — that's expected and still fast on the debug queue.
+**`--run-suffix _dbg` is not optional here.** Run names derive from the file
+token, not from `--outdir`, so without a suffix a debug batch writes into the
+same `output/<run>/` dirs as the real batch and leaves `.step8_done` sentinels
+behind — and `batch_submit.sh` skips any run whose `.step8_done` exists, so the
+real run would be silently skipped in favour of throwaway debug output.
+
+This generates one config/run per mock file (`--subsets 0`), so a debug run
+against a handful of files stays small and fast on the debug queue.
 
 Success = every `.step*_done` sentinel appears and
 `output/<run>/color_xonly_catalog.fits` is written. Then drop `--debug` for
@@ -213,14 +250,14 @@ the real run.
 ## Full Batch Run
 
 ```bash
-# 1. Generate n_subsets configs per fits file + seed each run's metric:
+# 1. Generate one s00 config per fits file (slice size 1/5, only slice 0 run):
 python3 make_batch_configs.py \
     --dir /global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7 \
     --base configs/abacus_2color.json \
     --outdir configs/batch_v0.5.7 \
-    --n-subsets 5 --n-objects 5000
+    --n-subsets 5 --subsets 0 --n-objects 5000
 
-# 2. Submit (throttle so at most N (file, subset) runs' chains are queued at once):
+# 2. Submit (throttle so at most N runs' step6_node jobs are queued at once):
 bash slurm/batch_submit.sh configs/batch_v0.5.7 8
 
 # 3. Monitor:
@@ -246,7 +283,22 @@ No `metric.json` (step5e is optional/skipped — see Mock Batch Overview).
 Step 8 runs `color_predict.py` first and `explore_residuals.py` second, so the
 catalog and covariance are already written before any residual plot is
 attempted — a plotting failure under `set -e` can no longer cost a run its
-science output.
+science output. The covariance carries a `d_err_r` HDF5 attribute recording the
+dust value used (decision #2c).
+
+### The batch as a whole
+
+**125 independent per-file outputs — there is no combine step, and none is
+intended.** Each mock file yields its own `color_xonly_catalog.fits` +
+`color_xonly_cov.h5` for its slice 0, consumed separately (e.g. as independent
+realizations for scatter across mocks).
+
+This is deliberately unlike the DR2 two-population case, where
+`combine_color_xonly.py` merges the spiral and irregular outputs into one
+`DESI-DR2_TF_pv_cat_v5b.fits` + `_cov.h5` pair. Combining the mock batch is not
+merely unimplemented but infeasible: 125 × ~18,167 galaxies is ~2.27M rows, and
+a dense covariance over them would be ~2.27M² × 8 bytes ≈ **40 TB**. Treat the
+per-file products as the batch's final output.
 
 ---
 
@@ -266,18 +318,23 @@ bash slurm/check_status.sh configs/batch_v0.5.7/c000_ph000_r001_s00.json
 
 ## Runtime / cost notes
 
-- step4 (CPU debug, <5 min): cheap, per (file, subset). Writes init_MAP.json
+Totals below assume the `--subsets 0` mode: **125 runs** for 125 mock files.
+
+- step4 (CPU debug, <5 min): cheap, one per run. Writes init_MAP.json
   directly (`fixed_init` is set), so no step5d GPU job is needed at all —
-  eliminates 625 GPU MAP-optimize submissions and their queue-wait time (the
+  eliminates 125 GPU MAP-optimize submissions and their queue-wait time (the
   GPU-hour magnitude was already small; the real win is fewer job-submission/
   queue cycles and removing the init-boundary failure mode step5d could hit).
 - **step6 dominates GPU-hours:** 4 chains (run in parallel, 1 per GPU on a
-  single `step6_node.sh` node) per (file, subset) run; timing depends on
+  single `step6_node.sh` node) per run; timing depends on
   `NUM_WARMUP`/`MAX_DEPTH` (default 1000/10 — re-measure per dataset, don't
   assume older ~14h-per-chain figures quoted for the previous 250/8
-  defaults). With `n_files` files and `n_subsets` subsets each (default 5),
-  total step6 chains = `n_files × n_subsets × 4` — **5× the GPU-hours of a
-  naive one-run-per-file estimate.**
+  defaults). At one slice per file that is `n_files × 4` = **500 step6
+  chains**. Running all five slices instead would be 2500 chains and 5× the
+  GPU-hours — which is why the batch runs s00 only (decision #4b). Note the
+  practical scale: the single validation run queued ~21.6 h before the
+  scheduler even estimated a start, so queue wait, not GPU-hours, is the
+  binding constraint.
 - **step6 job-submission count is now `n_files × n_subsets`, not ×4.**
   `step6_node.sh` runs all 4 chains as backgrounded processes on the 4 GPUs of
   one already-allocated node (`sacct` confirms a `--gpus-per-task=1` job gets
@@ -290,11 +347,11 @@ bash slurm/check_status.sh configs/batch_v0.5.7/c000_ph000_r001_s00.json
   so far more runs fit in flight simultaneously. Use the
   `MAX_CONCURRENT` throttle (now counts `step6_node` jobs, i.e. runs, directly)
   and mind the NERSC regular-GPU QOS limits for the real (non-debug) batch.
-- step7 (CPU debug, ~15 min) — per (file, subset).
+- step7 (CPU debug, ~15 min) — one per run.
 - step8 (CPU debug, ~5–10 min per slice-scoped run: `color_predict.py` then
   `explore_residuals.py`, dominated by the O(G²) covariance) — per (file,
-  subset). Each run's `color_xonly_cov.h5` is ~1.17 GB, so budget ~730 GB of
-  scratch for a 625-run batch; `--no-cov` skips it.
+  subset). Each run's `color_xonly_cov.h5` is ~1.17 GB, so budget ~150 GB of
+  scratch for a 125-run batch; `--no-cov` skips it.
 - **step5e is optional and skipped by default** (see decision #3 above) — it
   is not part of the GPU-hour budget for a normal batch.
 
@@ -308,7 +365,7 @@ disjoint slices, each of which then behaves like its own standalone FITS file:
 its own selection cuts, its own 5,000-galaxy training sample (matching DR2), its
 own holdout for prediction, and its own full-sample-vs-MAIN
 contrast. **This is not an opt-in special case
-for oversized outliers** — decisions #3–#5 above establish it as the standard mode
+for oversized outliers** — decisions #4–#5 above establish it as the standard mode
 for every file in the real batch, and `make_batch_configs.py --n-subsets 5` (used
 by "Full Batch Run" above) generates it automatically for every file it finds. The
 rest of this section documents the underlying mechanism and walks through it by
@@ -370,14 +427,14 @@ They share all selection parameters from `configs/abacus_2color.json` but differ
 - `"subset_index": 0` … `4`
 - `"n_subsets": 5`
 - `"n_objects": 5000`
-- `"fits_file"`: local path `data/TF_AbacusSummit_…_appmag.fits`
+- `"fits_file"`: local path `data/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits`
 
 To regenerate:
 
 ```python
 import json, os
 base = json.load(open('configs/abacus_2color.json'))
-base['fits_file'] = 'data/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11_appmag.fits'
+base['fits_file'] = 'data/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits'
 os.makedirs('configs/abacus_subsets', exist_ok=True)
 for i in range(5):
     cfg = dict(base)
@@ -398,7 +455,8 @@ bash slurm/batch_submit.sh configs/abacus_subsets
 ```
 
 This submits `step4 → step6×4 → step7 → step8` for all 5 subsets with
-SLURM dependencies, throttled to 8 concurrent files (20 chains) by default.
+SLURM dependencies, throttled to 8 concurrent `step6_node` jobs (i.e. 8 runs,
+each holding one whole 4-GPU node) by default.
 
 ### Running one subset end-to-end (manual, NERSC / SLURM)
 
@@ -446,18 +504,25 @@ are made on the ~13,167 holdout galaxies within the slice.
 
 ### Output structure
 
-Each subset produces a full independent run:
+Each slice produces a full independent run:
 
 ```
 output/abacus_2color_s00/
   ├── config.json, input.json, init.json
+  ├── init_MAP.json              (written by step4 — fixed_init, no step5d)
+  ├── data.png
   ├── 2color_{1..4}.csv          (MCMC chains)
-  ├── stansummary.txt, diagnose.txt
+  ├── 2color_{1..4}_metric.json  (each chain's own adapted metric)
+  ├── stansummary.txt, diagnose.txt, 2color.png
   ├── redshift_color_xonly.png   (x-only residuals vs z, default)
-  └── color_xonly_catalog.fits   (if --no-catalog not set)
-output/abacus_2color_s01/
-  └── ...
+  ├── color_xonly_catalog.fits   (if --no-catalog not set)
+  ├── color_xonly_cov.h5         (if --no-cov not set; carries the d_err_r attr)
+  ├── explore_residuals/         (step8, after color_predict.py)
+  └── .step{4,6_chain1..4,7,8}_done   (sentinels)
 ```
+
+In the `--subsets 0` mode only `_s00` exists per file; `_s01`…`_s04` are not
+generated or run.
 
 ### Subset sizes
 
@@ -467,11 +532,23 @@ set by the valid-row count, not the post-cut count. For the reference file
 rows, `n_subsets=5`, `haty_min=-21.6`/`haty_max=-18.4`):
 
 - Slices 0–3: 34,156 valid rows each (170781 // 5); slice 4 takes the remainder
-- Of one slice: ~18,167 pass the selection cuts, ~15,989 fail
+- Of slice 0: 18,167 pass the selection cuts, 15,989 fail
   (the fail population is what gives each slice its own MAIN contrast)
 - Training: 5,000 per slice, drawn from the cut-passing galaxies
-- Holdout (for prediction): ~13,167 per slice
+- Holdout (for prediction): 13,167 for slice 0
 
-The O(M×G) posterior-predictive work in step7/step8 is scoped to the slice, so
+These figures are what step4 actually reports for this file; the log line to
+compare against is
+`Slice 0/5: 34156 valid rows from 170781 …; of those 18167 pass the selection
+cuts (15989 fail -> MAIN contrast population)`. The per-slice cut-passing count
+varies a little across slices (18,092–18,256 for slices 1–4), since the split
+is over valid rows and the cuts are applied within each slice.
+
+This file is also the **reference/validation mock** used for Step 0 and for the
+numbers quoted throughout this document. Note its dust keyword is the older
+`DSTCFF_R_ERR` (0.20456262); production mocks are expected to carry `A_R_ERR`
+instead (decision #2c).
+
+The O(M×G) posterior-predictive work in step8 is scoped to the slice, so
 `G` ≈ 34,156 rather than the full 170,781 — about 1.1 GB per dense
 `(draws, galaxies)` temporary at 4,000 draws instead of ~5.5 GB.

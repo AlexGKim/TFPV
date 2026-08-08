@@ -159,10 +159,12 @@ two-population workflow, one population per invocation.
 ### Mocks — run in batch at NERSC
 
 AbacusSummit mock files are run as a SLURM batch on Perlmutter, not locally.
+Each file is sliced into fifths and **only slice `s00` is run**, giving one run
+per file (125 runs for the v0.5.7 set) with ~13,167 galaxies predicted each.
 
 | Doc | Role |
 |---|---|
-| [BATCH_MOCKS.md](BATCH_MOCKS.md) | **start here** — design decisions for the mock batch (frozen selection cuts and init, slice partitioning, per-file dust), config generation, full-batch submission |
+| [BATCH_MOCKS.md](BATCH_MOCKS.md) | **start here** — design decisions for the mock batch (frozen selection cuts and init, slice partitioning and the s00-only mode, per-file dust), config generation, full-batch submission |
 | [BATCH_NERSC.md](BATCH_NERSC.md) | mechanics of running on Perlmutter: prerequisites, GPU compile, per-step commands, resubmission, runtimes |
 | [BATCH_CLAUDE.md](BATCH_CLAUDE.md) | troubleshooting: step map, dependency graph, and a symptom → diagnosis → fix catalog of failure modes |
 

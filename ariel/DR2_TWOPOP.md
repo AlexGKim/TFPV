@@ -209,17 +209,23 @@ built-in iron default:
 "dust_pickle": "data/loa_internalDust_nokcorr_mcmc.pickle"
 ```
 
-| Source | `d_err_r` |
-|---|---|
-| Built-in default (`_D_ERR_R`, iron) — used when the key is **absent** | 0.17680325 |
-| `data/loa_internalDust_nokcorr_mcmc.pickle` (loa) — correct for DR2 | 0.21734862 |
+`color_predict.resolve_d_err_r()` resolves `d_err_r` in this order, first hit
+wins, and logs which source won:
 
-Getting this wrong is silent: with the key absent, `color_predict.py` simply
-uses the iron default and prints nothing. Both DR2 v5 populations were
-originally run this way, leaving the dust contribution low by a factor of
-`(0.2173/0.1768)² ≈ 1.5`. **Verify it took effect** — step 8 prints a
-`Loaded d_err_r = 0.21734862 mag from …` line whenever the pickle is read, and
-its absence from the log means the default was used:
+| Order | Source | `d_err_r` |
+|---|---|---|
+| 1 | `cfg["dust_pickle"]` → `data/loa_internalDust_nokcorr_mcmc.pickle` — **correct for DR2** | 0.21734862 |
+| 2 | FITS header `A_R_ERR` | per file — mocks only; DR2 FITS files have no dust keywords |
+| 3 | FITS header `DSTCFF_R_ERR` | per file — mocks only |
+| 4 | Built-in `_D_ERR_R` (iron) — only if none of the above | 0.17680325 |
+
+Both DR2 v5 populations were originally run on tier 4, leaving the dust
+contribution low by a factor of `(0.2173/0.1768)² ≈ 1.5`; the covariances have
+since been regenerated. **Verify it took effect** — step 8 prints
+`Loaded d_err_r = 0.21734862 mag from data/loa_internalDust_nokcorr_mcmc.pickle`
+whenever the pickle is read, and a loud multi-line `WARNING: no dust_pickle in
+config and no A_R_ERR/DSTCFF_R_ERR in the FITS header …` if it falls through to
+the iron default:
 
 ```bash
 grep "Loaded d_err_r" output/$RUN/step8.log

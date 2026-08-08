@@ -3,16 +3,29 @@
 Generate per-file, per-subset pipeline configs for a directory of AbacusSummit
 mock FITS files.
 
-Each FITS file is split into `--n-subsets` disjoint subsets (see BATCH_MOCKS.md
-"Subset Partition Mode"), one config per (file, subset_index) pair. Run names are
-derived from the c???_ph???_r??? token in the filename (e.g.
-TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits -> token
-"c000_ph000_r001") plus a subset suffix, e.g. "c000_ph000_r001_s00" ...
-"c000_ph000_r001_s04". Each generated config is a copy of a base config (default
-configs/abacus_2color.json) with "run", "fits_file", "subset_index", "n_subsets",
-and "n_objects" overridden, so the frozen selection cuts, random_seed, exe, model,
-etc. are shared across every mock and every subset — see BATCH_MOCKS.md for the
-rationale.
+Each FITS file is split into `--n-subsets` disjoint slices (see BATCH_MOCKS.md
+"Subset Partition Mode"), and a config is written for each slice named by
+`--subsets`. Run names are derived from the c???_ph???_r??? token in the filename
+(e.g. TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits -> token
+"c000_ph000_r001") plus a subset suffix, e.g. "c000_ph000_r001_s00". Each
+generated config is a copy of a base config (default configs/abacus_2color.json)
+with "run", "fits_file", "subset_index", "n_subsets", and "n_objects"
+overridden, so the frozen selection cuts, the frozen init (`fixed_init`),
+random_seed, exe, model, etc. are shared across every mock and every slice — see
+BATCH_MOCKS.md for the rationale.
+
+`--n-subsets` sets the slice *size*; `--subsets` sets which slices actually run.
+These are independent, and conflating them is a trap worth stating plainly:
+
+    --n-subsets 5 --subsets 0      slice = 1/5 of the file, only s00 runs
+    --n-subsets 1                  slice = the WHOLE file  <-- do not do this
+
+The standard mock batch is the first form. **Do not** express "only one slice"
+as `--n-subsets 1`: that makes the single slice the entire file (~170,781 valid
+rows for the reference mock), and step 8's covariance dimension becomes the
+whole file's MAIN count, G ~ 91,000 — a ~67 GB dense matrix that cannot finish
+inside step8's 30-minute walltime. Keep --n-subsets at 5 and narrow with
+--subsets.
 
 Optionally seeds each (file, subset) run's output directory with a reusable
 metric.json so step5e (the ~7h metric build) can be skipped entirely — metric.json
@@ -24,8 +37,7 @@ Usage:
         --dir /global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7 \
         --base configs/abacus_2color.json \
         --outdir configs/batch_v0.5.7 \
-        --metric output/abacus_2color/metric.json \
-        --n-subsets 5 --n-objects 5000
+        --n-subsets 5 --subsets 0 --n-objects 5000
 """
 
 import argparse
@@ -57,7 +69,14 @@ def main():
     parser.add_argument("--outdir", required=True,
                         help="Directory to write per-file-per-subset config JSONs into")
     parser.add_argument("--n-subsets", type=int, default=5,
-                        help="Disjoint subsets to split each FITS file into (default: 5)")
+                        help="Disjoint slices to split each FITS file into (default: 5). "
+                             "This sets the slice SIZE, not how many run — narrow with "
+                             "--subsets. Do not set this to 1 to get a single slice: that "
+                             "makes the slice the whole file and step8's covariance ~67 GB.")
+    parser.add_argument("--subsets", default=None,
+                        help="Comma-separated subset_index values to emit, e.g. '0' for the "
+                             "standard s00-only mock batch, or '0,2,4'. Default: all of "
+                             "range(--n-subsets).")
     parser.add_argument("--n-objects", type=int, default=5000,
                         help="Training sample size within each subset (default: 5000)")
     parser.add_argument("--metric", default=None,
@@ -80,6 +99,22 @@ def main():
         sys.exit(f"ERROR: --dir not found: {args.dir}")
     if args.n_subsets < 1:
         sys.exit(f"ERROR: --n-subsets must be >= 1, got {args.n_subsets}")
+
+    if args.subsets is None:
+        subset_indices = list(range(args.n_subsets))
+    else:
+        try:
+            subset_indices = [int(s) for s in args.subsets.split(",") if s.strip() != ""]
+        except ValueError:
+            sys.exit(f"ERROR: --subsets must be comma-separated integers, got {args.subsets!r}")
+        if not subset_indices:
+            sys.exit("ERROR: --subsets was empty")
+        bad = [i for i in subset_indices if not (0 <= i < args.n_subsets)]
+        if bad:
+            sys.exit(f"ERROR: --subsets {bad} out of range for --n-subsets "
+                     f"{args.n_subsets} (valid: 0..{args.n_subsets - 1})")
+    print(f"Slices: n_subsets={args.n_subsets} (slice size), emitting subset_index "
+          f"{subset_indices}")
     with open(args.base) as f:
         base_cfg = json.load(f)
 
@@ -109,7 +144,7 @@ def main():
             continue
         seen_tokens[token] = os.path.basename(fits_path)
 
-        for subset_index in range(args.n_subsets):
+        for subset_index in subset_indices:
             run = f"{token}_s{subset_index:02d}"
 
             cfg = dict(base_cfg)
