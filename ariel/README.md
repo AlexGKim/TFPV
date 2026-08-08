@@ -156,11 +156,20 @@ The two-population inputs are a morphology-classified subset of the same
 parent catalog. [run_dr2_onepop.sh](run_dr2_onepop.sh) automates the
 two-population workflow, one population per invocation.
 
-### Mocks — run in batch at NERSC
+### Mocks — in batch at NERSC, or locally
 
-AbacusSummit mock files are run as a SLURM batch on Perlmutter, not locally.
-Each file is sliced into fifths and **only slice `s00` is run**, giving one run
-per file (125 runs for the v0.5.7 set) with ~13,167 galaxies predicted each.
+AbacusSummit mock files run as a SLURM batch on Perlmutter, or locally with
+[run_batch_local.sh](run_batch_local.sh) — the same steps and the same sampler
+arguments, no scheduler. One run per file (125 for the v0.5.7 set). Each run
+analyses a fixed **17,234-galaxy** draw from the file's cut-passing MAIN
+galaxies, size-matched to `DESI-DR2_TF_pv_cat_v5b.fits`, of which 5,000 train
+and 12,234 are predicted.
+
+```bash
+# locally: one mock, or a whole directory of them
+bash run_batch_local.sh configs/abacus_2color.json
+bash run_batch_local.sh --fits-dir /path/to/mock_fits --debug   # plumbing test
+```
 
 | Doc | Role |
 |---|---|

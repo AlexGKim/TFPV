@@ -262,7 +262,8 @@ sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
 # verify output/abacus_2color/input.json:
 #   len(subset_sga_ids) == 17234   (exactly)
 #   len(train_sga_ids)  == 5000    (holdout 12234)
-#   provenance present: target_main_count, random_seed, N_after_cuts, fits_file
+#   provenance present: target_main_count, random_seed, N_after_cuts
+#   (the FITS path lives in config.json — input.json must stay string-free)
 # and data.png plus init_MAP.json (finite, no NaN — written directly by step4
 # since the config sets "fixed_init"; no step5d needed)
 bash slurm/step6_submit.sh $CONFIG   # 4 chains + auto step7/8
@@ -508,9 +509,16 @@ Three layers, in order of authority:
    `train_sga_ids` are written into `output/<run>/input.json`, so any run's
    sample can be reconstructed by reading them — no RNG replay needed.
 2. **Provenance for regeneration.** `input.json` also records
-   `target_main_count`, `random_seed`, `N_after_cuts`, and the resolved
-   `fits_file`; `config.json` records `target_main_count` too. That is
-   everything needed to recompute the draw from scratch.
+   `target_main_count`, `random_seed` and `N_after_cuts`; the FITS path comes
+   from `config.json`, which also records `target_main_count`. Between them that
+   is everything needed to recompute the draw from scratch.
+
+   > Numeric only, deliberately. CmdStan rejects a data file containing any
+   > string value ("Variable: …, error: string values not allowed"), so an
+   > earlier revision that recorded `fits_file` in `input.json` broke step 6 for
+   > every `target_main_count` run. Step 4 now refuses to write a data file
+   > containing a string, naming the offending key. Record text in
+   > `config.json`.
 3. **A drift check.** NumPy does not promise `Generator` stream stability
    across versions, so verify rather than assume:
 
@@ -536,22 +544,63 @@ bash slurm/step6_submit.sh $CONFIG
 
 ### Running locally without SLURM
 
-`run_dr2_onepop.sh` is the no-scheduler counterpart to `slurm/batch_submit.sh`
-for a single config, mirroring the same chain (step4 → step6 ×4 → step7 →
-step8, with step5d skipped when the config sets `fixed_init`) via the CPU
-`./2color` binary, with the 4 chains as background processes instead of one per
-GPU. Its sampler settings match `slurm/step6_node.sh`'s non-debug defaults
-exactly — `num_warmup=1000`, `num_samples=1000`, `max_depth=10`,
-`adapt delta=0.9`, identity metric, no seeding — so local results stay
-comparable to batch results. Override with the `--warmup`, `--max-depth`,
-`--delta` and `--chains` flags.
+**`run_batch_local.sh` is the no-scheduler counterpart to
+`slurm/batch_submit.sh`.** It takes a config directory or a single config and
+runs the identical chain — step4 → step6 (N chains in parallel) → step7 → step8,
+with step5d skipped when the config sets `fixed_init` — via the CPU `./2color`
+binary, with the chains as background processes instead of one per GPU.
+
+```bash
+bash run_batch_local.sh configs/abacus_2color.json          # one mock
+bash run_batch_local.sh configs/batch_v0.5.7                # a whole directory
+bash run_batch_local.sh --fits-dir /path/to/mock_fits       # generate configs first
+bash run_batch_local.sh configs/abacus_2color.json --debug  # ~25 s plumbing test
+```
+
+| Flag | Meaning |
+|---|---|
+| `--fits-dir DIR` | run `make_batch_configs.py` on DIR first, then run the configs |
+| `--base` / `--outdir` | base config and output dir for `--fits-dir` |
+| `--chains N` | chains per run, in parallel (default 4) |
+| `--jobs N` | runs processed concurrently (default 1) |
+| `--from-step S` | clear sentinels from S onward and re-run (`4 5d 6 7 8`) |
+| `--warmup` / `--samples` / `--max-depth` / `--delta` | sampler overrides |
+| `--debug` | `step6_node.sh`'s DEBUG branch + `--no-cov`; **not science-grade** |
+| `--force` | re-run even where `.step8_done` exists |
+
+**Its sampler arguments are identical to `slurm/step6_node.sh`'s**, token for
+token, in both the production and debug branches — `num_warmup=1000`,
+`num_samples=1000`, `adapt delta=0.9 save_metric=1`, `algorithm=hmc engine=nuts
+max_depth=10`, `metric=dense_e`, identity start. That parity is the whole point:
+change one, change the other, or mock-derived uncertainties stop calibrating the
+real measurement.
+
+Sentinels use the same names as `slurm/check_status.sh`, so both status scripts
+work on local runs unmodified:
+
+```bash
+bash slurm/check_status.sh configs/abacus_2color.json
+bash slurm/batch_status.sh configs/batch_local
+```
+
+Per-step logs land in `output/<run>/local_step*.log`, and one row per run in
+`batch/local_tracker.csv` (the analogue of the batch's `batch/job_tracker.csv`).
+Unlike the batch, it also rebuilds `./2color` when `2color.stan` is newer —
+mtime-based, so an edited model is actually picked up.
+
+**Cost.** ~6.4 h/chain on CPU at 17,234 galaxies (~4.4 h of it warmup), 4 chains
+in parallel, so roughly 6–7 h per mock plus ~5–10 min for step 8. `--jobs 2`
+doubles throughput on 8 cores, but each concurrent step 8 holds a ~1.19 GB
+covariance plus ~0.55 GB of temporaries.
 
 The local validation config is `configs/abacus_2color.json` itself: it points at
 `data/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits` and carries
 both `target_main_count: 17234` and `fixed_init`, so a local run exercises the
-same frozen-init path the batch uses. (The former
-`configs/abacus_zsnap020_zmax011_2color_test.json` was deleted: it omitted
-`fixed_init`, so it validated the step5d MAP path instead of the batch's.)
+same frozen-init path the batch uses. (Two predecessors were deleted:
+`configs/abacus_zsnap020_zmax011_2color_test.json`, which omitted `fixed_init`
+and so validated the step5d MAP path instead of the batch's, and
+`run_subsets.sh` with `configs/abacus_subsets/`, which still carried the removed
+`n_subsets`/`subset_index` keys and no `target_main_count`.)
 
 ### Predictions (plots only, no covariance)
 

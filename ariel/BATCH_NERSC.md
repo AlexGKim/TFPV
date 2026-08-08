@@ -51,8 +51,7 @@ export CONFIG=configs/<your_run>.json
 ```
 
 For a mock batch these are generated — see `BATCH_MOCKS.md` "Full Batch Run".
-For the reference validation run it is
-`configs/abacus_subsets/abacus_2color_s00.json`.
+For the reference validation run it is `configs/abacus_2color.json`.
 
 ### 4. Prerequisites, by step
 

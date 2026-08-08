@@ -298,7 +298,7 @@ run_one() {
 
     # --- Step 5d fallback: only when step4 did not write init_MAP.json.
     # Mock configs set "fixed_init" so this never fires; it keeps the driver
-    # usable on a config that does not. Mirrors run_subsets.sh's guard.
+    # usable on a config that does not.
     if [ ! -f "$RUN_DIR/init_MAP.json" ]; then
         echo "[$RUN] step5d: no init_MAP.json (config sets no fixed_init) — running MAP optimize"
         {
@@ -339,8 +339,8 @@ run_one() {
     if [ "${#PIDS[@]}" -gt 0 ]; then
         echo "[$RUN] step6: ${#PIDS[@]} chain(s) running in parallel (chains ${CHAIN_IDS[*]})"
         # Touch each chain's sentinel only if that chain actually succeeded, so
-        # --from-step 6 re-runs exactly the missing ones. run_subsets.sh's bare
-        # `wait` could not tell which chain failed.
+        # --from-step 6 re-runs exactly the missing ones. A bare
+        # `wait` cannot tell which chain failed.
         for i in "${!PIDS[@]}"; do
             if wait "${PIDS[$i]}"; then
                 touch "$RUN_DIR/.step6_chain${CHAIN_IDS[$i]}_done"

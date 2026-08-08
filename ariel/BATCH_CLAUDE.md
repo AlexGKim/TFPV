@@ -98,7 +98,8 @@ nothing reads it back.
 
 Referred to as `$CONFIG` throughout. Mock-batch configs are generated into
 `configs/batch_*/` by `make_batch_configs.py`; the reference validation config
-is `configs/abacus_subsets/abacus_2color_s00.json`.
+is `configs/abacus_2color.json`, which also runs locally via
+`run_batch_local.sh`.
 
 Key fields:
 - `"run"`: output directory name → `output/<run>/`
