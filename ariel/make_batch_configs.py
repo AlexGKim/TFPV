@@ -38,6 +38,51 @@ import os
 import re
 import sys
 
+from astropy.io import fits
+
+# Dust-coefficient-error header keywords, in resolve_d_err_r()'s precedence
+# order (color_predict.py). A mock config carries no dust_pickle, so one of
+# these must be present or step 8 silently falls back to the iron value.
+_DUST_KEYS = ("A_R_ERR", "DSTCFF_R_ERR")
+
+
+def check_systematics_columns(fits_path, needs_dust):
+    """Return a list of reasons ``fits_path`` cannot produce a valid run.
+
+    Both checks catch failures that would otherwise surface only in step 8,
+    after the run has already spent its step-6 GPU hours:
+
+    * **dust** — with no ``dust_pickle`` in the config, ``resolve_d_err_r()``
+      needs ``A_R_ERR`` or ``DSTCFF_R_ERR`` in the header. Absent both it logs
+      one WARNING and uses the iron value 0.1768, changing every covariance in
+      a way that is easy to miss across 125 run logs.
+    * **photsys** — ``_systematic_offdiag_terms()`` needs either a
+      ``PHOTSYS_ERR`` column or a string-typed ``PHOTSYS``. Mocks store PHOTSYS
+      as a numeric offset, so without ``PHOTSYS_ERR`` it now raises rather than
+      silently dropping the calibration systematic.
+
+    Reads only the header and column descriptors — no row data.
+    """
+    problems = []
+    with fits.open(fits_path) as hdul:
+        hdu = hdul[1]
+        header = hdu.header
+        cols = {c.name: c.format for c in hdu.columns}  # type: ignore[union-attr]
+
+    if needs_dust and not any(k in header for k in _DUST_KEYS):
+        problems.append(f"no dust error keyword (need one of {', '.join(_DUST_KEYS)})")
+
+    if "PHOTSYS_ERR" not in cols:
+        ps = cols.get("PHOTSYS")
+        if ps is None:
+            problems.append("no PHOTSYS_ERR column and no PHOTSYS column")
+        elif not ps.endswith("A"):
+            problems.append(
+                f"no PHOTSYS_ERR column and PHOTSYS is numeric (TFORM={ps!r}), "
+                f"so the photsys calibration systematic cannot be resolved"
+            )
+    return problems
+
 # Run-name token shared with fullmocks_data.py: c<NN>_ph<NN>_r<NN>
 RUN_TOKEN_RE = re.compile(r"(c\d+_ph\d+_r\d+)")
 
@@ -94,6 +139,9 @@ def main():
     n_written = 0
     n_skipped = 0
     seen_tokens = {}
+
+    # --- Pass 1: resolve run names ---
+    accepted = []          # (token, fits_path)
     for fits_path in fits_files:
         token = derive_run_name(fits_path)
         if token is None:
@@ -107,7 +155,35 @@ def main():
             n_skipped += 1
             continue
         seen_tokens[token] = os.path.basename(fits_path)
+        accepted.append((token, fits_path))
 
+    # --- Pass 2: validate the systematics inputs BEFORE writing anything ---
+    # A file that cannot produce a correct covariance should cost seconds here,
+    # not a step-6 GPU allocation followed by a step-8 failure. Nothing is
+    # written if any file fails, so the batch is all-or-nothing rather than
+    # silently partial.
+    needs_dust = base_cfg.get("dust_pickle") is None
+    if not needs_dust:
+        print(f"dust: base config sets dust_pickle={base_cfg['dust_pickle']!r} — "
+              f"per-file header keywords not required")
+    bad = {}
+    for token, fits_path in accepted:
+        problems = check_systematics_columns(fits_path, needs_dust)
+        if problems:
+            bad[os.path.basename(fits_path)] = problems
+    if bad:
+        print(f"\nERROR: {len(bad)} of {len(accepted)} files cannot produce a "
+              f"correct step-8 covariance. No configs written.", file=sys.stderr)
+        for name, problems in sorted(bad.items()):
+            for prob in problems:
+                print(f"  {name}: {prob}", file=sys.stderr)
+        sys.exit(f"\nFix the input files, or exclude them with --pattern. "
+                 f"See BATCH_MOCKS.md decisions #2c and the photsys note.")
+    print(f"systematics inputs OK for all {len(accepted)} files "
+          f"(dust keyword{'' if needs_dust else ' not required'}, PHOTSYS_ERR/PHOTSYS)")
+
+    # --- Pass 3: write ---
+    for token, fits_path in accepted:
         run = token
 
         cfg = dict(base_cfg)
