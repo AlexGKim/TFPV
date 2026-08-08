@@ -30,7 +30,16 @@ echo "Step 7: diagnostics for run=$RUN"
 echo "--- stansummary ---"
 cat output/$RUN/stansummary.txt
 
-python3 corner.py --run $RUN --model 2color
+# DEBUG=1 produces 15 unadapted draws, which chainconsumer cannot summarize
+# (IndexError in get_parameter_summary_max) -- so in debug mode a corner.py
+# failure is a warning, not a step failure. stansummary/diagnose above already
+# ran and are what a plumbing test needs. Matches run_batch_local.sh.
+if [ "${DEBUG:-0}" = "1" ]; then
+    python3 corner.py --run $RUN --model 2color \
+        || echo "WARNING: corner.py failed; tolerated because DEBUG=1 (too few draws to plot)"
+else
+    python3 corner.py --run $RUN --model 2color
+fi
 
 touch output/$RUN/.step7_done
 echo "DONE: step7 → stansummary.txt, diagnose.txt, 2color.png"

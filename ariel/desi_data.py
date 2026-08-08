@@ -529,7 +529,11 @@ def process_desi_tf_data(
     # compares against, so they must round-trip through input.json -- previously
     # they were never written, so _old_partition read back as all-None and the
     # warning fired on every regeneration regardless of whether anything changed.
-    # Stan ignores JSON keys that are not declared data variables.
+    #
+    # Stan ignores *numeric* JSON keys that are not declared data variables, but
+    # it REJECTS string values outright ("Variable: <name>, error: string values
+    # not allowed"), which kills step 6. So nothing written here may be a string
+    # -- record paths and other text in output/<run>/config.json instead.
     stan_data["n_objects"] = n_objects
     stan_data["random_seed"] = random_seed
     if train_fraction is not None:
@@ -543,10 +547,15 @@ def process_desi_tf_data(
             # Provenance for reproducible reconstruction of the subsample. The
             # authoritative record is subset_sga_ids itself (reconstruction
             # needs no RNG replay); these fields let the draw be regenerated
-            # from scratch and audited via --verify-subset.
+            # from scratch and audited via --verify_subset.
+            #
+            # Numeric only. `fits_file` deliberately is NOT written here: a
+            # string value makes CmdStan reject the whole data file with
+            # "Variable: fits_file, error: string values not allowed", which
+            # kills step 6 for every target_main_count run. --verify_subset
+            # falls back to output/<run>/config.json, which records the path.
             stan_data["target_main_count"] = target_main_count
             stan_data["N_after_cuts"] = int(N_after_cuts)
-            stan_data["fits_file"] = fits_file
             print(f"  Train/holdout split: {len(train_sga_ids)} training, "
                   f"{len(subset_sga_ids) - len(train_sga_ids)} holdout within subset")
         else:
@@ -580,6 +589,21 @@ def process_desi_tf_data(
                   f"in this run dir were fit to the OLD partition and must be "
                   f"regenerated (step6; also step5d if this config has no "
                   f"fixed_init) before further use.")
+
+    # Guard: CmdStan rejects a data file containing ANY string value, with
+    # "Variable: <name>, error: string values not allowed", and it does so at
+    # step 6 -- hours after step 4 wrote the file, and only for the runs whose
+    # extra provenance happened to include text. Fail here instead, where the
+    # offending key is obvious. (This caught `fits_file`, which broke step 6 for
+    # every target_main_count run.)
+    _str_keys = sorted(k for k, v in stan_data.items() if isinstance(v, str))
+    if _str_keys:
+        sys.exit(
+            f"ERROR: refusing to write {data_output_file}: CmdStan rejects "
+            f"string values in a data file, so these keys would make step 6 "
+            f"fail: {_str_keys}. Record text in output/<run>/config.json "
+            f"instead."
+        )
 
     with open(data_output_file, "w") as f:
         json.dump(stan_data, f, indent=2)
