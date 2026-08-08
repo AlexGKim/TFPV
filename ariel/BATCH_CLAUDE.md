@@ -109,14 +109,25 @@ Key fields:
 - `"slope_plane"`, `"intercept_plane"`, `"intercept_plane2"`: oblique cut geometry
 - `"fixed_init"`: path to frozen physical-unit init values. **When present,
   step 4 writes `init_MAP.json` itself and step 5d is not run.**
+- `"source"`: `"fullmocks"` or `"DESI"`. **Load-bearing for mocks:** step 4
+  restricts to `MAIN` rows when it is `"fullmocks"`, because the frozen cuts were
+  derived from MAIN rows only. Gated on `source`, not on the column existing —
+  the DR2 per-population files carry their own pipeline-written `MAIN`. See
+  `BATCH_MOCKS.md` decision #4a.
 - `"target_main_count"`: mock batch only. Step 4 applies the frozen cuts to the
-  whole file, then draws exactly this many cut-passing galaxies as the analysed
-  sample (MAIN). `17234`, matching `DESI-DR2_TF_pv_cat_v5b.fits`. There is no
-  slice partitioning — no `n_subsets`/`subset_index`/`slice_sga_ids` anywhere.
+  MAIN rows, then draws exactly this many cut-passing galaxies as the analysed
+  sample (MAIN in the output). `17234`, matching `DESI-DR2_TF_pv_cat_v5b.fits`.
+  There is no slice partitioning — no `n_subsets`/`subset_index`/`slice_sga_ids`
+  anywhere.
 - `"n_objects"`: training sample size within the drawn subsample (5000)
 - `"random_seed"`: 42 — fixes both the subsample draw and the training draw
+- `"model"`: now actually honoured by `color_predict.py` (it previously had a hard
+  `"color"` default that shadowed this key). Precedence: explicit `--model` flag >
+  this key > `"color"`.
 - `"dust_pickle"`: DR2 only. Mocks instead carry `d_err_r` in the FITS header
-  (`A_R_ERR` / `DSTCFF_R_ERR`), read per file.
+  (`A_R_ERR` / `DSTCFF_R_ERR`), read per file. `make_batch_configs.py` refuses to
+  emit configs for a mock file carrying neither keyword, so the iron-value
+  fallback is unreachable for a generated batch.
 
 All pipeline scripts accept `--config $CONFIG` or `--run $RUN`.
 
@@ -273,6 +284,11 @@ grep -E "Loaded d_err_r|WARNING: no dust_pickle" slurm/logs/step8_predict_*.out
   wrong for both mocks and DR2.** Getting it wrong by the DR2 margin
   (0.1768 vs 0.2173) scales the dust variance by ~1.5.
 
+For a **generated** batch this should now be impossible: `make_batch_configs.py`
+checks every file's header and refuses to emit any config if one carries neither
+keyword. Reaching the fallback means the config was hand-written or predates that
+gate.
+
 **Fix:** For a mock, confirm the FITS header actually carries `A_R_ERR` or
 `DSTCFF_R_ERR` on HDU 1. For DR2, confirm the config sets `dust_pickle` *and*
 that it reached `color_predict.py` — it reads `output/$RUN/config.json`, so a
@@ -288,6 +304,51 @@ terms. Inspect it with:
 ```bash
 python3 -c "import h5py,sys; f=h5py.File(sys.argv[1]); print(dict(f.attrs))" output/$RUN/color_xonly_cov.h5
 ```
+
+---
+
+### Config generation: `make_batch_configs.py` exits without writing anything
+
+**Symptom:** `ERROR: N of M files cannot produce a correct step-8 covariance. No
+configs written.`, followed by one line per offending file.
+
+**Diagnosis:** Deliberate, and cheap — it costs seconds here instead of a step-6
+GPU allocation followed by a quietly wrong (or failed) step 8. Three reasons:
+- `no dust error keyword (need one of A_R_ERR, DSTCFF_R_ERR)` — step 8 would fall
+  back to the iron 0.17680 (see the dust failure mode above).
+- `no PHOTSYS_ERR column and PHOTSYS is numeric (TFORM='D')` — step 8's
+  `_systematic_offdiag_terms` would raise, since a float `PHOTSYS` cannot match
+  `'N'`. See `BATCH_MOCKS.md` decision #2d.
+- `has no "target_main_count"` (on the *base* config) — every run would analyse
+  the whole file's cut-passing population, G ~ 91,000, a ~67 GB covariance.
+
+The check is all-or-nothing on purpose: a partial batch is harder to notice than
+no batch.
+
+**Fix:** Fix the input files, or narrow `--pattern` to exclude them. Inspect a
+header with:
+```bash
+python3 -c "from astropy.io import fits;h=fits.open('FILE')[1];print({k:h.header[k] for k in h.header if 'ERR' in k});print([c.name for c in h.columns if 'PHOTSYS' in c.name])"
+```
+
+---
+
+### Step 8: `TypeError: PHOTSYS has non-string dtype … and no PHOTSYS_ERR`
+
+**Symptom:** Step 8 raises from `_systematic_offdiag_terms`.
+
+**Diagnosis:** Working as intended — this replaced a silent failure. The mock
+catalogs store `PHOTSYS` as a numeric offset, and `np.where(photsys == 'N', …)`
+against a float array is elementwise-False *without raising*, so the 0.02
+photsys calibration systematic used to vanish from every mock covariance with no
+warning. The value lives in the `PHOTSYS_ERR` column; if a catalog has neither a
+usable `PHOTSYS_ERR` nor a string `PHOTSYS`, the term is unresolvable and the
+covariance would be wrong.
+
+**Fix:** Confirm the catalog has `PHOTSYS_ERR`. Every mock this pipeline targets
+does, which is why `make_batch_configs.py` now checks for it up front. Any mock
+covariance built before this change is missing a rank-1 block over ~30% of
+galaxies and must be regenerated.
 
 ---
 

@@ -80,6 +80,27 @@ workflow. The following decisions are fixed; do not re-derive them:
    with one dust value in its per-population blocks and another in its
    cross-population terms.
 
+   **The fallback is now unreachable for a generated batch.**
+   `make_batch_configs.py` reads every file's header and refuses to emit *any*
+   config if one lacks both keywords, naming the offenders. A missing dust value
+   costs seconds at generation instead of a step-6 GPU allocation followed by a
+   quietly wrong covariance. The runtime fallback survives only for paths that
+   legitimately have no dust information.
+
+2d. **The photsys calibration systematic comes from the `PHOTSYS_ERR` column.**
+   DESI catalogs flag the northern footprint with a 1-character `PHOTSYS` and take
+   the built-in `_D_A_SYS` = 0.02 floor. The mocks instead store `PHOTSYS` as a
+   *numeric* offset (0.0 / −0.0234) plus a `PHOTSYS_ERR` column whose nonzero
+   value is exactly 0.02, on the same 51,550 of 170,781 rows. Reading the column
+   keeps the value with the data rather than hardcoded.
+
+   This was silently broken: `np.where(photsys == 'N', 0.02, 0.0)` against a
+   float64 column is elementwise-False without raising, so the term vanished from
+   every mock covariance with no warning. It now raises if it cannot be resolved,
+   and `make_batch_configs.py` checks for the column at generation time alongside
+   the dust keyword. **Any mock covariance built before this must be
+   regenerated** — it is missing a rank-1 block over ~30% of galaxies.
+
 3. **There is no metric-building step.** Every chain starts from the
    **identity metric** and adapts a dense one during warmup
    (`metric=dense_e adapt save_metric=1`, no `metric_file=`), with
@@ -110,14 +131,31 @@ workflow. The following decisions are fixed; do not re-derive them:
    > manual experiments but is not a step in either.
 
 4. **Each mock file contributes exactly one run, size-matched to the real DR2
-   sample.** Step 4 applies the frozen trapezoid cuts to the whole file
-   (~90,756 cut-passing galaxies for the reference mock) and then draws
-   **exactly `target_main_count = 17234`** of them at random. That number is
+   sample.** Step 4 restricts to the file's `MAIN` rows (see #4a), applies the
+   frozen trapezoid cuts to them (90,119 cut-passing galaxies for the reference
+   mock) and then draws **exactly `target_main_count = 17234`** of them at
+   random. That number is
    the MAIN count of the real DR2 product, `DESI-DR2_TF_pv_cat_v5b.fits`, whose
    covariance `DESI-DR2_TF_pv_cat_v5b_cov.h5` is correspondingly
    `(17234, 17234)` — the two agree exactly. Matching it means mock and data
    samples carry comparable statistical weight, so their uncertainties are
    directly comparable.
+
+4a. **Step 4 restricts mocks to `MAIN` rows**, because that is the population the
+   frozen cuts were *derived* from: `selection_ellipse.py` filters to `MAIN` when
+   `source: fullmocks`, so Phase A saw 154,976 of the reference mock's 170,781
+   valid rows. Applying the resulting trapezoid to the whole file mixed in a
+   population the ellipse never saw — `MAIN` is exactly `~DWARF`, a type-selected
+   and therefore magnitude-correlated subset, and 637 of the 90,756 cut-passing
+   galaxies were `DWARF` (0.70%, ~121 per draw). DR2 has no such asymmetry: its
+   Phase A applies no `MAIN` filter, so derivation and application already agree
+   there.
+
+   The filter is gated on `source == "fullmocks"`, not on the column merely
+   existing: the DR2 per-population FITS files carry their own pipeline-*written*
+   `MAIN` column from an earlier `color_predict.py` run, and filtering on that
+   would silently re-select a DR2 run against a stale selection. A mock with no
+   `MAIN` column is a hard error.
 
    The draw is a **single step**, not an iteration or a partition, because the
    cuts are frozen: the post-cut population is fully determined before we
@@ -415,6 +453,7 @@ Two things motivate it, and they point the same way:
 
 ```json
 {
+  "source": "fullmocks",       // restricts step 4 to MAIN rows
   "target_main_count": 17234,  // galaxies drawn from the cut-passing sample
   "n_objects": 5000,           // training sample size within the draw
   "random_seed": 42            // seeds both draws
@@ -423,8 +462,10 @@ Two things motivate it, and they point the same way:
 
 When `target_main_count` is present, `desi_data.py`:
 
-1. Applies the selection cuts (magnitude window, redshift, plane cuts) to the
-   **whole file** → 90,756 cut-passing galaxies for the reference mock
+1. Restricts to `MAIN` rows when `source: fullmocks` (154,976 of 170,781 for the
+   reference mock), then applies the selection cuts (magnitude window, redshift,
+   plane cuts) → 90,119 cut-passing galaxies. See decision #4a for why the MAIN
+   restriction matters and why it is gated on `source`.
 2. Draws exactly `target_main_count` of them with
    `default_rng(random_seed).choice(..., replace=False)`, sorted — recorded as
    `subset_sga_ids`. **This drawn sample is MAIN**; only these galaxies are
@@ -437,7 +478,7 @@ It is **one step, not an iteration or a partition.** The trapezoid cuts are
 frozen for the mock analysis (decision #2), so the post-cut population is fully
 determined before we choose — the target is reachable exactly. A
 fraction-of-the-file scheme cannot hit it: the post-cut count would fall out of
-the fraction (1/5 → 18,092–18,256, 1/6 → 15,039–15,211; 17,234 needs 1/5.27).
+the fraction rather than being chosen.
 The earlier slice mechanism has been **removed entirely** — there is no
 `n_subsets`, `subset_index`, or `slice_sga_ids` anywhere in the pipeline.
 
@@ -553,14 +594,16 @@ rows, `haty_min=-21.6`/`haty_max=-18.4`, `z_obs` ∈ [0.01, 0.065]):
 | Stage | Count |
 |-------|-------|
 | valid rows | 170,781 |
-| pass the selection cuts (`N_after_cuts`) | 90,756 |
+| of those, `MAIN` (see #4a) | 154,976 |
+| pass the selection cuts (`N_after_cuts`) | 90,119 |
 | **drawn subsample = MAIN** | **17,234** |
 | training (`n_objects`) | 5,000 |
 | holdout / ANALYSIS | 12,234 |
 
 These are what step4 actually reports; the log lines to compare against are
-`Subsample: 17234 of 90756 cut-passing galaxies (target_main_count=17234,
-random_seed=42)` and `Training: 5000, holdout: 12234`. The 17,234/5,000/12,234
+`MAIN filter (source=fullmocks): 154976 of 170781 valid rows are MAIN (15805
+non-MAIN dropped)`, `Subsample: 17234 of 90119 cut-passing galaxies
+(target_main_count=17234, random_seed=42)` and `Training: 5000, holdout: 12234`. The 17,234/5,000/12,234
 split matches `DESI-DR2_TF_pv_cat_v5b.fits` exactly (spiral 13,569 + irregular
 3,665 = 17,234; ANALYSIS 8,569 + 3,665 = 12,234).
 
