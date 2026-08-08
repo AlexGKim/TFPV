@@ -126,28 +126,75 @@ def resolve_d_err_r(cfg, fits_path=None):
     return _D_ERR_R
 
 
-def _systematic_offdiag_terms(ba, photsys, d_err_r=_D_ERR_R):
+def _systematic_offdiag_terms(ba, photsys, d_err_r=_D_ERR_R, photsys_err=None):
     """Per-galaxy systematic sensitivity vectors (MU / mag units).
 
     Parameters
     ----------
     ba : (G,) array-like — axis ratio b/a for each galaxy
-    photsys : (G,) array-like of str — 'N' or 'S' per galaxy
+    photsys : (G,) array-like — 'N'/'S' strings (DESI catalogs), or the numeric
+        per-galaxy offset (mocks, where ``photsys_err`` carries the uncertainty)
     d_err_r : float — std of internal-dust slope d (default: iron value)
+    photsys_err : (G,) array-like or None — per-galaxy photometric-calibration
+        uncertainty, from a ``PHOTSYS_ERR`` column. Takes precedence over
+        ``photsys`` when given.
 
     Returns
     -------
     v_dust : (G,) ndarray — internal-dust sensitivity  d_err_r × (BA − 1)
-    v_phot : (G,) ndarray — photsys calibration floor  dAsys × 1_{N}
+    v_phot : (G,) ndarray — photsys calibration floor
+
+    Raises
+    ------
+    TypeError
+        If ``photsys_err`` is absent and ``photsys`` is not string-typed, so the
+        ``== 'N'`` test could not possibly match. This used to return an
+        all-zero ``v_phot`` silently: the AbacusSummit mocks store PHOTSYS as a
+        float64 column (values 0.0 / −0.0234), NumPy compares float-to-str
+        elementwise-False without raising, and the entire photsys term vanished
+        from every mock covariance with no warning. Same bug class as the
+        byte-string hazard guarded in ``combine_color_xonly.py``.
+
+    Notes
+    -----
+    The two carriers agree numerically: DESI files flag the northern footprint
+    with a 1-character PHOTSYS and take the ``_D_A_SYS`` = 0.02 floor, while the
+    mocks ship a PHOTSYS_ERR column whose nonzero value *is* 0.02, on exactly
+    the rows whose PHOTSYS offset is nonzero. Preferring the column keeps the
+    value with the data rather than hardcoded, so a mock that adopts a different
+    calibration floor is honoured automatically.
     """
     ba = np.asarray(ba, dtype=float)
-    photsys = np.asarray(photsys)
     v_dust = d_err_r * (ba - 1.0)
+
+    if photsys_err is not None:
+        v_phot = np.asarray(photsys_err, dtype=float)
+        if v_phot.shape != ba.shape:
+            raise ValueError(
+                f"photsys_err shape {v_phot.shape} does not match ba {ba.shape}"
+            )
+        return v_dust, v_phot
+
+    photsys = np.asarray(photsys)
+    # astropy's FITS reader yields bytes (|Sn) for string columns, and
+    # b'N' == 'N' is False — the same silent all-zero failure as the float case.
+    # Decode here so no caller has to remember to (combine_color_xonly.py did).
+    if photsys.dtype.kind == "S":
+        photsys = np.char.decode(photsys, "ascii")
+    if photsys.dtype.kind not in ("U", "O"):
+        raise TypeError(
+            f"PHOTSYS has non-string dtype {photsys.dtype} and no PHOTSYS_ERR "
+            f"was supplied, so the ==\'N\' calibration test cannot match and the "
+            f"photsys systematic would silently be zero for all "
+            f"{photsys.size} galaxies. Pass photsys_err (from the catalog's "
+            f"PHOTSYS_ERR column) for mock catalogs, which store PHOTSYS as a "
+            f"numeric offset rather than an 'N'/'S' flag."
+        )
     v_phot = np.where(photsys == 'N', _D_A_SYS, 0.0)
     return v_dust, v_phot
 
 
-def _add_systematic_offdiag(cov, ba, photsys, d_err_r=_D_ERR_R):
+def _add_systematic_offdiag(cov, ba, photsys, d_err_r=_D_ERR_R, photsys_err=None):
     """Add dust and photsys off-diagonal covariance terms in-place.
 
     The diagonal is preserved exactly; only true off-diagonal elements change.
@@ -156,14 +203,18 @@ def _add_systematic_offdiag(cov, ba, photsys, d_err_r=_D_ERR_R):
     ----------
     cov : (G, G) ndarray — covariance matrix, modified in-place
     ba : (G,) array-like — axis ratio b/a
-    photsys : (G,) array-like of str — 'N' or 'S'
+    photsys : (G,) array-like — 'N'/'S' strings, or the numeric mock offset
     d_err_r : float — std of internal-dust slope d (default: iron value)
+    photsys_err : (G,) array-like or None — per-galaxy calibration uncertainty
+        (``PHOTSYS_ERR``); see :func:`_systematic_offdiag_terms`
 
     Returns
     -------
     cov : same array, modified in-place
     """
-    v_dust, v_phot = _systematic_offdiag_terms(ba, photsys, d_err_r=d_err_r)
+    v_dust, v_phot = _systematic_offdiag_terms(
+        ba, photsys, d_err_r=d_err_r, photsys_err=photsys_err
+    )
     diag = np.diag(cov).copy()
     cov += np.outer(v_dust, v_dust) + np.outer(v_phot, v_phot)
     np.fill_diagonal(cov, diag)   # restore diagonal exactly
@@ -2712,6 +2763,11 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         _ba_col      = "BA" if "BA" in _names else "BA_RATIO"
         _ba_raw      = np.asarray(_d[_ba_col],   dtype=float)
         _photsys_raw = np.asarray(_d["PHOTSYS"])
+        # PHOTSYS_ERR carries the per-galaxy calibration uncertainty directly
+        # (mocks); DESI catalogs have no such column and are flagged 'N'/'S' in
+        # PHOTSYS instead. See _systematic_offdiag_terms.
+        _photsys_err_raw = (np.asarray(_d["PHOTSYS_ERR"], dtype=float)
+                            if "PHOTSYS_ERR" in _names else None)
         _sga_raw     = (np.asarray(_d["SGA_ID"], dtype=float) if "SGA_ID" in _d.names
                         else np.arange(len(_d), dtype=float))
 
@@ -2734,6 +2790,8 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     zobs_star     = _zobs_raw[main]
     ba_star       = _ba_raw[main]
     photsys_star  = _photsys_raw[main]
+    photsys_err_star = (_photsys_err_raw[main]
+                        if _photsys_err_raw is not None else None)
     analysis_star = analysis[main]
 
     keep_cols = ["slope", "intercept.1", "sigma_int_x", "alpha_kcorr_r"]
@@ -2757,7 +2815,9 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     if model == "2color":
         # For large G, write directly to HDF5 in row blocks to avoid OOM.
         import h5py
-        v_dust, v_phot = _systematic_offdiag_terms(ba_star, photsys_star, d_err_r=_d_err_r)
+        v_dust, v_phot = _systematic_offdiag_terms(
+            ba_star, photsys_star, d_err_r=_d_err_r,
+            photsys_err=photsys_err_star)
         h5_out = _p("color_xonly_cov.h5")
         ystar_pp_cov_color_xonly_vectorized(
             draws, xhat_star, sigma_x_star,
@@ -2791,7 +2851,8 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
         )
-        _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r)
+        _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r,
+                                photsys_err=photsys_err_star)
         fits_out = _p("color_xonly_cov.fits")
         hdr = fits.Header()
         hdr["COMMENT"] = "Posterior predictive covariance matrix (float32), x-hat only"
@@ -2889,6 +2950,8 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     _ba_col_out = 'BA' if 'BA' in _tmain.names else 'BA_RATIO'
     ba_star = np.array(_tmain[_ba_col_out], dtype=float)
     photsys_star = np.array(_tmain['PHOTSYS'])
+    photsys_err_star = (np.array(_tmain['PHOTSYS_ERR'], dtype=float)
+                        if 'PHOTSYS_ERR' in _tmain.names else None)
 
     G = int(xhat_star.size)
     n_sub = min(512, G)
@@ -2909,7 +2972,9 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
         )
         ghat_star = ghat_full[main]
         sigma_g_star = sigma_g_full[main]
-        v_dust, v_phot = _systematic_offdiag_terms(ba_star, photsys_star, d_err_r=_d_err_r)
+        v_dust, v_phot = _systematic_offdiag_terms(
+            ba_star, photsys_star, d_err_r=_d_err_r,
+            photsys_err=photsys_err_star)
         h5_out = _p("color_cov.h5")
         ystar_pp_cov_2color_vectorized(
             draws, xhat_star, sigma_x_star, zhat_star, sigma_z_star,
@@ -2955,7 +3020,8 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
         )
-        _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r)
+        _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r,
+                                photsys_err=photsys_err_star)
 
         # σ²_{y,★} is already included in the diagonal via A₁₁; no further addition needed.
         cov_sub_noobs = cov[np.ix_(idx, idx)]

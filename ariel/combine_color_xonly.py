@@ -70,10 +70,10 @@ def load_population_main(run_dir):
     cov_path = os.path.join(run_dir, "color_xonly_cov.h5")
 
     table = Table.read(cat_path)
-    # astropy's FITS reader yields bytes (|Sn) for string columns; comparing
-    # bytes against Python str (e.g. photsys == 'N' in
-    # _systematic_offdiag_terms) silently returns all-False rather than
-    # raising, so decode to native unicode here rather than downstream.
+    # astropy's FITS reader yields bytes (|Sn) for string columns. Decode to
+    # native unicode so the *written* combined catalog carries str, not bytes.
+    # _systematic_offdiag_terms also decodes defensively now, but this in-place
+    # fix is what keeps the output column's dtype consistent with the inputs.
     if table["PHOTSYS"].dtype.kind == "S":
         table["PHOTSYS"] = np.char.decode(
             np.asarray(table["PHOTSYS"]), "ascii"
@@ -145,10 +145,19 @@ def combine(spiral_run, irregular_run, out_run, catalog_name="color_xonly_catalo
     ba_col = "BA" if "BA" in combined_table.colnames else "BA_RATIO"
     ba_all = np.asarray(combined_table[ba_col], dtype=float)
     photsys_all = np.asarray(combined_table["PHOTSYS"])
+    # PHOTSYS_ERR, when the catalogs carry it, is the per-galaxy calibration
+    # uncertainty and takes precedence over the 'N'/'S' flag. DESI catalogs (the
+    # only ones this script can combine — it needs SGA_ID) do not have it, so
+    # this is normally None; carried through so the cross-population block is
+    # built from the same v_phot the per-population blocks used.
+    photsys_err_all = (
+        np.asarray(combined_table["PHOTSYS_ERR"], dtype=float)
+        if "PHOTSYS_ERR" in combined_table.colnames else None
+    )
     sga_id_all = np.asarray(combined_table["SGA_ID"], dtype=float)
 
     v_dust_all, v_phot_all = _systematic_offdiag_terms(
-        ba_all, photsys_all, d_err_r=d_err_r
+        ba_all, photsys_all, d_err_r=d_err_r, photsys_err=photsys_err_all
     )
 
     cov_combined = np.zeros((n_tot, n_tot), dtype=np.float32)
