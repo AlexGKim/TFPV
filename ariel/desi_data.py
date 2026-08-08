@@ -33,6 +33,7 @@ def process_desi_tf_data(
     random_seed=_DEFAULT_RANDOM_SEED,
     target_main_count=None,
     train_fraction=None,
+    source=None,
     *,
     z_col="Z_DESI",
     z_col_candidates=(
@@ -172,6 +173,28 @@ def process_desi_tf_data(
         # [SPLIT] Galaxy identifier for train/holdout tracking
         sga_id_all_raw = np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names else np.arange(len(_logV), dtype=float)
 
+        # [MOCK] MAIN flag. Only read for the mock source: the frozen trapezoid
+        # cuts were DERIVED from MAIN rows only (selection_ellipse.py filters to
+        # MAIN when source="fullmocks"), so applying them to the whole file mixes
+        # in a population the ellipse never saw -- 637 of the reference mock's
+        # 90,756 cut-passing galaxies are DWARF (MAIN is exactly ~DWARF). Small
+        # (0.70%), but it makes the mock inconsistent with DR2, whose Phase A
+        # applies no MAIN filter so derivation and application already agree.
+        #
+        # Gated on source rather than mere column presence: the DR2 per-population
+        # FITS files carry their own pipeline-WRITTEN MAIN column (from a previous
+        # color_predict.py run), and filtering on that would silently re-select a
+        # DR2 run against a stale selection.
+        main_all_raw = None
+        if source == "fullmocks":
+            if "MAIN" not in names:
+                raise KeyError(
+                    'source="fullmocks" but the catalog has no MAIN column. The '
+                    'frozen mock selection cuts were derived from MAIN rows, so '
+                    'this file cannot be selected consistently with them.'
+                )
+            main_all_raw = np.asarray(data["MAIN"], dtype=bool)
+
     total_rows = len(_logV)
 
     # Reference velocity (km/s)
@@ -192,6 +215,15 @@ def process_desi_tf_data(
     # [2COLOR] require finite g-band if available
     if G_ABSMAG_SB26 is not None:
         valid_mask = valid_mask & np.isfinite(G_ABSMAG_SB26) & np.isfinite(G_ABSMAG_SB26_ERR)
+
+    # [MOCK] Restrict to MAIN so the frozen cuts are applied to the same
+    # population they were fit on (see where main_all_raw is read).
+    if main_all_raw is not None:
+        _n_before = int(valid_mask.sum())
+        valid_mask = valid_mask & main_all_raw
+        _n_after = int(valid_mask.sum())
+        print(f"  MAIN filter (source=fullmocks): {_n_after} of {_n_before} valid "
+              f"rows are MAIN ({_n_before - _n_after} non-MAIN dropped)")
 
     _logV = _logV[valid_mask]
     _logV_err = _logV_err[valid_mask]
@@ -899,6 +931,7 @@ def verify_subset(run_dir):
             train_fraction=cfg.get("train_fraction"),
             random_seed=seed,
             target_main_count=target,
+            source=cfg.get("source"),
             z_obs_min=cfg.get("z_obs_min"),
             z_obs_max=cfg.get("z_obs_max"),
             fixed_init=cfg.get("fixed_init"),
@@ -991,6 +1024,13 @@ if __name__ == "__main__":
         help=f"Random seed for reproducible subsampling (default {_DEFAULT_RANDOM_SEED})",
     )
     parser.add_argument(
+        "--source", default=None,
+        help="Data origin: 'DESI' (real catalogs) or 'fullmocks' (AbacusSummit "
+             "mocks). For 'fullmocks', step 4 restricts to MAIN rows so the "
+             "frozen selection cuts are applied to the population they were "
+             "derived from. Default: from --config, else 'DESI'.",
+    )
+    parser.add_argument(
         "--target_main_count", type=int, default=None,
         help="Draw exactly this many galaxies from the post-selection-cut "
              "sample as the analysed subsample (they become MAIN). Used by the "
@@ -1069,7 +1109,7 @@ if __name__ == "__main__":
         plot_file = args.plot or os.path.join(run_dir, "data.png")
         config = {
             "fits_file": args.input,
-            "source": cfg.get("source", "DESI"),
+            "source": args.source,
             "haty_max": args.haty_max,
             "haty_min": args.haty_min,
             "n_objects": args.n_objects,
@@ -1125,6 +1165,7 @@ if __name__ == "__main__":
         train_fraction=args.train_fraction,
         random_seed=args.random_seed,
         target_main_count=args.target_main_count,
+        source=args.source,
         z_obs_min=args.z_obs_min,
         z_obs_max=args.z_obs_max,
         fixed_init=args.fixed_init,
