@@ -9,6 +9,7 @@ expected by tophat.stan.
 import argparse
 import json
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
@@ -30,8 +31,7 @@ def process_desi_tf_data(
     intercept_plane2=None,
     n_objects=None,
     random_seed=_DEFAULT_RANDOM_SEED,
-    n_subsets=None,
-    subset_index=None,
+    target_main_count=None,
     train_fraction=None,
     *,
     z_col="Z_DESI",
@@ -348,50 +348,57 @@ def process_desi_tf_data(
     elif n_objects is None:
         n_objects = _DEFAULT_N_OBJECTS  # legacy default when neither is specified
 
-    # Partition into disjoint subsets, or subsample randomly
-    if n_subsets is not None and subset_index is not None:
-        # [SLICE] Partition the *valid, pre-selection-cut* sample, so each
-        # subset behaves like a standalone FITS file: it carries both
-        # cut-passing and cut-failing galaxies, and therefore has its own
-        # genuine MAIN-vs-full-sample contrast. (Partitioning the post-cut
-        # sample instead would put 100% of every subset inside MAIN and leave
-        # every cut-failing galaxy outside all subsets, making that contrast
-        # degenerate and forcing the diagnostic/prediction steps to compute
-        # over the whole file to find any.)
-        rng = np.random.default_rng(random_seed)
-        perm = rng.permutation(valid_rows)
-        chunk_size = valid_rows // n_subsets
-        start = subset_index * chunk_size
-        end = (subset_index + 1) * chunk_size if subset_index < n_subsets - 1 else valid_rows
-        slice_pos = np.sort(perm[start:end])
-        slice_sga_ids = sga_id_all[slice_pos]
+    # Draw a fixed-size subsample, or subsample randomly for training only
+    if target_main_count is not None:
+        # [SUBSET] Draw exactly `target_main_count` galaxies from the post-cut
+        # sample. This is the mock analysis's sizing mechanism: it makes the
+        # mock's MAIN count match the real DR2 product
+        # (DESI-DR2_TF_pv_cat_v5b.fits, MAIN = 17234) so the two samples carry
+        # comparable statistical weight.
+        #
+        # It is a single draw, not an iterative or partitioned one, because the
+        # trapezoid cuts are frozen for this analysis: the post-cut population
+        # is fully determined before we choose, so the target is reachable
+        # exactly in one step. A fraction-of-the-file scheme cannot do this —
+        # the post-cut count would fall out of the fraction rather than being
+        # chosen (1/5 of the reference mock gives ~18.1k, 1/6 ~15.1k; the target
+        # would need 1/5.27).
+        if N_after_cuts < target_main_count:
+            sys.exit(
+                f"ERROR: target_main_count={target_main_count} exceeds the "
+                f"{N_after_cuts} galaxies passing the selection cuts in "
+                f"{fits_file}. This file cannot produce a sample matched to the "
+                f"target, so step 4 fails rather than emitting an unmatched run. "
+                f"Lower target_main_count, widen the cuts, or exclude this file."
+            )
 
-        # Restrict the post-cut galaxies to this slice. sga_id_all is the
-        # pipeline's galaxy identity key everywhere else (train_sga_ids,
-        # subset_sga_ids, _train_analysis_masks all match on it), so member-
-        # ship by ID is consistent with the rest of the design.
-        in_slice = np.isin(sga_ids_main, slice_sga_ids)
-        x = x[in_slice]
-        y = y[in_slice]
-        sigma_x = sigma_x[in_slice]
-        sigma_y = sigma_y[in_slice]
-        z_obs = z_obs[in_slice]
-        z_absmag = z_absmag[in_slice]
-        sigma_z_absmag = sigma_z_absmag[in_slice]
-        if g_absmag is not None:
-            g_absmag = g_absmag[in_slice]
-            sigma_g_absmag = sigma_g_absmag[in_slice]
-        subset_sga_ids = sga_ids_main[in_slice].tolist()
-        N_subset = len(subset_sga_ids)
-        print(
-            f"  Slice {subset_index}/{n_subsets}: {len(slice_sga_ids)} valid rows "
-            f"from {valid_rows} (random_seed={random_seed}); of those "
-            f"{N_subset} pass the selection cuts "
-            f"({len(slice_sga_ids) - N_subset} fail -> MAIN contrast population)"
+        rng = np.random.default_rng(random_seed)
+        idx = np.sort(
+            rng.choice(N_after_cuts, size=target_main_count, replace=False)
         )
-        # Subsample within the subset for training (holdout = remainder)
+        x = x[idx]
+        y = y[idx]
+        sigma_x = sigma_x[idx]
+        sigma_y = sigma_y[idx]
+        z_obs = z_obs[idx]
+        z_absmag = z_absmag[idx]
+        sigma_z_absmag = sigma_z_absmag[idx]
+        if g_absmag is not None:
+            g_absmag = g_absmag[idx]
+            sigma_g_absmag = sigma_g_absmag[idx]
+        subset_sga_ids = sga_ids_main[idx].tolist()
+        N_subset = len(subset_sga_ids)
+        assert N_subset == target_main_count, (
+            f"internal error: drew {N_subset}, expected {target_main_count}"
+        )
+        print(
+            f"  Subsample: {N_subset} of {N_after_cuts} cut-passing galaxies "
+            f"(target_main_count={target_main_count}, random_seed={random_seed})"
+        )
+
+        # Training draw within the subsample; the remainder is the holdout.
         if n_objects is not None and n_objects < N_subset:
-            rng2 = np.random.default_rng(random_seed + subset_index + 1)
+            rng2 = np.random.default_rng(random_seed + 1)
             train_idx = np.sort(rng2.choice(N_subset, size=n_objects, replace=False))
             x = x[train_idx]
             y = y[train_idx]
@@ -404,21 +411,15 @@ def process_desi_tf_data(
                 g_absmag = g_absmag[train_idx]
                 sigma_g_absmag = sigma_g_absmag[train_idx]
             train_sga_ids = [subset_sga_ids[i] for i in train_idx]
-            print(f"  Training subsample: {n_objects} from {N_subset} subset galaxies")
+            print(f"  Training: {n_objects}, holdout: {N_subset - n_objects}")
         else:
             train_sga_ids = subset_sga_ids
             if n_objects is not None:
-                # Every cut-passing galaxy in this slice becomes training, so
-                # there is NO holdout: step8's ANALYSIS set will be empty and
-                # its predictions are all in-sample. Easy to miss in a 625-run
-                # batch, hence a loud warning rather than silent degradation.
                 print(
-                    f"  WARNING: requested n_objects={n_objects} >= the "
-                    f"{N_subset} cut-passing galaxies in slice "
-                    f"{subset_index}/{n_subsets}, so ALL of them are training "
-                    f"and this run has NO holdout (empty ANALYSIS set; step8 "
-                    f"predictions will be in-sample). Lower n_objects, lower "
-                    f"n_subsets, or widen the selection cuts for this file."
+                    f"  WARNING: n_objects={n_objects} >= the {N_subset} drawn "
+                    f"galaxies, so ALL of them are training and this run has NO "
+                    f"holdout (empty ANALYSIS set; step 8 predictions are "
+                    f"in-sample)."
                 )
     elif n_objects is not None and n_objects < N_after_cuts:
         rng = np.random.default_rng(random_seed)
@@ -505,16 +506,15 @@ def process_desi_tf_data(
     # [SPLIT] record training galaxy IDs so color_predict.py can identify holdout
     if train_sga_ids is not None:
         stan_data["train_sga_ids"] = train_sga_ids
-        if n_subsets is not None:
-            stan_data["n_subsets"] = n_subsets
-            stan_data["subset_index"] = subset_index
+        if target_main_count is not None:
             stan_data["subset_sga_ids"] = subset_sga_ids
-            # [SLICE] All valid rows in this slice, cut-passing or not. This is
-            # the "standalone FITS file" this run stands in for: the diagnostic
-            # and prediction steps restrict to it, so their full-sample-vs-MAIN
-            # comparison and their O(draws x galaxies) cost are both scoped to
-            # this slice rather than the entire catalog.
-            stan_data["slice_sga_ids"] = slice_sga_ids.tolist()
+            # Provenance for reproducible reconstruction of the subsample. The
+            # authoritative record is subset_sga_ids itself (reconstruction
+            # needs no RNG replay); these fields let the draw be regenerated
+            # from scratch and audited via --verify-subset.
+            stan_data["target_main_count"] = target_main_count
+            stan_data["N_after_cuts"] = int(N_after_cuts)
+            stan_data["fits_file"] = fits_file
             print(f"  Train/holdout split: {len(train_sga_ids)} training, "
                   f"{len(subset_sga_ids) - len(train_sga_ids)} holdout within subset")
         else:
@@ -533,11 +533,11 @@ def process_desi_tf_data(
     if os.path.exists(data_output_file):
         with open(data_output_file) as f:
             _old = json.load(f)
-        _partition_keys = ["n_subsets", "subset_index", "n_objects", "random_seed",
+        _partition_keys = ["target_main_count", "n_objects", "random_seed",
                            "train_fraction"]
         _old_partition = {k: _old.get(k) for k in _partition_keys}
         _new_partition = {
-            "n_subsets": n_subsets, "subset_index": subset_index,
+            "target_main_count": target_main_count,
             "n_objects": n_objects, "random_seed": random_seed,
             "train_fraction": train_fraction,
         }
@@ -842,6 +842,92 @@ def plot_desi_tf_data(
         )
 
 
+def verify_subset(run_dir):
+    """Drift check for a ``target_main_count`` run: regenerate the subsample draw
+    from the provenance in ``run_dir`` and compare it to the recorded IDs.
+
+    The authoritative record of a subsample is ``subset_sga_ids`` in
+    ``input.json`` — reconstruction never needs an RNG replay. This check exists
+    because *regeneration* does: NumPy does not promise ``Generator`` stream
+    stability across versions, so if a future numpy (or a change to the selection
+    code) alters the draw, this reports it instead of letting the two silently
+    diverge.
+
+    Regeneration goes through ``process_desi_tf_data`` itself rather than a
+    reimplementation of the draw, so the check cannot pass while the real code
+    path has drifted. Returns a process exit status (0 = match).
+    """
+    import tempfile
+
+    input_path = os.path.join(run_dir, "input.json")
+    config_path = os.path.join(run_dir, "config.json")
+    for p in (input_path, config_path):
+        if not os.path.exists(p):
+            print(f"ERROR: {p} not found — cannot verify {run_dir}")
+            return 1
+    with open(input_path) as f:
+        recorded = json.load(f)
+    with open(config_path) as f:
+        cfg = json.load(f)
+
+    if "subset_sga_ids" not in recorded:
+        print(f"{input_path} has no subset_sga_ids: this run drew no fixed-size "
+              f"subsample, so there is nothing to verify.")
+        return 0
+
+    target = recorded.get("target_main_count", cfg.get("target_main_count"))
+    fits_file = recorded.get("fits_file", cfg.get("fits_file"))
+    seed = recorded.get("random_seed", cfg.get("random_seed"))
+    print(f"Verifying {run_dir}")
+    print(f"  fits_file         : {fits_file}")
+    print(f"  target_main_count : {target}")
+    print(f"  random_seed       : {seed}")
+    print(f"  N_after_cuts      : {recorded.get('N_after_cuts')}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        process_desi_tf_data(
+            fits_file,
+            os.path.join(tmp, "input.json"),
+            os.path.join(tmp, "init.json"),
+            haty_max=cfg.get("haty_max"),
+            haty_min=cfg.get("haty_min"),
+            plane_cut=True,
+            slope_plane=cfg.get("slope_plane"),
+            intercept_plane=cfg.get("intercept_plane"),
+            intercept_plane2=cfg.get("intercept_plane2"),
+            n_objects=cfg.get("n_objects"),
+            train_fraction=cfg.get("train_fraction"),
+            random_seed=seed,
+            target_main_count=target,
+            z_obs_min=cfg.get("z_obs_min"),
+            z_obs_max=cfg.get("z_obs_max"),
+            fixed_init=cfg.get("fixed_init"),
+        )
+        with open(os.path.join(tmp, "input.json")) as f:
+            regenerated = json.load(f)
+
+    status = 0
+    for key in ("subset_sga_ids", "train_sga_ids"):
+        old = recorded.get(key)
+        new = regenerated.get(key)
+        if old == new:
+            print(f"  MATCH    {key}: {len(old) if old is not None else 0} ids identical")
+        else:
+            n_old = len(old) if old is not None else 0
+            n_new = len(new) if new is not None else 0
+            n_common = len(set(old or []) & set(new or []))
+            print(f"  MISMATCH {key}: recorded {n_old} ids, regenerated {n_new}, "
+                  f"{n_common} in common")
+            status = 1
+    if status == 0:
+        print("  -> subsample regenerates exactly; no drift.")
+    else:
+        print("  -> DRIFT: the recorded subset_sga_ids in input.json remain "
+              "authoritative; do not regenerate this run's input.json without "
+              "re-running the downstream chain.")
+    return status
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare DESI TF data for Stan.")
     parser.add_argument(
@@ -905,12 +991,18 @@ if __name__ == "__main__":
         help=f"Random seed for reproducible subsampling (default {_DEFAULT_RANDOM_SEED})",
     )
     parser.add_argument(
-        "--n_subsets", type=int, default=None,
-        help="Number of disjoint partitions (requires --subset_index)",
+        "--target_main_count", type=int, default=None,
+        help="Draw exactly this many galaxies from the post-selection-cut "
+             "sample as the analysed subsample (they become MAIN). Used by the "
+             "mock batch to match the real DR2 MAIN count. Seeded by "
+             "--random_seed; the drawn IDs are recorded in input.json.",
     )
     parser.add_argument(
-        "--subset_index", type=int, default=None,
-        help="Which partition to select (0-indexed, requires --n_subsets)",
+        "--verify_subset", metavar="RUN_DIR", default=None,
+        help="Drift check: regenerate the subsample draw from the provenance "
+             "recorded in RUN_DIR/input.json and RUN_DIR/config.json and compare "
+             "it to the recorded subset_sga_ids/train_sga_ids. Exits 0 on a "
+             "match, 1 on a mismatch. Does not modify RUN_DIR.",
     )
     parser.add_argument(
         "--z_obs_min", type=float, default=None, help="Minimum redshift"
@@ -947,6 +1039,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    if args.verify_subset is not None:
+        sys.exit(verify_subset(args.verify_subset))
+
     from config_utils import apply_config
     cfg = apply_config(args)
     # Applied after apply_config so a config's "random_seed" still wins over it.
@@ -980,6 +1075,9 @@ if __name__ == "__main__":
             "n_objects": args.n_objects,
             "train_fraction": args.train_fraction,
             "random_seed": args.random_seed,
+            # Recorded so --verify_subset can regenerate the draw from the run
+            # dir alone, without the original pipeline config.
+            "target_main_count": args.target_main_count,
             "z_obs_min": args.z_obs_min,
             "z_obs_max": args.z_obs_max,
             "slope_plane": args.slope_plane,
@@ -1026,8 +1124,7 @@ if __name__ == "__main__":
         n_objects=args.n_objects,
         train_fraction=args.train_fraction,
         random_seed=args.random_seed,
-        n_subsets=args.n_subsets,
-        subset_index=args.subset_index,
+        target_main_count=args.target_main_count,
         z_obs_min=args.z_obs_min,
         z_obs_max=args.z_obs_max,
         fixed_init=args.fixed_init,

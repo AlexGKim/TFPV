@@ -8,7 +8,7 @@ Where configs come from, and which doc owns what:
 
 | You are running | Where | Doc |
 |---|---|---|
-| AbacusSummit mocks, as a batch | NERSC | [BATCH_MOCKS.md](BATCH_MOCKS.md) — design decisions, config generation, submission. **Start there**; it defines the frozen cuts/init, slice partitioning, and the s00-only mode. |
+| AbacusSummit mocks, as a batch | NERSC | [BATCH_MOCKS.md](BATCH_MOCKS.md) — design decisions, config generation, submission. **Start there**; it defines the frozen cuts/init and the fixed-size subsample draw. |
 | the mechanics of one run's steps | NERSC | **this file** |
 | diagnosing a failure | NERSC | [BATCH_CLAUDE.md](BATCH_CLAUDE.md) — step map, dependency graph, failure catalog |
 | real DR2 data, whole catalog | locally | [DR2_SINGLE.md](DR2_SINGLE.md) |
@@ -108,8 +108,8 @@ explicitly not part of that pipeline (`BATCH_MOCKS.md` decisions #2, #2b).
 
 For a **new real dataset**, Phase A must be run locally first. Note that
 `export_config.py` prompts only for the keys it manages: `dust_pickle`,
-`train_fraction`, `fixed_init`, and the partition fields
-(`n_subsets`/`subset_index`/`n_objects`) must be added by hand. It does
+`train_fraction`, `fixed_init`, and the sampling fields
+(`target_main_count`/`n_objects`) must be added by hand. It does
 preserve keys it does not manage on a *re-*export. See
 [DR2_TWOPOP.md](DR2_TWOPOP.md) Step 3b, which also documents the `fits_file`
 placeholder that must be force-corrected after export.
@@ -310,20 +310,20 @@ chain's own adapted metric is saved as `output/$RUN/2color_{1..4}_metric.json`
 | compile | debug | ~5 min |
 | step4 (data prep) | debug | <5 min |
 | step5d (MAP) | debug | ~5 min — **skipped** for any config with `fixed_init` set (step4 writes `init_MAP.json` directly) |
-| step6 (4 chains, 1 node) | regular | depends on dataset size and the `NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure per dataset rather than assuming a fixed figure (walltime is set to 24h; adjust if insufficient). For reference, the validated abacus slice took ~6.4 h/chain on **CPU** from the identity metric: ~4.4 h warmup, ~2.1 h sampling |
+| step6 (4 chains, 1 node) | regular | depends on dataset size and the `NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure per dataset rather than assuming a fixed figure (walltime is set to 24h; adjust if insufficient). For reference, the validated abacus run took ~6.4 h/chain on **CPU** from the identity metric: ~4.4 h warmup, ~2.1 h sampling |
 | step7 (diagnose) | debug | ~15 min |
-| step8 (predict) | debug | ~5–10 min per slice-scoped run (step7 and step8 both request `-q debug -t 0:30:00`) |
+| step8 (predict) | debug | ~5–10 min per run (step7 and step8 both request `-q debug -t 0:30:00`) |
 
 There is no step 5e. Warmup from the identity metric is the whole adaptation
 budget, which is why `NUM_WARMUP` dominates step6's wall clock.
 
 **On step8's runtime.** The earlier "~1–4 hours on the regular queue" figure
-predated slice partitioning, when step8's posterior-predictive computation ran
-over every valid row of the whole catalog. It is now scoped to the run's slice
-(`_slice_mask`, see `BATCH_MOCKS.md`), which measured ~5 min end-to-end on a
-laptop for a 34,156-row slice of the 170k-row reference mock. Most of that is
-the O(G²) covariance, not the prediction: with G ≈ 18,200 MAIN galaxies the
-dense matrix is ~2.6 GB in float64 and lands as a **~1.17 GB gzipped float32
-`.h5`** per run — budget roughly **150 GB of scratch for a 125-run batch**
-(one slice per file, plus ~7 GB of catalogs). Pass `--no-cov` to skip it if that
+predated subsample scoping, when step8's posterior-predictive computation ran
+over every valid row of the whole catalog. It is now scoped to the run's drawn
+subsample (`_subset_mask`, see `BATCH_MOCKS.md`), which measured ~5 min
+end-to-end on a laptop at this scale on the 170k-row reference mock. Most of
+that is the O(G²) covariance, not the prediction: with G = 17,234 MAIN galaxies
+the dense matrix is ~2.4 GB in float64 and lands as a **~1.19 GB gzipped
+float32 `.h5`** per run — budget roughly **150 GB of scratch for a 125-run
+batch** (one run per file, plus ~7 GB of catalogs). Pass `--no-cov` to skip it if that
 footprint is a problem for a given batch.

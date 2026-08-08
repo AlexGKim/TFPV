@@ -39,7 +39,7 @@ scripts that built one (`step5e_metric.sh`, `make_metric.py`) have been
 deleted. A local A/B test found that approach ~2.7x slower overall to obtain
 than letting step6 adapt from scratch, with no quality gain, and its builder
 was a crude 100-draw `np.cov` over a stale parameter list. Warmup from
-identity suffices for the rank-1 model: the validated abacus slice finished
+identity suffices for the rank-1 model: the validated abacus run finished
 warmup in ~4.4 h/chain on CPU without stalling at max treedepth. (The local
 real-data workflow does still seed a Pathfinder metric — DR2_TWOPOP.md
 Step 5e — which is separate from the batch.)
@@ -54,7 +54,7 @@ Step 5e — which is separate from the batch.)
 | 5d *(skipped if config sets `fixed_init`)* | `slurm/step5d_map.sh` | `input.json`, `init.json` | `optimize.csv`, `init_MAP.json` | ~5 min | debug GPU |
 | 6 | `slurm/step6_node.sh` (1 node, 4 GPUs, 4 chains, identity metric + adapt) | `input.json`, `init_MAP.json` | `2color_{1..4}.csv`, `2color_metric_{1..4}.json` (each chain's own adapted metric, `save_metric=1`) | dataset-dependent (`NUM_WARMUP=1000`/`MAX_DEPTH=10` defaults — re-measure, don't assume a fixed figure) | regular GPU |
 | 7 | `slurm/step7_diagnose.sh` | `2color_?.csv` | `stansummary.txt`, `diagnose.txt`, `2color.png` | ~15 min | debug CPU |
-| 8 | `slurm/step8_predict.sh` (`color_predict.py`, then `explore_residuals.py`) | config, `input.json`, `2color_?.csv` | `color_xonly_catalog.fits`, `color_xonly_cov.h5` (x-only default; `--full` adds `color_catalog.fits`/`color_cov.h5`), `explore_residuals/` | ~5–10 min per slice-scoped run (mostly the O(G²) covariance; ~1.17 GB `.h5` each) | debug CPU |
+| 8 | `slurm/step8_predict.sh` (`color_predict.py`, then `explore_residuals.py`) | config, `input.json`, `2color_?.csv` | `color_xonly_catalog.fits`, `color_xonly_cov.h5` (x-only default; `--full` adds `color_catalog.fits`/`color_cov.h5`), `explore_residuals/` | ~5–10 min per run (mostly the O(G²) covariance; ~1.19 GB `.h5` each) | debug CPU |
 
 **Sentinel files:** Each step writes `output/$RUN/.step<N>_done` on success.
 Check completion with: `bash slurm/check_status.sh $CONFIG`
@@ -109,11 +109,12 @@ Key fields:
 - `"slope_plane"`, `"intercept_plane"`, `"intercept_plane2"`: oblique cut geometry
 - `"fixed_init"`: path to frozen physical-unit init values. **When present,
   step 4 writes `init_MAP.json` itself and step 5d is not run.**
-- `"n_subsets"`, `"subset_index"`: slice partitioning. `n_subsets` sets the
-  slice *size*; `subset_index` picks which slice. The mock batch uses
-  `n_subsets=5, subset_index=0`.
-- `"n_objects"`: training sample size within the slice (5000)
-- `"random_seed"`: 42 — fixes both the slice split and the training draw
+- `"target_main_count"`: mock batch only. Step 4 applies the frozen cuts to the
+  whole file, then draws exactly this many cut-passing galaxies as the analysed
+  sample (MAIN). `17234`, matching `DESI-DR2_TF_pv_cat_v5b.fits`. There is no
+  slice partitioning — no `n_subsets`/`subset_index`/`slice_sga_ids` anywhere.
+- `"n_objects"`: training sample size within the drawn subsample (5000)
+- `"random_seed"`: 42 — fixes both the subsample draw and the training draw
 - `"dust_pickle"`: DR2 only. Mocks instead carry `d_err_r` in the FITS header
   (`A_R_ERR` / `DSTCFF_R_ERR`), read per file.
 
@@ -235,13 +236,19 @@ predictive or covariance computation.
 
 **Diagnosis:** Check the galaxy count the run is working over. Both the
 O(draws × galaxies) prediction and the O(G²) covariance must be **scoped to the
-run's slice**. If the config lacks `n_subsets`/`subset_index`, nothing is
-scoped: G becomes the whole file's MAIN count (≈91,000 for the reference mock →
-a ~67 GB dense matrix). `color_predict._slice_mask()` does the scoping, keyed on
-`slice_sga_ids` in `input.json` — if that key is absent, step 4 was run by code
-predating slice partitioning and must be re-run.
+run's drawn subsample**. If a mock config lacks `target_main_count`, nothing is
+scoped: G becomes the whole file's cut-passing count (≈91,000 for the reference
+mock → a ~67 GB dense matrix). `color_predict._subset_mask()` does the scoping,
+keyed on `subset_sga_ids` in `input.json` — if that key is absent from a *mock*
+run's `input.json`, step 4 ran without `target_main_count` and must be re-run.
+(For DR2 runs the key is legitimately absent: they use their full sample, which
+is small enough.) Confirm with:
+```bash
+python3 -c "import json;d=json.load(open('output/$RUN/input.json'));print(len(d['subset_sga_ids']))"
+```
+It should print `17234`.
 
-**Fix:** Confirm the config carries the partition fields, re-run step 4, then
+**Fix:** Confirm the config carries `target_main_count`, re-run step 4, then
 step 8. To skip the covariance entirely:
 ```bash
 python color_predict.py --config $CONFIG --model 2color --no-cov
@@ -309,12 +316,14 @@ sbatch --export=CONFIG=$CONFIG slurm/step8_predict.sh
 ### Step 4: silently stale `input.json` after editing a config
 
 **Symptom:** Chains sample fine and everything looks normal, but predictions
-don't match the selection/holdout you expect — e.g. `n_objects`/`n_subsets`
-were changed in a config but the run's actual training rows didn't change.
+don't match the selection/holdout you expect — e.g.
+`n_objects`/`target_main_count` were changed in a config but the run's actual
+training rows didn't change.
 
 **Diagnosis:** `desi_data.py` now warns when it's about to overwrite an
-`output/$RUN/input.json` whose partition metadata (`n_subsets`, `subset_index`,
-`n_objects`, `random_seed`) differs from the config currently being applied —
+`output/$RUN/input.json` whose partition metadata (`target_main_count`,
+`n_objects`, `random_seed`, `train_fraction`) differs from the config currently
+being applied —
 check `slurm/logs/step4_data_*.out` for a `WARNING: overwriting ... whose
 partition metadata differs` line. If step 4 was never re-run after a config
 edit, `input.json`/`init_MAP.json`/the MCMC chains are all still fit to the old
@@ -327,14 +336,20 @@ unrelated field changed:
 sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
 ```
 
-**Note — this warning cannot catch a partition-*code* change.** It compares
-config metadata only. The partition point moved from post-selection-cut to
-pre-selection-cut (see `BATCH_MOCKS.md` "Subset Partition Mode"), so any
-`input.json` written before that change has identical metadata
-(`n_subsets`/`subset_index`/`n_objects`/`random_seed`) but *different actual
-membership* — and no warning will fire. Any run dir predating the change must
-be regenerated from step4, and its `input.json` is recognizable by the absence
-of a `slice_sga_ids` key.
+**Note — this warning cannot catch a sampling-*code* change.** It compares
+config metadata only. The mock sampling scheme was replaced: slice partitioning
+gave way to a single fixed-size draw of `target_main_count` cut-passing galaxies
+(see `BATCH_MOCKS.md` "The Subsample Draw"). A run dir predating that change is
+recognizable by an `n_subsets`/`subset_index`/`slice_sga_ids` key in its
+`input.json` — the current code writes none of those, and `apply_config`
+silently *ignores* those keys in an old config, so a stale config produces an
+unscoped run with no error. Any such run must be regenerated from step4.
+
+To check that a mock run's recorded draw still regenerates identically (numpy
+does not promise RNG stream stability across versions):
+```bash
+python3 desi_data.py --verify_subset output/$RUN
+```
 
 ---
 

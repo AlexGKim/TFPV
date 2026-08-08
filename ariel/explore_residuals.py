@@ -32,7 +32,7 @@ from predict import (
 from color_predict import (
     _load_logV,
     _logV_to_x,
-    _slice_mask,
+    _subset_mask,
     ystar_pp_mean_sd_color_xonly_vectorized,
 )
 
@@ -208,7 +208,7 @@ def main():
     # galaxies and the Full-sample-vs-MAIN contrast survives — while the
     # O(draws x galaxies) residual computation stays scoped to the slice
     # instead of the whole catalog (which OOMs at ~170k-galaxy mock scale).
-    mask = mask & _slice_mask(sga_id, input_data)
+    mask = mask & _subset_mask(sga_id, input_data)
 
     def _m(arr):
         return arr[mask]
@@ -318,12 +318,12 @@ def main():
     main_mask = _apply_main_cuts(cfg, xhat, yhat, zobs=zobs)
 
     # [SPLIT] Confine "main sample" to this run's holdout: exclude training
-    # galaxies, and — in subset partition mode — restrict to this run's
-    # subset_sga_ids. Without this, main_mask would pool training + holdout
-    # galaxies across every subset partition, not just this run's.
+    # galaxies, and — when a fixed-size subsample was drawn — restrict to this
+    # run's subset_sga_ids. Without this, main_mask would pool the whole file's
+    # cut-passing population rather than just the galaxies this run analysed.
     if "train_sga_ids" in input_data:
         in_training = np.isin(sga_id, input_data["train_sga_ids"])
-        if "n_subsets" in input_data:
+        if "subset_sga_ids" in input_data:
             in_subset = np.isin(sga_id, input_data["subset_sga_ids"])
             main_mask = main_mask & in_subset & ~in_training
         else:

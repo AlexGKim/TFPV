@@ -237,8 +237,8 @@ def _train_analysis_masks(sga_ids, input_data):
     ``(train_mask, analysis_mask)`` booleans in that same space.
 
     ``analysis_mask`` = NOT in ``train_sga_ids``; ``train_mask`` = in
-    ``train_sga_ids``. Both are restricted to ``subset_sga_ids`` when subset
-    partitioning is active (``n_subsets`` in ``input_data``). If no split was
+    ``train_sga_ids``. Both are restricted to ``subset_sga_ids`` when a
+    fixed-size subsample was drawn (``subset_sga_ids`` in ``input_data``). If no split was
     requested (``train_sga_ids`` absent), ``train_mask`` is all-False and
     ``analysis_mask`` is all-True — backward compatible with unsplit runs.
 
@@ -253,33 +253,32 @@ def _train_analysis_masks(sga_ids, input_data):
     train_ids = set(input_data["train_sga_ids"])
     in_training = np.isin(sga_ids, list(train_ids))
 
-    if "n_subsets" in input_data:
+    if "subset_sga_ids" in input_data:
         in_subset = np.isin(sga_ids, list(input_data["subset_sga_ids"]))
         return in_subset & in_training, in_subset & ~in_training
 
     return in_training, ~in_training
 
 
-def _slice_mask(sga_ids, input_data):
+def _subset_mask(sga_ids, input_data):
     """Given SGA_IDs (in any index space) and input.json contents, return a
-    boolean mask selecting this run's *slice*: every valid catalog row assigned
-    to it, whether or not it passes the selection cuts.
+    boolean mask selecting this run's drawn subsample.
 
-    ``desi_data.py`` partitions the valid, pre-selection-cut sample, so a slice
-    stands in for a standalone FITS file — it carries both cut-passing and
-    cut-failing galaxies, giving each run its own full-sample-vs-MAIN contrast.
-    Prediction and diagnostic steps restrict to this mask so their
-    O(draws x galaxies) work is scoped to the slice instead of the whole
-    catalog (~5x smaller for n_subsets=5, and the per-run predictions outside
-    the slice were never used).
+    For the mock batch, ``desi_data.py`` draws exactly ``target_main_count``
+    galaxies from the post-selection-cut sample (see BATCH_MOCKS.md), recording
+    them as ``subset_sga_ids``. Prediction and diagnostic steps restrict to this
+    mask so their O(draws x galaxies) work and the O(G^2) dense covariance are
+    scoped to the subsample (G = 17,234) instead of the whole file's cut-passing
+    population (G ~ 91,000, a ~67 GB matrix that cannot finish in step8's
+    walltime).
 
-    Returns all-True when slice partitioning is not active (``slice_sga_ids``
-    absent), so unsliced and pre-existing runs are unaffected.
+    Returns all-True when no subsample was drawn (``subset_sga_ids`` absent),
+    which is the DR2 case — the full sample is used there.
     """
     sga_ids = np.asarray(sga_ids, dtype=float)
-    if "slice_sga_ids" not in input_data:
+    if "subset_sga_ids" not in input_data:
         return np.ones(len(sga_ids), dtype=bool)
-    return np.isin(sga_ids, list(input_data["slice_sga_ids"]))
+    return np.isin(sga_ids, list(input_data["subset_sga_ids"]))
 
 
 def _sga_ids_valid_for_mask(fits_path, main_mask):
@@ -1838,10 +1837,10 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
 
     # [SLICE] Scope to this run's slice — same reasoning as in
-    # write_desi_catalog_color_xonly (see _slice_mask).
-    _sga_for_slice = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
+    # write_desi_catalog_color_xonly (see _subset_mask).
+    _sga_for_subset = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
                       else np.arange(n_rows, dtype=float))
-    valid = valid & _slice_mask(_sga_for_slice, input_data)
+    valid = valid & _subset_mask(_sga_for_subset, input_data)
 
     if model == "2color":
         draws = read_cmdstan_posterior(
@@ -2022,9 +2021,9 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     # intermediate, which OOMs at ~170k-galaxy mock scale. Rows outside the
     # slice would be discarded anyway: MAIN/ANALYSIS below are slice-scoped,
     # and combine_color_xonly.py reads only MAIN rows.
-    _sga_for_slice = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
+    _sga_for_subset = (np.asarray(data["SGA_ID"], dtype=float) if "SGA_ID" in names
                       else np.arange(n_rows, dtype=float))
-    valid = valid & _slice_mask(_sga_for_slice, input_data)
+    valid = valid & _subset_mask(_sga_for_subset, input_data)
 
     mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_color_xonly_vectorized(
         draws,
