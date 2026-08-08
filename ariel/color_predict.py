@@ -3094,17 +3094,35 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model",
-        default="color",
-        help="Model name for CSV glob pattern (default: color → color_?.csv)",
+        # default=None so config_utils.apply_config can fill this from the
+        # config's "model" key -- it only fills args that are still None. With a
+        # hard "color" default the key was silently ignored, so a config-only
+        # invocation would run the 1-color model on a 2color run while
+        # "model": "2color" sat in the config looking authoritative. Same idiom
+        # as corner.py. The documented default is applied after apply_config.
+        default=None,
+        help="Model name for CSV glob pattern (default: from --config's "
+             "\"model\" key, else color → color_?.csv)",
     )
     args = parser.parse_args()
 
     import json as _json
+    # Resolve --model explicitly rather than letting apply_config fill it.
+    # PIPELINE_DEFAULTS carries "model": "tophat" for the DR1 pipeline, which is
+    # not a model this script can read, so falling through to it would be worse
+    # than the old hard default. Precedence: explicit flag > config's "model" >
+    # "color".
+    _model_cli = args.model
     if args.config or args.run:
         from config_utils import apply_config, run_dir_from_args
-        apply_config(args)
+        _pipeline_cfg = apply_config(args)
         if not args.run_dir:
             args.run_dir = run_dir_from_args(args)
+        if _model_cli is None:
+            args.model = _pipeline_cfg.get("model") or "color"
+    if args.model is None:
+        args.model = "color"
+    print(f"model: {args.model} (reading {args.model}_?.csv)")
     _run_dir = args.run_dir or "."
     with open(os.path.join(_run_dir, "config.json")) as _f:
         _cfg = _json.load(_f)

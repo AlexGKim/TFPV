@@ -294,13 +294,21 @@ if ! skip_if_done 7; then
     ../../cmdstan/bin/stansummary "$RUN_DIR"/2color_?.csv > "$RUN_DIR/stansummary.txt"
     ../../cmdstan/bin/diagnose    "$RUN_DIR"/2color_?.csv > "$RUN_DIR/diagnose.txt"
     python corner.py --run "$RUN" --model 2color
-    python explore_residuals.py --config "$CONFIG" --kind 2color
+    # explore_residuals.py runs in step 8, after color_predict.py — see below.
     mark_done 7
 fi
 
 if ! skip_if_done 8; then
     echo "=== Step 8: prediction (x-only, the default model; pass --full for the full model too) ==="
     python color_predict.py --config "$CONFIG" --model 2color
+
+    # Order matters, and it is the same order slurm/step8_predict.sh uses:
+    # color_predict.py writes the catalog and covariance (the science output),
+    # explore_residuals.py only writes diagnostic plots. Running the plots first
+    # -- as this script used to, from step 7 -- means a plotting failure under
+    # `set -e` costs the run its science output.
+    echo "=== Step 8b: residual diagnostics ==="
+    python explore_residuals.py --config "$CONFIG" --kind 2color
     mark_done 8
 fi
 

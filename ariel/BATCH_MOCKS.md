@@ -499,15 +499,18 @@ bash slurm/step6_submit.sh $CONFIG
 for a single config, mirroring the same chain (step4 → step6 ×4 → step7 →
 step8, with step5d skipped when the config sets `fixed_init`) via the CPU
 `./2color` binary, with the 4 chains as background processes instead of one per
-GPU. Its sampler settings track `slurm/step6_node.sh`'s non-debug defaults
-(`num_warmup=1000`, `max_depth=10`, `delta=0.9`, no metric seeding), so local
-results stay comparable to batch results; override via `NUM_WARMUP`,
-`NUM_SAMPLES`, `MAX_DEPTH`, `DELTA`, or `NO_COV=1` in the environment.
+GPU. Its sampler settings match `slurm/step6_node.sh`'s non-debug defaults
+exactly — `num_warmup=1000`, `num_samples=1000`, `max_depth=10`,
+`adapt delta=0.9`, identity metric, no seeding — so local results stay
+comparable to batch results. Override with the `--warmup`, `--max-depth`,
+`--delta` and `--chains` flags.
 
-The local validation config is
-`configs/abacus_zsnap020_zmax011_2color_test.json`, which points at
+The local validation config is `configs/abacus_2color.json` itself: it points at
 `data/TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits` and carries
-the same `target_main_count: 17234`.
+both `target_main_count: 17234` and `fixed_init`, so a local run exercises the
+same frozen-init path the batch uses. (The former
+`configs/abacus_zsnap020_zmax011_2color_test.json` was deleted: it omitted
+`fixed_init`, so it validated the step5d MAP path instead of the batch's.)
 
 ### Predictions (plots only, no covariance)
 

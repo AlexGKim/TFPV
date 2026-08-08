@@ -454,7 +454,7 @@ Residual plots land in `output/$RUN/explore_residuals/`.
 | File | Purpose |
 |------|---------|
 | [run_dr2_onepop.sh](run_dr2_onepop.sh) | Automates Steps 1–8 above, one population per invocation |
-| [2COLOR.md](2COLOR.md) | Background: full 2color model docs, single-population form. Its "Step 5e" short-MCMC metric builder is retired — Step 6 runs from identity. |
+| [2COLOR.md](2COLOR.md) | Background: full 2color model docs, single-population form. Its Step 6 now matches this one — identity metric, same sampler arguments. |
 | [DR1.md](DR1.md) | Background: original selection workflow this doc's Steps 1–3b are adapted from |
 | `2color.stan` | Stan model: quadrivariate TFR with two independent color factors |
 | `make_map_init.py` | Step 5d: converts the MAP `optimize.csv` to `init_MAP.json` |

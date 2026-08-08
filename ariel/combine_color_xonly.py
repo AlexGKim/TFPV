@@ -29,7 +29,7 @@ from astropy.table import Table, vstack
 from color_predict import _systematic_offdiag_terms, resolve_d_err_r
 
 
-def _resolve_d_err_r(run_dir, cov_path=None):
+def _resolve_d_err_r(run_dir, cov_path=None, pipeline_config=None):
     """Return the d_err_r that step 8 actually used for this population.
 
     Prefers the ``d_err_r`` attribute step 8 records on the covariance HDF5.
@@ -40,7 +40,12 @@ def _resolve_d_err_r(run_dir, cov_path=None):
     (0.1768) in the cross terms.
 
     Falls back to re-resolving from the run's config/FITS header for
-    covariances written before the attribute existed, and says so.
+    covariances written before the attribute existed, and says so. That fallback
+    overlays ``pipeline_config`` the same way ``color_predict.py`` does, because
+    ``output/<run>/config.json`` records only what step 4 knew: all three DR2 run
+    dirs have ``dust_pickle: null``, and the DR2 FITS files carry no dust
+    keywords, so without the overlay this path lands on the iron default 0.1768
+    -- exactly the drift this function exists to prevent.
     """
     if cov_path and os.path.exists(cov_path):
         with h5py.File(cov_path, "r") as hf:
@@ -54,10 +59,16 @@ def _resolve_d_err_r(run_dir, cov_path=None):
               f"match what its blocks were built with. Re-run step 8 to be sure.")
     with open(os.path.join(run_dir, "config.json")) as f:
         cfg = json.load(f)
+    if pipeline_config and os.path.exists(pipeline_config):
+        with open(pipeline_config) as f:
+            _pcfg = json.load(f)
+        for k, v in _pcfg.items():
+            if cfg.get(k) is None:
+                cfg[k] = v
     return resolve_d_err_r(cfg, cfg.get("fits_file"))
 
 
-def load_population_main(run_dir):
+def load_population_main(run_dir, pipeline_config=None):
     """Load one population's MAIN-row catalog subset + full covariance.
 
     Returns (table, cov, analysis_mask, d_err_r). `table` rows, `cov`
@@ -96,23 +107,24 @@ def load_population_main(run_dir):
             f"MAIN row count {len(table_main)}"
         )
 
-    d_err_r = _resolve_d_err_r(run_dir, cov_path)
+    d_err_r = _resolve_d_err_r(run_dir, cov_path, pipeline_config=pipeline_config)
     return table_main, cov, analysis, d_err_r
 
 
-def combine(spiral_run, irregular_run, out_run, catalog_name="color_xonly_catalog.fits"):
+def combine(spiral_run, irregular_run, out_run, catalog_name="color_xonly_catalog.fits",
+            spiral_config=None, irregular_config=None):
     out_dir = os.path.join("output", out_run)
     os.makedirs(out_dir, exist_ok=True)
 
     print(f"Loading spiral population from output/{spiral_run} ...")
     t_sp, cov_sp, ana_sp, d_err_r_sp = load_population_main(
-        os.path.join("output", spiral_run)
+        os.path.join("output", spiral_run), pipeline_config=spiral_config
     )
     print(f"  MAIN rows: {len(t_sp)}, d_err_r={d_err_r_sp:.8f}")
 
     print(f"Loading irregular population from output/{irregular_run} ...")
     t_ir, cov_ir, ana_ir, d_err_r_ir = load_population_main(
-        os.path.join("output", irregular_run)
+        os.path.join("output", irregular_run), pipeline_config=irregular_config
     )
     print(f"  MAIN rows: {len(t_ir)}, d_err_r={d_err_r_ir:.8f}")
 
@@ -229,6 +241,12 @@ def combine(spiral_run, irregular_run, out_run, catalog_name="color_xonly_catalo
         hf.create_dataset("analysis", data=analysis_combined)
         hf.create_dataset("population", data=population_combined)
         hf.create_dataset("sga_id", data=sga_id_all)
+        # Record the dust value the whole matrix was built with. The
+        # per-population inputs carry this attribute and it is what the
+        # cross-population blocks above were computed from; omitting it here left
+        # the delivered product as the only file in the chain without the
+        # provenance the mechanism exists to preserve.
+        hf.attrs["d_err_r"] = float(d_err_r)
         hf.attrs["population_labels"] = "0=spiral, 1=irregular"
         hf.attrs["row_order"] = (
             f"MAIN=True rows of {catalog_name} in this directory, "
@@ -244,8 +262,21 @@ def main():
     parser.add_argument("--irregular-run", default="DR2_TF_irrs_v5_2color_irregular")
     parser.add_argument("--out-run", default="DR2_TF_v5_2color_combined")
     parser.add_argument("--catalog-name", default="DESI-DR2_TF_pv_cat_v5b.fits")
+    parser.add_argument(
+        "--spiral-config", default=None,
+        help="Pipeline config for the spiral run. Only consulted if that run's "
+             "covariance lacks a d_err_r attribute; overlaid onto the run-dir "
+             "config.json so keys added after step 4 last ran (notably "
+             "dust_pickle) are still seen. Same overlay color_predict.py does.",
+    )
+    parser.add_argument(
+        "--irregular-config", default=None,
+        help="Pipeline config for the irregular run; see --spiral-config.",
+    )
     args = parser.parse_args()
-    combine(args.spiral_run, args.irregular_run, args.out_run, args.catalog_name)
+    combine(args.spiral_run, args.irregular_run, args.out_run, args.catalog_name,
+            spiral_config=args.spiral_config,
+            irregular_config=args.irregular_config)
 
 
 if __name__ == "__main__":
