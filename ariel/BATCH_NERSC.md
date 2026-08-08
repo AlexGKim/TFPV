@@ -76,8 +76,8 @@ Two things worth stating explicitly, because both changed:
   pass `metric_file=`; both start from the identity metric and adapt a dense one
   during warmup (`NUM_WARMUP=1000`). The scripts that built a metric
   (`step5e_metric.sh`, `make_metric.py`) have been removed. The local real-data
-  workflow does still seed a Pathfinder metric — see [DR2_TWOPOP.md](DR2_TWOPOP.md)
-  Step 5e — which is deliberate and separate from the batch.
+  workflow runs from identity too, with the same sampler arguments — see
+  [DR2_TWOPOP.md](DR2_TWOPOP.md) Step 6.
 
 ### Obtaining the FITS file
 

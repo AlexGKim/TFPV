@@ -101,12 +101,13 @@ workflow. The following decisions are fixed; do not re-derive them:
    run completed warmup in ~4.4 h/chain on CPU without stalling at max
    treedepth. That is only true for the **rank-1** model (`S = w wᵀ`) — the
    earlier rank-2 parameterization did funnel, which is what Pathfinder
-   seeding was introduced to fix.
+   seeding was introduced to fix. Rank-1 removed the funnel, so the workaround
+   went with it.
 
-   > The **local real-data** workflow still seeds a Pathfinder-built metric —
-   > see [DR2_TWOPOP.md](DR2_TWOPOP.md) Step 5e and `make_pf_metric.py`. That
-   > is retained deliberately and is separate from the batch; only the crude
-   > short-chain builder was removed.
+   > The **local real-data** workflow runs from identity as well, with the same
+   > sampler arguments — see [DR2_TWOPOP.md](DR2_TWOPOP.md) Step 6. The two
+   > paths sample identically by design. `make_pf_metric.py` survives for
+   > manual experiments but is not a step in either.
 
 4. **Each mock file contributes exactly one run, size-matched to the real DR2
    sample.** Step 4 applies the frozen trapezoid cuts to the whole file

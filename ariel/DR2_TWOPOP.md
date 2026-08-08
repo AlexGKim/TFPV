@@ -25,17 +25,21 @@ selection steps (1–3b) and [2COLOR.md](2COLOR.md)'s fit/predict steps (4–8),
 plus two things found while actually running it that aren't reflected
 upstream yet:
 
-- Step 6 runs from a **Pathfinder-built dense warmup metric** (Step 5e below),
-  not the identity metric. The 2color posterior is badly conditioned (~10^5
-  spread in parameter SDs), so from the identity metric HMC warmup collapses to
-  a tiny stepsize at max treedepth (~1023 leapfrog steps/iteration,
-  ~60 s/iteration, ~4+ h/chain of warmup). Pathfinder estimates the full
-  posterior covariance in ~1 minute; seeding `dense_e` with it removes the
-  mis-conditioning from iteration 1 and keeps warmup off the treedepth cap
-  (~3 s/iteration). This is **not** the old short-MCMC-run "Step 5e" that
-  [2COLOR.md](2COLOR.md) documents and rejects — that built a covariance from
-  only ~100 post-warmup draws (too few, ~2.7x slower overall). Pathfinder is
-  cheap and purpose-built for this, so it is a default step here.
+- Step 6 runs from the **identity metric**, adapting a dense one during warmup.
+  There is no separate metric-seeding step. Earlier revisions of this doc seeded
+  a Pathfinder-built `dense_e` metric, because under the **rank-2**
+  parameterization warmup from identity collapsed to a tiny stepsize at max
+  treedepth (~1023 leapfrog steps/iteration, ~60 s/iteration). That was a
+  rank-2 artifact — see the next bullet — and it no longer applies: under
+  rank-1, warmup adapts from identity in ~4.4 h/chain without stalling at the
+  treedepth cap (measured on the abacus validation run, see
+  [BATCH_MOCKS.md](BATCH_MOCKS.md)). Running from identity also keeps this
+  procedure **algorithmically identical to the NERSC mock batch**, which is what
+  lets mock-derived uncertainties calibrate the real measurement.
+  `make_pf_metric.py` is retained for manual experiments but is not a step here.
+  (The ~2.7x slowdown quoted in [2COLOR.md](2COLOR.md) measured that doc's *old
+  short-MCMC* builder — a covariance from only ~100 post-warmup draws — and is
+  not a statement about Pathfinder.)
 - The intrinsic (y,z,g) scatter is a **rank-1 covariance `S = w wᵀ`** (a single
   loading vector `w`), not the earlier rank-2 `V Σ_c Vᵀ` with a free
   `unit_vector` null direction. The data support one scatter axis (the rank-2
@@ -282,55 +286,12 @@ MAP drove near its 0 boundary (default floor 0.01, via `--sigma-floor`).
 
 ---
 
-## Step 5e: Build a warmup metric from Pathfinder
+## Step 6: Run MCMC sampling — 4 parallel chains, identity metric
 
-```bash
-./2color pathfinder num_paths=1 history_size=30 max_lbfgs_iters=100 \
-    num_draws=200 num_elbo_draws=10 num_psis_draws=200 \
-    data file=output/$RUN/input.json \
-    init=output/$RUN/init.json \
-    output file=output/$RUN/pathfinder.csv
-
-python3 make_pf_metric.py --run $RUN
-```
-
-Pathfinder inits from `init.json` (the pre-MAP starting point), **not**
-`init_MAP.json`: starting Pathfinder's L-BFGS exactly at the MAP mode (near-zero
-gradient, very flat) can make every L-BFGS iteration fail with ELBO `-inf`
-("None of the LBFGS iterations completed successfully" — seen on the spiral
-population). Starting from `init.json` lets Pathfinder run its own optimization
-normally.
-
-The 2color posterior is badly conditioned — parameter standard deviations span
-~10^5 across the 13 sampling dimensions (magnitudes ~1e-3, band k-corrections
-~1e-1). Started from the identity metric, HMC fights this mis-conditioning for
-most of warmup: the stepsize collapses to ~2e-4 and *every* transition hits the
-max-treedepth cap (~1023 leapfrog steps/iteration, ~60 s/iteration), taking
-~4+ h/chain of warmup before adaptation converges.
-
-Pathfinder (Stan's L-BFGS variational method) produces an approximate posterior
-in ~1 minute. `make_pf_metric.py` reads its draws, transforms each sampling
-parameter to Stan's unconstrained scale (logit for the bounded `slope_std`,
-`intercept_std`, `sigma_int_x`; the rank-1 loading `w` and the mean/k-correction
-params are unconstrained-native), and writes a full **13×13 dense** `dense_e`
-metric — the exact posterior covariance estimate, correlations included — to
-`output/$RUN/pf_metric.json`. Seeding Step 6 with this removes the
-mis-conditioning from iteration 1; warmup stays off the max-treedepth cap
-(treedepth ~2–6, ~3 s/iteration) instead of funneling. (The rank-1 `S = w w^T`
-parameterization is what makes the metric exact: every sampling dimension
-transforms cleanly, unlike the earlier rank-2 `unit_vector` null direction,
-which had a sphere-constrained radial dimension that no fixed metric could
-precondition — the source of the warmup funnel this whole step exists to
-avoid.) `make_pf_metric.py` assumes `N_bins == 1` (this workflow) and errors out
-otherwise.
-
----
-
-## Step 6: Run MCMC sampling — 4 parallel chains, Pathfinder metric
-
-Runs from the Pathfinder-seeded metric (Step 5e) with in-warmup dense-metric
-adaptation (`adapt`, Stan's default). Launches 4 single-chain processes in the
-background, one per core (adjust if you have fewer than 4 free cores):
+Runs from the identity metric with in-warmup dense-metric adaptation (`adapt`),
+matching `slurm/step6_node.sh` argument for argument. Launches 4 single-chain
+processes in the background, one per core (adjust if you have fewer than 4 free
+cores):
 
 ```bash
 PIDS=()
@@ -338,7 +299,7 @@ for CHAIN_ID in 1 2 3 4; do
     ./2color sample num_warmup=1000 num_samples=1000 \
         adapt delta=0.9 save_metric=1 \
         algorithm=hmc engine=nuts max_depth=10 \
-        metric=dense_e metric_file=output/$RUN/pf_metric.json \
+        metric=dense_e \
         id=$CHAIN_ID \
         data file=output/$RUN/input.json \
         init=output/$RUN/init_MAP.json \
@@ -362,11 +323,14 @@ treedepth cap lets NUTS actually reach its natural trajectory length instead
 of being cut off (at the cost of up to 1023 leapfrog steps/iteration in the
 worst case, vs. 255 at depth 8, so this is meaningfully slower per iteration
 — expect substantially longer runs than the timing note below, which
-predates this change). `adapt delta=0.9` (up from Stan's default 0.8): the
-rank-2 `S` / Householder null-direction geometry produces tight posterior
-curvature that drove a non-trivial divergence rate at the default (1.9% on
+predates this change). `adapt delta=0.9` (up from Stan's default 0.8): at the
+default, tight posterior curvature drove a non-trivial divergence rate (1.9% on
 DR2_v0 spiral, 8.4% on DR2_TF_spirals_v5 spiral); a higher target acceptance
-statistic shrinks the adapted stepsize and suppresses those divergences. This
+statistic shrinks the adapted stepsize and suppresses those divergences. Those
+rates were measured under the earlier rank-2 `S` / Householder
+null-direction geometry, which is gone — but `0.9` is retained because it is
+also what `slurm/step6_node.sh` uses, and the two paths must sample
+identically. Re-measure before lowering it. This
 comes at a real wall-clock cost, and the cost is steeply non-linear in the
 irregular population: at `delta=0.95` the irregular warmup was so slow it was
 impractical locally (~135 min per 100 warmup iterations, i.e. ~20+ h/chain),
@@ -389,7 +353,7 @@ you have cores, or fall back to the sequential single-invocation form:
 ./2color sample num_warmup=1000 num_samples=1000 num_chains=4 \
     adapt delta=0.9 save_metric=1 \
     algorithm=hmc engine=nuts max_depth=10 \
-    metric=dense_e metric_file=output/$RUN/pf_metric.json \
+    metric=dense_e \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
     output file=output/$RUN/2color.csv
@@ -490,11 +454,11 @@ Residual plots land in `output/$RUN/explore_residuals/`.
 | File | Purpose |
 |------|---------|
 | [run_dr2_onepop.sh](run_dr2_onepop.sh) | Automates Steps 1–8 above, one population per invocation |
-| [2COLOR.md](2COLOR.md) | Background: full 2color model docs, single-population form, the old short-MCMC-run "Step 5e" (superseded here by Pathfinder) |
+| [2COLOR.md](2COLOR.md) | Background: full 2color model docs, single-population form. Its "Step 5e" short-MCMC metric builder is retired — Step 6 runs from identity. |
 | [DR1.md](DR1.md) | Background: original selection workflow this doc's Steps 1–3b are adapted from |
 | `2color.stan` | Stan model: quadrivariate TFR with two independent color factors |
 | `make_map_init.py` | Step 5d: converts the MAP `optimize.csv` to `init_MAP.json` |
-| `make_pf_metric.py` | Step 5e: builds the Pathfinder warmup metric `pf_metric.json` |
+| `make_pf_metric.py` | Not a pipeline step. Builds a Pathfinder `dense_e` metric for manual experiments only; Step 6 runs from identity. |
 | `make_population_subsets.py` | Splits an official FITS file into per-population subsets |
 | `color_predict.py --model 2color` | Posterior predictive computation |
 | `data/loa_internalDust_nokcorr_mcmc.pickle` | Internal-dust MCMC for DR2; `"dust_pickle"` in `$CONFIG` points here to give `d_err_r = 0.21734862` instead of the iron default `0.17680325` (see Step 3b) |

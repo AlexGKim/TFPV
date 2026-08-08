@@ -10,10 +10,24 @@
 # (nohup) to run Steps 4-8 unattended in the background -- that phase takes
 # hours (mainly Step 6's MCMC sampling).
 #
-# See DR2_TWOPOP.md for the full narrative / rationale (in particular why
+# See DR2_TWOPOP.md for the full narrative / rationale.
+#
 # Step 6 runs from the identity metric directly, with no separate metric
-# warm-start step -- an empirical test found that ~2.7x slower overall than
-# just letting Step 6 adapt from scratch).
+# warm-start step. This is a rank-1 consequence, not a general claim about
+# preconditioning: the warmup funnel that made a fixed metric necessary came
+# from the earlier rank-2 parameterization (a vanishing second scale plus a
+# sphere-constrained unit_vector null direction, which no fixed metric could
+# precondition). Under the current rank-1 S = w w^T the funnel is gone, and
+# warmup adapts a dense metric from identity in ~4.4 h/chain without stalling
+# at max treedepth -- measured on the abacus validation run, see BATCH_MOCKS.md.
+# It also keeps this script algorithmically identical to the NERSC mock batch
+# (slurm/step6_node.sh), which is what lets mock-derived uncertainties
+# calibrate the real measurement.
+#
+# (Do not confuse this with the ~2.7x figure quoted in 2COLOR.md: that measured
+# the *old short-MCMC* metric builder -- a covariance from ~100 post-warmup
+# draws -- and says nothing about Pathfinder, which was a separate mechanism
+# retired here for the rank-1 reason above.)
 #
 # Options:
 #   --population {spiral,irregular}   required
@@ -29,6 +43,8 @@
 #                                      250 after an abacus-mock experiment showed a
 #                                      non-trivial divergence/max-treedepth rate and
 #                                      a systematic residual bias at 250)
+#   --delta D                         adapt delta (default 0.9, matching the
+#                                     NERSC batch; see slurm/step6_node.sh)
 #   --max-depth N                     Step 6 max_depth (default 10, Stan's own
 #                                      default; lowering to 8 roughly halves the
 #                                      worst-case per-iteration cost but was found
@@ -44,7 +60,7 @@ set -e
 STEP_ORDER=(1 2 3 3b 4 5 5d 6 7 8)
 
 usage() {
-    echo "Usage: $0 --population {spiral,irregular} --fits PATH [--run-suffix NAME] [--from-step N] [--chains N] [--warmup N] [--max-depth N]"
+    echo "Usage: $0 --population {spiral,irregular} --fits PATH [--run-suffix NAME] [--from-step N] [--chains N] [--warmup N] [--max-depth N] [--delta D]"
     exit 1
 }
 
@@ -55,6 +71,13 @@ FROM_STEP=""
 N_CHAINS=4
 N_WARMUP=1000
 MAX_DEPTH=10
+# adapt delta. MUST match slurm/step6_node.sh's non-debug default so the local
+# real-data fit and the NERSC mock batch sample the same posterior with the same
+# algorithm -- mock-derived uncertainties only calibrate the real measurement if
+# the sampler is identical. 0.9 (up from Stan's default 0.8) is the value
+# DR2_TWOPOP.md validated against 1.9%-8.4% divergence rates at 0.8; this script
+# previously passed no delta at all and so silently sampled at 0.8.
+DELTA=0.9
 PHASE2=0
 
 while [ $# -gt 0 ]; do
@@ -66,6 +89,7 @@ while [ $# -gt 0 ]; do
         --chains) N_CHAINS="$2"; shift 2 ;;
         --warmup) N_WARMUP="$2"; shift 2 ;;
         --max-depth) MAX_DEPTH="$2"; shift 2 ;;
+        --delta) DELTA="$2"; shift 2 ;;
         --phase2) PHASE2=1; shift ;;
         -h|--help) usage ;;
         *) echo "Unknown argument: $1"; usage ;;
@@ -194,7 +218,7 @@ print('fits_file set to', cfg['fits_file'])
     echo "=== Steps 1-3b complete. Backgrounding Steps 4-8 (this takes hours). ==="
     nohup "$0" --population "$POPULATION" --fits "$PARENT_FITS" \
         ${RUN_SUFFIX:+--run-suffix "$RUN_SUFFIX"} --chains "$N_CHAINS" \
-        --warmup "$N_WARMUP" --max-depth "$MAX_DEPTH" --phase2 \
+        --warmup "$N_WARMUP" --max-depth "$MAX_DEPTH" --delta "$DELTA" --phase2 \
         > "$RUN_DIR/run_dr2_phase2.log" 2>&1 &
     echo "Backgrounded as PID $!. Follow progress with:"
     echo "  tail -f $RUN_DIR/run_dr2_phase2.log"
@@ -228,7 +252,7 @@ if ! skip_if_done 5d; then
 fi
 
 if ! skip_if_done 6; then
-    echo "=== Step 6: MCMC sampling ($N_CHAINS parallel chains, identity metric) ==="
+    echo "=== Step 6: MCMC sampling ($N_CHAINS parallel chains, identity metric, delta=$DELTA) ==="
     PIDS=()
     CHAIN_IDS=()
     for CHAIN_ID in $(seq 1 "$N_CHAINS"); do
@@ -237,7 +261,7 @@ if ! skip_if_done 6; then
             continue
         fi
         ./2color sample num_warmup="$N_WARMUP" num_samples=1000 \
-            adapt save_metric=1 \
+            adapt delta="$DELTA" save_metric=1 \
             algorithm=hmc engine=nuts max_depth="$MAX_DEPTH" metric=dense_e \
             id=$CHAIN_ID \
             data file="$RUN_DIR/input.json" \

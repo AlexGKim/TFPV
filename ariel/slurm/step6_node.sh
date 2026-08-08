@@ -41,11 +41,13 @@
 # matches the model, and a metric from a different data type or model version
 # is actively harmful (wrong dimension, or Cholesky failures).
 #
-# The local real-data workflow does still seed a Pathfinder-built metric --
-# see DR2_TWOPOP.md Step 5e and make_pf_metric.py. That is deliberate and
-# separate; the batch relies on NUM_WARMUP=1000 being enough from identity,
-# which the validated abacus run confirmed (warmup completed in ~4.4 h/chain
-# on CPU without stalling at max treedepth).
+# The local real-data workflow (run_dr2_onepop.sh) runs from identity too, with
+# these same arguments -- the two paths sample identically, which is what lets
+# mock-derived uncertainties calibrate the real measurement. Both rely on
+# NUM_WARMUP=1000 being enough from identity, which the validated abacus run
+# confirmed (warmup completed in ~4.4 h/chain on CPU without stalling at max
+# treedepth). Pathfinder seeding was a rank-2-era workaround and is retired;
+# make_pf_metric.py remains for manual experiments only.
 #
 # NUM_WARMUP defaults to 1000 (up from 250) and MAX_DEPTH defaults to 10
 # (Stan's own default, up from a hardcoded 8): an abacus-mock run at the old

@@ -40,9 +40,9 @@ deleted. A local A/B test found that approach ~2.7x slower overall to obtain
 than letting step6 adapt from scratch, with no quality gain, and its builder
 was a crude 100-draw `np.cov` over a stale parameter list. Warmup from
 identity suffices for the rank-1 model: the validated abacus run finished
-warmup in ~4.4 h/chain on CPU without stalling at max treedepth. (The local
-real-data workflow does still seed a Pathfinder metric — DR2_TWOPOP.md
-Step 5e — which is separate from the batch.)
+warmup in ~4.4 h/chain on CPU without stalling at max treedepth. The local
+real-data workflow (`run_dr2_onepop.sh`) runs from identity with the same
+sampler arguments, so both paths sample identically — DR2_TWOPOP.md Step 6.
 
 ---
 
