@@ -195,14 +195,32 @@ workflow. The following decisions are fixed; do not re-derive them:
    totals are `n_files` runs and `n_files × 4` step6 chains — for 125 files,
    **125 runs and 500 step6 chains**.
 
-**Target mock set:** `v0.5.7`
-(`/global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7/`),
+**Target mock set:** `v2.0.8`
+(`/global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.0.8/`),
 the `base`/`fullmocks` family (`TF_AbacusSummit_base_..._zsnap..._zmax....fits`,
 `"source": "fullmocks"`, relies on a `MAIN` column) — this is what
 everything below in this document covers. The batch driver takes a `--dir`,
-so it processes whatever files are present when more arrive. (Other
-populated sets exist: `DR2/.../v0.5.6/` 675 files, and older
-`mocks/TF_mocks/fullmocks/v0.5.1–4/` 675 each.)
+so it processes whatever files are present when more arrive.
+
+> `/global/cfs/cdirs/desi/...` and `/global/cfs/cdirs/desicollab/...` are the
+> **same tree** — the former is a symlink to the latter (verified with
+> `readlink -f`). Either spelling works; don't "fix" one to the other.
+
+> ⚠️ **`v2.0.8` is not group-readable and the batch cannot run against it yet.**
+> It is `drwxrwx--- sybenzvi sybenzvi`, whereas every sibling (`v0.5.4`–`v0.5.8`)
+> is group `desi`. Members of `desi` therefore get `Permission denied` on the
+> directory itself, so its contents cannot even be listed. The fix is the owner's
+> to make — `chgrp -R desi v2.0.8` (plus `chmod -R g+rX`) — after which
+> `make_batch_configs.py` can validate the headers. Until then, **a count of 0
+> files means "unreadable", not "empty"**: `ls dir/*.fits | wc -l` returns 0 for
+> both, which has caused this exact misreading before.
+
+Verified file counts in the readable sets (2026-08-09), which do not match some
+older claims in this document's history: `v0.5.4` 2, `v0.5.5` 1, `v0.5.6` **675**,
+`v0.5.7` **1** (just the reference mock
+`TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits`, byte-identical to
+the local `..._OFFICIAL.fits`), `v0.5.8` 124. The per-file cost arithmetic below
+uses **125 files as an illustration**, not as a measured count of `v2.0.8`.
 
 **A separate `spec`/`v0.5.8` family** also exists
 (`v0.5.8/TF_AbacusSummit_spec_c###_ph###_r###.fits`, `"source": "DESI"`, no
@@ -293,7 +311,7 @@ a single iteration can exceed 10 min.)
 
 ```bash
 python3 make_batch_configs.py \
-    --dir /global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7 \
+    --dir /global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.0.8 \
     --base configs/abacus_2color.json \
     --outdir configs/batch_debug \
     --n-objects 5000 --run-suffix _dbg
@@ -322,18 +340,18 @@ the real run.
 # 1. Generate one config per fits file (sample size comes from the base config's
 #    target_main_count; the generator hard-errors if it is missing):
 python3 make_batch_configs.py \
-    --dir /global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7 \
+    --dir /global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.0.8 \
     --base configs/abacus_2color.json \
-    --outdir configs/batch_v0.5.7 \
+    --outdir configs/batch_v2.0.8 \
     --n-objects 5000
 
 # 2. Submit (throttle so at most N runs' step6_node jobs are queued at once):
-bash slurm/batch_submit.sh configs/batch_v0.5.7 8
+bash slurm/batch_submit.sh configs/batch_v2.0.8 8
 
 # 3. Monitor:
 squeue -u $USER
-bash slurm/batch_status.sh configs/batch_v0.5.7            # summary
-bash slurm/batch_status.sh configs/batch_v0.5.7 --verbose  # per-run detail
+bash slurm/batch_status.sh configs/batch_v2.0.8            # summary
+bash slurm/batch_status.sh configs/batch_v2.0.8 --verbose  # per-run detail
 ```
 
 `batch_submit.sh` skips any run whose `.step8_done` sentinel already exists, so it
@@ -378,12 +396,12 @@ per-file products as the batch's final output.
 
 ```bash
 # A single chain (after step4 done):
-sbatch --export=CONFIG=configs/batch_v0.5.7/c000_ph000_r001.json,CHAIN_ID=2 slurm/step6_chain.sh
+sbatch --export=CONFIG=configs/batch_v2.0.8/c000_ph000_r001.json,CHAIN_ID=2 slurm/step6_chain.sh
 # Re-run one file's remaining steps: clear its sentinel(s) and re-submit:
 rm output/c000_ph000_r001/.step8_done
-bash slurm/batch_submit.sh configs/batch_v0.5.7 8
+bash slurm/batch_submit.sh configs/batch_v2.0.8 8
 # Per-run status:
-bash slurm/check_status.sh configs/batch_v0.5.7/c000_ph000_r001.json
+bash slurm/check_status.sh configs/batch_v2.0.8/c000_ph000_r001.json
 ```
 
 ---
@@ -534,7 +552,7 @@ Three layers, in order of authority:
 ### Running one file end-to-end (manual, NERSC / SLURM)
 
 ```bash
-export CONFIG=configs/batch_v0.5.7/c000_ph000_r001.json
+export CONFIG=configs/batch_v2.0.8/c000_ph000_r001.json
 
 sbatch --export=CONFIG=$CONFIG slurm/step4_data.sh
 # After step4 done (writes init_MAP.json directly, since the config sets
@@ -552,7 +570,7 @@ binary, with the chains as background processes instead of one per GPU.
 
 ```bash
 bash run_batch_local.sh configs/abacus_2color.json          # one mock
-bash run_batch_local.sh configs/batch_v0.5.7                # a whole directory
+bash run_batch_local.sh configs/batch_v2.0.8                # a whole directory
 bash run_batch_local.sh --fits-dir /path/to/mock_fits       # generate configs first
 bash run_batch_local.sh configs/abacus_2color.json --debug  # ~25 s plumbing test
 ```

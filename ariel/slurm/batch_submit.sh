@@ -18,7 +18,7 @@
 # Usage:
 #   bash slurm/batch_submit.sh <config_dir> [MAX_CONCURRENT] [--debug]
 # Examples:
-#   bash slurm/batch_submit.sh configs/batch_v0.5.7 8
+#   bash slurm/batch_submit.sh configs/batch_v2.0.8 8
 #   bash slurm/batch_submit.sh configs/batch_debug --debug
 #
 # --debug          Run tiny chains on the debug GPU queue (plumbing test only).

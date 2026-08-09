@@ -25,9 +25,9 @@ built a metric have been removed from the batch.
 
 Usage:
     python3 make_batch_configs.py \
-        --dir /global/cfs/cdirs/desicollab/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v0.5.7 \
+        --dir /global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.0.8 \
         --base configs/abacus_2color.json \
-        --outdir configs/batch_v0.5.7 \
+        --outdir configs/batch_v2.0.8 \
         --n-objects 5000
 """
 

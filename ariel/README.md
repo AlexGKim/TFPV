@@ -160,7 +160,7 @@ two-population workflow, one population per invocation.
 
 AbacusSummit mock files run as a SLURM batch on Perlmutter, or locally with
 [run_batch_local.sh](run_batch_local.sh) — the same steps and the same sampler
-arguments, no scheduler. One run per file (125 for the v0.5.7 set). Each run
+arguments, no scheduler. One run per file. Each run
 analyses a fixed **17,234-galaxy** draw from the file's cut-passing MAIN
 galaxies, size-matched to `DESI-DR2_TF_pv_cat_v5b.fits`, of which 5,000 train
 and 12,234 are predicted.

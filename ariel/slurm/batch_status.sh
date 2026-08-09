@@ -5,7 +5,7 @@
 # Usage:
 #   bash slurm/batch_status.sh <config_dir> [--verbose]
 # Example:
-#   bash slurm/batch_status.sh configs/batch_v0.5.7
+#   bash slurm/batch_status.sh configs/batch_v2.0.8
 
 CONFIG_DIR="${1:-}"
 VERBOSE=0
