@@ -69,6 +69,13 @@ else
     STEPSIZE_ARG=""
 fi
 
+# See step6_node.sh: Stan's default refresh=100 makes a short run opaque while
+# in flight (iteration 1, then nothing until 100, and no CSV rows during
+# warmup). REFRESH=1 or 10 gives per-iteration progress; unset keeps Stan's
+# default so production is unchanged.
+REFRESH_ARG=""
+[ -n "${REFRESH:-}" ] && REFRESH_ARG="refresh=$REFRESH"
+
 echo "Step 6: MCMC chain $CHAIN_ID for run=$RUN"
 ./2color_g sample num_warmup=$NUM_WARMUP num_samples=$NUM_SAMPLES \
     $ADAPT_ARGS \
@@ -76,7 +83,7 @@ echo "Step 6: MCMC chain $CHAIN_ID for run=$RUN"
     id=$CHAIN_ID \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
-    output file=output/$RUN/2color_${CHAIN_ID}.csv
+    output file=output/$RUN/2color_${CHAIN_ID}.csv $REFRESH_ARG
 
 touch output/$RUN/.step6_chain${CHAIN_ID}_done
 echo "DONE: step6 chain $CHAIN_ID → output/$RUN/2color_${CHAIN_ID}.csv"

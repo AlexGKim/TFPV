@@ -206,21 +206,32 @@ so it processes whatever files are present when more arrive.
 > **same tree** — the former is a symlink to the latter (verified with
 > `readlink -f`). Either spelling works; don't "fix" one to the other.
 
-> ⚠️ **`v2.0.8` is not group-readable and the batch cannot run against it yet.**
-> It is `drwxrwx--- sybenzvi sybenzvi`, whereas every sibling (`v0.5.4`–`v0.5.8`)
-> is group `desi`. Members of `desi` therefore get `Permission denied` on the
-> directory itself, so its contents cannot even be listed. The fix is the owner's
-> to make — `chgrp -R desi v2.0.8` (plus `chmod -R g+rX`) — after which
-> `make_batch_configs.py` can validate the headers. Until then, **a count of 0
-> files means "unreadable", not "empty"**: `ls dir/*.fits | wc -l` returns 0 for
-> both, which has caused this exact misreading before.
+`v2.0.8` holds **676** `.fits` files (counted 2026-08-09 with
+`find -maxdepth 1 -name '*.fits' | wc -l`), so a full batch is 676 runs and
+`676 × 4` = **2,704** step6 chains — not the 125/500 the cost notes below assume.
+Treat every "125 files" figure in this document as an illustration of the
+arithmetic, not a measurement.
 
-Verified file counts in the readable sets (2026-08-09), which do not match some
-older claims in this document's history: `v0.5.4` 2, `v0.5.5` 1, `v0.5.6` **675**,
+> It was briefly unreadable: `v2.0.8` was created `drwxrwx--- sybenzvi sybenzvi`
+> while every sibling (`v0.5.4`–`v0.5.8`) is group `desi`, so members of `desi`
+> got `Permission denied` on the directory itself. Fixed by the owner to group
+> `desi`. If it recurs, note that **a count of 0 files means "unreadable", not
+> "empty"** — `ls dir/*.fits | wc -l` returns 0 for both, a misreading already
+> made once here. Prefer `find`, which reports the error.
+
+Other verified counts (2026-08-09): `v0.5.4` 2, `v0.5.5` 1, `v0.5.6` 675,
 `v0.5.7` **1** (just the reference mock
 `TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits`, byte-identical to
-the local `..._OFFICIAL.fits`), `v0.5.8` 124. The per-file cost arithmetic below
-uses **125 files as an illustration**, not as a measured count of `v2.0.8`.
+the local `..._OFFICIAL.fits`), `v0.5.8` 124.
+
+**The GPU binary is built from the same model source.** On Perlmutter
+`2color_g.stan` is a **symlink to `2color.stan`**, so `compile_2color_gpu.sh`
+compiles the identical model the CPU `./2color` does — the parity that makes
+local and batch results comparable holds at the source level, not just in the
+sampler arguments. The symlink is untracked, so a fresh checkout must recreate it
+(`ln -s 2color.stan 2color_g.stan`) before the GPU compile will work. A pull that
+does not touch `2color.stan` needs no recompile; check with
+`[ 2color.stan -nt 2color_g ]`.
 
 **A separate `spec`/`v0.5.8` family** also exists
 (`v0.5.8/TF_AbacusSummit_spec_c###_ph###_r###.fits`, `"source": "DESI"`, no

@@ -47,6 +47,9 @@
 #   --samples N       num_samples     (default 1000)
 #   --max-depth N     max_depth       (default 10)
 #   --delta D         adapt delta     (default 0.9)
+#   --refresh N       Stan progress interval. Unset uses Stan's default of 100,
+#                     which prints iteration 1 then nothing until 100 -- opaque
+#                     on a short run. Use 1 or 10 when timing.
 #   --debug           Fast plumbing test: no adaptation, 15 samples,
 #                     max_depth=1, fixed stepsize, and step8 skips the
 #                     covariance. Mirrors step6_node.sh's DEBUG=1 branch.
@@ -113,6 +116,7 @@ while [ $# -gt 0 ]; do
         --samples)    NUM_SAMPLES="$2"; shift 2 ;;
         --max-depth)  MAX_DEPTH="$2"; shift 2 ;;
         --delta)      DELTA="$2"; shift 2 ;;
+        --refresh)    REFRESH="$2"; shift 2 ;;
         --debug)      DEBUG=1; shift ;;
         --no-cov)     NO_COV=1; shift ;;
         --force)      FORCE=1; shift ;;
@@ -192,6 +196,12 @@ else
     ENGINE_ARGS="engine=nuts max_depth=$MAX_DEPTH"
     STEPSIZE_ARG=""
 fi
+
+# See slurm/step6_node.sh: Stan's default refresh=100 makes a short run opaque
+# while in flight. --refresh N surfaces per-iteration progress; unset keeps
+# Stan's default so production output is unchanged.
+REFRESH_ARG=""
+[ -n "${REFRESH:-}" ] && REFRESH_ARG="refresh=$REFRESH"
 
 # ---------------------------------------------------------------------------
 # Prerequisites. The batch gets these for free (a one-time compile job, and a
@@ -331,7 +341,7 @@ run_one() {
                 id=$CHAIN_ID \
                 data file="$RUN_DIR/input.json" \
                 init="$RUN_DIR/init_MAP.json" \
-                output file="$RUN_DIR/2color_${CHAIN_ID}.csv"
+                output file="$RUN_DIR/2color_${CHAIN_ID}.csv" $REFRESH_ARG
         ) > "$RUN_DIR/local_step6_chain${CHAIN_ID}.log" 2>&1 &
         PIDS+=($!)
         CHAIN_IDS+=("$CHAIN_ID")

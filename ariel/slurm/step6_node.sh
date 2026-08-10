@@ -99,6 +99,14 @@ else
     STEPSIZE_ARG=""
 fi
 
+# Stan's default refresh=100 prints iteration 1 and then nothing until 100, and
+# save_warmup=false means the CSV stays empty for the whole warmup -- so a short
+# run is completely opaque while it is in flight and you cannot tell a slow
+# chain from a stuck one. Set REFRESH=1 (or 10) on a timing/debug run to get
+# per-iteration progress. Unset keeps Stan's default, so production is unchanged.
+REFRESH_ARG=""
+[ -n "${REFRESH:-}" ] && REFRESH_ARG="refresh=$REFRESH"
+
 echo "Step 6 (node): 4 chains for run=$RUN, one per GPU on $(hostname)"
 PIDS=()
 for CHAIN_ID in 1 2 3 4; do
@@ -110,7 +118,7 @@ for CHAIN_ID in 1 2 3 4; do
             id=$CHAIN_ID \
             data file=output/$RUN/input.json \
             init=output/$RUN/init_MAP.json \
-            output file=output/$RUN/2color_${CHAIN_ID}.csv \
+            output file=output/$RUN/2color_${CHAIN_ID}.csv $REFRESH_ARG \
         && touch output/$RUN/.step6_chain${CHAIN_ID}_done \
         && echo "DONE: step6 chain $CHAIN_ID (GPU $GPU_ID) → output/$RUN/2color_${CHAIN_ID}.csv"
     ) &
