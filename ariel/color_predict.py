@@ -541,7 +541,10 @@ def load_xyz_and_uncertainties_from_desi(
             & (sigma_z >= 0)
         )
         if with_gband:
-            mask = mask & np.isfinite(ghat) & np.isfinite(sigma_g)  # type: ignore[arg-type]
+            # sigma_g >= 0 for the same reason as sigma_y/sigma_z above: a negative
+            # error bar is unphysical and isfinite() happily accepts one.
+            mask = (mask & np.isfinite(ghat) & np.isfinite(sigma_g)  # type: ignore[arg-type]
+                    & (sigma_g >= 0))
         xhat = xhat[mask]
         sigma_x = sigma_x[mask]
         yhat = yhat[mask]

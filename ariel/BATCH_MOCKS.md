@@ -224,6 +224,44 @@ Other verified counts (2026-08-09): `v0.5.4` 2, `v0.5.5` 1, `v0.5.6` 675,
 `TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits`, byte-identical to
 the local `..._OFFICIAL.fits`), `v0.5.8` 124.
 
+### Negative error bars in v2.0.8 — a data defect the pipeline now guards
+
+Scanned all 676 files (2026-08-10). **576 carry at least one negative error bar:**
+
+| column | files | rows | consumed by |
+|---|---|---|---|
+| `R_ABSMAG_SB26_ERR` (σ_y) | 133 | 875 | step 4 and step 8 — both already required `>= 0` |
+| `Z_MAG_SB26_ERR` (step 4's σ_z) | **508** | 881 | step 4 only |
+| `G_ABSMAG_SB26_ERR` | 235 | 3,224 | **nothing** — both paths take σ_g from `G_MAG_SB26_ERR`, which is clean |
+| `LOGVROT_ERR`, `R_MAG_SB26_ERR`, `Z_ABSMAG_SB26_ERR`, `G_MAG_SB26_ERR` | 0 | 0 | — |
+
+Two distinct defects, worth reporting upstream separately: a **`-1.0` sentinel**
+(seen in `..._r001`'s `Z_MAG_SB26_ERR`), which is a missing-value flag; and
+**tiny values around `-1e-3`** (e.g. `-0.00133095`, `-0.00108818` in
+`..._r000`), which look like a variance going negative in arithmetic. Note the
+pattern: the *apparent* r and g errors are clean while their *absolute*
+counterparts are not, and for z it is inverted — suggesting absolute and apparent
+errors are computed by different code.
+
+`Z_MAG_SB26_ERR` was the live hazard. `desi_data.py` derives σ_z from it and
+checked only `isfinite`, which a negative value passes, so it reached
+`input.json` — where `2color.stan`'s `vector<lower=0>` makes **CmdStan reject the
+whole data file** at step 6, after the run has spent its GPU allocation. At
+~5,000 of ~95,000 cut-passing galaxies drawn for training, each bad row has a
+~5% chance of being selected, so of the 508 affected files roughly **45 runs
+would have died at step 6**. `..._r000` demonstrates the mechanism: 3 bad rows,
+1 inside the 17,234 subsample, 0 in training — it survived on luck.
+
+`desi_data.py`'s `valid_mask` now requires `>= 0` on every band, not just r. The
+cost is ~2.6 dropped galaxies per file out of ~95,000 cut-passing.
+
+> **This changes which galaxies a mock run analyses**, so `subset_sga_ids` for a
+> given file and seed differs from anything generated before the guard: excluding
+> a row changes `N_after_cuts`, and the draw is taken from that population. The
+> reference `..._r001` mock goes from 90,119 to 90,118 cut-passing. Mock runs
+> made earlier are not reproducible against current code — regenerate from step 4
+> rather than comparing across the change.
+
 **The GPU binary is built from the same model source.** On Perlmutter
 `2color_g.stan` is a **symlink to `2color.stan`**, so `compile_2color_gpu.sh`
 compiles the identical model the CPU `./2color` does — the parity that makes

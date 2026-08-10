@@ -208,13 +208,26 @@ def process_desi_tf_data(
         & np.isfinite(R_ABSMAG_SB26_ERR)
         & np.isfinite(z_all_raw)
         & (_logV_err > 0)
+        # Non-negativity, per band. A negative error bar is unphysical, and
+        # 2color.stan declares every sigma as vector<lower=0>, so one reaching
+        # input.json makes CmdStan reject the whole data file at step 6 -- after
+        # the run has already spent its GPU allocation. The r-band check was here
+        # from the start; z and g were checked only for isfinite, which a negative
+        # value passes. That asymmetry was live: 508 of the 676 v2.0.8 mocks carry
+        # a negative Z_MAG_SB26_ERR (881 rows), which is where step 4 gets its
+        # sigma_z, so roughly 45 runs would have failed once such a row landed in
+        # the 5,000-galaxy training draw (~5% chance per row). 133 files also have
+        # a negative R_ABSMAG_SB26_ERR, already excluded here.
         & (R_ABSMAG_SB26_ERR >= 0)
         & np.isfinite(Z_ABSMAG_SB26)      # [COLOR]
         & np.isfinite(Z_ABSMAG_SB26_ERR)  # [COLOR]
+        & (Z_ABSMAG_SB26_ERR >= 0)        # [COLOR]
     )
     # [2COLOR] require finite g-band if available
     if G_ABSMAG_SB26 is not None:
-        valid_mask = valid_mask & np.isfinite(G_ABSMAG_SB26) & np.isfinite(G_ABSMAG_SB26_ERR)
+        valid_mask = (valid_mask & np.isfinite(G_ABSMAG_SB26)
+                      & np.isfinite(G_ABSMAG_SB26_ERR)
+                      & (G_ABSMAG_SB26_ERR >= 0))
 
     # [MOCK] Restrict to MAIN so the frozen cuts are applied to the same
     # population they were fit on (see where main_all_raw is read).
