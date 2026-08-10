@@ -332,65 +332,53 @@ def _subset_mask(sga_ids, input_data):
     return np.isin(sga_ids, list(input_data["subset_sga_ids"]))
 
 
-def _sga_ids_valid_for_mask(fits_path, main_mask):
-    """Return SGA_IDs in the same valid-row index space as ``main_mask``.
+def _sga_ids_for_valid_mask(fits_path, valid_mask):
+    """Return SGA_IDs reduced to valid-row space by ``valid_mask``.
 
-    Reads SGA_ID from the FITS catalog (applying the same V > 0 validity filter
-    used by ``load_xyz_and_uncertainties_from_desi``) to map IDs back to the
-    valid-row index space of ``main_mask``.
+    ``valid_mask`` must be the mask that
+    ``load_xyz_and_uncertainties_from_desi(..., return_mask=True)`` returned for
+    this same catalog. Passing it in — rather than reconstructing it — is the
+    whole point of this function.
+
+    The predecessor, ``_sga_ids_valid_for_mask``, re-derived validity from
+    scratch and got it wrong: it checked only ``isfinite(logV)``,
+    ``isfinite(logV_err)``, ``logV_err > 0`` and ``isfinite(zhat)``, while the
+    loader also requires ``isfinite`` on ``yhat``/``sigma_y``/``sigma_z``/
+    ``zobs`` **and** ``sigma_y >= 0`` / ``sigma_z >= 0``. The two agreed on every
+    catalog processed for months, then disagreed by exactly 13 rows on the v2.0.8
+    mock ``TF_AbacusSummit_base_c000_ph000_r000``, which carries 13 negative
+    ``R_ABSMAG_SB26_ERR`` values — and step 8 died with a length mismatch. Two
+    independent definitions of "valid" will always drift; there is now one.
 
     Parameters
     ----------
     fits_path : str — path to the DESI FITS catalog
-    main_mask : array-like of bool — mask (length = N valid galaxies)
+    valid_mask : array-like of bool, length = raw catalog rows
 
     Returns
     -------
-    sga_ids_valid : float ndarray, same length as ``main_mask``
+    sga_ids_valid : float ndarray, length = ``valid_mask.sum()``
     """
-    main_mask = np.asarray(main_mask, dtype=bool)
-
-    # Load SGA_IDs with the same validity filter as load_xyz_and_uncertainties_from_desi.
-    # The caller is responsible for passing a main_mask whose length matches this filter:
-    # - non-2color (or no g-band in catalog): xyz filter only → N_xyz rows
-    # - 2color (with_gband=True in the data loader): xyz+g filter → N_xyzg rows
+    valid_mask = np.asarray(valid_mask, dtype=bool)
     with fits.open(fits_path) as hdul:
         data = hdul[1].data  # type: ignore[union-attr]
         names = set(data.dtype.names or ())
-        logV, logV_err = _load_logV(data, names)
-        # z-band: needed to match the validity filter in load_xyz_and_uncertainties_from_desi
-        z_col = "Z_ABSMAG_SB26_CORR" if "Z_ABSMAG_SB26_CORR" in names else "Z_ABSMAG_SB26"
-        zhat_raw = np.asarray(data[z_col], dtype=float) if z_col in names else np.ones(len(logV))
+        n_rows = len(data)
         if "SGA_ID" in names:
             sga_ids_raw = np.asarray(data["SGA_ID"], dtype=float)
         else:
-            sga_ids_raw = np.arange(len(logV), dtype=float)
-    valid = (np.isfinite(logV) & np.isfinite(logV_err) & (logV_err > 0)
-             & np.isfinite(zhat_raw))
-    # If main_mask is shorter than the xyz-filtered count, the caller used with_gband=True;
-    # apply g-band filtering here too so the SGA_ID array length matches.
-    n_xyz = int(valid.sum())
-    if len(main_mask) < n_xyz:
-        with fits.open(fits_path) as hdul:
-            data = hdul[1].data  # type: ignore[union-attr]
-            names = set(data.dtype.names or ())
-            if "G_MAG_SB26_CORR" in names:
-                G_app = np.asarray(data["G_MAG_SB26_CORR"], dtype=float)
-            elif "G_MAG_SB26" in names:
-                G_app = np.asarray(data["G_MAG_SB26"], dtype=float)
-            else:
-                G_app = None
-        if G_app is not None:
-            valid = valid & np.isfinite(G_app)
-    sga_ids_valid = sga_ids_raw[valid]
+            # Mocks carry no SGA_ID; raw row index is the identifier, matching
+            # desi_data.py's fallback so the two index spaces agree.
+            sga_ids_raw = np.arange(n_rows, dtype=float)
 
-    if len(sga_ids_valid) != len(main_mask):
+    if len(valid_mask) != n_rows:
         raise ValueError(
-            f"_sga_ids_valid_for_mask: SGA_ID array length ({len(sga_ids_valid)}) "
-            f"does not match main_mask length ({len(main_mask)}). "
-            f"The validity filter may differ from load_xyz_and_uncertainties_from_desi."
+            f"_sga_ids_for_valid_mask: valid_mask length ({len(valid_mask)}) does "
+            f"not match the {n_rows} raw rows of {fits_path}. Pass the mask "
+            f"returned by load_xyz_and_uncertainties_from_desi(..., "
+            f"return_mask=True) for this same catalog."
         )
-    return sga_ids_valid
+    return sga_ids_raw[valid_mask]
 
 
 def _load_logV(data, names):
@@ -1450,15 +1438,19 @@ def DESI_color(
     x_bar = input_data.get("mean_x", None)
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
     # Load galaxy data — for 2color use with_gband=True so all arrays share one mask
+    # return_mask=True gives the loader's OWN validity mask, which is then the
+    # single definition of "valid" for this catalog -- see _sga_ids_for_valid_mask
+    # for the 13-row mismatch that reconstructing it separately caused.
     if model == "2color":
         (xhat_star, sigma_x_star, yhat_star, sigma_y_star,  # type: ignore[assignment]
          zhat_star, sigma_z_star, zobs_star,
-         ghat_star, sigma_g_star) = load_xyz_and_uncertainties_from_desi(
-            galaxy_fits, with_gband=True
+         ghat_star, sigma_g_star, _valid_mask) = load_xyz_and_uncertainties_from_desi(
+            galaxy_fits, with_gband=True, return_mask=True
         )
     else:
-        xhat_star, sigma_x_star, yhat_star, sigma_y_star, zhat_star, sigma_z_star, zobs_star = (  # type: ignore[assignment]
-            load_xyz_and_uncertainties_from_desi(galaxy_fits)
+        (xhat_star, sigma_x_star, yhat_star, sigma_y_star, zhat_star, sigma_z_star,  # type: ignore[assignment]
+         zobs_star, _valid_mask) = (
+            load_xyz_and_uncertainties_from_desi(galaxy_fits, return_mask=True)
         )
         ghat_star = sigma_g_star = None
 
@@ -1519,7 +1511,7 @@ def DESI_color(
     # MAIN sample mask (union of training + analysis)
     rz_color_desi = _load_rz_color_from_desi(galaxy_fits)
     _main_all = _apply_main_cuts_with_zmax(cfg, xhat_star, yhat_star, zobs=zobs_star, rz_color=rz_color_desi)
-    _sga_ids_valid = _sga_ids_valid_for_mask(galaxy_fits, _main_all)
+    _sga_ids_valid = _sga_ids_for_valid_mask(galaxy_fits, _valid_mask)
     _train_mask, _analysis_mask = _train_analysis_masks(_sga_ids_valid, input_data)
     main_mask = _main_all & (_train_mask | _analysis_mask)
 
