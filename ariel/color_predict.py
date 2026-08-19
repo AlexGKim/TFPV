@@ -86,7 +86,11 @@ def resolve_d_err_r(cfg, fits_path=None):
        gives d_err_r = 0.21734862.
     2. FITS header ``A_R_ERR`` — the canonical keyword in the AbacusSummit
        mocks produced for the NERSC batch.
-    3. FITS header ``DSTCFF_R_ERR`` — the older spelling, present in
+    3. FITS header ``CFFR_ERR`` — a third spelling, used by the `.rlshift`
+       regenerated mocks (which also rename DSTCFF_G/R/Z to CFFG/CFFR/CFFZ).
+       Same physical quantity: CFFR = -0.7189 there against DSTCFF_R = -0.7688
+       in the v2.0.8 file it was regenerated from.
+    4. FITS header ``DSTCFF_R_ERR`` — the older spelling, present in
        TF_AbacusSummit_base_c000_ph000_r001_zsnap0.20_zmax0.11.fits
        (0.20456262) and other early mocks. This one is a HIERARCH card on
        HDU 1, since 12 characters exceeds FITS's 8-character keyword limit;
@@ -110,7 +114,7 @@ def resolve_d_err_r(cfg, fits_path=None):
         try:
             with fits.open(fits_path) as _hdul:
                 hdr = _hdul[1].header
-                for key in ("A_R_ERR", "DSTCFF_R_ERR"):
+                for key in ("A_R_ERR", "DSTCFF_R_ERR", "CFFR_ERR"):
                     if key in hdr:
                         val = float(hdr[key])
                         print(f"Loaded d_err_r = {val:.8f} mag from FITS header "
@@ -119,7 +123,8 @@ def resolve_d_err_r(cfg, fits_path=None):
         except Exception as exc:
             print(f"WARNING: could not read dust keywords from {fits_path}: {exc}")
 
-    print(f"WARNING: no dust_pickle in config and no A_R_ERR/DSTCFF_R_ERR in the "
+    print(f"WARNING: no dust_pickle in config and no "
+          f"A_R_ERR/DSTCFF_R_ERR/CFFR_ERR in the "
           f"FITS header — falling back to the built-in iron default "
           f"d_err_r = {_D_ERR_R:.8f}. If this run should use a measured dust "
           f"uncertainty, this value is wrong.")

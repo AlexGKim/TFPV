@@ -43,7 +43,7 @@ from astropy.io import fits
 # Dust-coefficient-error header keywords, in resolve_d_err_r()'s precedence
 # order (color_predict.py). A mock config carries no dust_pickle, so one of
 # these must be present or step 8 silently falls back to the iron value.
-_DUST_KEYS = ("A_R_ERR", "DSTCFF_R_ERR")
+_DUST_KEYS = ("A_R_ERR", "DSTCFF_R_ERR", "CFFR_ERR")
 
 
 def check_systematics_columns(fits_path, needs_dust):
