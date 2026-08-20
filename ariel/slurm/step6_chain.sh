@@ -29,7 +29,7 @@ export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 
 CONFIG=${CONFIG:-configs/batch_test.json}
 CHAIN_ID=${CHAIN_ID:?'CHAIN_ID must be set (1-4)'}
-RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
+RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
 # Sampling depth: full (with adaptation) by default; in DEBUG mode skip adaptation

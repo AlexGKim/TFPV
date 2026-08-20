@@ -3,7 +3,7 @@
 # Usage: bash slurm/check_status.sh [configs/dr1_v6_2color.json]
 
 CONFIG=${1:-configs/dr1_v6_2color.json}
-RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
+RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
 
 echo "Status for run: $RUN"
 echo "---"

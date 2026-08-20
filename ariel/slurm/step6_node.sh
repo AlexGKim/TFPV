@@ -78,7 +78,7 @@ module load craype-accel-nvidia80 cudatoolkit nvidia PrgEnv-nvidia
 export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 
 CONFIG=${CONFIG:-configs/batch_test.json}
-RUN=$(python -c "import json; print(json.load(open('$CONFIG'))['run'])")
+RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
 mkdir -p slurm/logs
 
 if [ "${DEBUG:-0}" = "1" ]; then
