@@ -20,19 +20,25 @@
 # Examples:
 #   bash slurm/batch_submit.sh configs/batch_v2.0.8 8
 #   bash slurm/batch_submit.sh configs/batch_debug --debug
+#   bash slurm/batch_submit.sh configs/batch_rlshift 8 --max-depth 8
 #
 # --debug          Run tiny chains on the debug GPU queue (plumbing test only).
+# --max-depth N    NUTS max_depth for step6 (default: step6_node.sh's own 10).
+#                  Set this when a mock set needs shallower trees to fit the
+#                  24 h walltime -- see the note above the MAX_DEPTH block below.
 
 set -e
 
 CONFIG_DIR=""
 MAX_CONCURRENT=8
 DEBUG=0
+MAX_DEPTH=""   # empty = inherit step6_node.sh's default (10)
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --debug)  DEBUG=1; shift ;;
-        --*)      echo "ERROR: unknown option $1"; exit 1 ;;
+        --debug)      DEBUG=1; shift ;;
+        --max-depth)  MAX_DEPTH="$2"; shift 2 ;;
+        --*)          echo "ERROR: unknown option $1"; exit 1 ;;
         *)
             if [ -z "$CONFIG_DIR" ]; then
                 CONFIG_DIR="$1"
@@ -47,7 +53,7 @@ done
 
 if [ -z "$CONFIG_DIR" ] || [ ! -d "$CONFIG_DIR" ]; then
     echo "ERROR: pass a config directory."
-    echo "Usage: bash slurm/batch_submit.sh <config_dir> [MAX_CONCURRENT] [--debug]"
+    echo "Usage: bash slurm/batch_submit.sh <config_dir> [MAX_CONCURRENT] [--debug] [--max-depth N]"
     exit 1
 fi
 
@@ -64,6 +70,18 @@ if [ "$DEBUG" = "1" ]; then
     STEP6_OVERRIDE=(-q debug -t 00:20:00)
     STEP6_EXPORT_EXTRA=",DEBUG=1"
     echo "DEBUG mode: step6 samples 15 draws at fixed stepsize (no adaptation) on the debug GPU queue."
+fi
+
+# Sampler cost is data-dependent, and a step6 that cannot finish inside the 24 h
+# walltime writes NOTHING (save_warmup=false), so a whole batch can burn its
+# allocation and produce no draws. The rlshift mock needed 102 s/iteration at
+# max_depth=10 -- 56.8 h for 2000 iterations -- and finished in 11.9 h at
+# max_depth=8, where the adapted sampler never exceeded treedepth 5 and no
+# transition hit the cap (job 57376631). Measure the rate on ONE file before
+# submitting a large set; if it is slow, pass --max-depth 8.
+if [ -n "$MAX_DEPTH" ]; then
+    STEP6_EXPORT_EXTRA="$STEP6_EXPORT_EXTRA,MAX_DEPTH=$MAX_DEPTH"
+    echo "step6: max_depth=$MAX_DEPTH (overriding the default 10)."
 fi
 
 n_submitted=0
