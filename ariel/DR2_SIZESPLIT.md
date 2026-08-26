@@ -90,7 +90,8 @@ automates Steps 1–8 (pausing only for Step 3's interactive fiducial choice):
 
 It also runs the split above if the subset file is missing, so the explicit
 `make_size_subsets.py` call is optional. Its options match run_dr2_onepop.sh
-(`--from-step`, `--chains`, `--warmup`, `--delta`, `--max-depth`, `--run-suffix`),
+(`--from-step`, `--chains`, `--warmup`, `--delta`, `--max-depth`, `--run-suffix`,
+`--dust-pickle`),
 plus `--size-input PATH` (repeatable) to stack different catalogs into the parent.
 
 ---
@@ -166,16 +167,27 @@ Two things about Step 3 and Step 3b that matter here:
   `select_v2_pull.png`.** The large and small samples have different luminosity
   distributions, so DR2_TWOPOP.md's spiral/irregular reference values
   (`-22.0` / `-17.8` / `-17.5`) do not carry over.
-- **Add `dust_pickle` to `$CONFIG` by hand** after Step 3b — it is not
-  prompted for, and without it step 8 silently falls back to the iron default
-  `d_err_r = 0.17680325` instead of the correct loa value `0.21734862`:
+- **`dust_pickle` is set for you** — `run_size_onepop.sh` writes it into
+  `$CONFIG` at Step 3b, defaulting to
+  `data/loa_internalDust_nokcorr_mcmc.pickle` (`d_err_r = 0.21734862`, matching
+  the three reference DR2 configs). Override with `--dust-pickle PATH`, or
+  `--dust-pickle none` for an input whose FITS header carries
+  `A_R_ERR`/`DSTCFF_R_ERR`/`CFFR_ERR` instead; a nonexistent path is rejected at
+  argument-parsing time.
+
+  **If you run Steps 1–8 by hand** rather than through the script, add it
+  yourself after Step 3b — the DR2 disk subsets carry no dust keyword, so
+  without it step 8 falls back to the iron default `0.17680325`, which is
+  0.8135× the correct value and puts the dust variance off by 0.66×:
 
   ```json
   "dust_pickle": "data/loa_internalDust_nokcorr_mcmc.pickle"
   ```
 
-  Verify it took effect: `grep "Loaded d_err_r" output/$RUN/step8.log`.
-  See DR2_TWOPOP.md Step 3b for the full resolution order.
+  Either way, verify it took effect: `grep "Loaded d_err_r" output/$RUN/step8.log`
+  must show `0.21734862`, not `0.17680325`. The `d_err_r` attribute on
+  `color_xonly_cov.h5` is the authoritative record. See DR2_TWOPOP.md Step 3b for
+  the full resolution order.
 
 ---
 
