@@ -57,6 +57,13 @@
 #                                      default; lowering to 8 roughly halves the
 #                                      worst-case per-iteration cost but was found
 #                                      to cut off trajectories prematurely)
+#   --dust-pickle PATH                internal-dust MCMC written into $CONFIG as
+#                                     "dust_pickle" at Step 3b (default
+#                                     data/loa_internalDust_nokcorr_mcmc.pickle,
+#                                     giving the DR2 value d_err_r = 0.21734862).
+#                                     "none" leaves it unset, for inputs whose
+#                                     FITS header carries A_R_ERR/DSTCFF_R_ERR/
+#                                     CFFR_ERR instead.
 #
 # Resumable: each step is guarded by a sentinel file under output/$RUN/
 # (.step{N}_done, matching slurm/check_status.sh's convention). Re-running
@@ -68,7 +75,7 @@ set -e
 STEP_ORDER=(1 2 3 3b 4 5 5d 6 7 8)
 
 usage() {
-    echo "Usage: $0 --population {large,small} --fits PATH [--run-suffix NAME] [--from-step N] [--chains N] [--warmup N] [--max-depth N] [--delta D]"
+    echo "Usage: $0 --population {large,small} --fits PATH [--run-suffix NAME] [--from-step N] [--chains N] [--warmup N] [--max-depth N] [--delta D] [--dust-pickle PATH|none]"
     exit 1
 }
 
@@ -86,6 +93,16 @@ MAX_DEPTH=10
 # DR2_TWOPOP.md validated against 1.9%-8.4% divergence rates at 0.8.
 DELTA=0.9
 PHASE2=0
+# Internal-dust MCMC supplying d_err_r, the dust-slope uncertainty that scales
+# the v_dust systematic in step 8's covariance. resolve_d_err_r() takes
+# cfg["dust_pickle"] first, then the FITS header keywords, then a built-in iron
+# default of 0.17680325 -- and the DR2 disk subsets carry NO dust keyword at all,
+# so an unset dust_pickle lands silently on that default. For DR2 that is wrong
+# by a factor of 0.8135 in d_err_r, i.e. 0.66x in dust variance. It emits one
+# WARNING, which is exactly the line that scrolled past unnoticed in the mock
+# batch. Set it here rather than leaving it to the reminder this script used to
+# print: --dust-pickle none opts out for inputs that do carry a header keyword.
+DUST_PICKLE="data/loa_internalDust_nokcorr_mcmc.pickle"
 # Catalogs stacked into $PARENT_FITS by make_size_subsets.py. The DR2 disk
 # sample ships as two morphology files; the size split is a repartition of
 # exactly those galaxies, which is what makes it comparable to the
@@ -103,6 +120,7 @@ while [ $# -gt 0 ]; do
         --warmup) N_WARMUP="$2"; shift 2 ;;
         --max-depth) MAX_DEPTH="$2"; shift 2 ;;
         --delta) DELTA="$2"; shift 2 ;;
+        --dust-pickle) DUST_PICKLE="$2"; shift 2 ;;
         --phase2) PHASE2=1; shift ;;
         -h|--help) usage ;;
         *) echo "Unknown argument: $1"; usage ;;
@@ -115,6 +133,16 @@ case "$POPULATION" in
     large|small) ;;
     *) echo "ERROR: --population must be 'large' or 'small'"; exit 1 ;;
 esac
+
+# Fail now, not in step 8 hours later: a dust_pickle path that does not exist
+# resolves to the iron default with only a WARNING, which is the silent-wrong
+# outcome this setting exists to prevent.
+if [ "$DUST_PICKLE" != "none" ] && [ ! -f "$DUST_PICKLE" ]; then
+    echo "ERROR: --dust-pickle '$DUST_PICKLE' does not exist."
+    echo "       Pass a valid path, or --dust-pickle none if this input carries"
+    echo "       A_R_ERR / DSTCFF_R_ERR / CFFR_ERR in its FITS header instead."
+    exit 1
+fi
 
 if [ ${#SIZE_INPUTS[@]} -eq 0 ]; then
     SIZE_INPUTS=(data/DR2_TF_spirals_v5.fits data/DR2_TF_irrs_v5.fits)
@@ -230,12 +258,16 @@ if [ "$PHASE2" -eq 0 ]; then
 import json
 cfg = json.load(open('$CONFIG'))
 cfg['fits_file'] = '$FITS'
+dust = '$DUST_PICKLE'
+if dust != 'none':
+    cfg['dust_pickle'] = dust
 json.dump(cfg, open('$CONFIG', 'w'), indent=2)
 print('fits_file set to', cfg['fits_file'])
+print('dust_pickle set to', cfg.get('dust_pickle', '<unset: header keyword or iron default>'))
 "
         mark_done 3b
         echo "Config written: $CONFIG (commit it to git)"
-        echo "Optional: add \"train_fraction\": 0.4 / \"dust_pickle\": \"...\" to $CONFIG now if needed."
+        echo "Optional: add \"train_fraction\": 0.4 to $CONFIG now if needed."
     fi
 
     echo ""
