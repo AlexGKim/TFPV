@@ -68,17 +68,26 @@ def _resolve_d_err_r(run_dir, cov_path=None, pipeline_config=None):
     return resolve_d_err_r(cfg, cfg.get("fits_file"))
 
 
-def load_population_main(run_dir, pipeline_config=None):
+def load_population_main(run_dir, pipeline_config=None,
+                         cat_name="color_xonly_catalog.fits",
+                         cov_name="color_xonly_cov.h5"):
     """Load one population's MAIN-row catalog subset + full covariance.
 
     Returns (table, cov, analysis_mask, d_err_r). `table` rows, `cov`
     rows/cols, and `analysis_mask` entries are all in the same order:
-    MAIN=True rows of color_xonly_catalog.fits, in catalog order (the
-    invariant color_predict.py relies on for its own FITS-cov output,
-    verified to hold identically for the HDF5 path).
+    MAIN=True rows of the input catalog, in catalog order (the invariant
+    color_predict.py relies on for its own FITS-cov output, verified to hold
+    identically for the HDF5 path).
+
+    cat_name/cov_name select which color_predict.py products to combine. The
+    defaults are the x-only pair, which marginalises over the two colours.
+    Pass color_catalog.fits / color_cov.h5 for the full (x, z, g)-conditioned
+    predictions instead; the combine logic is identical either way, since the
+    cross-population terms it adds are the PHOTSYS floor and the dust slope,
+    neither of which depends on which predictor produced MU_TF.
     """
-    cat_path = os.path.join(run_dir, "color_xonly_catalog.fits")
-    cov_path = os.path.join(run_dir, "color_xonly_cov.h5")
+    cat_path = os.path.join(run_dir, cat_name)
+    cov_path = os.path.join(run_dir, cov_name)
 
     table = Table.read(cat_path)
     # astropy's FITS reader yields bytes (|Sn) for string columns. Decode to
@@ -112,19 +121,23 @@ def load_population_main(run_dir, pipeline_config=None):
 
 
 def combine(spiral_run, irregular_run, out_run, catalog_name="color_xonly_catalog.fits",
-            spiral_config=None, irregular_config=None):
+            spiral_config=None, irregular_config=None,
+            in_cat_name="color_xonly_catalog.fits", in_cov_name="color_xonly_cov.h5"):
     out_dir = os.path.join("output", out_run)
     os.makedirs(out_dir, exist_ok=True)
 
+    print(f"Combining {in_cat_name} / {in_cov_name}")
     print(f"Loading spiral population from output/{spiral_run} ...")
     t_sp, cov_sp, ana_sp, d_err_r_sp = load_population_main(
-        os.path.join("output", spiral_run), pipeline_config=spiral_config
+        os.path.join("output", spiral_run), pipeline_config=spiral_config,
+        cat_name=in_cat_name, cov_name=in_cov_name
     )
     print(f"  MAIN rows: {len(t_sp)}, d_err_r={d_err_r_sp:.8f}")
 
     print(f"Loading irregular population from output/{irregular_run} ...")
     t_ir, cov_ir, ana_ir, d_err_r_ir = load_population_main(
-        os.path.join("output", irregular_run), pipeline_config=irregular_config
+        os.path.join("output", irregular_run), pipeline_config=irregular_config,
+        cat_name=in_cat_name, cov_name=in_cov_name
     )
     print(f"  MAIN rows: {len(t_ir)}, d_err_r={d_err_r_ir:.8f}")
 
@@ -273,10 +286,19 @@ def main():
         "--irregular-config", default=None,
         help="Pipeline config for the irregular run; see --spiral-config.",
     )
+    parser.add_argument(
+        "--full", action="store_true", default=False,
+        help="Combine the full (x, z, g)-conditioned predictions "
+             "(color_catalog.fits / color_cov.h5) instead of the x-only pair. "
+             "Requires color_predict.py to have been run with --full.",
+    )
     args = parser.parse_args()
+    in_cat = "color_catalog.fits" if args.full else "color_xonly_catalog.fits"
+    in_cov = "color_cov.h5" if args.full else "color_xonly_cov.h5"
     combine(args.spiral_run, args.irregular_run, args.out_run, args.catalog_name,
             spiral_config=args.spiral_config,
-            irregular_config=args.irregular_config)
+            irregular_config=args.irregular_config,
+            in_cat_name=in_cat, in_cov_name=in_cov)
 
 
 if __name__ == "__main__":
