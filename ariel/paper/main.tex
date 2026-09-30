@@ -2006,6 +2006,121 @@ on the degenerate direction.  Any measurement of $\sigma_a$ itself should be rea
 as an upper bound on the achromatic intrinsic scatter, inclusive of velocity
 scatter.
 
+\section{Surface-Brightness Extension and the Angular-Diameter Selection}
+\label{sec:v8}
+
+\subsection{Motivation}
+\label{sec:v8:motivation}
+
+Two problems in the preceding appendices have the same resolution.
+
+First, the TF residual carries a surface-brightness dependence that no model variable
+can absorb.  Measured on the DR2 sample it is $11.4\sigma$ overall, and $3.6\sigma$
+($0.0134\pm0.0037$~dex per mag) restricted to galaxies far enough above the selection
+threshold that the selection cannot be responsible.  Writing
+$s \equiv m_r + 5\log_{10}\theta_{26}$, the residual correlation of $s$ with $y$ at
+fixed $x$ is $0.19$ --- small, but genuinely new information: the corresponding
+correlations among $(y,z,g)$ are $0.98$, so the colors carry no direction the magnitude
+does not already have (\S\ref{sec:v7:limits}).
+
+Second, the sample is selected on the HyperLeda $B$-band $D_L(25)>20''$, which the
+likelihood does not represent.  Expressed as a bound on absolute magnitude through the
+size--luminosity relation the cut is soft: the relation's $0.63$~mag scatter means a
+hard bound at its mean excludes $10.6\%$ of the galaxies actually observed.  Replacing
+it with a more stringent cut on the precisely measured $r$-band diameter,
+$\theta_{26}>\theta_r$, makes the selection exact, but only if $s$ is a modeled
+quantity: written in terms of the galaxy's own $\hat{y}$ the bound is conditioned on the
+datum and is not a selection probability at all.
+
+Both are solved by promoting $s$ to a fifth state variable.
+
+\subsection{Generative Model}
+\label{sec:v8:generative}
+
+Extend the observation vector to $(\hat{x}_i,\hat{y}_i,\hat{z}_i,\hat{g}_i,\hat{s}_i)$,
+with $\hat{s}_i$ the observed $r$-band surface brightness inside the $D_{26}$ isophote.
+Like a color, $s$ is distance independent: $m_r$ and $\theta_{26}$ are both observed, so
+$\partial s/\partial\mu = 0$ exactly.  Its mean follows the pattern of
+Eqs.~(\ref{eq:2c:mean}),
+\begin{equation}
+  m_{s,i} = y_{\mathrm{TF},i} - \mu_s - \delta_s(x_i-\bar{x}) + \Delta_{s,i},
+  \label{eq:v8:mean_s}
+\end{equation}
+with $\mu_s$ the mean surface-brightness offset at $x=\bar{x}$, $\delta_s$ its
+velocity slope, and $\Delta_{s,i}$ a residual $k$-correction-like term that also absorbs
+the known $10\log_{10}(1+z)$ dimming.  The intrinsic covariance $\boldsymbol{S}$ becomes
+$4\times4$ over $(y,z,g,s)$, and the measurement equation is
+$\hat{s}_i\mid s_i\sim\mathcal{N}(s_i,\sigma_{s,i}^2)$ with
+$\sigma_{s,i}^2=\sigma_{m_r,i}^2+25\,\sigma_{\log\theta,i}^2$; in practice
+$\sigma_s\simeq0.15$~mag, dominated by the photometry, since
+$5\sigma_{\log\theta}\simeq0.017$~mag.
+
+\paragraph{The distance-degenerate direction.}
+A distance error $\delta$ displaces $(y,z,g)$ by $-\delta$ and leaves $s$ untouched, so
+in the four-dimensional space the achromatic direction of \S\ref{sec:v7:S} becomes
+\begin{equation}
+  \hat{\boldsymbol{e}}_a = (1,1,1,0)^T/\sqrt{3},
+  \label{eq:v8:ea}
+\end{equation}
+and the decomposition $\boldsymbol{S}=\sigma_a^2\hat{\boldsymbol{e}}_a
+\hat{\boldsymbol{e}}_a^T+\boldsymbol{U}\boldsymbol{U}^T$ carries over with
+$\boldsymbol{U}$ a $4\times k$ loading orthogonal to $\hat{\boldsymbol{e}}_a$.  The
+protection of \S\ref{sec:v7:predict} is unchanged: prediction conditions on quantities
+invariant under $\mu\to\mu+\delta$, and $s$ is one of them.
+
+\subsection{The Angular-Diameter Cut as a Half-Plane}
+\label{sec:v8:selection}
+
+Because $5\log_{10}\theta_{26}=s-m_r$ and $m_r=\hat{y}+\mu(z)$, the $r$-band diameter
+cut is a single \emph{linear} condition on the state vector,
+\begin{equation}
+  \theta_{26}>\theta_r
+  \quad\Longleftrightarrow\quad
+  s - \hat{y} \;>\; 5\log_{10}\theta_r + \mu(z_i).
+  \label{eq:v8:halfplane}
+\end{equation}
+This is exact, with no size--luminosity relation and no scatter budget entering.  Since
+any linear combination of a multivariate Gaussian is univariate Gaussian, the
+corresponding selection factor is a single normal CDF,
+\begin{equation}
+  P(\theta_{26}>\theta_r \mid y_{\mathrm{TF},i})
+  = \Phi\!\left(
+      \frac{m_{s,i}-m_{y,i}-5\log_{10}\theta_r-\mu(z_i)}
+           {\sigma_{s-y,i}}
+    \right),
+  \label{eq:v8:Pselect}
+\end{equation}
+with $\sigma_{s-y,i}^2 = S_{ss}+S_{yy}-2S_{ys}+\sigma_{s,i}^2+\sigma_{y,i}^2$.
+
+\paragraph{Choice of $\theta_r$.}
+The new cut supersedes the $B$-band one only if a galaxy passing it is certain to have
+had $D_L(25)>20''$, i.e.\ if $\theta_r/20$ exceeds its $D_{26}/D_{25}$ ratio.  Fitting a
+truncated Gaussian to $\log_{10}(D_{26}/D_{25})$ per $D_{26}$ bin --- the in-sample
+distribution is truncated at $\log_{10}(D_{26}/20)$ by the original selection, and
+uncorrected estimates are biased low by up to $0.03$~dex --- gives $\sigma\simeq0.073$~dex
+and a median ratio rising from $1.52$ to $1.88$ with size.  The residual incompleteness
+is then $20\%$ at $\theta_r=35''$, $5.9\%$ at $40''$, $1.4\%$ at $45''$ and $0.36\%$ at
+$50''$, retaining $57\%$, $41\%$, $30\%$ and $22\%$ of the parent respectively.
+
+\subsection{Selection Normalization}
+\label{sec:v8:norm}
+
+Equation~\eqref{eq:v8:halfplane} adds a third linear condition to the two already
+imposed (the oblique plane strip and the $\hat{y}$ window), so the selection
+probability at fixed $y_{\mathrm{TF}}$ becomes a \emph{trivariate} normal rectangle
+probability rather than the bivariate one of \S\ref{sec:cc:selection}.  It does not
+factorize: the induced correlation between $s-\hat{y}$ and $\hat{y}$ is $-0.74$.
+
+No closed form exists in the available function set.  Two routes are open.  The
+trivariate probability can be written as a one-dimensional integral of bivariate
+CDFs and evaluated by nesting a Gauss--Legendre rule inside the existing
+$y_{\mathrm{TF}}$ quadrature, which is exact to quadrature error but multiplies the
+cost of the selection term by the inner node count.  Alternatively $\theta_r$ may be
+chosen large enough that Eq.~\eqref{eq:v8:Pselect} is saturated for essentially every
+galaxy in the sample, in which case the factor is constant and drops out of the
+normalization --- at the cost of the sample loss tabulated above.  The second is
+exact only in the limit and should be validated against the first.
+
 \section{Redshift-Dependent Rotational-Velocity Correction}
 \label{sec:vcorr}
 
