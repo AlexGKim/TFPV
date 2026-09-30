@@ -652,10 +652,15 @@ parameters {
   // so conditioning the prediction on (xhat, zhat, ghat) reconstructed that
   // displacement and destroyed the velocity signal (d yhat/d mu = -0.992).
   // Separating e_a lets the colour-conditioned predictor ignore it.
-  // 4 DOF (sigma_ach, two chromatic scales, one chromatic correlation).
+  // 3 DOF: sigma_ach, plus a free CARTESIAN 2-vector v_chrom giving a rank-1
+  // chromatic term. The chromatic part is rank-1 because a 2x2 chromatic
+  // covariance drove one of its scales to ~2e-5 -- the vanishing-scale funnel
+  // the rank-2 attempt hit (see the 2color appendix). v_chrom is Cartesian,
+  // not polar: a 2-vector shrinking to the origin under a normal prior is an
+  // ordinary point, whereas a (scale, angle) pair with scale -> 0 leaves the
+  // angle unidentified and funnels.
   real<lower=0> sigma_ach;                 // achromatic scatter amplitude
-  vector<lower=0>[2] sigma_chrom;          // chromatic scales
-  cholesky_factor_corr[2] L_chrom;         // chromatic correlation
+  vector[2] v_chrom;                       // chromatic loading in the e_1,e_2 plane
 
   // [COLOR] mean-color structure (kept: these define the MEAN, not the scatter)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
@@ -674,20 +679,22 @@ transformed parameters {
   // folded into S.
   real sigma_int_x_std = sigma_int_x / sd_x;
 
-  // [V7] S = sigma_ach^2 e_a e_a^T + E_c Sigma_c E_c^T, with
+  // [V7] S = sigma_ach^2 e_a e_a^T + (E_c v_chrom)(E_c v_chrom)^T, with
   // e_a = (1,1,1)/sqrt3 and E_c an orthonormal basis of its complement:
   //   e_1 = (1,-1,0)/sqrt2,  e_2 = (1,1,-2)/sqrt6.
-  // PSD by construction; full rank whenever sigma_ach and both chromatic
-  // scales are positive.
+  // Rank <= 2 and PSD by construction. u_chrom = E_c v_chrom is the chromatic
+  // scatter axis; it is orthogonal to e_a by construction, so no part of the
+  // chromatic term can leak into the distance-degenerate direction.
   matrix[3, 3] S;
+  vector[3] u_chrom;
   {
     vector[3] e_a = rep_vector(inv_sqrt(3.0), 3);
-    matrix[2, 2] Lc = diag_pre_multiply(sigma_chrom, L_chrom);
     matrix[3, 2] E_c;
     E_c[1, 1] =  inv_sqrt(2.0); E_c[2, 1] = -inv_sqrt(2.0); E_c[3, 1] = 0.0;
     E_c[1, 2] =  inv_sqrt(6.0); E_c[2, 2] =  inv_sqrt(6.0);
     E_c[3, 2] = -2.0 * inv_sqrt(6.0);
-    S = square(sigma_ach) * (e_a * e_a') + E_c * (Lc * Lc') * E_c';
+    u_chrom = E_c * v_chrom;
+    S = square(sigma_ach) * (e_a * e_a') + u_chrom * u_chrom';
   }
 }
 model {
@@ -698,9 +705,8 @@ model {
   // any true achromatic luminosity scatter AND is degenerate with the
   // peculiar-velocity scatter C_vv, so it is given the wider prior; the
   // chromatic scales are the ones that actually sharpen the prediction.
-  sigma_ach   ~ normal(0, 0.5);            // half-normal via <lower=0>
-  sigma_chrom ~ normal(0, 0.2);            // half-normal via <lower=0>
-  L_chrom     ~ lkj_corr_cholesky(2.0);
+  sigma_ach ~ normal(0, 0.5);              // half-normal via <lower=0>
+  v_chrom   ~ normal(0, 0.2);              // even in v_chrom, like the 2color w
 
   // [COLOR] Priors for the mean-color structure (unchanged)
   delta_c ~ std_normal();
@@ -843,11 +849,12 @@ generated quantities {
   // total intrinsic variance that lives in the chromatic plane -- it is what
   // the colour-conditioned predictor can use. chrom_frac -> 0 reduces the
   // prediction exactly to the x-only case.
-  matrix[2, 2] Sigma_chrom = multiply_lower_tri_self_transpose(
-                               diag_pre_multiply(sigma_chrom, L_chrom));
-  real rho_chrom = L_chrom[2, 1] / sqrt(dot_self(row(L_chrom, 2)));
+  real sigma_chrom = sqrt(dot_self(v_chrom));
   real var_ach = square(sigma_ach);
-  real var_chrom = trace(Sigma_chrom);
+  real var_chrom = square(sigma_chrom);
   real chrom_frac = var_chrom / (var_ach + var_chrom + 1e-12);
   real S_trace = var_ach + var_chrom;
+  // sign-fixed chromatic axis (S is even in v_chrom) and its y-band loading
+  vector[3] u_chrom_report = v_chrom[1] >= 0 ? u_chrom : -u_chrom;
+  real sigma_int_y = sqrt(S[1, 1]);        // r-band intrinsic scatter, mag
 }

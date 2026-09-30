@@ -1874,16 +1874,28 @@ The intrinsic covariance is
 \begin{equation}
   \boldsymbol{S}
   = \sigma_a^2\,\hat{\boldsymbol{e}}_a\hat{\boldsymbol{e}}_a^T
-  + \boldsymbol{E}_c\,\boldsymbol{\Sigma}_c\,\boldsymbol{E}_c^T,
+  + \boldsymbol{u}\boldsymbol{u}^T,
   \qquad
-  \boldsymbol{\Sigma}_c = \boldsymbol{L}_c\boldsymbol{L}_c^T,
+  \boldsymbol{u} = \boldsymbol{E}_c\,\boldsymbol{v}_c,
   \label{eq:v7:S}
 \end{equation}
-with $\boldsymbol{\Sigma}_c$ a $2\times2$ symmetric positive-definite matrix
-parameterized by its Cholesky factor, equivalently by two scales
-$\sigma_{c1},\sigma_{c2}$ and a correlation $\rho_c$.  The free parameters are
-$\sigma_a\ge0$, $\sigma_{c1},\sigma_{c2}\ge0$ and $\rho_c\in(-1,1)$: four in place
-of the three components of $\boldsymbol{w}$.
+with $\boldsymbol{v}_c\in\mathbb{R}^2$ a free loading in the chromatic plane, so
+that $\boldsymbol{u}\perp\hat{\boldsymbol{e}}_a$ by construction and no part of
+the chromatic term can leak into the distance-degenerate direction.  The free
+parameters are $\sigma_a\ge0$ and the two components of $\boldsymbol{v}_c$:
+three in place of the three components of $\boldsymbol{w}$, but allocated one to
+the achromatic axis and two to the chromatic plane.
+
+The chromatic term is rank~1 for the same empirical reason the two-color model
+is (\S\ref{sec:2c:generative}).  A full $2\times2$ chromatic covariance drives
+one of its scales to $\sim\!2\times10^{-5}$~mag, reproducing the vanishing-scale
+funnel: with the scale at zero the corresponding direction is unidentified.  We
+therefore parameterize the chromatic loading in \emph{Cartesian} form
+$\boldsymbol{v}_c$ rather than as a (scale, angle) pair.  A two-vector shrinking
+to the origin under a normal prior is an ordinary interior point, whereas a
+vanishing polar scale leaves its angle unconstrained; the Cartesian form removes
+the funnel rather than merely tolerating it.  In practice the MAP converges in
+roughly half the iterations and to a higher $\log p$ than the $2\times2$ form.
 
 Equation~\eqref{eq:v7:S} is not a reparameterization of
 $\boldsymbol{S}=\boldsymbol{w}\boldsymbol{w}^T$.  The rank-1 form fixes
@@ -1892,9 +1904,10 @@ here instead \emph{fixes the achromatic direction to be an eigenvector} and lets
 the scatter along it and within the chromatic plane vary independently.  The two
 families intersect only on a measure-zero set, so v7 contains neither the rank-1
 model nor the single-color model of \S\ref{sec:cc:marginalization} as a special
-case.  We adopt $\sigma_a\sim\mathrm{HalfNormal}(0.5)$,
-$\sigma_{c1},\sigma_{c2}\sim\mathrm{HalfNormal}(0.2)$, and an
-$\mathrm{LKJ}(2)$ prior on the $2\times2$ correlation.
+case.  We adopt $\sigma_a\sim\mathrm{HalfNormal}(0.5)$ and
+$\boldsymbol{v}_c\sim\mathcal{N}(\boldsymbol{0},0.2^2\boldsymbol{I})$;
+$\boldsymbol{S}$ is even in $\boldsymbol{v}_c$, exactly as it is in
+$\boldsymbol{w}$.
 
 The likelihood is unchanged: substituting Eq.~\eqref{eq:v7:S} for
 $\boldsymbol{w}\boldsymbol{w}^T$ in $\boldsymbol{B}_i$ (Eq.~\ref{eq:2c:B}) leaves
@@ -1963,13 +1976,21 @@ still using the chromatic information that the $x$-only predictor discards.
 \subsection{Limits}
 \label{sec:v7:limits}
 
-If $\boldsymbol{\Sigma}_c\to0$ the colors carry no intrinsic information and the
+If $\boldsymbol{v}_c\to0$ the colors carry no intrinsic information and the
 conditional prediction reduces exactly to the $x$-only result of
 \S\ref{sec:2c:xonly}; the chromatic conditioning can only help.  If
 $\sigma_a\to0$ all intrinsic scatter is chromatic and the color conditioning is
-maximally informative.  The useful gain over $x$-only is governed by
-$\lVert\boldsymbol{\Sigma}_c\rVert$ relative to the measurement errors on the
-colors, not by $\sigma_a$.
+maximally informative.
+
+Two quantities control how much is actually gained, and they are different.  The
+first is $\lVert\boldsymbol{v}_c\rVert$ relative to the measurement errors on the
+colors.  The second, and the more restrictive one here, is the $y$-component
+$u_y=\hat{\boldsymbol{e}}_y^T\boldsymbol{u}$: the color residuals inform the
+$r$-band prediction only through the off-diagonal entries $S_{yz}$ and $S_{yg}$
+that $\boldsymbol{u}\boldsymbol{u}^T$ contributes, and those vanish with $u_y$.
+A chromatic mode confined to the $(z,g)$ plane changes the colors without
+changing $y$, and therefore cannot sharpen the absolute-magnitude prediction at
+all, however large $\lVert\boldsymbol{v}_c\rVert$ is.
 
 \subsection{What the Decomposition Does Not Fix}
 \label{sec:v7:caveats}
