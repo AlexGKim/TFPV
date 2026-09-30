@@ -1,11 +1,11 @@
 // 2color.stan — Two-Color TFR Model, rank-2 intrinsic covariance
 //
 // Quadrivariate (x, y, z, g) model extending tophat.stan. The intrinsic (y,z,g)
-// [V8] = V7 + a REDSHIFT-DEPENDENT selection bound. haty_max is now a per-galaxy
-// vector, not a scalar: the survey selects on angular diameter (D25 > 20"), which
-// through the size-luminosity relation is a bound on absolute magnitude that sweeps
-// ~5.6 mag across 0.005 < z < 0.065. The deliberate dwarf cut is kept by taking
-//     haty_max[n] = min(dwarf_cut, y_max_theta(z_n)).
+// [V8] adds SURFACE BRIGHTNESS s = m_r + 5log10(theta26) as a fifth state variable.
+// s is distance-free, correlates with y at only 0.19 (the colours correlate at 0.98),
+// and turns the r-band diameter cut into the linear condition s - yhat > sel_c.
+// The degenerate direction becomes e_a = (1,1,1,0)/sqrt(3): a distance error moves
+// (y,z,g) but not s. See paper/main.tex App. "Surface-Brightness Extension".
 // [V7] scatter is an ACHROMATIC/CHROMATIC decomposition (see paper/main.tex
 // App. "Achromatic--Chromatic Decomposition"), replacing the rank-1 S = w w^T:
 //   w — loading vector; scatter direction w/|w|, magnitude |w| (N(0,0.5) prior)
@@ -518,24 +518,30 @@ data {
   vector[N_total] g;
   vector<lower=0>[N_total] sigma_g;
 
+  // [V8] r-band surface brightness, its error, and the selection constant
+  //      sel_c = 5 log10(theta_r) + mu(z): the diameter cut is s - yhat > sel_c.
+  vector[N_total] s;
+  vector<lower=0>[N_total] sigma_s;
+  vector[N_total] sel_c;
+  real theta_r;
+
   real haty_min;
-  // [V8] per-galaxy faint bound: min(dwarf cut, theta-selection bound at z_n).
-  // Built by make_haty_max_v8.py; a constant vector reproduces the v7 model exactly.
-  vector[N_total] haty_max;
+  real haty_max;
   real slope_plane;
   real intercept_plane;
   real intercept_plane2;
 
-  // [V8] bounds relative to haty_max are checked in transformed data, since Stan
-  // cannot constrain a scalar against a vector.
-  real y_min;
-  real y_max;
+  real<upper=haty_max> y_min;
+  real<lower=haty_max> y_max;
 
   // [COLOR] sample-mean observed color = mean(y - z); used as prior mean for mu_c (Eq. C31)
   real c_bar_obs;
 
   // [2COLOR] sample-mean observed g-r color = mean(y - g)
   real c_bar_g_obs;
+
+  // [V8] sample-mean (y - s), prior mean for mu_s
+  real s_bar_obs;
 
   // [KCORR] per-galaxy redshift, used by the latent k-correction term
   vector<lower=0>[N_total] z_obs;
@@ -547,16 +553,16 @@ transformed data {
   vector[N_total] x_std = (x - mean_x) / sd_x;
   vector[N_total] sigma_x_std = sigma_x / sd_x;
 
-  // [V8] validate the prior support brackets every per-galaxy selection bound.
-  // (log_lb / log_minus_ub were computed here but never used; dropped.)
-  real haty_max_lo = min(haty_max);
-  real haty_max_hi = max(haty_max);
+  real log_lb = log(haty_max - y_min);
+  real log_minus_ub = log(y_max - haty_max);
   vector[N_total] sigma_x_std_sq = square(sigma_x_std);
   vector[N_total] sigma_y_sq = square(sigma_y);
   // [COLOR]
   vector[N_total] sigma_z_sq = square(sigma_z);
   // [2COLOR]
   vector[N_total] sigma_g_sq = square(sigma_g);
+  // [V8]
+  vector[N_total] sigma_s_sq = square(sigma_s);
 
   int bin_idx = 1;
 
@@ -646,13 +652,6 @@ transformed data {
                               0.3626837833783619830, 0.3137066458778872873,
                               0.2223810344533744861, 0.1012285362903762591};
   vector[8] gl_w_8 = to_vector(gl_w_arr_8);
-  // [V8]
-  if (y_min >= haty_max_lo)
-    reject("y_min must be below every haty_max; y_min=", y_min,
-           " min(haty_max)=", haty_max_lo);
-  if (y_max <= haty_max_hi)
-    reject("y_max must exceed every haty_max; y_max=", y_max,
-           " max(haty_max)=", haty_max_hi);
 }
 parameters {
   real<lower=-9 * sd_x, upper=-4.0 * sd_x> slope_std;
@@ -678,18 +677,22 @@ parameters {
   // ordinary point, whereas a (scale, angle) pair with scale -> 0 leaves the
   // angle unidentified and funnels.
   real<lower=0> sigma_ach;                 // achromatic scatter amplitude
-  vector[2] v_chrom;                       // chromatic loading in the e_1,e_2 plane
+  vector[3] v_chrom;                       // loading in the 3-space orthogonal to e_a
 
   // [COLOR] mean-color structure (kept: these define the MEAN, not the scatter)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
   real mu_c;             // mean color at x = x_bar                          (Eq. C31)
   real delta_g;
   real mu_g;
+  // [V8] surface-brightness mean structure
+  real delta_s;
+  real mu_s;
 
   // [KCORR] band-dependent latent k-correction parameters
   real alpha_kcorr_r;
   real alpha_kcorr_z;
   real alpha_kcorr_g;
+  real alpha_kcorr_s;          // [V8]
 }
 transformed parameters {
   // [2COLOR] fit_sigmas==0 branch (dead: fit_sigmas is hardcoded to 1) formerly
@@ -703,14 +706,16 @@ transformed parameters {
   // Rank <= 2 and PSD by construction. u_chrom = E_c v_chrom is the chromatic
   // scatter axis; it is orthogonal to e_a by construction, so no part of the
   // chromatic term can leak into the distance-degenerate direction.
-  matrix[3, 3] S;
-  vector[3] u_chrom;
+  matrix[4, 4] S;
+  vector[4] u_chrom;
   {
-    vector[3] e_a = rep_vector(inv_sqrt(3.0), 3);
-    matrix[3, 2] E_c;
-    E_c[1, 1] =  inv_sqrt(2.0); E_c[2, 1] = -inv_sqrt(2.0); E_c[3, 1] = 0.0;
+    // [V8] e_a = (1,1,1,0)/sqrt3: a distance error moves (y,z,g) but not s.
+    vector[4] e_a = [inv_sqrt(3.0), inv_sqrt(3.0), inv_sqrt(3.0), 0.0]';
+    matrix[4, 3] E_c = rep_matrix(0.0, 4, 3);
+    E_c[1, 1] =  inv_sqrt(2.0); E_c[2, 1] = -inv_sqrt(2.0);
     E_c[1, 2] =  inv_sqrt(6.0); E_c[2, 2] =  inv_sqrt(6.0);
     E_c[3, 2] = -2.0 * inv_sqrt(6.0);
+    E_c[4, 3] =  1.0;                       // the pure-s direction
     u_chrom = E_c * v_chrom;
     S = square(sigma_ach) * (e_a * e_a') + u_chrom * u_chrom';
   }
@@ -727,6 +732,9 @@ model {
   v_chrom   ~ normal(0, 0.2);              // even in v_chrom, like the 2color w
 
   // [COLOR] Priors for the mean-color structure (unchanged)
+  delta_s ~ std_normal();            // [V8]
+  mu_s    ~ normal(s_bar_obs, 1);    // [V8]
+  alpha_kcorr_s ~ normal(0, 5);      // [V8]
   delta_c ~ std_normal();
   mu_c    ~ normal(c_bar_obs, 1);
   delta_g ~ std_normal();
@@ -743,6 +751,10 @@ model {
 
   if (y_TF_limits != 0) {
     // [2COLOR] Intrinsic (y,z,g) covariance entries from S = w w^T (rank-1).
+    real S_ys = S[1, 4];   // [V8]
+    real S_zs = S[2, 4];
+    real S_gs = S[3, 4];
+    real S_ss = S[4, 4];
     real S_yy = S[1, 1];
     real S_yz = S[1, 2];
     real S_yg = S[1, 3];
@@ -752,9 +764,10 @@ model {
 
     // [2COLOR] Closed-form numerator coefficients extended to 4-vector.
     real inv_slope_std        = inv(slope_std);
-    vector[4] b_vec           = [inv_slope_std, 1.0,
+    vector[5] b_vec           = [inv_slope_std, 1.0,
                                  1.0 - delta_c * inv_slope_std,
-                                 1.0 - delta_g * inv_slope_std]';
+                                 1.0 - delta_g * inv_slope_std,
+                                 1.0 - delta_s * inv_slope_std]';
     real intercept_over_slope = intercept_std[bin_idx] * inv_slope_std;
 
     for (n in 1 : N_total) {
@@ -763,6 +776,7 @@ model {
       real alpha_zn_r = alpha_kcorr_r * log1pz_centered;
       real alpha_zn_z = alpha_kcorr_z * log1pz_centered;
       real alpha_zn_g = alpha_kcorr_g * log1pz_centered;
+      real alpha_zn_s = alpha_kcorr_s * log1pz_centered;   // [V8]
 
       // [2COLOR] Per-galaxy y diagonal (intrinsic + measurement); used by selection.
       real A11 = S_yy + sigma_y_sq[n];
@@ -770,7 +784,7 @@ model {
       // [2COLOR] B_i covariance matrix extended to 4×4
       real s1sq = sigmasq1_std[n];
       real sigma_intx_sq = square(sigma_int_x_std);
-      matrix[4, 4] B = rep_matrix(0.0, 4, 4);
+      matrix[5, 5] B = rep_matrix(0.0, 5, 5);
       B[1, 1] = s1sq;
       B[1, 3] = -delta_c * sigma_intx_sq;
       B[3, 1] = -delta_c * sigma_intx_sq;
@@ -798,22 +812,32 @@ model {
       B[3, 3] = S_zz + square(delta_c) * sigma_intx_sq + sigma_z_sq[n];
       B[4, 4] = S_gg + square(delta_g) * sigma_intx_sq + sigma_g_sq[n];
 
-      for (k in 1:4) B[k, k] += 1e-10;
-      matrix[4, 4] L_B = cholesky_decompose(B);
+      // [V8] surface-brightness row/column
+      real B_zs = S_zs + delta_c * delta_s * sigma_intx_sq;
+      real B_gs = S_gs + delta_g * delta_s * sigma_intx_sq;
+      B[1, 5] = -delta_s * sigma_intx_sq;  B[5, 1] = B[1, 5];
+      B[2, 5] = S_ys;                      B[5, 2] = S_ys;
+      B[3, 5] = B_zs;                      B[5, 3] = B_zs;
+      B[4, 5] = B_gs;                      B[5, 4] = B_gs;
+      B[5, 5] = S_ss + square(delta_s) * sigma_intx_sq + sigma_s_sq[n];
+
+      for (k in 1:5) B[k, k] += 1e-10;
+      matrix[5, 5] L_B = cholesky_decompose(B);
 
       // [2COLOR] Observed data vector for this galaxy (standardized x)
-      vector[4] obs = [x_std[n], y[n], z[n], g[n]]';
+      vector[5] obs = [x_std[n], y[n], z[n], g[n], s[n]]';
 
       // [2COLOR] Mean offset vector
-      vector[4] a_vec = [-intercept_over_slope,
+      vector[5] a_vec = [-intercept_over_slope,
                          alpha_zn_r,
                          alpha_zn_z - mu_c + delta_c * intercept_over_slope,
-                         alpha_zn_g - mu_g + delta_g * intercept_over_slope]';
-      vector[4] d_vec = obs - a_vec;
+                         alpha_zn_g - mu_g + delta_g * intercept_over_slope,
+                         alpha_zn_s - mu_s + delta_s * intercept_over_slope]';
+      vector[5] d_vec = obs - a_vec;
 
       // Triangular solves against L_B (Cholesky of B_n): v = L_B⁻¹·b, w = L_B⁻¹·d
-      vector[4] v_vec = mdivide_left_tri_low(L_B, b_vec);
-      vector[4] w_vec = mdivide_left_tri_low(L_B, d_vec);
+      vector[5] v_vec = mdivide_left_tri_low(L_B, b_vec);
+      vector[5] w_vec = mdivide_left_tri_low(L_B, d_vec);
 
       real xi_n    = dot_self(v_vec);              // ξ_n  = bᵀ B_n⁻¹ b
       real phi_n   = dot_product(v_vec, w_vec);    // φ_n  = bᵀ B_n⁻¹ d_n
@@ -829,7 +853,7 @@ model {
 
       // log L_n = -log(2π) - ½·log|B_n| - ½·log(ξ_n) - ½·Q_{0,n} + log ΔΦ_n,
       // with log|B_n| = 2·∑ log(diag(L_B)).  Top-hat prior 1/(y_max - y_min).
-      target += -1.5 * log(2 * pi())
+      target += -2.0 * log(2 * pi())   // [V8] -(D-1)/2, D=5
                 - sum(log(diagonal(L_B)))
                 - 0.5 * log(xi_n)
                 - 0.5 * Q_0
@@ -845,7 +869,7 @@ model {
         target += -log(
           integrate_binormal_strip_sinh2_gl(
             y_min, y_max,
-            haty_min - alpha_zn_r, haty_max[n] - alpha_zn_r,
+            haty_min - alpha_zn_r, haty_max - alpha_zn_r,
             slope_std, intercept_std[bin_idx],
             slope_plane_std,
             intercept_plane_std,
@@ -868,11 +892,14 @@ generated quantities {
   // the colour-conditioned predictor can use. chrom_frac -> 0 reduces the
   // prediction exactly to the x-only case.
   real sigma_chrom = sqrt(dot_self(v_chrom));
+  real u_y = u_chrom[1];                 // [V8] y-loading of the non-achromatic mode
+  real u_s = u_chrom[4];                 // [V8] s-loading
+  real corr_ys = S[1, 4] / sqrt(S[1, 1] * S[4, 4] + 1e-12);
   real var_ach = square(sigma_ach);
   real var_chrom = square(sigma_chrom);
   real chrom_frac = var_chrom / (var_ach + var_chrom + 1e-12);
   real S_trace = var_ach + var_chrom;
   // sign-fixed chromatic axis (S is even in v_chrom) and its y-band loading
-  vector[3] u_chrom_report = v_chrom[1] >= 0 ? u_chrom : -u_chrom;
+  vector[4] u_chrom_report = v_chrom[1] >= 0 ? u_chrom : -u_chrom;
   real sigma_int_y = sqrt(S[1, 1]);        // r-band intrinsic scatter, mag
 }
