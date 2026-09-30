@@ -1823,6 +1823,168 @@ $\sigma_{\mathrm{int},z}^2$ diagonal terms of the single-color $\boldsymbol{B}_i
 have no counterpart here.
 
 
+\section{Achromatic--Chromatic Decomposition}
+\label{sec:v7}
+
+\subsection{Motivation}
+\label{sec:v7:motivation}
+
+The two-color model of \S\ref{sec:2color} places the entire intrinsic scatter of
+$(y_i,z_i,g_i)$ along the single direction $\hat{\boldsymbol{w}}$
+(Eq.~\ref{eq:2c:S}).  Fitted to the DR2 sample, $\hat{\boldsymbol{w}}$ lies only
+$\theta_S=10.6^\circ\pm1.0^\circ$ from the \emph{achromatic} direction
+$\hat{\boldsymbol{e}}_a=(1,1,1)^T/\sqrt{3}$.
+
+This matters because an error $\delta$ in the adopted distance modulus --- a
+peculiar velocity in particular --- displaces all three absolute magnitudes
+equally,
+\begin{equation}
+  (y_i,z_i,g_i) \;\longrightarrow\; (y_i,z_i,g_i) - \delta\,(1,1,1),
+  \label{eq:v7:shift}
+\end{equation}
+that is, exactly along $\hat{\boldsymbol{e}}_a$.  The model's one intrinsic mode
+is therefore nearly parallel to the distance-error direction, and the
+conditioning of \S\ref{sec:2c:predict} on $(\hat{x}_\star,\hat{z}_\star,
+\hat{g}_\star)$ allows the regression term
+$\boldsymbol{b}_{\mathrm{reg}}^T\boldsymbol{r}_\star$ to reconstruct that
+displacement: both $\hat{z}_\star$ and $\hat{g}_\star$ shift by $-\delta$, and the
+fitted coefficients on them sum to $\simeq1$.  Measured on the DR2 catalogue the
+predicted absolute magnitude tracks the distance modulus with
+$\partial\hat{y}_\star/\partial\mu = -0.992$, so the residual
+$\eta=(\mu_{z}-\mu_{\mathrm{TF}})/5$ retains only $1/126$ of its sensitivity to a
+peculiar velocity.  Section~\ref{sec:2c:generative} already notes that the
+near-achromatic mode is degenerate with the peculiar-velocity scatter
+$C_{vv}$; the rank-1 restriction does not remove that degeneracy, it concentrates
+all of the intrinsic scatter into it.
+
+The model of this appendix, which we label v7, retains the generative structure of
+\S\ref{sec:2c:generative} and changes two things: the intrinsic covariance is
+decomposed so that the achromatic direction carries its own amplitude, and
+prediction is conditioned on distance-invariant colors.
+
+\subsection{Decomposed Intrinsic Covariance}
+\label{sec:v7:S}
+
+Let $\hat{\boldsymbol{e}}_a=(1,1,1)^T/\sqrt3$ and choose any orthonormal basis of
+its complement, e.g.
+$\hat{\boldsymbol{e}}_1=(1,-1,0)^T/\sqrt2$,
+$\hat{\boldsymbol{e}}_2=(1,1,-2)^T/\sqrt6$,
+and write $\boldsymbol{E}_c=[\hat{\boldsymbol{e}}_1\;\hat{\boldsymbol{e}}_2]$.
+The intrinsic covariance is
+\begin{equation}
+  \boldsymbol{S}
+  = \sigma_a^2\,\hat{\boldsymbol{e}}_a\hat{\boldsymbol{e}}_a^T
+  + \boldsymbol{E}_c\,\boldsymbol{\Sigma}_c\,\boldsymbol{E}_c^T,
+  \qquad
+  \boldsymbol{\Sigma}_c = \boldsymbol{L}_c\boldsymbol{L}_c^T,
+  \label{eq:v7:S}
+\end{equation}
+with $\boldsymbol{\Sigma}_c$ a $2\times2$ symmetric positive-definite matrix
+parameterized by its Cholesky factor, equivalently by two scales
+$\sigma_{c1},\sigma_{c2}$ and a correlation $\rho_c$.  The free parameters are
+$\sigma_a\ge0$, $\sigma_{c1},\sigma_{c2}\ge0$ and $\rho_c\in(-1,1)$: four in place
+of the three components of $\boldsymbol{w}$.
+
+Equation~\eqref{eq:v7:S} is not a reparameterization of
+$\boldsymbol{S}=\boldsymbol{w}\boldsymbol{w}^T$.  The rank-1 form fixes
+$\det\boldsymbol{S}=0$ while leaving its one direction free; the decomposition
+here instead \emph{fixes the achromatic direction to be an eigenvector} and lets
+the scatter along it and within the chromatic plane vary independently.  The two
+families intersect only on a measure-zero set, so v7 contains neither the rank-1
+model nor the single-color model of \S\ref{sec:cc:marginalization} as a special
+case.  We adopt $\sigma_a\sim\mathrm{HalfNormal}(0.5)$,
+$\sigma_{c1},\sigma_{c2}\sim\mathrm{HalfNormal}(0.2)$, and an
+$\mathrm{LKJ}(2)$ prior on the $2\times2$ correlation.
+
+The likelihood is unchanged: substituting Eq.~\eqref{eq:v7:S} for
+$\boldsymbol{w}\boldsymbol{w}^T$ in $\boldsymbol{B}_i$ (Eq.~\ref{eq:2c:B}) leaves
+the marginalization of \S\ref{sec:2c:marginalization} and the closed-form
+likelihood of \S\ref{sec:2c:closed} untouched, since neither uses the rank of
+$\boldsymbol{S}$.
+
+\subsection{Distance-Invariant Prediction}
+\label{sec:v7:predict}
+
+Define the observed colors
+\begin{equation}
+  \hat{c}_{1,\star} = \hat{y}_\star - \hat{z}_\star,
+  \qquad
+  \hat{c}_{2,\star} = \hat{y}_\star - \hat{g}_\star,
+  \label{eq:v7:colors}
+\end{equation}
+and the linear map
+$\boldsymbol{T}:(\hat{x},\hat{y},\hat{z},\hat{g})\mapsto
+(\hat{x},\hat{y},\hat{c}_1,\hat{c}_2)$,
+\begin{equation}
+  \boldsymbol{T} =
+  \begin{pmatrix}
+    1&0&0&0\\ 0&1&0&0\\ 0&1&-1&0\\ 0&1&0&-1
+  \end{pmatrix},
+  \qquad
+  \tilde{\boldsymbol{B}}_i = \boldsymbol{T}\boldsymbol{B}_i\boldsymbol{T}^T,
+  \qquad
+  \tilde{\boldsymbol{\mu}}_i = \boldsymbol{T}\boldsymbol{\mu}_i .
+  \label{eq:v7:T}
+\end{equation}
+Prediction then proceeds exactly as in \S\ref{sec:2c:predict}, with the
+$3\times3$ conditioning matrix $\boldsymbol{D}_\star$ formed from the
+$(\hat{x},\hat{c}_1,\hat{c}_2)$ sub-block of $\tilde{\boldsymbol{B}}_\star$
+rather than the $(\hat{x},\hat{z},\hat{g})$ sub-block of $\boldsymbol{B}_\star$,
+and with the residual vector
+$\boldsymbol{r}_\star=(\hat{x}_\star-\mu_{x,\star},\,
+\hat{c}_{1,\star}-\tilde{m}_{c1,\star},\,
+\hat{c}_{2,\star}-\tilde{m}_{c2,\star})$.
+Equations~\eqref{eq:2c:mu_cond}--\eqref{eq:2c:xi_xzg} carry over verbatim under
+this substitution.
+
+The point of the change is immediate from Eq.~\eqref{eq:v7:shift}: under
+$\mu\to\mu+\delta$ the observables transform as
+$(\hat{x},\hat{y},\hat{z},\hat{g})\to(\hat{x},\hat{y}-\delta,\hat{z}-\delta,
+\hat{g}-\delta)$, so
+\begin{equation}
+  \hat{c}_{1,\star}\to\hat{c}_{1,\star},
+  \qquad
+  \hat{c}_{2,\star}\to\hat{c}_{2,\star} ,
+  \label{eq:v7:invariance}
+\end{equation}
+and the conditioning set carries no information about $\delta$.  Therefore
+\begin{equation}
+  \frac{\partial}{\partial\delta}\,
+  \mathbb{E}\!\left[\hat{y}_\star \mid \hat{x}_\star,\hat{c}_{1,\star},
+  \hat{c}_{2,\star}\right] = 0,
+  \qquad
+  \frac{\partial\eta}{\partial\mu_z} = \frac{1}{5},
+  \label{eq:v7:response}
+\end{equation}
+i.e.\ the predicted distance modulus responds to a peculiar velocity with full
+amplitude, as it does for the $x$-only predictor of \S\ref{sec:2c:xonly}, while
+still using the chromatic information that the $x$-only predictor discards.
+
+\subsection{Limits}
+\label{sec:v7:limits}
+
+If $\boldsymbol{\Sigma}_c\to0$ the colors carry no intrinsic information and the
+conditional prediction reduces exactly to the $x$-only result of
+\S\ref{sec:2c:xonly}; the chromatic conditioning can only help.  If
+$\sigma_a\to0$ all intrinsic scatter is chromatic and the color conditioning is
+maximally informative.  The useful gain over $x$-only is governed by
+$\lVert\boldsymbol{\Sigma}_c\rVert$ relative to the measurement errors on the
+colors, not by $\sigma_a$.
+
+\subsection{What the Decomposition Does Not Fix}
+\label{sec:v7:caveats}
+
+The achromatic amplitude $\sigma_a$ remains degenerate with the peculiar-velocity
+scatter $C_{vv}$ in the \emph{likelihood}, exactly as in
+\S\ref{sec:2c:generative}: both scatter $\hat{y}$ at fixed $\hat{x}$ and fixed
+color, and the data cannot separate an intrinsically achromatic luminosity
+scatter from a line-of-sight velocity.  What Eq.~\eqref{eq:v7:response}
+guarantees is narrower but is the property needed for peculiar-velocity work:
+the \emph{prediction} is immune to that degeneracy, because it never conditions
+on the degenerate direction.  Any measurement of $\sigma_a$ itself should be read
+as an upper bound on the achromatic intrinsic scatter, inclusive of velocity
+scatter.
+
 \section{Redshift-Dependent Rotational-Velocity Correction}
 \label{sec:vcorr}
 
