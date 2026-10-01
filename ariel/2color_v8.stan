@@ -677,7 +677,18 @@ parameters {
   // ordinary point, whereas a (scale, angle) pair with scale -> 0 leaves the
   // angle unidentified and funnels.
   real<lower=0> sigma_ach;                 // achromatic scatter amplitude
-  vector[3] v_chrom;                       // loading in the 3-space orthogonal to e_a
+  // [V8] RANK-2 loading in the 3-space orthogonal to e_a. Rank-1 was adequate for
+  // three variables but cannot carry both the colour mode (|u| ~ 0.07 mag) and the
+  // surface-brightness mode (~0.5 mag): with one loading it goes to SB, the colour
+  // structure is squeezed out, and the TF parameters shift to compensate (the control
+  // against v7 moved the slope by 0.27 and sigma_int_y by 21%).
+  // Lower-triangular, 5 free parameters = a 3x3 rank-2 PSD matrix, identified up to
+  // sign. Basis order puts the dominant SB direction first for conditioning.
+  real<lower=0> V11;
+  real V21;
+  real<lower=0> V22;
+  real V31;
+  real V32;
 
   // [COLOR] mean-color structure (kept: these define the MEAN, not the scatter)
   real delta_c;          // population color-velocity slope                   (Eq. C30)
@@ -707,17 +718,22 @@ transformed parameters {
   // scatter axis; it is orthogonal to e_a by construction, so no part of the
   // chromatic term can leak into the distance-degenerate direction.
   matrix[4, 4] S;
-  vector[4] u_chrom;
+  matrix[4, 2] U_load;
   {
     // [V8] e_a = (1,1,1,0)/sqrt3: a distance error moves (y,z,g) but not s.
     vector[4] e_a = [inv_sqrt(3.0), inv_sqrt(3.0), inv_sqrt(3.0), 0.0]';
+    // basis of e_a's complement, SB direction FIRST
     matrix[4, 3] E_c = rep_matrix(0.0, 4, 3);
-    E_c[1, 1] =  inv_sqrt(2.0); E_c[2, 1] = -inv_sqrt(2.0);
-    E_c[1, 2] =  inv_sqrt(6.0); E_c[2, 2] =  inv_sqrt(6.0);
-    E_c[3, 2] = -2.0 * inv_sqrt(6.0);
-    E_c[4, 3] =  1.0;                       // the pure-s direction
-    u_chrom = E_c * v_chrom;
-    S = square(sigma_ach) * (e_a * e_a') + u_chrom * u_chrom';
+    E_c[4, 1] =  1.0;                        // pure-s
+    E_c[1, 2] =  inv_sqrt(2.0); E_c[2, 2] = -inv_sqrt(2.0);
+    E_c[1, 3] =  inv_sqrt(6.0); E_c[2, 3] =  inv_sqrt(6.0);
+    E_c[3, 3] = -2.0 * inv_sqrt(6.0);
+    matrix[3, 2] V = rep_matrix(0.0, 3, 2);
+    V[1, 1] = V11;
+    V[2, 1] = V21; V[2, 2] = V22;
+    V[3, 1] = V31; V[3, 2] = V32;
+    U_load = E_c * V;
+    S = square(sigma_ach) * (e_a * e_a') + U_load * U_load';
   }
 }
 model {
@@ -729,7 +745,13 @@ model {
   // peculiar-velocity scatter C_vv, so it is given the wider prior; the
   // chromatic scales are the ones that actually sharpen the prediction.
   sigma_ach ~ normal(0, 0.5);              // half-normal via <lower=0>
-  v_chrom   ~ normal(0, 0.2);              // even in v_chrom, like the 2color w
+  // [V8] the SB mode is ~0.5 mag and the colour mode ~0.07, so give the first
+  // loading a wider prior than the second.
+  V11 ~ normal(0, 0.5);
+  V21 ~ normal(0, 0.2);
+  V22 ~ normal(0, 0.2);
+  V31 ~ normal(0, 0.2);
+  V32 ~ normal(0, 0.2);
 
   // [COLOR] Priors for the mean-color structure (unchanged)
   delta_s ~ std_normal();            // [V8]
@@ -891,15 +913,20 @@ generated quantities {
   // total intrinsic variance that lives in the chromatic plane -- it is what
   // the colour-conditioned predictor can use. chrom_frac -> 0 reduces the
   // prediction exactly to the x-only case.
-  real sigma_chrom = sqrt(dot_self(v_chrom));
-  real u_y = u_chrom[1];                 // [V8] y-loading of the non-achromatic mode
-  real u_s = u_chrom[4];                 // [V8] s-loading
+  // [V8] report both non-achromatic modes
+  real mode1_norm = sqrt(dot_self(col(U_load, 1)));
+  real mode2_norm = sqrt(dot_self(col(U_load, 2)));
+  real u_y = U_load[1, 1];               // y-loading of the dominant (SB) mode
+  real u_y2 = U_load[1, 2];              // y-loading of the second (colour) mode
+  real u_s = U_load[4, 1];
   real corr_ys = S[1, 4] / sqrt(S[1, 1] * S[4, 4] + 1e-12);
   real var_ach = square(sigma_ach);
-  real var_chrom = square(sigma_chrom);
-  real chrom_frac = var_chrom / (var_ach + var_chrom + 1e-12);
-  real S_trace = var_ach + var_chrom;
+  real var_mode1 = square(mode1_norm);
+  real var_mode2 = square(mode2_norm);
+  real nonach_frac = (var_mode1 + var_mode2) / (var_ach + var_mode1 + var_mode2 + 1e-12);
+  real S_trace = var_ach + var_mode1 + var_mode2;
   // sign-fixed chromatic axis (S is even in v_chrom) and its y-band loading
-  vector[4] u_chrom_report = v_chrom[1] >= 0 ? u_chrom : -u_chrom;
+  vector[4] mode1_report = col(U_load, 1);
+  vector[4] mode2_report = col(U_load, 2);
   real sigma_int_y = sqrt(S[1, 1]);        // r-band intrinsic scatter, mag
 }
