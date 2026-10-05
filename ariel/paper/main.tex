@@ -1912,7 +1912,7 @@ $\boldsymbol{w}$.
 The likelihood is unchanged: substituting Eq.~\eqref{eq:v7:S} for
 $\boldsymbol{w}\boldsymbol{w}^T$ in $\boldsymbol{B}_i$ (Eq.~\ref{eq:2c:B}) leaves
 the marginalization of \S\ref{sec:2c:marginalization} and the closed-form
-likelihood of \S\ref{sec:2c:closed} untouched, since neither uses the rank of
+likelihood of \S\ref{sec:2c:likelihood} untouched, since neither uses the rank of
 $\boldsymbol{S}$.
 
 \subsection{Distance-Invariant Prediction}
@@ -2120,6 +2120,294 @@ chosen large enough that Eq.~\eqref{eq:v8:Pselect} is saturated for essentially 
 galaxy in the sample, in which case the factor is constant and drops out of the
 normalization --- at the cost of the sample loss tabulated above.  The second is
 exact only in the limit and should be validated against the first.
+
+\section{Surface Brightness Without Color}
+\label{sec:v9}
+
+\subsection{Motivation}
+\label{sec:v9:motivation}
+
+The model of \S\ref{sec:v8} carries five state variables, two of which the data
+decline to use.  Fitting it to the spiral training sample measures the chromatic
+mode cleanly --- its norm is $\lVert\boldsymbol{u}_2\rVert=0.0702\pm0.0022$~mag ---
+but finds its loading on the magnitude direction consistent with zero,
+\begin{equation}
+  u_{2,y} = 0.0013\pm0.0011, \qquad
+  \text{95\% credible interval } [-0.0009,\,+0.0034],
+  \label{eq:v9:uy}
+\end{equation}
+so conditioning the prediction on the colors cannot improve a distance by more than
+a few thousandths of a magnitude.  The large raw correlation between color and the TF
+residual noted in \S\ref{sec:v7:limits} is not evidence against this: $\hat{z}$ and
+$\hat{g}$ are absolute magnitudes and therefore share $-\mu$ with $\hat{y}$, so that
+correlation is the distance-degenerate direction of Eq.~\eqref{eq:v7:S}, not a color
+term.  We therefore drop $\hat{z}$ and $\hat{g}$, reducing the state vector from five
+variables to three, and label the result v9.
+
+\subsection{Conditioning on Rotation Velocity}
+\label{sec:v9:conditioning}
+
+A second parameter of the Tully--Fisher relation is, by definition, a dependence of
+the distance residual $\Delta\mu\equiv\mu_z-\mu_{\mathrm{TF}}$ on some quantity
+\emph{at fixed rotation velocity}.  This conditioning is not optional, and it is the
+single largest source of error in the surface-brightness literature we are able to
+check directly, so we establish it before quoting any number.
+
+The estimated residual is not independent of $\log V$.  On the DR2 analysis sample
+\begin{equation}
+  \frac{\partial\langle\Delta\mu\rangle}{\partial\log V} = -1.318\pm0.024 ,
+  \label{eq:v9:dmudx}
+\end{equation}
+a $54\sigma$ dependence.  It is an artifact of the estimator, not of the galaxies:
+$\mu_{\mathrm{TF}}$ is built from the truncated-normal posterior mean of
+$y_{\mathrm{TF}}$ (\S\ref{sec:2c:xonly}), and shrinkage toward the prior induces
+precisely such a residual--$\hat{x}$ correlation.  An AbacusSummit mock catalogue
+processed through the identical pipeline, where the true distances are known, confirms
+this: the true residual carries
+$-0.043\pm0.007$ while the measured one carries $-1.570\pm0.034$, so essentially the
+whole effect is estimator bias.
+
+Because surface brightness is itself strongly correlated with rotation velocity,
+$\mathrm{corr}(s,\log V)=-0.544$, any statistic that does not condition on $\log V$
+inherits Eq.~\eqref{eq:v9:dmudx}.  To calibrate how much, we construct in the mock a
+synthetic variable $v$ with the same correlation to $\log V$ and the same dispersion
+as $s$, but \emph{no} relation to the true distance by construction, and measure the
+same slopes (40 realizations):
+\begin{equation}
+  \left.\frac{\partial\Delta\mu}{\partial v}\right|_{\mathrm{marginal}}
+    = +0.297\pm0.010,
+  \qquad
+  \left.\frac{\partial\Delta\mu}{\partial v}\right|_{\log V}
+    = -0.003\pm0.014 .
+  \label{eq:v9:mockctl}
+\end{equation}
+The marginal statistic manufactures a large slope from a variable that has none; the
+conditioned statistic correctly recovers zero.  The corresponding slopes against the
+\emph{true} residual are $+0.008\pm0.002$ and $+0.000\pm0.002$.  We therefore quote
+only slopes at fixed $\log V$, and read Eq.~\eqref{eq:v9:mockctl} as the null
+calibration of that statistic.
+
+\subsection{The Surface-Brightness Dependence}
+\label{sec:v9:sb}
+
+Let $a_{26,i}$ be the semi-major axis of the $26\,\mathrm{mag}\,\mathrm{arcsec}^{-2}$
+isophote and $(b/a)_i$ its axis ratio.  The surface brightness averaged over the
+\emph{elliptical} isophotal area is
+\begin{equation}
+  s_i = m_{r,26,i} + 2.5\log_{10}\!\left(\pi\,a_{26,i}^{2}\,(b/a)_i\right),
+  \label{eq:v9:s}
+\end{equation}
+which differs from the circular form $s^{\mathrm{circ}}_i = m_{r,26,i} +
+5\log_{10}\theta_{26,i}$ by exactly $\varpi_i \equiv 2.5\log_{10}(b/a)_i$, an
+orientation term carrying no information about the galaxy's structure.  At fixed
+$\log V$, and against the null calibration of Eq.~\eqref{eq:v9:mockctl},
+\begin{align}
+  \left.\frac{\partial\Delta\mu}{\partial s}\right|_{\log V}
+    &= -0.195\pm0.010 \quad (20\sigma), \label{eq:v9:sbslope}\\
+  \left.\frac{\partial\Delta\mu}{\partial s^{\mathrm{circ}}}\right|_{\log V}
+    &= -0.044\pm0.006 , \label{eq:v9:sbcirc}
+\end{align}
+and adding $\varpi$ as a third regressor leaves the first essentially unchanged,
+$-0.193\pm0.010$, with $\partial\Delta\mu/\partial\varpi=-0.039\pm0.007$.  The
+elliptical aperture gives a slope four times larger than the circular one: dividing by
+a circular area dilutes the signal with inclination, which is why
+Eq.~\eqref{eq:v9:s} is adopted.  The magnitude in Eq.~\eqref{eq:v9:s} is the
+\emph{uncorrected} $m_{r,26}$, since the internal-dust correction is itself $97\%$ a
+linear function of $\varpi$ (slope $-0.30$) and would return $0.30\,\varpi$ to the
+variable, raising $\mathrm{corr}(s,\varpi)$ from $+0.03$ to $\simeq+0.32$.
+
+\paragraph{The signal is not entirely selection.}
+The sample is cut on the HyperLeda $B$-band $D_L(25)>20''$, which acts through angular
+size and therefore correlates with surface brightness.  Splitting at fixed $\log V$
+into a subsample far above the threshold, where the selection is essentially complete,
+and one near it:
+\begin{equation}
+  \left.\frac{\partial\Delta\mu}{\partial s}\right|_{\log V} =
+  \begin{cases}
+    -0.118\pm0.024 & D_{25}>40'' \quad (N=1927),\\
+    -0.256\pm0.012 & D_{25}<30'' \quad (N=7165),
+  \end{cases}
+  \label{eq:v9:sizesplit}
+\end{equation}
+a difference of $0.138\pm0.027$ ($5.1\sigma$).  The near-threshold subsample is
+twice as steep, so part of the full-sample slope is selection-driven; but the
+complete subsample retains a $4.9\sigma$ dependence that selection cannot produce.  A
+surface-brightness term is therefore required, with an amplitude between
+Eqs.~\eqref{eq:v9:sbslope} and \eqref{eq:v9:sizesplit}.
+
+\paragraph{Physical size is not an alternative.}
+For a galaxy at distance modulus $\mu$ with absolute magnitude $M$ and physical
+semi-major axis $R$, Eq.~\eqref{eq:v9:s} and the definition of $\mu$ give
+\begin{equation}
+  s = M + 5\log_{10}R + 2.5\log_{10}(b/a) + 10\log_{10}(1+z) + \mathrm{const},
+  \label{eq:v9:identity}
+\end{equation}
+exactly, for an $R$ computed self-consistently from the same distance (we verify it to
+machine precision this way; the catalogued $D_{26}$ in kpc uses a different convention
+and satisfies it only to $0.23$~mag).  Given $M$ --- which is what the TF relation
+predicts --- a model linear in $s$ is therefore identical to a model linear in
+$\log R$ with rescaled coefficients: the two are the same second parameter in
+different coordinates.  The distinction that matters is observational.  $s$ is built
+from an apparent magnitude and an angular size and needs no distance, while $R$ does;
+a redshift-derived $R$ re-injects $\mu$ into the predictor and reproduces the
+pathology of \S\ref{sec:v7:predict}.  Surface brightness is the distance-free
+coordinate on the same luminosity--size plane.
+
+\subsection{Generative Model}
+\label{sec:v9:generative}
+
+The observation vector is $(\hat{x}_i,\hat{y}_i,\hat{s}_i)$.  The latent TF variables
+and the mean relation for $s$ are unchanged from Eqs.~\eqref{eq:cc:yTF_prior} and
+\eqref{eq:v8:mean_s}, except that the TF relation carries an inclination term,
+\begin{equation}
+  x_i \mid y_{\mathrm{TF},i} \;\sim\;
+  \mathcal{N}\!\left(\frac{y_{\mathrm{TF},i}-\beta-\kappa\varpi_i}{\alpha},\;
+  \sigma_{\mathrm{int},x}^2\right),
+  \label{eq:v9:x_given_yTF}
+\end{equation}
+that is $y_{\mathrm{TF},i}=\beta+\kappa\varpi_i+\alpha x_i$, and the mean of $s$
+carries its own,
+\begin{equation}
+  m_{s,i} = y_{\mathrm{TF},i} - \mu_s - \delta_s(x_i-\bar{x}) + \Delta_{s,i}
+            + \lambda_s\varpi_i .
+  \label{eq:v9:mean_s}
+\end{equation}
+Two coefficients are needed, not one.  Because $\beta$ also enters the $s$ row through
+$\delta_s\beta/\alpha$, a lone $\kappa$ is estimated from both residuals and returns a
+precision-weighted average of two different slopes; with
+$\sigma_{\mathrm{int},y}\approx\sigma_{\mathrm{int},s}$ the weights are nearly equal.
+Fitting the single-coefficient version returned $-0.034\pm0.008$, essentially the mean
+of $\partial y/\partial\varpi|_x=-0.010\pm0.011$ and
+$\partial s/\partial\varpi|_x=-0.058\pm0.009$, and reporting it as an inclination
+correction to the TF relation would have been wrong.  With the split, $\kappa$ is the
+magnitude slope and $\lambda_s$ absorbs the rest; $\lambda_s$ does not enter the
+selection, which is bivariate in $(\hat{x},\hat{y})$ only.  Because $\varpi$ is
+measured essentially without error, and is already used in the deprojection and the
+internal-dust correction, it enters as a fixed covariate rather than a state variable.
+
+The intrinsic covariance is an unrestricted $2\times2$ over $(y,s)$, parameterized by
+its Cholesky factor,
+\begin{equation}
+  \boldsymbol{S} = \boldsymbol{L}\boldsymbol{L}^T, \qquad
+  \boldsymbol{L} = \begin{pmatrix} L_{11} & 0 \\ L_{21} & L_{22}\end{pmatrix},
+  \quad L_{11},L_{22}>0,
+  \label{eq:v9:S}
+\end{equation}
+so $\sigma_{\mathrm{int},y}=L_{11}$, $S_{ys}=L_{11}L_{21}$ and
+$S_{ss}=L_{21}^2+L_{22}^2$, each factor given a weakly-informative
+$\mathcal{N}(0,0.5^2)$ prior, half-normal on the diagonal.
+
+\paragraph{Why the achromatic decomposition is not carried over.}
+The split of Eq.~\eqref{eq:v7:S} into an achromatic amplitude plus a loading
+constrained orthogonal to $\hat{\boldsymbol{e}}_a$ cannot be used here.  With a single
+distance-bearing variable the degenerate direction of Eq.~\eqref{eq:v8:ea} reduces to
+$\hat{\boldsymbol{e}}_a=(1,0)^T$, whose orthogonal complement in the $(y,s)$ plane is
+exactly the pure-$s$ direction; a loading orthogonal to $\hat{\boldsymbol{e}}_a$ would
+force $S_{ys}\equiv0$ by construction, which is the quantity the model exists to
+measure.  The unrestricted form is safe because the leak guarded against in
+\S\ref{sec:v7:predict} arises from conditioning on $\hat{z},\hat{g}$, which carry
+$-\mu$.  Since $\partial s/\partial\mu=0$, conditioning on $s$ cannot reconstruct a
+distance error.
+
+\subsection{Likelihood and Selection}
+\label{sec:v9:likelihood}
+
+Marginalizing the latent $(x_i,y_i,s_i)$ and integrating $y_{\mathrm{TF},i}$ over its
+top-hat prior follows \S\ref{sec:2c:likelihood} with the dimension reduced from five
+to three:
+\begin{equation}
+  \boldsymbol{b} = \left(\alpha^{-1},\;1,\;1-\delta_s\alpha^{-1}\right)^T,
+  \qquad
+  \boldsymbol{B}_i =
+  \begin{pmatrix}
+    \sigma_{1,i}^2 & 0 & -\delta_s\sigma_{\mathrm{int},x}^2\\
+    0 & S_{yy}+\sigma_{y,i}^2 & S_{ys}\\
+    -\delta_s\sigma_{\mathrm{int},x}^2 & S_{ys} &
+      S_{ss}+\delta_s^2\sigma_{\mathrm{int},x}^2+\sigma_{s,i}^2
+  \end{pmatrix},
+  \label{eq:v9:B}
+\end{equation}
+with $\sigma_{1,i}^2=\sigma_{\mathrm{int},x}^2+\sigma_{x,i}^2$.  The first-row
+off-diagonals are induced by marginalizing $x_i$; omitting them leaves
+$\boldsymbol{B}_i$ the covariance of no generative model and able to fail
+positive-definiteness even though $\boldsymbol{S}$ is PSD by construction.
+
+The selection probability is unchanged from \S\ref{sec:cc:selection} --- the $\hat{y}$
+window, the oblique plane strip, and the top-hat prior on $y_{\mathrm{TF}}$ --- with
+the single modification that the intercept passed to it is the per-galaxy
+$\beta+\kappa\varpi_i$.  The angular-diameter condition of \S\ref{sec:v8:selection} is
+\emph{not} imposed.
+
+\paragraph{Where the inclination term must not go.}
+Placing $\kappa\varpi_i$ in the observation equation for $\hat{y}$ instead displaces
+each galaxy's selection window, and because the log-posterior carries
+$-\log P_{\mathrm{select}}$ the fit can purchase likelihood without bound by pushing
+windows outside the support of the $y_{\mathrm{TF}}$ prior.  The log-posterior then
+climbs monotonically to $\kappa\simeq2$ with gradients of order $10^5$ and no finite
+value beyond $\kappa\simeq2.5$, and neither the optimizer nor the Pathfinder
+initialization converges.  Shifting the intercept, which the selection integral
+already takes as an argument, removes the pathology.
+
+\subsection{Results}
+\label{sec:v9:results}
+
+Fitted to the spiral training sample with no modification to the selection term
+(4 chains, 1 divergence in 4000, $\hat{R}$ and ESS satisfactory throughout):
+\begin{equation}
+  \alpha = -6.70\pm0.07,\quad
+  \sigma_{\mathrm{int},y} = 0.360\pm0.010,\quad
+  \delta_s = -0.690\pm0.010,
+  \label{eq:v9:tf}
+\end{equation}
+\begin{equation}
+  \kappa = +0.038\pm0.014,\qquad
+  \lambda_s = -0.094\pm0.015,\qquad
+  \mathrm{corr}(y,s) = 0.048\pm0.036 .
+  \label{eq:v9:results}
+\end{equation}
+The inclination signal sits in the surface brightness ($6.3\sigma$), not in the
+magnitude ($2.7\sigma$): at fixed rotation velocity the TF magnitude has at most a
+weak residual inclination dependence.
+
+Two posterior predictive checks, simulating from the posterior with the same selection
+applied and computing the same statistic on simulated and real data, test whether the
+model accounts for the surface-brightness signal of \S\ref{sec:v9:sb}:
+\begin{align}
+  \mathrm{corr}(y,s\mid x) &: \quad
+    \text{observed } +0.101, \quad \text{predicted } +0.131\pm0.022
+    \quad (p=0.07), \label{eq:v9:ppc1}\\
+  \left.\partial\Delta\mu/\partial s\right|_{x,\varpi} &: \quad
+    \text{observed } -0.121, \quad \text{predicted } -0.166\pm0.027
+    \quad (p=0.04). \label{eq:v9:ppc2}
+\end{align}
+The model reproduces both, the second with mild ($1.7\sigma$) tension in the direction
+of over-prediction.  It does so through the mean structure --- the
+surface-brightness--velocity coupling $\delta_s$ --- rather than through the intrinsic
+covariance: $\mathrm{corr}(y,s)$ is consistent with zero.  The two quantities answer
+different questions.  Surface brightness is a second parameter of the TF relation, and
+v9 captures it; the \emph{additional} intrinsic residual coupling between $y$ and $s$,
+beyond that mean dependence, is not detected.
+
+\subsection{Limitations}
+\label{sec:v9:limits}
+
+$\mathrm{corr}(y,s)$ is weakly identified.  Removing the selection term entirely sends
+the optimum to $-0.62$ to $-0.72$ (stable across four starts) against $+0.06$ with it;
+the sign is set by the selection term rather than by the data, so
+Eq.~\eqref{eq:v9:results} should be read as a bound, not a measurement.  The same
+mechanism produces a secondary mode at the lower edge of the $\alpha$ prior, where the
+fit sacrifices $1446$~nats of data likelihood to gain $1565$~nats of selection
+normalization.  That mode is sub-dominant by $165$~nats for spirals and the chains
+sit $36$ posterior standard deviations from the bound, but it dominates for
+irregulars, whose intrinsic covariance does not mix ($\hat{R}>1.01$, tail ESS
+$\simeq50$); no irregular result is quoted here.
+
+The angular-diameter selection is not represented in the likelihood, and
+Eq.~\eqref{eq:v9:sizesplit} shows it contributes roughly half the full-sample
+surface-brightness slope.  Imposing it requires the trivariate normalization of
+\S\ref{sec:v8:norm}.  Finally, $\sigma_s$ omits the axis-ratio uncertainty, which at a
+typical $\sigma_{b/a}=0.02$ contributes $\simeq0.05$~mag and so is not negligible
+against the quoted $\sigma_s\simeq0.025$.
 
 \section{Redshift-Dependent Rotational-Velocity Correction}
 \label{sec:vcorr}

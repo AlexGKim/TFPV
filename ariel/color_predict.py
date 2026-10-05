@@ -946,6 +946,39 @@ _S_COV_COLS = [
     "S.1.1", "S.1.2", "S.1.3", "S.2.2", "S.2.3", "S.3.3",
 ]
 
+# [V9] sb_v9.stan drops the colour state variables, so S is 2x2 over (y, s) and
+# there is no S.1.3/S.2.3/S.3.3. The x-only predictor needs only S_yy = S.1.1.
+# gamma_inc is the inclination coefficient on q = 2.5 log10(b/a); it shifts the
+# TF intercept per galaxy: y_TF = intercept + gamma_inc*q + slope*x.
+_V9_COV_COLS = ["S.1.1", "S.1.2", "S.2.2", "gamma_inc"]
+
+
+def _q_from_ba(ba):
+    """Inclination covariate q = 2.5 log10(b/a); non-finite or b/a<=0 -> nan."""
+    ba = np.asarray(ba, dtype=float)
+    out = np.full(ba.shape, np.nan)
+    good = np.isfinite(ba) & (ba > 0)
+    out[good] = 2.5 * np.log10(ba[good])
+    return out
+
+
+def _mu_L_inclination(draws, q_star, G):
+    """[V9] (M,G) intercept shift gamma_inc*q, or None for every pre-v9 model.
+
+    Raises rather than silently dropping the term if gamma_inc is in the
+    posterior but q was not supplied by the caller.
+    """
+    if "gamma_inc" not in draws.columns:
+        return None
+    if q_star is None:
+        raise ValueError(
+            "posterior contains gamma_inc (v9) but q_star was not supplied; "
+            "the inclination term would be silently dropped from the prediction")
+    q = np.asarray(q_star, dtype=float)
+    if q.shape[0] != G:
+        raise ValueError(f"q_star has length {q.shape[0]}, expected {G}")
+    return draws["gamma_inc"].to_numpy(float)[:, None] * q[None, :]
+
 
 def _intrinsic_cov_entries(draws):
     """Intrinsic (y,z,g) covariance entries read directly from the sampled S
@@ -1233,6 +1266,7 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     y_max,
     zobs_star,
     mean_log1pz,
+    q_star=None,
     on_bad_Z="raise",
     Z_floor=1e-300,
 ):
@@ -1286,7 +1320,9 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     # and the legacy/single-color gamma/tau product parameterization (color.stan)
     # for backward compatibility.
     if "S.1.1" in draws.columns:
-        Syy_d = _intrinsic_cov_entries(draws)[0]        # [2COLOR] S_yy
+        # S.1.1 is S_yy for the 3x3 (v5) and the 2x2 (v9) alike; reading it
+        # directly avoids needing the colour entries a v9 posterior lacks.
+        Syy_d = draws["S.1.1"].to_numpy(float)
     else:
         gamma = draws["gamma"].to_numpy(float)
         tau_c = draws["tau_c"].to_numpy(float)
@@ -1311,6 +1347,9 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     # Truncated normal posterior for y_TF | x̂  (identical to baseline)
     sigma1_sq = sixMG**2 + sigma_x_star[None, :] ** 2  # (M, G)
     mu_L = bMG + aMG * xhat_star[None, :]  # (M, G)
+    _inc = _mu_L_inclination(draws, q_star, xhat_star.shape[0])   # [V9]
+    if _inc is not None:
+        mu_L = mu_L + _inc
     sigma_L_sq = aMG**2 * sigma1_sq  # (M, G)
     sigma_L = np.sqrt(sigma_L_sq)  # (M, G)
 
@@ -2052,6 +2091,9 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     if model == "2color":
         # [2COLOR] free intrinsic-covariance columns (x-only needs S_yy from these)
         keep_cols += _S_COV_COLS
+    elif model.startswith("v9") or model.startswith("sb_v9"):
+        # [V9] 2x2 S over (y,s) plus the inclination coefficient
+        keep_cols += _V9_COV_COLS
     else:
         keep_cols += ["sigma_int_y", "gamma", "tau_c"]
     draws = read_cmdstan_posterior(
@@ -2076,6 +2118,12 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
                       else np.arange(n_rows, dtype=float))
     valid = valid & _subset_mask(_sga_for_subset, input_data)
 
+    # [V9] inclination covariate for the prediction sample; None for pre-v9 models
+    _ba_cat = ("BA" if "BA" in names else ("BA_RATIO" if "BA_RATIO" in names else None))
+    _q_cat = (_q_from_ba(np.asarray(data[_ba_cat], dtype=float))[valid]
+              if ("gamma_inc" in draws.columns and _ba_cat) else None)
+    if "gamma_inc" in draws.columns and _ba_cat is None:
+        raise ValueError("v9 posterior needs BA (or BA_RATIO) in the FITS to build q")
     mean_pred_valid, sd_pred_valid = ystar_pp_mean_sd_color_xonly_vectorized(
         draws,
         xhat[valid],
@@ -2085,6 +2133,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         y_max=y_max,
         zobs_star=zobs[valid],
         mean_log1pz=mean_log1pz,
+        q_star=_q_cat,
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -2563,6 +2612,7 @@ def ystar_pp_cov_color_xonly_vectorized(
     y_max,
     zobs_star,
     mean_log1pz,
+    q_star=None,
     on_bad_Z="floor",
     Z_floor=1e-300,
     chunk_size=200,
@@ -2595,6 +2645,7 @@ def ystar_pp_cov_color_xonly_vectorized(
         sigma_y_star=sigma_y_star,
         y_min=y_min, y_max=y_max,
         zobs_star=zobs_star, mean_log1pz=mean_log1pz,
+        q_star=q_star,
         on_bad_Z=on_bad_Z, Z_floor=Z_floor,
     )
 
@@ -2607,7 +2658,7 @@ def ystar_pp_cov_color_xonly_vectorized(
     alpha_k_r_d = draws["alpha_kcorr_r"].to_numpy(float)
     # Intrinsic y-band variance S_yy: 2color rank-2 covariance (S.i.j), else legacy gamma/tau.
     if "S.1.1" in draws.columns:
-        Syy_d = _intrinsic_cov_entries(draws)[0]
+        Syy_d = draws["S.1.1"].to_numpy(float)
     else:
         gamma_d = draws["gamma"].to_numpy(float)
         tau_c_d = draws["tau_c"].to_numpy(float)
@@ -2616,6 +2667,8 @@ def ystar_pp_cov_color_xonly_vectorized(
         if "gamma_g" in draws.columns and "tau_g" in draws.columns:
             Syy_d = Syy_d + draws["gamma_g"].to_numpy(float)**2 * draws["tau_g"].to_numpy(float)**2
     M = len(draws)
+    # [V9] full (M, G) inclination shift, sliced per draw-chunk below
+    _inc_all = _mu_L_inclination(draws, q_star, xhat_star.shape[0])
 
     if out_h5 is not None:
         all_mu_c_xo = np.zeros((M, G), dtype=np.float32)
@@ -2635,6 +2688,8 @@ def ystar_pp_cov_color_xonly_vectorized(
 
         sigma1_sq = sixMG**2 + sigma_x_star[None, :]**2
         mu_L = bMG + aMG * xhat_star[None, :]
+        if _inc_all is not None:                                      # [V9]
+            mu_L = mu_L + _inc_all[start:end]
         sigma_L_sq = aMG**2 * sigma1_sq
         sigma_L = np.sqrt(sigma_L_sq)
 
@@ -2798,6 +2853,9 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     if model == "2color":
         # [2COLOR] free intrinsic-covariance columns (x-only needs S_yy from these)
         keep_cols += _S_COV_COLS
+    elif model.startswith("v9") or model.startswith("sb_v9"):
+        # [V9] 2x2 S over (y,s) plus the inclination coefficient
+        keep_cols += _V9_COV_COLS
     else:
         keep_cols += ["sigma_int_y", "gamma", "tau_c"]
     draws = read_cmdstan_posterior(
@@ -2806,13 +2864,18 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         drop_diagnostics=True,
     )
 
+    # [V9] inclination covariate for the covariance sample; None for pre-v9 models
+    _q_cov = _q_from_ba(ba_star) if "gamma_inc" in draws.columns else None
+
     G = int(xhat_star.size)
     n_sub = min(512, G)
     rng = np.random.default_rng(0)
     idx = rng.choice(G, size=n_sub, replace=False)
     idx.sort()
 
-    if model == "2color":
+    # [V9] v9 takes the same large-G HDF5 path as 2color; combine_color_xonly.py
+    # reads color_xonly_cov.h5, so the FITS branch produces an unusable product.
+    if model == "2color" or model.startswith("v9"):
         # For large G, write directly to HDF5 in row blocks to avoid OOM.
         import h5py
         v_dust, v_phot = _systematic_offdiag_terms(
@@ -2825,6 +2888,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
             y_min=y_min, y_max=y_max,
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
+            q_star=_q_cov,                      # [V9] None for pre-v9 models
             out_h5=h5_out, v_dust=v_dust, v_phot=v_phot,
         )
         with h5py.File(h5_out, 'a') as _hf:
@@ -2850,6 +2914,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
             y_min=y_min, y_max=y_max,
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
+            q_star=_q_cov,                      # [V9] None for pre-v9 models
         )
         _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r,
                                 photsys_err=photsys_err_star)
