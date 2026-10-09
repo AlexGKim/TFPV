@@ -750,6 +750,7 @@ def ystar_pp_mean_sd_color_vectorized(
         raise ValueError(f"Require y_min < y_max; got y_min={a}, y_max={b}.")
 
     # Extract draws (M,)
+    _reject_v10(draws, "full-colour predictor")
     alpha = draws["slope"].to_numpy(float)
     beta = draws["intercept.1"].to_numpy(float)
     six = draws["sigma_int_x"].to_numpy(float)
@@ -952,6 +953,35 @@ _S_COV_COLS = [
 # TF intercept per galaxy: y_TF = intercept + gamma_inc*q + slope*x.
 _V9_COV_COLS = ["S.1.1", "S.1.2", "S.2.2", "gamma_inc"]
 
+# [V10] 2color_v10.stan makes the TF slope linear in redshift:
+#   slope(z) = slope + slope_dz * (z_obs - mean_z)
+_V10_EXTRA_COLS = ["slope_dz"]
+
+
+def _alpha_per_galaxy(draws, zobs_star, mean_z):
+    """TF slope as (M,1), or (M,G) when the posterior carries slope_dz.
+
+    Returns alpha[:, None] unchanged for every pre-v10 model, so those paths stay
+    bit-identical. Raises rather than silently applying the mean-redshift slope
+    to all galaxies if slope_dz is present but no redshifts were supplied.
+    """
+    alpha = draws["slope"].to_numpy(float)[:, None]
+    if "slope_dz" not in draws.columns:
+        return alpha
+    if zobs_star is None or mean_z is None:
+        raise ValueError(
+            "posterior has slope_dz (v10) but zobs_star/mean_z were not supplied; "
+            "the redshift-dependent slope would be silently dropped")
+    dz = draws["slope_dz"].to_numpy(float)[:, None]
+    return alpha + dz * (np.asarray(zobs_star, float)[None, :] - float(mean_z))
+
+
+def _reject_v10(draws, where):
+    """The full-colour predictors do not implement the v10 slope; fail loudly."""
+    if "slope_dz" in draws.columns:
+        raise NotImplementedError(
+            f"{where} does not support the v10 redshift-dependent slope.")
+
 
 def _q_from_ba(ba):
     """Inclination covariate q = 2.5 log10(b/a); non-finite or b/a<=0 -> nan."""
@@ -1066,6 +1096,7 @@ def ystar_pp_mean_sd_2color_vectorized(
     G = xhat_star.size
 
     # Extract all draw arrays up front (M,)
+    _reject_v10(draws, "2color predictor")
     alpha_d   = draws["slope"].to_numpy(float)
     beta_d    = draws["intercept.1"].to_numpy(float)
     six_d     = draws["sigma_int_x"].to_numpy(float)
@@ -1267,6 +1298,7 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
     zobs_star,
     mean_log1pz,
     q_star=None,
+    mean_z=None,
     on_bad_Z="raise",
     Z_floor=1e-300,
 ):
@@ -1310,7 +1342,7 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
         raise ValueError(f"Require y_min < y_max; got y_min={a}, y_max={b}.")
 
     # Extract draws (M,)
-    alpha = draws["slope"].to_numpy(float)
+    # [V10] alpha is built per galaxy below
     beta = draws["intercept.1"].to_numpy(float)
     six = draws["sigma_int_x"].to_numpy(float)
     alpha_k_r = draws["alpha_kcorr_r"].to_numpy(float)
@@ -1333,11 +1365,12 @@ def ystar_pp_mean_sd_color_xonly_vectorized(
             tg = draws["tau_g"].to_numpy(float)
             Syy_d = Syy_d + gg**2 * tg**2
 
-    if np.any(alpha == 0):
-        raise ValueError("Found slope == 0 in draws; model requires α ≠ 0.")
-
     # Broadcast to (M, G)
-    aMG = alpha[:, None]
+    aMG = _alpha_per_galaxy(draws, zobs_star, mean_z)   # [V10]
+    # [V10] the guard now runs on the per-galaxy slope: with a drifting slope it is
+    # the EFFECTIVE slope that must stay away from zero, not just its pivot value.
+    if np.any(aMG == 0):
+        raise ValueError("Found slope == 0 in draws; model requires α ≠ 0.")
     bMG = beta[:, None]
     sixMG = six[:, None]
 
@@ -1484,6 +1517,7 @@ def DESI_color(
     y_max = input_data["y_max"]
     x_bar = input_data.get("mean_x", None)
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
+    mean_z = float(np.mean(input_data["z_obs"]))          # [V10] slope pivot
     # Load galaxy data — for 2color use with_gband=True so all arrays share one mask
     # return_mask=True gives the loader's OWN validity mask, which is then the
     # single definition of "valid" for this catalog -- see _sga_ids_for_valid_mask
@@ -1925,6 +1959,7 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
     y_max = input_data["y_max"]
     x_bar = input_data.get("mean_x", float(np.mean(input_data["x"])))
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
+    mean_z = float(np.mean(input_data["z_obs"]))          # [V10] slope pivot
 
     # [SLICE] Scope to this run's slice — same reasoning as in
     # write_desi_catalog_color_xonly (see _subset_mask).
@@ -2088,7 +2123,9 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     )
 
     keep_cols = ["slope", "intercept.1", "sigma_int_x", "alpha_kcorr_r"]
-    if model == "2color":
+    if model.endswith("v10"):
+        keep_cols += _V10_EXTRA_COLS + _S_COV_COLS        # [V10]
+    elif model == "2color":
         # [2COLOR] free intrinsic-covariance columns (x-only needs S_yy from these)
         keep_cols += _S_COV_COLS
     elif model.startswith("v9") or model.startswith("sb_v9"):
@@ -2107,6 +2144,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
+    mean_z = float(np.mean(input_data["z_obs"]))          # [V10] slope pivot
 
     # [SLICE] Scope the posterior-predictive computation to this run's slice.
     # Without this it runs over every valid row of the whole catalog against
@@ -2133,7 +2171,7 @@ def write_desi_catalog_color_xonly(run_dir, fits_path, cfg=None, model="color"):
         y_max=y_max,
         zobs_star=zobs[valid],
         mean_log1pz=mean_log1pz,
-        q_star=_q_cat,
+        q_star=_q_cat, mean_z=mean_z,
         on_bad_Z="floor",
         Z_floor=1e-300,
     )
@@ -2613,6 +2651,7 @@ def ystar_pp_cov_color_xonly_vectorized(
     zobs_star,
     mean_log1pz,
     q_star=None,
+    mean_z=None,
     on_bad_Z="floor",
     Z_floor=1e-300,
     chunk_size=200,
@@ -2645,14 +2684,14 @@ def ystar_pp_cov_color_xonly_vectorized(
         sigma_y_star=sigma_y_star,
         y_min=y_min, y_max=y_max,
         zobs_star=zobs_star, mean_log1pz=mean_log1pz,
-        q_star=q_star,
+        q_star=q_star, mean_z=mean_z,
         on_bad_Z=on_bad_Z, Z_floor=Z_floor,
     )
 
     a = float(y_min)
     b = float(y_max)
 
-    alpha_d = draws["slope"].to_numpy(float)
+    alpha_all = _alpha_per_galaxy(draws, zobs_star, mean_z)   # [V10]
     beta_d = draws["intercept.1"].to_numpy(float)
     six_d = draws["sigma_int_x"].to_numpy(float)
     alpha_k_r_d = draws["alpha_kcorr_r"].to_numpy(float)
@@ -2680,7 +2719,7 @@ def ystar_pp_cov_color_xonly_vectorized(
     for start in range(0, M, chunk_size):
         end = min(start + chunk_size, M)
 
-        aMG = alpha_d[start:end, None]
+        aMG = alpha_all[start:end]            # [V10]
         bMG = beta_d[start:end, None]
         sixMG = six_d[start:end, None]
 
@@ -2790,6 +2829,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
+    mean_z = float(np.mean(input_data["z_obs"]))          # [V10] slope pivot
 
     # Load in raw-catalog space using only r-band + velocity (same validity as the
     # catalog writer), so MAIN and holdout counts are identical between catalog and cov.
@@ -2850,7 +2890,9 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
     analysis_star = analysis[main]
 
     keep_cols = ["slope", "intercept.1", "sigma_int_x", "alpha_kcorr_r"]
-    if model == "2color":
+    if model.endswith("v10"):
+        keep_cols += _V10_EXTRA_COLS + _S_COV_COLS        # [V10]
+    elif model == "2color":
         # [2COLOR] free intrinsic-covariance columns (x-only needs S_yy from these)
         keep_cols += _S_COV_COLS
     elif model.startswith("v9") or model.startswith("sb_v9"):
@@ -2888,7 +2930,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
             y_min=y_min, y_max=y_max,
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
-            q_star=_q_cov,                      # [V9] None for pre-v9 models
+            q_star=_q_cov, mean_z=mean_z,       # [V9]/[V10]
             out_h5=h5_out, v_dust=v_dust, v_phot=v_phot,
         )
         with h5py.File(h5_out, 'a') as _hf:
@@ -2914,7 +2956,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
             y_min=y_min, y_max=y_max,
             zobs_star=zobs_star,
             mean_log1pz=mean_log1pz,
-            q_star=_q_cov,                      # [V9] None for pre-v9 models
+            q_star=_q_cov, mean_z=mean_z,       # [V9]/[V10]
         )
         _add_systematic_offdiag(cov, ba_star, photsys_star, d_err_r=_d_err_r,
                                 photsys_err=photsys_err_star)
@@ -2970,6 +3012,7 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     y_min = input_data["y_min"]
     y_max = input_data["y_max"]
     mean_log1pz = float(np.mean(np.log1p(input_data["z_obs"])))
+    mean_z = float(np.mean(input_data["z_obs"]))          # [V10] slope pivot
 
     # Load MAIN-sample galaxies — for 2color use with_gband=True so all arrays share one mask
     if model == "2color":
