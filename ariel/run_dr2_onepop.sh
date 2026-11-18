@@ -60,7 +60,7 @@ set -e
 STEP_ORDER=(1 2 3 3b 4 5 5d 6 7 8)
 
 usage() {
-    echo "Usage: $0 --population {spiral,irregular} --fits PATH [--run-suffix NAME] [--from-step N] [--chains N] [--warmup N] [--max-depth N] [--delta D]"
+    echo "Usage: $0 --population {spiral,irregular} --fits PATH [--run-suffix NAME] [--from-step N] [--chains N] [--warmup N] [--max-depth N] [--delta D] [--model NAME]"
     exit 1
 }
 
@@ -79,6 +79,11 @@ MAX_DEPTH=10
 # previously passed no delta at all and so silently sampled at 0.8.
 DELTA=0.9
 PHASE2=0
+# Stan model. Empty here so slurm/_model.sh can resolve it below from the
+# config's "model" key, falling back to 2color -- the same precedence the
+# NERSC path uses, so the local driver and the batch path cannot disagree
+# about which model a config names. --model overrides both.
+MODEL=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -90,6 +95,7 @@ while [ $# -gt 0 ]; do
         --warmup) N_WARMUP="$2"; shift 2 ;;
         --max-depth) MAX_DEPTH="$2"; shift 2 ;;
         --delta) DELTA="$2"; shift 2 ;;
+        --model) MODEL="$2"; shift 2 ;;
         --phase2) PHASE2=1; shift ;;
         -h|--help) usage ;;
         *) echo "Unknown argument: $1"; usage ;;
@@ -116,9 +122,16 @@ RUN_DIR="output/$RUN"
 
 mkdir -p "$RUN_DIR"
 
+# MODEL: --model > the config's "model" key > 2color. Shared with the SLURM
+# path so the two cannot disagree. Note the "_2color_" in RUN above is a
+# NAMING convention, deliberately NOT parameterized: changing it would rename
+# every existing output/ directory and configs/ file.
+source slurm/_model.sh
+
 echo "RUN=$RUN"
 echo "CONFIG=$CONFIG"
 echo "FITS=$FITS"
+echo "MODEL=$MODEL"
 
 # --- Sentinel helpers ---
 sentinel() { echo "$RUN_DIR/.step${1}_done"; }
@@ -196,7 +209,7 @@ if [ "$PHASE2" -eq 0 ]; then
 
     if ! skip_if_done 3b; then
         echo "=== Step 3b: export_config.py — INTERACTIVE ==="
-        echo "Suggested answers: exe=2color, source=DESI, model=2color, n_sigma=3.0"
+        echo "Suggested answers: exe=$MODEL, source=DESI, model=$MODEL, n_sigma=3.0"
         python export_config.py --run "$RUN" --out "$CONFIG"
         # export_config.py only picks up the correct fits_file from
         # output/$RUN/config.json, which desi_data.py (Step 4) hasn't
@@ -236,14 +249,16 @@ if ! skip_if_done 4; then
 fi
 
 if ! skip_if_done 5; then
-    echo "=== Step 5: compile 2color ==="
-    ( cd ../../cmdstan && make ../TFPV/ariel/2color )
+    echo "=== Step 5: compile $MODEL (CPU) ==="
+    # No STAN_OPENCL here: this is the CPU binary. The GPU build is a separate
+    # ${MODEL}_g target -- see slurm/compile_gpu.sh.
+    ( cd ../../cmdstan && make ../TFPV/ariel/${MODEL} )
     mark_done 5
 fi
 
 if ! skip_if_done 5d; then
     echo "=== Step 5d: MAP estimate ==="
-    ./2color optimize \
+    ./${MODEL} optimize \
         data file="$RUN_DIR/input.json" \
         init="$RUN_DIR/init.json" \
         output file="$RUN_DIR/optimize.csv"
@@ -260,13 +275,13 @@ if ! skip_if_done 6; then
             echo "  chain $CHAIN_ID: already done, skipping"
             continue
         fi
-        ./2color sample num_warmup="$N_WARMUP" num_samples=1000 \
+        ./${MODEL} sample num_warmup="$N_WARMUP" num_samples=1000 \
             adapt delta="$DELTA" save_metric=1 \
             algorithm=hmc engine=nuts max_depth="$MAX_DEPTH" metric=dense_e \
             id=$CHAIN_ID \
             data file="$RUN_DIR/input.json" \
             init="$RUN_DIR/init_MAP.json" \
-            output file="$RUN_DIR/2color_${CHAIN_ID}.csv" &
+            output file="$RUN_DIR/${MODEL}_${CHAIN_ID}.csv" &
         PIDS+=($!)
         CHAIN_IDS+=("$CHAIN_ID")
     done
@@ -291,16 +306,19 @@ fi
 
 if ! skip_if_done 7; then
     echo "=== Step 7: diagnostics ==="
-    ../../cmdstan/bin/stansummary "$RUN_DIR"/2color_?.csv > "$RUN_DIR/stansummary.txt"
-    ../../cmdstan/bin/diagnose    "$RUN_DIR"/2color_?.csv > "$RUN_DIR/diagnose.txt"
-    python corner.py --run "$RUN" --model 2color
+    ../../cmdstan/bin/stansummary "$RUN_DIR"/${MODEL}_?.csv > "$RUN_DIR/stansummary.txt"
+    ../../cmdstan/bin/diagnose    "$RUN_DIR"/${MODEL}_?.csv > "$RUN_DIR/diagnose.txt"
+    # --model is passed explicitly: corner.py hard-defaults to "tophat".
+    python corner.py --run "$RUN" --model "$MODEL"
     # explore_residuals.py runs in step 8, after color_predict.py — see below.
     mark_done 7
 fi
 
 if ! skip_if_done 8; then
     echo "=== Step 8: prediction (x-only, the default model; pass --full for the full model too) ==="
-    python color_predict.py --config "$CONFIG" --model 2color
+    # --model deliberately omitted: color_predict.py's precedence is explicit
+    # flag > config "model" > "color", so the config stays authoritative.
+    python color_predict.py --config "$CONFIG"
 
     # Order matters, and it is the same order slurm/step8_predict.sh uses:
     # color_predict.py writes the catalog and covariance (the science output),
@@ -308,7 +326,8 @@ if ! skip_if_done 8; then
     # -- as this script used to, from step 7 -- means a plotting failure under
     # `set -e` costs the run its science output.
     echo "=== Step 8b: residual diagnostics ==="
-    python explore_residuals.py --config "$CONFIG" --kind 2color
+    python explore_residuals.py --config "$CONFIG" --kind "$MODEL" \
+        || echo "WARNING: explore_residuals.py failed (non-fatal)"
     mark_done 8
 fi
 

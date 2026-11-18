@@ -29,9 +29,10 @@ export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 
 CONFIG=${CONFIG:-configs/batch_test.json}
 RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
+source slurm/_model.sh   # resolves MODEL (env > config "model" > 2color)
 mkdir -p slurm/logs
 
-echo "Step 5d: MAP optimize for run=$RUN"
+echo "Step 5d: MAP optimize for run=$RUN model=$MODEL"
 # Plain optimize (LBFGS default, unbounded) -- matches what was validated
 # locally on the current free-null rank-2 model (n_null/Sc_scale/Sc_Lcorr),
 # which converges normally. The previous algorithm=newton iter=20 override
@@ -41,7 +42,7 @@ echo "Step 5d: MAP optimize for run=$RUN"
 # produce zero usable output rows for this model, silently falling through
 # to the generic fallback init below instead of an actual MAP.
 # '|| true' keeps set -e from aborting if the optimizer still exits nonzero.
-./2color_g optimize \
+./${MODEL}_g optimize \
     data file=output/$RUN/input.json \
     init=output/$RUN/init.json \
     output file=output/$RUN/optimize.csv || echo "step5d: optimizer exited nonzero (using best iterate / fallback)"

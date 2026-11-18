@@ -79,6 +79,7 @@ export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 
 CONFIG=${CONFIG:-configs/batch_test.json}
 RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
+source slurm/_model.sh   # resolves MODEL (env > config "model" > 2color)
 mkdir -p slurm/logs
 
 if [ "${DEBUG:-0}" = "1" ]; then
@@ -107,20 +108,20 @@ fi
 REFRESH_ARG=""
 [ -n "${REFRESH:-}" ] && REFRESH_ARG="refresh=$REFRESH"
 
-echo "Step 6 (node): 4 chains for run=$RUN, one per GPU on $(hostname)"
+echo "Step 6 (node): 4 chains for run=$RUN model=$MODEL, one per GPU on $(hostname)"
 PIDS=()
 for CHAIN_ID in 1 2 3 4; do
     GPU_ID=$((CHAIN_ID - 1))
     (
-        CUDA_VISIBLE_DEVICES=$GPU_ID ./2color_g sample num_warmup=$NUM_WARMUP num_samples=$NUM_SAMPLES \
+        CUDA_VISIBLE_DEVICES=$GPU_ID ./${MODEL}_g sample num_warmup=$NUM_WARMUP num_samples=$NUM_SAMPLES \
             $ADAPT_ARGS \
             algorithm=hmc $ENGINE_ARGS metric=dense_e $STEPSIZE_ARG \
             id=$CHAIN_ID \
             data file=output/$RUN/input.json \
             init=output/$RUN/init_MAP.json \
-            output file=output/$RUN/2color_${CHAIN_ID}.csv $REFRESH_ARG \
+            output file=output/$RUN/${MODEL}_${CHAIN_ID}.csv $REFRESH_ARG \
         && touch output/$RUN/.step6_chain${CHAIN_ID}_done \
-        && echo "DONE: step6 chain $CHAIN_ID (GPU $GPU_ID) → output/$RUN/2color_${CHAIN_ID}.csv"
+        && echo "DONE: step6 chain $CHAIN_ID (GPU $GPU_ID) → output/$RUN/${MODEL}_${CHAIN_ID}.csv"
     ) &
     PIDS+=($!)
 done

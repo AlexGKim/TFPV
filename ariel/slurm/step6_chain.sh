@@ -30,6 +30,7 @@ export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 CONFIG=${CONFIG:-configs/batch_test.json}
 CHAIN_ID=${CHAIN_ID:?'CHAIN_ID must be set (1-4)'}
 RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
+source slurm/_model.sh   # resolves MODEL (env > config "model" > 2color)
 mkdir -p slurm/logs
 
 # Sampling depth: full (with adaptation) by default; in DEBUG mode skip adaptation
@@ -55,6 +56,11 @@ else
     # produced, so different settings here would yield a chain that is not
     # comparable to its siblings and would corrupt the combined posterior. They
     # previously diverged (250 warmup / max_depth=8 here vs 1000 / 10 there).
+    # The same applies to MODEL: both scripts resolve it through
+    # slurm/_model.sh, but a resubmission must be given the SAME MODEL as the
+    # original node job -- mixing 2color and 2color_v10 chains in one run dir
+    # would produce a posterior over two different parameter spaces. MODEL is
+    # echoed below; check it against the original step6_node log.
     NUM_WARMUP=${NUM_WARMUP:-1000}
     NUM_SAMPLES=${NUM_SAMPLES:-1000}
     MAX_DEPTH=${MAX_DEPTH:-10}
@@ -76,14 +82,14 @@ fi
 REFRESH_ARG=""
 [ -n "${REFRESH:-}" ] && REFRESH_ARG="refresh=$REFRESH"
 
-echo "Step 6: MCMC chain $CHAIN_ID for run=$RUN"
-./2color_g sample num_warmup=$NUM_WARMUP num_samples=$NUM_SAMPLES \
+echo "Step 6: MCMC chain $CHAIN_ID for run=$RUN model=$MODEL"
+./${MODEL}_g sample num_warmup=$NUM_WARMUP num_samples=$NUM_SAMPLES \
     $ADAPT_ARGS \
     algorithm=hmc $ENGINE_ARGS metric=dense_e $STEPSIZE_ARG \
     id=$CHAIN_ID \
     data file=output/$RUN/input.json \
     init=output/$RUN/init_MAP.json \
-    output file=output/$RUN/2color_${CHAIN_ID}.csv $REFRESH_ARG
+    output file=output/$RUN/${MODEL}_${CHAIN_ID}.csv $REFRESH_ARG
 
 touch output/$RUN/.step6_chain${CHAIN_ID}_done
-echo "DONE: step6 chain $CHAIN_ID → output/$RUN/2color_${CHAIN_ID}.csv"
+echo "DONE: step6 chain $CHAIN_ID → output/$RUN/${MODEL}_${CHAIN_ID}.csv"
