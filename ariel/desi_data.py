@@ -19,6 +19,32 @@ _DEFAULT_N_OBJECTS = 5000
 _DEFAULT_RANDOM_SEED = 42
 
 
+# Init keys that 2color_v10.stan does not declare.  CmdStan silently ignores
+# unknown init keys, so leaving them in would be harmless but misleading; they
+# are legacy of the earlier `color`/`tophat` models.  (2color.stan does not
+# declare them either -- they are dropped only for v10 so that the v5 init
+# files stay byte-identical to what every existing v5 run used.)
+_V10_UNDECLARED_INIT_KEYS = (
+    "sigma_int_y",
+    "log_sigma_int_z",
+    "gamma_tau_c",
+    "log_tau_c",
+)
+
+
+def _is_v10(model) -> bool:
+    """True when *model* names the redshift-dependent-slope model.
+
+    2color_v10.stan replaces v5's single ``slope_std`` with ``slope_std_0``
+    (the slope at the sample mean redshift, carrying v5's bounds) and
+    ``slope_std_1`` (the drift per unit z).  An init file written with the
+    v5 key name leaves BOTH of them to CmdStan's random initialization on the
+    unconstrained scale in (-2, 2); since slope_std_0 is logit-bounded on
+    [-9*sd_x, -4*sd_x] that is a wild start, and the failure is silent.
+    """
+    return isinstance(model, str) and model.endswith("v10")
+
+
 def process_desi_tf_data(
     fits_file,
     data_output_file,
@@ -49,6 +75,7 @@ def process_desi_tf_data(
     z_obs_min=None,  # <<< NEW: Minimum redshift for inclusion
     z_obs_max=None,
     fixed_init=None,
+    model=None,
 ):
     """
     Process DESI TF data: convert to Stan JSON format and create initial conditions.
@@ -664,8 +691,14 @@ def process_desi_tf_data(
     # ============================================================================
     # SECTION 5: CREATE INITIAL CONDITIONS DICTIONARY
     # ============================================================================
+    # [V10] slope_std vs slope_std_0/slope_std_1: see _is_v10() above.  The
+    # starting value slope_std_1 = 0 is the v5 nesting point and the centre of
+    # v10's normal(0, 5) prior on the drift, so it is also the right start on
+    # the merits, not merely a safe one.
+    _v10 = _is_v10(model)
     init_data = {
-        "slope_std": float(slope_std),
+        **({"slope_std_0": float(slope_std), "slope_std_1": 0.0}
+           if _v10 else {"slope_std": float(slope_std)}),
         "intercept_std": intercept_std_vec,
         "slope_orig": float(slope_orig),
         "intercept_orig": float(intercept_orig),
@@ -682,6 +715,9 @@ def process_desi_tf_data(
         "log_tau_c": -3.3,
         "alpha_kcorr_z": -0.5,
     }
+    if _v10:
+        for _k in _V10_UNDECLARED_INIT_KEYS:
+            init_data.pop(_k, None)
 
     # [2COLOR] g-band init parameters.
     # The 2color model (2color.stan) uses a rank-1 intrinsic covariance
@@ -704,9 +740,14 @@ def process_desi_tf_data(
         for k, v in fixed_init_data.items():
             if k in ("slope_orig", "intercept_orig"):
                 continue
+            # A fixed_init file shared with the v5 arm still carries the keys
+            # v10 does not declare; do not let the overlay put them back.
+            if _v10 and k in _V10_UNDECLARED_INIT_KEYS:
+                continue
             init_data[k] = v
         print(
-            f"  fixed_init: {fixed_init} -> slope_std={slope_std:.6g} "
+            f"  fixed_init: {fixed_init} -> "
+            f"{'slope_std_0' if _v10 else 'slope_std'}={slope_std:.6g} "
             f"intercept_std={intercept_std:.6g} (from slope_orig={slope_orig:.6g} "
             f"intercept_orig={intercept_orig:.6g}, mean_x={mean_x:.6g}, sd_x={sd_x:.6g})"
         )
@@ -972,6 +1013,7 @@ def verify_subset(run_dir):
             z_obs_min=cfg.get("z_obs_min"),
             z_obs_max=cfg.get("z_obs_max"),
             fixed_init=cfg.get("fixed_init"),
+            model=cfg.get("model"),
         )
         with open(os.path.join(tmp, "input.json")) as f:
             regenerated = json.load(f)
@@ -1114,6 +1156,16 @@ if __name__ == "__main__":
              "skipping the need for step5d's MAP optimization.",
     )
 
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Posterior model name, e.g. 2color or 2color_v10. Only affects "
+             "which init keys are written: 2color_v10.stan declares "
+             "slope_std_0/slope_std_1 where earlier models declare slope_std. "
+             "default=None so --config's \"model\" key fills it.",
+    )
+
     args = parser.parse_args()
 
     if args.verify_subset is not None:
@@ -1161,6 +1213,8 @@ if __name__ == "__main__":
             "intercept_plane": args.intercept_plane,
             "intercept_plane2": args.intercept_plane2,
             "fixed_init": args.fixed_init,
+            # Recorded so --verify_subset regenerates the same init key names.
+            "model": args.model,
             # Propagated so color_predict.py can see it: that script builds its
             # cfg from output/<run>/config.json (this dict), not from --config,
             # so a "dust_pickle" set only in the pipeline config never reached
@@ -1206,7 +1260,7 @@ if __name__ == "__main__":
         z_obs_min=args.z_obs_min,
         z_obs_max=args.z_obs_max,
         fixed_init=args.fixed_init,
-
+        model=args.model,
     )
 
     if run_dir is not None:

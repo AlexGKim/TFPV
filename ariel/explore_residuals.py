@@ -113,7 +113,13 @@ def main():
         default=None,
         help="Path to JSON config file (e.g., configs/dr1_v3.json)",
     )
-    parser.add_argument("--kind", default="tophat", choices=["tophat", "normal", "2color"])
+    parser.add_argument(
+        "--kind",
+        default="tophat",
+        choices=["tophat", "normal", "2color", "2color_v10"],
+        help="Posterior model whose CSVs to read. The CSVs are globbed as "
+             "<kind>_?.csv, matching the names step6 writes.",
+    )
     args = parser.parse_args()
 
     from config_utils import apply_config
@@ -283,7 +289,22 @@ def main():
             drop_diagnostics=True,
         )
         mean_pred, sd_pred = ystar_pp_mean_sd_normal_vectorized(draws, xhat, sigma_x)
-    else:  # 2color (rank-2 intrinsic covariance, free or fixed null direction)
+    else:  # 2color / 2color_v10
+        # [V10] 2color_v10.stan emits the same columns this branch keeps --
+        # slope, intercept.1, sigma_int_x, alpha_kcorr_r and the assembled
+        # S.i.j -- where its `slope` is the slope at the sample MEAN redshift
+        # and the per-galaxy slope is slope + slope_dz * (z_obs - mean_z).
+        # slope_dz is NOT threaded through here yet, so for a v10 run these
+        # residuals apply the mean-redshift slope to every galaxy and are
+        # wrong by up to slope_dz * (z_obs_max - mean_z) ~ slope_dz * 0.035.
+        # The fix is to mirror color_predict.py's _alpha_per_galaxy; until
+        # then, treat v10 residual plots as indicative only.  (This is also
+        # why step8 calls this script non-fatally: a wrong plot must not cost
+        # a 24 h GPU run its .step8_done sentinel.)
+        if kind.endswith("v10"):
+            print("  WARNING: v10 residuals use the mean-redshift slope for "
+                  "every galaxy (slope_dz not yet threaded through); "
+                  "indicative only.")
         # S.i.j are the transformed parameters (full 3x3 intrinsic covariance)
         # written directly to the CSV; ystar_pp_mean_sd_color_xonly_vectorized
         # reads all six entries via _intrinsic_cov_entries (even though only
@@ -296,7 +317,7 @@ def main():
         keep_cols = ["slope", "intercept.1", "sigma_int_x", "alpha_kcorr_r",
                      "S.1.1", "S.1.2", "S.1.3", "S.2.2", "S.2.3", "S.3.3"]
         draws = read_cmdstan_posterior(
-            os.path.join(run_dir, "2color_?.csv"),
+            os.path.join(run_dir, f"{kind}_?.csv"),
             keep=keep_cols,
             drop_diagnostics=True,
         )

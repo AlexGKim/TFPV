@@ -66,6 +66,9 @@ def load_params(file_pattern):
     # Values are candidate CSV column names to search for.
     wanted = {
         r"$\alpha$":                      ["slope"],
+        # [V10] d(slope)/dz. 2color_v10.stan only; load_params skips any
+        # parameter a model does not emit, so this is inert for 2color.
+        r"$d\alpha/dz$":                  ["slope_dz"],
         r"$\beta$":                       ["intercept.1", "intercept[1]", "intercept"],  # common Stan CSV variants
         r"$\sigma_{\rm int,x}$":          ["sigma_int_x"],
         r"$\sigma_{\rm int,y}$":          ["sigma_int_y"],
@@ -248,7 +251,7 @@ def _build_parser():
     p.add_argument(
         '--model',
         default=None,
-        choices=['tophat', 'normal', 'color', '2color'],
+        choices=['tophat', 'normal', 'color', '2color', '2color_v10'],
         help="Model to plot when using --run (default: tophat).",
     )
     p.add_argument(
