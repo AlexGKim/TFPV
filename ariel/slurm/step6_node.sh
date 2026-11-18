@@ -32,14 +32,19 @@
 # Requires: output/$RUN/input.json, init_MAP.json (step 4 done -- step4 writes
 # init_MAP.json directly when the config sets "fixed_init"; step5d_map.sh is
 # only needed for configs without a fixed_init).
-# Each chain starts from the IDENTITY metric and adapts its own dense metric
-# during warmup (metric=dense_e adapt save_metric=1). There is no pre-built
-# metric step in this pipeline: the scripts that built one (step5e_metric.sh,
-# make_metric.py) have been removed. A local CPU A/B test found that approach
-# ~2.7x slower overall to obtain than identity+adapt with no quality gain, its
-# builder was a crude 100-draw np.cov over a parameter list that no longer
-# matches the model, and a metric from a different data type or model version
-# is actively harmful (wrong dimension, or Cholesky failures).
+# By DEFAULT each chain starts from the IDENTITY metric and adapts its own
+# dense metric during warmup (metric=dense_e adapt save_metric=1). That is the
+# right default for 2color: under its rank-1 S = w w^T the warmup funnel a
+# pre-built metric existed to avoid is gone, and a local CPU A/B test found the
+# pre-built route ~2.7x slower overall to obtain with no quality gain.
+#
+# It is NOT right for 2color_v10, whose per-galaxy slope enters the selection
+# integral: on identity, v10's chains did not reach iteration 100 in 203 CPU
+# minutes and varied 8x in throughput between chains, where with a Pathfinder
+# metric they ran at ~11.7 s/iteration in lockstep. So slurm/step5e_metric.sh
+# is back as an OPT-IN step, with one builder per model so the old "wrong
+# dimension" failure cannot recur. Set METRIC=pf (and run step5e first) to use
+# it; unset, this script's command line is byte-for-byte what it was.
 #
 # The local real-data workflow (run_dr2_onepop.sh) runs from identity too, with
 # these same arguments -- the two paths sample identically, which is what lets
@@ -108,6 +113,23 @@ fi
 REFRESH_ARG=""
 [ -n "${REFRESH:-}" ] && REFRESH_ARG="refresh=$REFRESH"
 
+# METRIC: opt-in Pathfinder-seeded dense_e metric from slurm/step5e_metric.sh.
+# With METRIC unset, METRIC_FILE_ARG is empty and the command line is exactly
+# what it was before step5e was reinstated -- identity metric, adapted during
+# warmup. METRIC=pf appends metric_file=... after the metric=dense_e that is
+# already there, which is the form run_v5_3.sh and run_v5b_2m.sh used for the
+# delivered v5 catalogues.
+METRIC_FILE_ARG=""
+if [ "${METRIC:-}" = "pf" ]; then
+    if [ ! -s "output/$RUN/pf_metric.json" ]; then
+        echo "ERROR: METRIC=pf but output/$RUN/pf_metric.json is missing or" \
+             "empty. Run slurm/step5e_metric.sh first (with the same MODEL)." >&2
+        exit 1
+    fi
+    METRIC_FILE_ARG="metric_file=output/$RUN/pf_metric.json"
+    echo "Using Pathfinder metric: output/$RUN/pf_metric.json"
+fi
+
 echo "Step 6 (node): 4 chains for run=$RUN model=$MODEL, one per GPU on $(hostname)"
 PIDS=()
 for CHAIN_ID in 1 2 3 4; do
@@ -115,7 +137,7 @@ for CHAIN_ID in 1 2 3 4; do
     (
         CUDA_VISIBLE_DEVICES=$GPU_ID ./${MODEL}_g sample num_warmup=$NUM_WARMUP num_samples=$NUM_SAMPLES \
             $ADAPT_ARGS \
-            algorithm=hmc $ENGINE_ARGS metric=dense_e $STEPSIZE_ARG \
+            algorithm=hmc $ENGINE_ARGS metric=dense_e $METRIC_FILE_ARG $STEPSIZE_ARG \
             id=$CHAIN_ID \
             data file=output/$RUN/input.json \
             init=output/$RUN/init_MAP.json \

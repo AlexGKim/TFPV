@@ -76,12 +76,34 @@ Two things worth stating explicitly, because both changed:
   `fixed_init`, so step 5d is not in the chain. See `BATCH_MOCKS.md` decision
   #2b, and the Step 5d section below for the fallback when a config has no
   `fixed_init`.
-- **No metric file is involved at all.** `step6_node.sh`/`step6_chain.sh` never
-  pass `metric_file=`; both start from the identity metric and adapt a dense one
-  during warmup (`NUM_WARMUP=1000`). The scripts that built a metric
-  (`step5e_metric.sh`, `make_metric.py`) have been removed. The local real-data
-  workflow runs from identity too, with the same sampler arguments — see
-  [DR2_TWOPOP.md](DR2_TWOPOP.md) Step 6.
+- **No metric file is involved by default.** With `METRIC` unset,
+  `step6_node.sh`/`step6_chain.sh` do not pass `metric_file=`; both start from
+  the identity metric and adapt a dense one during warmup
+  (`NUM_WARMUP=1000`). That remains the right default for `2color`, and the
+  local real-data workflow matches it — see [DR2_TWOPOP.md](DR2_TWOPOP.md)
+  Step 6.
+
+  **It is the wrong default for `2color_v10`.** Its per-galaxy slope enters the
+  selection integral, and on the identity metric its chains did not reach
+  iteration 100 in 203 CPU-minutes, with 8× throughput variation between
+  chains; with a Pathfinder metric they ran at ~11.7 s/iteration in lockstep.
+  So `slurm/step5e_metric.sh` is back as an **opt-in** step:
+
+  ```bash
+  bash slurm/batch_submit.sh <dir> 1 --model 2color_v10 --metric pf
+  ```
+
+  which inserts step5e between step4 and step6 and makes step6 consume
+  `output/$RUN/pf_metric.json`. `make_metric.py` stays deleted; step5e uses
+  Stan's own `pathfinder` plus one builder per model
+  (`make_pf_metric.py` for 2color, 13 params; `make_pf_metric_v10.py` for
+  2color_v10, 14 params), which is what addresses the "wrong dimension"
+  failure that got the old step removed.
+
+  Use `--metric pf` for **both arms** of a v10/v5 pair. `run_v5_3.sh`'s header
+  records that v5's real procedure used a Pathfinder metric and that an
+  identity-metric attempt was ~5× slower, so a v5 control sampled on identity
+  against a v10 twin sampled with a metric is a confounded comparison.
 
 ### Obtaining the FITS file
 
@@ -328,8 +350,12 @@ chain's own adapted metric is saved as `output/$RUN/2color_{1..4}_metric.json`
 | step7 (diagnose) | debug | ~15 min |
 | step8 (predict) | debug | ~5–10 min per run (step7 and step8 both request `-q debug -t 0:30:00`) |
 
-There is no step 5e. Warmup from the identity metric is the whole adaptation
-budget, which is why `NUM_WARMUP` dominates step6's wall clock.
+| step5e (Pathfinder metric) | regular | minutes — **opt-in**, only in the chain with `--metric pf`; the 2 h walltime is slack, not an estimate |
+
+With `METRIC` unset there is no step 5e, and warmup from the identity metric is
+the whole adaptation budget, which is why `NUM_WARMUP` dominates step6's wall
+clock. With `--metric pf` the metric is pre-built and `NUM_WARMUP` buys
+refinement rather than discovery.
 
 **On step8's runtime.** The earlier "~1–4 hours on the regular queue" figure
 predated subsample scoping, when step8's posterior-predictive computation ran

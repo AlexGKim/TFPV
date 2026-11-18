@@ -101,14 +101,13 @@ workflow. The following decisions are fixed; do not re-derive them:
    the dust keyword. **Any mock covariance built before this must be
    regenerated** — it is missing a rank-1 block over ~30% of galaxies.
 
-3. **There is no metric-building step.** Every chain starts from the
-   **identity metric** and adapts a dense one during warmup
+3. **There is no metric-building step by default.** Every chain starts from
+   the **identity metric** and adapts a dense one during warmup
    (`metric=dense_e adapt save_metric=1`, no `metric_file=`), with
-   `NUM_WARMUP=1000` as the entire adaptation budget. The scripts that built a
-   metric — `slurm/step5e_metric.sh` and `make_metric.py` — have been
-   **deleted**, and `--metric` has been removed from `batch_submit.sh` and
-   `make_batch_configs.py`. This is a deliberate simplification, resting on
-   three findings:
+   `NUM_WARMUP=1000` as the entire adaptation budget. `make_metric.py` is
+   deleted and `--metric` is gone from `make_batch_configs.py`. This remains
+   the default, and for `2color` it is the right one, resting on three
+   findings:
 
    - A local CPU A/B test found a pre-built metric ~2.7× slower *overall to
      obtain* than letting step6 adapt from identity, with no quality gain.
@@ -127,8 +126,26 @@ workflow. The following decisions are fixed; do not re-derive them:
 
    > The **local real-data** workflow runs from identity as well, with the same
    > sampler arguments — see [DR2_TWOPOP.md](DR2_TWOPOP.md) Step 6. The two
-   > paths sample identically by design. `make_pf_metric.py` survives for
-   > manual experiments but is not a step in either.
+   > paths sample identically by design.
+
+   **`2color_v10` is the exception, and it is opt-in.** The three findings
+   above are all about the rank-1 `2color` posterior. v10 adds a per-galaxy
+   slope inside the selection integral, and on identity its chains did not
+   reach iteration 100 in 203 CPU-minutes with 8× chain-to-chain throughput
+   variation; with a Pathfinder metric they ran at ~11.7 s/iteration in
+   lockstep. `slurm/step5e_metric.sh` is therefore back, and
+   `batch_submit.sh` takes `--metric pf` to insert it between step4 and step6:
+
+   ```bash
+   bash slurm/batch_submit.sh configs/batch_v213_v10 1 --model 2color_v10 --metric pf
+   ```
+
+   The "crude builder" and "wrong dimension" objections are addressed by
+   having one builder per model — `make_pf_metric.py` (2color, 13 params) and
+   `make_pf_metric_v10.py` (2color_v10, 14 params), both asserting
+   `N_bins == 1` — and by building the metric inside the run's own directory
+   from its own Pathfinder draws. Pass `--metric pf` to **both arms** of a
+   v10/v5 pair, or the comparison is confounded by preconditioning.
 
 4. **Each mock file contributes exactly one run, size-matched to the real DR2
    sample.** Step 4 restricts to the file's `MAIN` rows (see #4a), applies the
@@ -190,8 +207,8 @@ workflow. The following decisions are fixed; do not re-derive them:
    `batch_submit.sh` never advances that file, rather than emitting a run
    whose sample size is silently unmatched.
 
-5. **Per-file chain:** `step4 → step6 ×4 → step7 → step8`
-   (no step5d — see #2b; no metric step — see #3). **Cost implication:** the
+5. **Per-file chain:** `step4 → [step5e] → step6 ×4 → step7 → step8`
+   (no step5d — see #2b; step5e only with `--metric pf` — see #3). **Cost implication:** the
    totals are `n_files` runs and `n_files × 4` step6 chains — for 125 files,
    **125 runs and 500 step6 chains**.
 

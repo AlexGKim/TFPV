@@ -20,8 +20,8 @@ map, dependency graph, and a symptom → diagnosis → fix catalogue.
 The pipeline fits a two-color Tully-Fisher Relation (TFR) model to DESI galaxy
 data using Stan (CmdStan). Of its numbered steps, only **4, 6, 7, 8** run on
 NERSC in the current chain — step 5d is skipped whenever a config sets
-`fixed_init`, and there is no step 5e (the metric-building scripts were
-removed).
+`fixed_init`, and step 5e is opt-in (`batch_submit.sh --metric pf`, needed for
+`2color_v10`; see the metric discussion below).
 
 **Model:** `2color.stan` — quadrivariate (x̂, ŷ, ẑ, ĝ) TFR with two independent
 latent color factors (r–z and g–r), and a **rank-1** intrinsic covariance
@@ -34,15 +34,24 @@ dense metric.)
 `step6_chain.sh` handle this by running from the identity metric with
 in-warmup dense-metric adaptation (`metric=dense_e adapt save_metric=1`, no
 pre-built `metric_file=`) and `NUM_WARMUP=1000`/`MAX_DEPTH=10` (both
-env-overridable). There is **no pre-built-metric step in the batch** — the
-scripts that built one (`step5e_metric.sh`, `make_metric.py`) have been
-deleted. A local A/B test found that approach ~2.7x slower overall to obtain
-than letting step6 adapt from scratch, with no quality gain, and its builder
-was a crude 100-draw `np.cov` over a stale parameter list. Warmup from
-identity suffices for the rank-1 model: the validated abacus run finished
-warmup in ~4.4 h/chain on CPU without stalling at max treedepth. The local
-real-data workflow (`run_dr2_onepop.sh`) runs from identity with the same
-sampler arguments, so both paths sample identically — DR2_TWOPOP.md Step 6.
+env-overridable). There is **no pre-built-metric step in the batch by
+default** — `make_metric.py` is deleted. A local A/B test found that approach
+~2.7x slower overall to obtain than letting step6 adapt from scratch, with no
+quality gain, and its builder was a crude 100-draw `np.cov` over a stale
+parameter list. Warmup from identity suffices for the rank-1 model: the
+validated abacus run finished warmup in ~4.4 h/chain on CPU without stalling
+at max treedepth. The local real-data workflow (`run_dr2_onepop.sh`) runs from
+identity with the same sampler arguments, so both paths sample identically —
+DR2_TWOPOP.md Step 6.
+
+`slurm/step5e_metric.sh` is back as an **opt-in** step for `2color_v10`, whose
+per-galaxy slope enters the selection integral: on identity its chains did not
+reach iteration 100 in 203 CPU-minutes with 8x throughput variation, and with
+a Pathfinder metric ran ~11.7 s/iteration in lockstep. `batch_submit.sh
+--metric pf` inserts it; `METRIC=pf` makes step6 pass `metric_file=`. One
+builder per model (`make_pf_metric.py`, 13 params; `make_pf_metric_v10.py`,
+14 params) is what answers the old "wrong dimension" failure. Use it for both
+arms of a v10/v5 pair.
 
 ---
 
