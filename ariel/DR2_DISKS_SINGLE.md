@@ -64,6 +64,54 @@ export RUN=DR2_TF_disks_v5_all_2color
 export CONFIG=configs/dr2_tf_disks_v5_all_2color.json
 ```
 
+### Provenance: `DR2_TF_vrot_all_v5.fits` is already here (checked 2026-11-18)
+
+`/global/cfs/cdirs/desi/science/td/pv/tfgalaxies/Y3/DR2_TF_vrot_all_v5.fits`
+is **the same catalogue as `data/DR2_TF_disks_v5.fits`**, not a new input. It
+does not supersede anything. Verified on Perlmutter with md5 fingerprints of
+the SGA_ID-sorted `SGA_ID`, `LOGVROT`, `R_MAG_SB26` and `Z_DESI` columns — all
+four identical, 32,488 rows on both sides.
+
+| | rows | state |
+|---|---|---|
+| `DR2_TF_vrot_all_v5.fits` (CFS) = `data/DR2_TF_disks_v5.fits` | 32,488 | disk-only, **before** VI filtering |
+| `data/DR2_TF_disks_v5_all.fits` | 31,368 | the same, **after** dropping 1,120 VI rejects |
+
+What the CFS file contains: `MORPHTYPE` is Spiral 25,388 + Irregular 7,100 —
+exactly the two halves `make_disk_union.py` stacks — with **zero** early types
+(E/S0/PSF/REX), so no morphology selection is needed. `JOHN_VI` has 1,120
+`reject` rows, so it is **not** VI-filtered. Its columns are a strict subset of
+the local union's; the 7 extra columns there (`MAIN`, `GOOD_MORPH`,
+`MU_ZCMB_ERR`, `R_ABSMAG_SB26_TF*`) are pipeline outputs written by a previous
+run, not new data. No negative magnitude errors.
+
+Three consequences:
+
+- **Nothing needs downloading.** Phase A runs locally on files already in
+  `data/`.
+- **Step 0 is still required, for the VI cut alone.** Do not feed
+  `DR2_TF_disks_v5.fits` to the pipeline: nothing downstream applies
+  `JOHN_VI` — `desi_data.py` and `color_predict.py` re-derive validity and
+  phase-space cuts but not visual inspection — so you would silently fit
+  1,120 VI-rejected galaxies and lose comparability with v5b/v10b. The
+  stacking half of Step 0 is already done; its output,
+  `data/DR2_TF_disks_v5_all.fits`, already exists. **Use that as `--fits`.**
+- **The `MAIN` column in the local union is stale** — 28,856 true, which is
+  v5a's MAIN count, so it was written by the v5a (Hyper) run and says nothing
+  about v11a. It is harmless only because the config keeps `source: "DESI"`:
+  `desi_data.py:232-239` gates the MAIN restriction on the source value
+  precisely so a DR2 run is never re-selected against a stale pipeline-written
+  MAIN. Do not change `source` to `"fullmocks"`, and do not filter on MAIN.
+  (This also settles the open question of how v5a was built: from the combined
+  disk set *before* VI filtering, which is why its row count is 32,488.)
+
+Counts in `data/DR2_TF_disks_v5_all.fits` that set expectations for the v11a
+run — Spiral 24,813 / Irregular 6,555; z>0.01 30,897; z>0.03 25,332;
+0.03 < z <= 0.065 **14,682**. Of those, 13,472 also carry the stale MAIN flag,
+which is the right order of magnitude for v11a's own MAIN count and hence for
+the mock batch's `target_main_count` (section 7a) — but read the real number
+off the completed catalogue rather than using this one.
+
 [run_disks_single.sh](run_disks_single.sh) derives `RUN`/`CONFIG` from the FITS
 basename the same way and automates Steps 1–8, pausing only for Step 3's
 interactive fiducial choice:
