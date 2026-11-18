@@ -9,9 +9,13 @@ Conventions used throughout (see LOWZ_DIAGNOSIS.md):
 so a galaxy receding faster than Hubble flow (v_r > 0) has eta > 0, and the negative
 low-z means in the catalogues correspond to v_r < 0, i.e. net infall toward us.
 
-The exact eta <-> v_r map and the GLS machinery are reused from
-output/DR2_TF_v5_2color_bulkflow/{b0_transform,b1_fit}.py; they are imported by
-adding that directory to sys.path (b1 does `import b0_transform as b0`).
+The exact eta <-> v_r map and the GLS machinery live in ariel/{b0_transform,
+b1_fit}.py and are imported normally. They used to sit in
+output/DR2_TF_v5_2color_bulkflow/ and be reached by inserting that directory
+into sys.path -- but output/ is gitignored, so on a fresh clone the import
+failed and nothing in this module could be used at all. They were moved up to
+ariel/ and tracked; b2_shells.py and b4_nulls.py, which stayed behind in the
+bulkflow directory, add ariel/ to sys.path themselves.
 """
 from __future__ import annotations
 
@@ -26,9 +30,8 @@ from astropy.coordinates import SkyCoord
 import astropy.units as u
 
 ARIEL = os.path.abspath(os.path.dirname(__file__))
-BULKFLOW_DIR = os.path.join(ARIEL, "output", "DR2_TF_v5_2color_bulkflow")
-if BULKFLOW_DIR not in sys.path:
-    sys.path.insert(0, BULKFLOW_DIR)
+if ARIEL not in sys.path:
+    sys.path.insert(0, ARIEL)
 import b0_transform as b0  # noqa: E402
 import b1_fit as b1        # noqa: E402
 

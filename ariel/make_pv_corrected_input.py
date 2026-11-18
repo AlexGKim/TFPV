@@ -6,7 +6,7 @@ default TwoMPP_SDSS = Said+2020 / Carr+2021) at (RA, DEC, Z_DESI_CMB) is turned 
 cosmological redshift and a distance-modulus shift
 
     z_cos = (1 + z_cmb) / (1 + v/c) - 1                 (doc/model3.tex convention; same map as
-                                                         output/DR2_TF_v5_2color_bulkflow/b0_transform.py)
+                                                         ariel/b0_transform.py, formerly under output/DR2_TF_v5_2color_bulkflow/)
     dmu   = 5 log10[ d_L(z_cos) / d_L(z_cmb) ]          astropy Planck18; H0 cancels in the ratio
 
 and the absolute magnitudes are moved to the PV-corrected distance while apparent magnitudes,

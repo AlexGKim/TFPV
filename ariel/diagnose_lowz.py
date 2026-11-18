@@ -67,8 +67,19 @@ def cmd_t6_mock(args):
     import matplotlib.pyplot as plt
     L.style()
     bins = _zbins(args)
-    m = L.load_mock(main_only=True)
-    print(f"mock prediction catalogue: {m['n']} MAIN rows, z {m['z'].min():.4f}-{m['z'].max():.4f}")
+    # --pred: lowz_common.MOCK_PRED is one particular mock run
+    # (abacus_spec_c000_ph000_r001_2color). load_mock() has always accepted a
+    # path; it was simply never threaded through, so this test could only ever
+    # be run against that one catalogue. A new mock arm -- notably a v10 arm,
+    # whose c_dex_per_z is the measurement -- needs its own.
+    pred = getattr(args, "pred", None) or L.MOCK_PRED
+    tag = getattr(args, "tag", None) or "t6_mock"
+    m = L.load_mock(path=pred, main_only=True)
+    print(f"mock prediction catalogue: {os.path.relpath(pred, L.ARIEL)}")
+    print(f"  {m['n']} MAIN rows, z {m['z'].min():.4f}-{m['z'].max():.4f}")
+    # Data catalogue for the comparability panel. v10b is the Hier default;
+    # for a v11a mock arm the meaningful comparison is v11a itself.
+    data_cat = getattr(args, "data_cat", None) or "v10b"
     rows_eta = L.zbin_stats(m["z"], m["eta"], m["err"], bins, K=m["K"])
     rows_true = L.zbin_stats(m["z"], m["eta_true"], None, bins, K=m["K"])
     rows_bias = L.zbin_stats(m["z"], m["eta"] - m["eta_true"], None, bins, K=m["K"])
@@ -95,8 +106,8 @@ def cmd_t6_mock(args):
               f"dAIC(M1,M2,M3 vs M0) = {sh['models']['M1']['dAIC_vs_M0']:+.1f}, "
               f"{sh['models']['M2']['dAIC_vs_M0']:+.1f}, {sh['models']['M3']['dAIC_vs_M0']:+.1f}")
 
-    # population medians vs z, mock vs data (v10b), for the comparability check
-    d = L.load("v10b")
+    # population medians vs z, mock vs data, for the comparability check
+    d = L.load(data_cat)
     comp = []
     for lo, hi in zip(bins[:-1], bins[1:]):
         sm = (m["z"] >= lo) & (m["z"] < hi); sd = (d["z"] >= lo) & (d["z"] < hi)
@@ -114,24 +125,29 @@ def cmd_t6_mock(args):
     # figure: three panels
     f, axs = plt.subplots(1, 3, figsize=(13, 3.8), sharex=True)
     rows_data = L.zbin_stats(d["z"], d["eta"], d["err"], bins, K=d["K"])
-    _plot_bins(axs[0], rows_data, L.COLORS["v10b"], "data v10b (Hier)")
+    _plot_bins(axs[0], rows_data, L.COLORS[data_cat], f"data {data_cat} ({d['info'].framework})")
     _plot_bins(axs[0], rows_eta, L.COLORS["mock"], "mock, pipeline eta")
     _plot_bins(axs[0], rows_true, L.MUTED, "mock, eta_true (pure PV)", marker="s")
     axs[0].set_title("Mean η vs redshift"); axs[0].set_ylabel("⟨η⟩ = ⟨log d_z/d_TF⟩  [dex]")
     _plot_bins(axs[1], rows_bias, L.COLORS["mock"], "mock: η − η_true")
     axs[1].set_title("Pipeline model bias b_model(z)"); axs[1].set_ylabel("⟨η − η_true⟩  [dex]")
-    _plot_bins(axs[2], rows_data, L.COLORS["v10b"], "data v10b", key="kms", ekey="kms_se")
+    _plot_bins(axs[2], rows_data, L.COLORS[data_cat], f"data {data_cat}", key="kms", ekey="kms_se")
     _plot_bins(axs[2], rows_eta, L.COLORS["mock"], "mock pipeline", key="kms", ekey="kms_se")
     _plot_bins(axs[2], rows_true, L.MUTED, "mock true PV", key="kms", ekey="kms_se", marker="s")
     axs[2].set_title("Same, in velocity units ⟨η⟩/⟨K⟩"); axs[2].set_ylabel("km/s")
     for ax in axs:
         L.zero_line(ax); ax.set_xlabel("z_CMB"); ax.legend(loc="best")
     f.suptitle("T6 — Mock control: the Hier pipeline on an AbacusSummit mock (MAIN rows)", x=0.01, ha="left")
-    L.fig("t6_mock")
+    L.fig(tag)
 
-    L.save_json("t6_mock", dict(n=m["n"], bins=bins, eta=rows_eta, eta_true=rows_true, bias=rows_bias,
-                                vr=rows_vr, V_bulk_mock=Vmock, shape_bias=sh_bias, shape_eta=sh_eta,
-                                comparability=comp))
+    # pred/data_cat are recorded in the JSON because cmd_t4_spatial reads
+    # results/t6_mock.json for b_model(z): without them there is no way to tell
+    # afterwards WHICH mock arm produced the bias it subtracts. Use --tag to
+    # write a different basename rather than overwriting the reference run.
+    L.save_json(tag, dict(n=m["n"], bins=bins, eta=rows_eta, eta_true=rows_true, bias=rows_bias,
+                          vr=rows_vr, V_bulk_mock=Vmock, shape_bias=sh_bias, shape_eta=sh_eta,
+                          comparability=comp,
+                          pred=os.path.relpath(pred, L.ARIEL), data_cat=data_cat))
 
 
 # ============================================================================
@@ -1074,6 +1090,21 @@ def main(argv=None):
         if name == "t5_external":
             sp.add_argument("--source", default="pvhub", choices=["pvhub", "cf4"])
             sp.add_argument("--cf4-file", default=None)
+        if name == "t6_mock":
+            sp.add_argument("--pred", default=None,
+                            help="Path to a mock run's color_xonly_catalog.fits "
+                                 "(default: lowz_common.MOCK_PRED, the "
+                                 "abacus_spec_c000_ph000_r001_2color run). Use this to "
+                                 "measure a NEW mock arm -- for a v10 arm, M2's "
+                                 "c_dex_per_z is the slope_dz signature and should "
+                                 "straddle zero on a mock with no true drift.")
+            sp.add_argument("--tag", default=None,
+                            help="Output basename for the figure and results JSON "
+                                 "(default t6_mock). Pass one when using --pred, or the "
+                                 "reference run's results/t6_mock.json -- which "
+                                 "t4_spatial reads for b_model(z) -- is overwritten.")
+            sp.add_argument("--data-cat", dest="data_cat", default=None,
+                            help="Catalogue for the comparability panel (default v10b).")
         sp.set_defaults(func=fn)
     args = p.parse_args(argv)
     L.ensure_dirs()
