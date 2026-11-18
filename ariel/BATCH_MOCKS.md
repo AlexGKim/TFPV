@@ -212,8 +212,8 @@ workflow. The following decisions are fixed; do not re-derive them:
    totals are `n_files` runs and `n_files × 4` step6 chains — for 125 files,
    **125 runs and 500 step6 chains**.
 
-**Target mock set:** `v2.0.8`
-(`/global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.0.8/`),
+**Target mock set:** `v2.1.3`
+(`/global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.1.3/`),
 the `base`/`fullmocks` family (`TF_AbacusSummit_base_..._zsnap..._zmax....fits`,
 `"source": "fullmocks"`, relies on a `MAIN` column) — this is what
 everything below in this document covers. The batch driver takes a `--dir`,
@@ -222,6 +222,22 @@ so it processes whatever files are present when more arrive.
 > `/global/cfs/cdirs/desi/...` and `/global/cfs/cdirs/desicollab/...` are the
 > **same tree** — the former is a symlink to the latter (verified with
 > `readlink -f`). Either spelling works; don't "fix" one to the other.
+
+> **The v2.0.8 material below is history, not the target — and it is the
+> pre-flight checklist.** `v2.1.3` has not been inspected. Before generating
+> any configs for it, re-run every check that v2.0.8 needed, because each one
+> records a way this directory has actually gone wrong:
+> `find $D -maxdepth 1 -name '*.fits' -type f | wc -l` and
+> `find $D -maxdepth 1 -name '*.fits' ! -readable | wc -l` (must be 0) plus
+> `ls -ld $D` for the group-permission trap; every filename matching
+> `c\d+_ph\d+_r\d+` with **unique** tokens, or make_batch_configs.py silently
+> drops or collides files; per-file headers carrying a dust keyword
+> (`A_R_ERR` | `DSTCFF_R_ERR` | `CFFR_ERR`), `PHOTSYS_ERR` or string-typed
+> `PHOTSYS`, and **`MAIN`** (desi_data.py:189-195 hard-exits without it under
+> `source: fullmocks`); `MORPHTYPE` **absent**, which is the premise of the
+> mock arm being inherently combined; and whether the negative-error-bar
+> defect persists. Then run step 4 on one file with
+> `--pattern '*c000_ph000_r001*.fits'` before anything else.
 
 `v2.0.8` holds **676** `.fits` files (counted 2026-08-09 with
 `find -maxdepth 1 -name '*.fits' | wc -l`), so a full batch is 676 runs and
@@ -403,22 +419,43 @@ the real run.
 ## Full Batch Run
 
 ```bash
-# 1. Generate one config per fits file (sample size comes from the base config's
-#    target_main_count; the generator hard-errors if it is missing):
-python3 make_batch_configs.py \
-    --dir /global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.0.8 \
-    --base configs/abacus_2color.json \
-    --outdir configs/batch_v2.0.8 \
-    --n-objects 5000
+D=/global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.1.3
 
-# 2. Submit (throttle so at most N runs' step6_node jobs are queued at once):
-bash slurm/batch_submit.sh configs/batch_v2.0.8 8
+# 1. Generate one config per fits file (sample size comes from the base config's
+#    target_main_count; the generator hard-errors if it is missing).
+#    --run-suffix is MANDATORY for a paired v10/v5 batch: the run name is the
+#    c???_ph???_r??? token alone, so both arms would write to the same
+#    output/<run>/ and overwrite each other's CSVs.
+python3 make_batch_configs.py --dir $D \
+    --base configs/abacus_2color_v10_z03.json \
+    --outdir configs/batch_v213_v10 --run-suffix _v10 --n-objects 5000
+python3 make_batch_configs.py --dir $D \
+    --base configs/abacus_2color_v5_z03.json \
+    --outdir configs/batch_v213_v5  --run-suffix _v5  --n-objects 5000
+
+# 2. ONE realization per arm first, then release the batch. The mock sample
+#    size differs from DR2's, so Phase 1's rate does not carry over --
+#    re-measure it before committing 24 h/run allocations.
+#    --metric pf on BOTH arms: a v5 control sampled on the identity metric
+#    against a v10 twin sampled with a Pathfinder metric is confounded.
+bash slurm/batch_submit.sh configs/batch_v213_v10 1 --model 2color_v10 --metric pf
+bash slurm/batch_submit.sh configs/batch_v213_v5  1 --model 2color     --metric pf
 
 # 3. Monitor:
 squeue -u $USER
-bash slurm/batch_status.sh configs/batch_v2.0.8            # summary
-bash slurm/batch_status.sh configs/batch_v2.0.8 --verbose  # per-run detail
+bash slurm/batch_status.sh configs/batch_v213_v10            # summary
+bash slurm/batch_status.sh configs/batch_v213_v10 --verbose  # per-run detail
 ```
+
+`target_main_count` in both base configs must come from **Phase 1's completed
+combined z>0.03 catalogue**, not from v5b's 17,234: the key exists
+(desi_data.py:398-402) to size-match each mock to the real product so both
+carry comparable statistical weight, and the real product here is the v11a run.
+Expect roughly 13,000 (the existing combined catalogue gives MAIN 16,918 at
+z>0.01, of which 3,674 sit in 0.01<z<=0.03), moved further by the refit cuts.
+If a mock file cannot reach the target, desi_data.py:411-418 exits with
+guidance — **let it exit**. Lowering the target per file would give runs
+different statistical weight, the one thing the key exists to prevent.
 
 `batch_submit.sh` skips any run whose `.step8_done` sentinel already exists, so it
 is safe to re-run to pick up failed/incomplete runs.

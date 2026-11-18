@@ -19,16 +19,26 @@ dense covariance tractable — the whole file's cut-passing population is
 G ~ 91,000, a ~67 GB matrix that cannot finish inside step8's 30-minute
 walltime — so do not remove `target_main_count` from the base config.
 
-There is no metric-seeding step: every chain starts from the identity metric and
-adapts a dense one during warmup (see slurm/step6_node.sh). The scripts that
-built a metric have been removed from the batch.
+By default there is no metric-seeding step: every chain starts from the identity
+metric and adapts a dense one during warmup (see slurm/step6_node.sh).
+slurm/step5e_metric.sh is back as an OPT-IN step for 2color_v10, which cannot
+sample usefully from identity -- pass `--metric pf` to slurm/batch_submit.sh.
 
 Usage:
     python3 make_batch_configs.py \
-        --dir /global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.0.8 \
+        --dir /global/cfs/cdirs/desi/science/td/pv/mocks/DR2/TF_mocks/full_mocks/v2.1.3 \
         --base configs/abacus_2color.json \
-        --outdir configs/batch_v2.0.8 \
+        --outdir configs/batch_v213 \
         --n-objects 5000
+
+--run-suffix is MANDATORY when generating two arms over the same directory.
+The run name is the c???_ph???_r??? token alone, so a v10 arm and a v5 arm
+would both write to output/c000_ph000_r001/ and overwrite each other's CSVs:
+
+    python3 make_batch_configs.py --dir $D --base configs/abacus_2color_v10_z03.json \
+        --outdir configs/batch_v213_v10 --run-suffix _v10 --n-objects 5000
+    python3 make_batch_configs.py --dir $D --base configs/abacus_2color_v5_z03.json \
+        --outdir configs/batch_v213_v5  --run-suffix _v5  --n-objects 5000
 """
 
 import argparse
