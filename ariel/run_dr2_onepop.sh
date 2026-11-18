@@ -244,7 +244,12 @@ fi
 
 if ! skip_if_done 4; then
     echo "=== Step 4: desi_data.py ==="
-    python desi_data.py --config "$CONFIG"
+    # --model is passed explicitly so that --model on THIS script's command
+    # line wins over the config's own "model" key. It decides which init keys
+    # desi_data.py writes: 2color_v10 declares slope_std_0 / slope_std_1 where
+    # earlier models declare slope_std, and a mismatch is silent -- CmdStan
+    # ignores unknown init keys and random-inits what is missing.
+    python desi_data.py --config "$CONFIG" --model "$MODEL"
     mark_done 4
 fi
 
