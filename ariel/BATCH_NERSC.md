@@ -23,14 +23,19 @@ it does not happen at all — the cuts are frozen and shared
 
 ## Prerequisites
 
-### 1. Pull the batch branch
+### 1. Pull the working branch
 
 ```bash
 cd $SCRATCH/TFPV/ariel        # or wherever you cloned the repo on NERSC
 git fetch origin
-git checkout batch
+git checkout hyper-z03
 git pull
 ```
+
+`batch` is an ancestor of `v10`, which is an ancestor of `hyper-z03`. Use
+`hyper-z03`: it is the only branch that has the `$MODEL` parameterization of
+steps 5d-8, the `*_g.stan` symlinks and `slurm/compile_gpu.sh`, so it is the
+only one on which a `2color_v10` run can be submitted at all.
 
 ### 2. Load modules
 
@@ -122,7 +127,7 @@ python selection_ellipse.py --config configs/<base>.json  # Step 1: fit selectio
 python select_v2.py --config configs/<base>.json --exe ./tophat  # Step 2: MLE + pull profile (tophat, not 2color)
 python set_fiducial.py --run $RUN                         # Step 3: interactive cut selection
 python export_config.py --run $RUN --out configs/<new>.json  # Step 3b: export config
-git add configs/<new>.json && git commit -m "add config for <new_run>"
+git add -f configs/<new>.json && git commit -m "add config for <new_run>"
 git push
 ```
 
@@ -134,17 +139,27 @@ Then on NERSC: `git pull` to get the new config before submitting jobs.
 
 ### Compile the GPU binary
 
-Run once per checkout (or after any `.stan` file changes):
+Run once per checkout, per model (or after any `.stan` file changes):
 
 ```bash
-sbatch slurm/compile_2color_gpu.sh
+sbatch --export=MODEL=2color     slurm/compile_gpu.sh
+sbatch --export=MODEL=2color_v10 slurm/compile_gpu.sh
 ```
 
-Wait for it to complete, then verify:
+`MODEL` defaults to `2color`, and `slurm/compile_2color_gpu.sh` is kept as a
+one-line wrapper, so the old command still works. The target `${MODEL}_g` is
+built from the tracked symlink `${MODEL}_g.stan -> ${MODEL}.stan`; the script
+fails with instructions if that symlink is missing.
+
+Wait for them to complete, then verify:
 
 ```bash
-ls -lh 2color_g
+ls -lh 2color_g 2color_v10_g
 ```
+
+The binaries are **per-platform** (Perlmutter is x86-64, a laptop may be
+arm64) and are deliberately not tracked -- `ariel/.gitignore` ignores them
+with a `!*.stan` negation so the sources and symlinks stay tracked.
 
 ---
 
