@@ -54,8 +54,23 @@ module load craype-accel-nvidia80 cudatoolkit nvidia PrgEnv-nvidia
 # Workaround for CUDA OpenCL link error on Perlmutter
 export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 
+# PrgEnv-nvidia sets CXX to nvc++ (currently nvidia/26.5). Stan's TBB build
+# recognizes only gcc and clang and classifies anything else as "other", then
+# refuses to proceed:
+#
+#   stan/lib/stan_math/make/libraries:114: *** "Need to set TBB_CXX_TYPE for
+#   non-standard compiler other than gcc or clang."
+#
+# so the build dies in ~14 s before compiling anything. This is NOT a
+# pre-existing condition of the old script -- the Aug 2026 2color_g was built
+# before NERSC's programming-environment update, and the identical module
+# loads now fail. nvc++ takes gcc-style driver flags, so gcc is the right
+# value; clang also parses but would hand TBB the wrong flag dialect.
+# Override via --export=...,TBB_CXX_TYPE=... if the toolchain moves again.
+TBB_CXX_TYPE=${TBB_CXX_TYPE:-gcc}
+
 cd ../../cmdstan
-make -j4 STAN_OPENCL=true ../TFPV/ariel/${MODEL}_g
+make -j4 STAN_OPENCL=true TBB_CXX_TYPE=${TBB_CXX_TYPE} ../TFPV/ariel/${MODEL}_g
 cd ../TFPV/ariel
 
 echo "Compiled: $(ls -lh ${MODEL}_g)"
