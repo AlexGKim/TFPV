@@ -24,10 +24,12 @@
 # stores them as 20-byte blobs and a fresh checkout without them cannot compile
 # at all.
 #
-# STAN_OPENCL=true is passed on the make line and NOT put in cmdstan/make/local
-# (which does not exist). A global flag would also turn OpenCL on for the CPU
-# ./${MODEL} that run_dr2_onepop.sh builds locally, and would break the macOS
-# arm64 build.
+# STAN_OPENCL=true is passed on the make line and deliberately NOT put in
+# cmdstan/make/local. That file DOES exist on Perlmutter (checked 2026-11-18)
+# but leaves STAN_OPENCL commented out; its only active settings are
+# `STANCFLAGS+= --warn-pedantic` and `CXXFLAGS += -fpermissive`. Keep it that
+# way: a global flag would also turn OpenCL on for the CPU ./${MODEL} that
+# run_dr2_onepop.sh builds, and would break the macOS arm64 build.
 
 set -e
 
