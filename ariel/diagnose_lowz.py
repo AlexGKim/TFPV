@@ -519,7 +519,10 @@ def cmd_t3_lever(args):
         return dict(b=float(b), scatter=scat, bins=rows, trend=trend)
 
     for c, d in data.items():
-        if d["info"].framework == "Hier" or c == "v7a":
+        # "Unsplit" (v11a) is included: it uses the Hier selection, just fit
+        # as one population, so the inverse-TF test applies to it exactly as it
+        # does to Hier. Without this it would be silently skipped.
+        if d["info"].framework in ("Hier", "Unsplit") or c == "v7a":
             res["catalogs"][c]["inverse"] = inverse(d, c)
             if d["photsys"] is not None:
                 res["catalogs"][c]["inverse_N"] = inverse(d, c + " PHOTSYS=N", d["photsys"] == "N")
@@ -898,11 +901,24 @@ def cmd_t7_pairs(args):
     import matplotlib.pyplot as plt
     L.style()
     bins = _zbins(args)
-    pairs = [("v10b", "v5b"), ("v5_3", "v5b"), ("v7a", "v5a"), ("v9", "v7a"), ("v5b", "v5a"), ("v10b", "v9"), ("v5_3", "v7a")]
-    data = {c: L.load(c, args.subset) for c in L.ALL}
+    # v11a vs v11a_fixedslope is the controlled pair: identical sample and
+    # cuts, differing only in slope_std_1, so their delta eta isolates the
+    # redshift-dependent slope. v11a vs v5_3 is the split/unsplit comparison at
+    # the same z cut; v11a vs v10b is unsplit/split at the same slope freedom.
+    pairs = [("v10b", "v5b"), ("v5_3", "v5b"), ("v7a", "v5a"), ("v9", "v7a"),
+             ("v5b", "v5a"), ("v10b", "v9"), ("v5_3", "v7a"),
+             ("v11a", "v11a_fixedslope"), ("v11a", "v5_3"), ("v11a", "v10b")]
+    data = {c: L.load(c, args.subset) for c in L.available()}
+    # Drop pairs whose catalogues are not on disk yet (v11a until Phase 1 runs).
+    skipped = [(a, b) for a, b in pairs if a not in data or b not in data]
+    if skipped:
+        print("  skipping pairs with no catalogue on disk: "
+              + ", ".join(f"{a}-{b}" for a, b in skipped))
+    pairs = [(a, b) for a, b in pairs if a in data and b in data]
     res = {"bins": bins, "pairs": {}}
     f, ax = plt.subplots(figsize=(8, 4.2))
-    cols = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7"]
+    cols = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7",
+            "#7a3fbf", "#b07fd8", "#e34948"]
     for (a, b), col in zip(pairs, cols):
         da, db = data[a], data[b]
         ia, ib = L.match(da, db)
@@ -1041,7 +1057,10 @@ def cmd_report(args):
 # ============================================================================
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--catalogs", default=",".join(L.ALL))
+    # L.available(), not L.ALL: the registry carries v11a before its FITS
+    # exists, and the default must not make every command fail on a missing
+    # file. Naming a catalogue explicitly still fails loudly, as it should.
+    p.add_argument("--catalogs", default=",".join(L.available()))
     p.add_argument("--subset", default="MAIN", choices=["MAIN", "ANALYSIS", "ALL"])
     p.add_argument("--zmax", type=float, default=0.07, help="upper z for shape / regression fits")
     p.add_argument("--zbins", default=None, help="comma-separated bin edges")

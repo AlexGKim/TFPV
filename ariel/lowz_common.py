@@ -57,7 +57,7 @@ DEFAULT_ZBINS = [0.002, 0.010, 0.015, 0.020, 0.025, 0.030, 0.040, 0.050, 0.070]
 class CatInfo:
     name: str
     file: str
-    framework: str          # "Hier" | "Hyper"
+    framework: str          # "Hier" | "Hyper" | "Unsplit"
     z_train_min: float | None
     zslope: bool            # redshift-dependent TF slope
     note: str
@@ -65,24 +65,61 @@ class CatInfo:
 
 CATALOGS: dict[str, CatInfo] = {
     "v5b":  CatInfo("v5b",  "DESI-DR2_TF_pv_cat_v5b.fits",     "Hier",  0.01, False, "z>0.01 training"),
-    "v5_3": CatInfo("v5_3", "DESI-DR2_TF_pv_cat_v5_3.fits",    "Hier",  0.03, True,  "z>0.03 training, z-dep slope"),
+    # v5_3 is a FIXED-slope rerun. Its configs differ from v5's in "run" and
+    # "z_obs_min" only and both set "model": "2color"; run_v5_3.sh's header says
+    # the same. zslope was True here (and catalogs/README.txt listed v5_3 under
+    # the z-dependent-slope analyses) -- both wrong, both corrected.
+    "v5_3": CatInfo("v5_3", "DESI-DR2_TF_pv_cat_v5_3.fits",    "Hier",  0.03, False, "z>0.03 training, fixed slope"),
     "v10b": CatInfo("v10b", "DESI-DR2_TF_pv_cat_v10b.fits",    "Hier",  0.01, True,  "z-dependent slope"),
     "v5a":  CatInfo("v5a",  "DESI-DR2_TF_pv_cat_v5a.fits",     "Hyper", 0.01, False, "z>0.01"),
     "v7a":  CatInfo("v7a",  "DESI-DR2_TF_pv_cat_v7a.fits",     "Hyper", 0.03, False, "z>0.03"),
     "v9":   CatInfo("v9",   "DESI-DR2_TF_pv_test_cat_v9.fits", "Hyper", None, True,  "z-dependent slope (test)"),
     "v5b_2m": CatInfo("v5b_2m", "DESI-DR2_TF_pv_cat_v5b_2m.fits", "Hier", 0.01, False, "v5b with 2M++ PV-corrected training magnitudes"),
+    # v11a: the combined (unsplit) disk sample, z>0.03 training, redshift-
+    # dependent slope, with v11a_fixedslope as its control twin on the same
+    # sample and cuts. See the framework note below for why these are neither
+    # Hier nor Hyper.
+    "v11a": CatInfo("v11a", "DESI-DR2_TF_pv_cat_v11a.fits", "Unsplit", 0.03, True,
+                    "combined spirals+irregulars, z>0.03 training, z-dep slope"),
+    "v11a_fixedslope": CatInfo("v11a_fixedslope", "DESI-DR2_TF_pv_cat_v11a_fixedslope.fits",
+                               "Unsplit", 0.03, False,
+                               "v11a control: same sample and cuts, fixed slope"),
 }
 HIER = ["v5b", "v5_3", "v10b"]
 HYPER = ["v5a", "v7a", "v9"]
-ALL = HIER + HYPER
+# A THIRD framework value, rather than filing v11a under Hyper. In this registry
+# "Hyper" denotes a looser-selection pipeline: 28,856-29,152 MAIN rows and NO
+# ANALYSIS hold-out. v11a will have ~13,100 MAIN and DOES have a hold-out (the
+# existing DR2_TF_disks_v5_all_2color gives MAIN 16,918 / ANALYSIS 11,918 --
+# essentially v5b's counts, not v5a's). Per LOWZ_DIAGNOSIS.md finding #3 the
+# repo's Hyper catalogues keep 1,188 low-mass galaxies at z<0.025 that fail the
+# Hier phase-space cut, and those triple the low-z offset. Registering v11a as
+# Hyper would silently change the meaning of every HYPER-indexed comparison in
+# diagnose_lowz.py and LOWZ_DIAGNOSIS.md. "Unsplit" says what it actually is:
+# the Hier selection, fit as one population instead of two.
+UNSPLIT = ["v11a", "v11a_fixedslope"]
+ALL = HIER + HYPER + UNSPLIT
 
 # Fixed categorical colour per catalogue (dataviz reference palette, fixed order).
 COLORS = {"v5b": "#2a78d6", "v5_3": "#eb6834", "v10b": "#1baf7a",
           "v5a": "#eda100", "v7a": "#e87ba4", "v9": "#008300", "v5b_2m": "#e34948",
+          "v11a": "#7a3fbf", "v11a_fixedslope": "#b07fd8",
           "mock": "#4a3aa7", "other": "#e34948"}
-LINESTYLE = {"Hier": "-", "Hyper": "--"}
+# ":" was the only free style; "-" and "--" are taken by Hier and Hyper.
+LINESTYLE = {"Hier": "-", "Hyper": "--", "Unsplit": ":"}
 INK = "#0b0b0b"; INK2 = "#52514e"; MUTED = "#898781"; GRID = "#e1e0d9"; AXIS = "#c3c2b7"
 SURFACE = "#fcfcfb"
+
+
+def available(names: list[str] | None = None) -> list[str]:
+    """Those of *names* (default ALL) whose FITS file is actually in catalogs/.
+
+    v11a and v11a_fixedslope are registered before they have been produced, so
+    anything that defaults to "all catalogues" must go through here or every
+    command fails with FileNotFoundError on a file that does not exist yet.
+    """
+    return [n for n in (ALL if names is None else names)
+            if os.path.exists(os.path.join(CAT_DIR, CATALOGS[n].file))]
 
 
 def _str(col):
