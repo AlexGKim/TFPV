@@ -15,6 +15,15 @@
 #   sbatch --export=MODEL=2color     slurm/compile_gpu.sh
 #   sbatch --export=MODEL=2color_v10 slurm/compile_gpu.sh
 #
+# ONE AT A TIME. Do not submit two of these concurrently: every model is built
+# in the SAME ../../cmdstan tree and shares its artifacts (the model_header
+# precompiled header, libtbb, bin/stanc), so two makes race on the same
+# targets. Submitting both together on 2026-11-18 put them on one node, where
+# they reached MaxRSS 235 GB against a 229 GB request and the 2color job was
+# OOM-killed compiling 2color_g.o (job 61544394) while the v10 job, which is
+# the larger model, had finished alone in 1 m 59 s (job 61544396). Wait for
+# one to finish before submitting the next.
+#
 # MODEL defaults to 2color. slurm/compile_2color_gpu.sh is kept as a one-line
 # wrapper for that default, so BATCH_NERSC.md's documented command still works.
 #
