@@ -101,8 +101,19 @@ export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 TBB_ARG=""
 [ -n "${TBB_CXX_TYPE:-}" ] && TBB_ARG="TBB_CXX_TYPE=${TBB_CXX_TYPE}"
 
+# Build parallelism. 4 is fine for a model that compiles cleanly, but the
+# single translation unit ${MODEL}_g.o is by far the largest thing here and
+# -j lets it run alongside other heavy compiles. 2color_g.o was OOM-killed at
+# -j4 while sharing a node (job 61544394) and then hit
+# "g++: internal compiler error: Segmentation fault ... cc1plus" at -j4 alone
+# (job 61545173). Use MAKE_J=1 when a model will not compile:
+#   sbatch --export=MODEL=2color,MAKE_J=1 slurm/compile_gpu.sh
+# Remember --export without ALL restricts the job environment, so MAKE_J only
+# reaches the job if it is in the --export string.
+MAKE_J=${MAKE_J:-4}
+
 cd ../../cmdstan
-make -j4 STAN_OPENCL=true $TBB_ARG ../TFPV/ariel/${MODEL}_g
+make -j${MAKE_J} STAN_OPENCL=true $TBB_ARG ../TFPV/ariel/${MODEL}_g
 cd ../TFPV/ariel
 
 echo "Compiled: $(ls -lh ${MODEL}_g)"
