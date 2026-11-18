@@ -2,3 +2,33 @@ doc/*.fdb_latexmk
 doc/*.fls
 doc/*.pdf
 *.npy
+
+# Compiled Stan binaries and the C++ cmdstan generates for them. Model sources
+# (*.stan, including the *_g.stan GPU symlinks) stay tracked -- hence the
+# !*.stan negation, which must come after the globs above it. The binaries are
+# per-platform (NERSC is x86-64, this laptop is arm64), so a committed one is
+# always wrong somewhere. `2color` itself is tracked for historical reasons; do
+# not add more.
+2color_v*
+sb_v9*
+color
+tophat
+!*.stan
+*.hpp
+
+# Python and editor noise
+__pycache__/
+.DS_Store
+
+# Large inputs the parent repo's *fits / *csv / *json rules do not cover. The
+# parent .gitignore un-ignores this directory wholesale via !ariel/data, so
+# without these a `git add -A` would commit ~290 MB.
+data/external/
+data/*.pickle
+data/*.bak
+
+# LaTeX build artifacts
+paper/*.bbl
+paper/*.blg
+paper/*.out
+paper/*Notes.bib
