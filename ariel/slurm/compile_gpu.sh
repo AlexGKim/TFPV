@@ -112,8 +112,31 @@ TBB_ARG=""
 # reaches the job if it is in the --export string.
 MAKE_J=${MAKE_J:-4}
 
+# Host compiler. Unset means Perlmutter's default g++, currently 14.3.0.
+#
+# g++ 14.3 has a REPRODUCIBLE internal compiler error on 2color.stan:
+#   g++: internal compiler error: Segmentation fault signal terminated
+#   program cc1plus      -> make/program:77: ../TFPV/ariel/2color_g.o  Error 4
+# seen at -j4 (job 61545173, 37 s) and again at -j1 (job 61545756, 35 s,
+# MaxRSS 93 MB) -- so it is a compiler bug, not a resource problem. Oddly it
+# does NOT affect 2color_v10.stan, the larger model, which builds cleanly.
+#
+# g++ 13.2 is the known-good compiler for this tree: cmdstan already holds
+# model_header_opencl_13_2.hpp.gch, so 13.2 has built OpenCL models here
+# before -- almost certainly what produced the 2026-08-06 2color_g. Use:
+#   sbatch --export=MODEL=2color,STAN_CXX=g++-13 slurm/compile_gpu.sh
+# /usr/bin/g++-13 is 13.2.1 and needs no module load. The precompiled header
+# is named after the compiler version, so this reuses the existing 13_2 PCH.
+#
+# NOTE for paired runs: the two arms of a v10/v5 likelihood-ratio comparison
+# should be built by the SAME compiler, or they differ at roundoff for an
+# uninteresting reason. If 2color is built with g++-13, rebuild 2color_v10
+# with g++-13 too.
+CXX_ARG=""
+[ -n "${STAN_CXX:-}" ] && CXX_ARG="CXX=${STAN_CXX}"
+
 cd ../../cmdstan
-make -j${MAKE_J} STAN_OPENCL=true $TBB_ARG ../TFPV/ariel/${MODEL}_g
+make -j${MAKE_J} STAN_OPENCL=true $TBB_ARG $CXX_ARG ../TFPV/ariel/${MODEL}_g
 cd ../TFPV/ariel
 
 echo "Compiled: $(ls -lh ${MODEL}_g)"
