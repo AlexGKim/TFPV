@@ -49,28 +49,51 @@ if [ ! -e "${MODEL}_g.stan" ]; then
     exit 1
 fi
 
-module load craype-accel-nvidia80 cudatoolkit nvidia PrgEnv-nvidia
+# Modules: craype-accel-nvidia80 + cudatoolkit ONLY. Do NOT add
+# `nvidia PrgEnv-nvidia` -- see the note below.
+module load craype-accel-nvidia80 cudatoolkit
 
 # Workaround for CUDA OpenCL link error on Perlmutter
 export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
 
-# PrgEnv-nvidia sets CXX to nvc++ (currently nvidia/26.5). Stan's TBB build
-# recognizes only gcc and clang and classifies anything else as "other", then
-# refuses to proceed:
+# Why PrgEnv-nvidia is gone (2026-11-18)
+# -------------------------------------
+# compile_2color_gpu.sh loaded `nvidia PrgEnv-nvidia` as well. That now sets
+# CXX to nvc++ (nvidia/26.5) and the build dies twice over:
 #
-#   stan/lib/stan_math/make/libraries:114: *** "Need to set TBB_CXX_TYPE for
-#   non-standard compiler other than gcc or clang."
+#   1. stan/lib/stan_math/make/libraries:114: *** "Need to set TBB_CXX_TYPE
+#      for non-standard compiler other than gcc or clang."
+#   2. with TBB_CXX_TYPE set, it gets as far as the precompiled header and
+#      then: nvc++-Error-Unknown switch: -Wno-ignored-attributes  (and -MG).
+#      Stan's OpenCL build passes gcc flags that nvc++ does not accept.
 #
-# so the build dies in ~14 s before compiling anything. This is NOT a
-# pre-existing condition of the old script -- the Aug 2026 2color_g was built
-# before NERSC's programming-environment update, and the identical module
-# loads now fail. nvc++ takes gcc-style driver flags, so gcc is the right
-# value; clang also parses but would hand TBB the wrong flag dialect.
-# Override via --export=...,TBB_CXX_TYPE=... if the toolchain moves again.
-TBB_CXX_TYPE=${TBB_CXX_TYPE:-gcc}
+# The fix is not to coax nvc++ through: it is that this build never used
+# nvc++. cmdstan's existing precompiled headers are
+# model_header_opencl_13_2.hpp.gch and model_header_opencl_14_3.hpp.gch --
+# g++ 13.2 and 14.3, not nvidia 26.5 -- so the working 2color_g of 2026-08-06
+# was produced by g++. PrgEnv-gnu is Perlmutter's default (Lmod reports it is
+# "replacing PrgEnv-gnu/8.7.0" when the nvidia modules load), g++ is now
+# 14.3.0, and its OpenCL PCH is already built.
+#
+# Stan's OpenCL backend needs only the bundled OpenCL headers
+# (stan/lib/stan_math/lib/opencl_3.0.0) and libOpenCL to link against. The
+# latter comes from cudatoolkit -- $CUDATOOLKIT_HOME/lib64/libOpenCL.so, which
+# the LIBRARY_PATH line above already puts on the search path. The NVIDIA host
+# compiler plays no part.
+#
+# NOTE the asymmetry: the step5d/5e/6 scripts still load `nvidia
+# PrgEnv-nvidia`. Those are RUNTIME loads for an already-built binary, they
+# are what the delivered runs used, and they are left alone deliberately.
+# Only the compile needed changing.
+#
+# TBB_CXX_TYPE is left unset by default: with g++, Stan detects CXX_TYPE=gcc
+# and sets it itself. Pass --export=...,TBB_CXX_TYPE=... only if a future
+# toolchain change needs it.
+TBB_ARG=""
+[ -n "${TBB_CXX_TYPE:-}" ] && TBB_ARG="TBB_CXX_TYPE=${TBB_CXX_TYPE}"
 
 cd ../../cmdstan
-make -j4 STAN_OPENCL=true TBB_CXX_TYPE=${TBB_CXX_TYPE} ../TFPV/ariel/${MODEL}_g
+make -j4 STAN_OPENCL=true $TBB_ARG ../TFPV/ariel/${MODEL}_g
 cd ../TFPV/ariel
 
 echo "Compiled: $(ls -lh ${MODEL}_g)"
