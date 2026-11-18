@@ -2917,7 +2917,7 @@ def write_cov_color_xonly(run_dir, fits_path, cfg=None, model="color"):
 
     # [V9] v9 takes the same large-G HDF5 path as 2color; combine_color_xonly.py
     # reads color_xonly_cov.h5, so the FITS branch produces an unusable product.
-    if model == "2color" or model.startswith("v9"):
+    if model == "2color" or model.startswith("v9") or model.endswith("v10"):
         # For large G, write directly to HDF5 in row blocks to avoid OOM.
         import h5py
         v_dust, v_phot = _systematic_offdiag_terms(
