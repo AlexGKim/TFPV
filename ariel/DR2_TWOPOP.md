@@ -463,3 +463,28 @@ Residual plots land in `output/$RUN/explore_residuals/`.
 | `color_predict.py --model 2color` | Posterior predictive computation |
 | `data/loa_internalDust_nokcorr_mcmc.pickle` | Internal-dust MCMC for DR2; `"dust_pickle"` in `$CONFIG` points here to give `d_err_r = 0.21734862` instead of the iron default `0.17680325` (see Step 3b) |
 | [Predict.md](Predict.md) | Full prediction-step argument reference |
+
+## Variant: v5b_2m — training on 2M++ peculiar-velocity-corrected magnitudes (2026-10-13)
+
+Same recipe, cuts and seeds as v5b; the only change is the input FITS. `make_pv_corrected_input.py`
+moves the six `{R,G,Z}_ABSMAG_SB26[_CORR]` columns to the distance implied by the 2M++ predicted
+radial velocity (pvhub `TwoMPP_SDSS`, Said+2020/Carr+2021): `z_cos = (1+z_cmb)/(1+v/c) − 1`,
+`Δμ = 5 log10 d_L(z_cos)/d_L(z_cmb)` (Planck18), `M → M − Δμ`, `MU_ZCMB → MU_ZCMB + Δμ`; apparent
+magnitudes, errors, LOGVROT and redshifts untouched. Added columns `V_PRED_2MPP`, `Z_COS_2MPP`,
+`DMU_2MPP`, `PV_CORR_OK`.
+
+```
+python make_pv_corrected_input.py --input data/DR2_TF_spirals_v5_spiral.fits --output data/DR2_TF_spirals_v5_2m_spiral.fits
+python make_pv_corrected_input.py --input data/DR2_TF_irrs_v5_irregular.fits  --output data/DR2_TF_irrs_v5_2m_irregular.fits
+nohup bash run_v5b_2m.sh > output/run_v5b_2m.log 2>&1 &        # steps 4-9 for both populations in parallel, then finalize
+python finalize_v5b_2m.py --compare                              # v5b_2m vs v5b, matched on SGA_ID
+```
+
+Configs: `configs/dr2_tf_{spirals,irrs}_v5b_2m_2color_{spiral,irregular}.json`. Output:
+`output/DR2_TF_v5b_2m_2color_combined/DESI-DR2_TF_pv_cat_v5b_2m.fits` (+ copy in `catalogs/`).
+Convention: `LOGDIST` is against the **observed** redshift as in v5b (the catalogue still contains
+the PVs); `LOGDIST_PVCORR = LOGDIST + DMU_2MPP/5`… precisely `LOGDIST = LOGDIST_PVCORR − DMU_2MPP/5`
+is against `z_cos`; `MU_ZCOS`, `*_ABSMAG_*_PVCORR` carry the PV-corrected values the fit used.
+Below z=0.01 (outside training) the linear-theory prediction can approach cz and `DMU_2MPP` is
+unreliable for a handful of galaxies; `PV_CORR_OK` only flags missing predictions, so filter on
+`|DMU_2MPP|` there if needed.
