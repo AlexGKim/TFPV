@@ -49,35 +49,54 @@ echo "Step 5d: MAP optimize for run=$RUN model=$MODEL"
 
 python3 make_map_init.py --run $RUN || true
 
-# Guarantee a usable, well-conditioned init_MAP.json. On degenerate data (e.g.
-# mocks whose per-band noise is perfectly correlated) the near-rank-1 MAP makes
-# the optimizer diverge, driving Sc_scale to 0 (finite but SINGULAR -> step6's
-# Cholesky fails). If init_MAP.json is missing, non-finite, or has a degenerate
-# Sc_scale, replace it with a moderate well-conditioned start (Sc_scale=0.3,
-# chromatic correlation 0.7); NUTS warmup adapts from there, so a converged MAP
-# is not required.
+# Guarantee a usable, well-conditioned init_MAP.json. On degenerate data the
+# MAP optimizer can drive the rank-1 loading w to ~0 -- finite, but a SINGULAR
+# intrinsic covariance S = w w^T, so step6's Cholesky fails. If init_MAP.json
+# is missing, non-finite, or has a collapsed |w|, replace it with a moderate
+# well-conditioned start; NUTS warmup adapts from there, so a converged MAP is
+# not required.
+#
+# This guard used to test Sc_scale and Sc_Lcorr, from the retired rank-2
+# V Sigma_c V^T / free-null parameterization. The current model declares
+# neither, so the lookup raised KeyError, the `except` branch declared EVERY
+# MAP bad, and the script silently overwrote its own MAP with the plain
+# polyfit init from init.json -- while logging "missing/non-finite/degenerate",
+# which was never the real reason. It also injected Sc_scale/Sc_Lcorr keys no
+# current model declares. Rewritten against the parameters the model has.
 python3 - "$RUN" <<'PYEOF'
-import json, math, sys, numpy as np
+import json, math, sys
 run = sys.argv[1]
 mapf = f'output/{run}/init_MAP.json'
+# A collapsed loading is the rank-1 analogue of the old Sc_scale -> 0 test:
+# S = w w^T becomes singular as |w| -> 0.
+W_NORM_MIN = 0.05
 def bad():
     try:
-        d = json.load(open(mapf)); s = d['Sc_scale']; L = d['Sc_Lcorr']
-        vals = list(s) + [x for row in L for x in row]
-        if not all(math.isfinite(v) for v in vals): return True
-        if min(s) < 1e-2: return True          # degenerate / singular scatter
-        return False
-    except Exception:
+        d = json.load(open(mapf))
+    except Exception as e:
+        print(f'step5d: cannot read {mapf} ({type(e).__name__}) -> fallback')
         return True
+    w = d.get('w')
+    if w is None:
+        print('step5d: init_MAP.json has no w -> fallback')
+        return True
+    scalars = [v for v in d.values() if isinstance(v, (int, float))]
+    if not all(math.isfinite(float(v)) for v in list(w) + scalars):
+        print('step5d: init_MAP.json has non-finite values -> fallback')
+        return True
+    wn = math.sqrt(sum(float(x) ** 2 for x in w))
+    if wn < W_NORM_MIN:
+        print(f'step5d: |w| = {wn:.4g} < {W_NORM_MIN} (singular S) -> fallback')
+        return True
+    print(f'step5d: MAP init_MAP.json OK (|w| = {wn:.4g})')
+    return False
 if bad():
-    print('step5d: init_MAP.json missing/non-finite/degenerate -> moderate fallback init')
     d = json.load(open(f'output/{run}/init.json'))
-    R = np.full((2, 2), 0.7); np.fill_diagonal(R, 1.0)
-    d['Sc_scale'] = [0.3, 0.3]
-    d['Sc_Lcorr'] = np.linalg.cholesky(R).tolist()
+    # Asymmetric by design: a symmetric w = [c,c,c] gives a degenerate gradient
+    # for S = w w^T and can stall the optimizer. Same values desi_data.py uses.
+    d['w'] = [0.15, 0.20, 0.25]
     json.dump(d, open(mapf, 'w'), indent=2)
-else:
-    print('step5d: MAP init_MAP.json OK (Sc_scale =', json.load(open(mapf))['Sc_scale'], ')')
+    print('step5d: wrote moderate fallback init (w = [0.15, 0.20, 0.25])')
 PYEOF
 
 touch output/$RUN/.step5d_done
