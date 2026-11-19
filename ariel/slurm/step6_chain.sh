@@ -26,8 +26,7 @@
 
 set -e
 
-module load craype-accel-nvidia80 cudatoolkit nvidia PrgEnv-nvidia
-export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
+source slurm/_gpu_runtime.sh   # modules + the LD_LIBRARY_PATH OpenCL fix
 
 CONFIG=${CONFIG:-configs/batch_test.json}
 CHAIN_ID=${CHAIN_ID:?'CHAIN_ID must be set (1-4)'}

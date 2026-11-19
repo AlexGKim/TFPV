@@ -24,8 +24,7 @@ set -e
 source /global/common/software/desi/perlmutter/desiconda/20260227-2.3.1/conda/etc/profile.d/conda.sh
 conda activate /global/cfs/projectdirs/desi/users/akim/conda/envs/TFPV
 
-module load craype-accel-nvidia80 cudatoolkit nvidia PrgEnv-nvidia
-export LIBRARY_PATH=$LIBRARY_PATH:${CUDATOOLKIT_HOME}/lib64
+source slurm/_gpu_runtime.sh   # modules + the LD_LIBRARY_PATH OpenCL fix
 
 CONFIG=${CONFIG:-configs/batch_test.json}
 RUN=$(python3 -c "import json; print(json.load(open('$CONFIG'))['run'])")
