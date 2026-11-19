@@ -25,11 +25,31 @@ source slurm/_model.sh   # resolves MODEL (env > config "model" > 2color)
 mkdir -p slurm/logs
 
 echo "Step 7: diagnostics for run=$RUN model=$MODEL"
-../../cmdstan/bin/stansummary output/$RUN/${MODEL}_?.csv > output/$RUN/stansummary.txt
+# --sig_figs=6: stansummary defaults to 2 significant figures, which prints
+# R_hat as "1.0"/"1.1" and cannot resolve the 1.02 convergence threshold
+# check_rhat.py tests. Harmless to the one other parser of this file
+# (finalize_v5b_2m.py:_stansummary_scalars), which float()s whitespace-split
+# columns.
+../../cmdstan/bin/stansummary --sig_figs=6 output/$RUN/${MODEL}_?.csv > output/$RUN/stansummary.txt
 ../../cmdstan/bin/diagnose    output/$RUN/${MODEL}_?.csv > output/$RUN/diagnose.txt
 
 echo "--- stansummary ---"
 cat output/$RUN/stansummary.txt
+
+# Convergence gate on the global parameters. CmdStan's `diagnose` above also
+# reports R-hat (at 1.01), but it exits 0 even when it warns, so nothing in
+# this chain ever acted on it. This writes output/$RUN/rhat_check.json with an
+# explicit pass/fail that downstream decisions can read.
+#
+# Non-fatal by default: a failing fit still proceeds to step8, so the
+# catalogue and predictions exist to diagnose WHY it failed. Set RHAT_STRICT=1
+# to make a FAIL exit 1 instead, which under `set -e` holds step8 on its
+# afterok dependency.
+echo "--- R-hat gate (threshold ${RHAT_THRESHOLD:-1.02}) ---"
+python3 check_rhat.py --run $RUN --threshold "${RHAT_THRESHOLD:-1.02}" \
+    ${RHAT_STRICT:+--strict} \
+    || { rc=$?; [ "${RHAT_STRICT:-0}" = "1" ] && exit $rc; \
+         echo "WARNING: check_rhat.py exited $rc; continuing (RHAT_STRICT unset)"; }
 
 # DEBUG=1 produces 15 unadapted draws, which chainconsumer cannot summarize
 # (IndexError in get_parameter_summary_max) -- so in debug mode a corner.py
@@ -46,4 +66,4 @@ else
 fi
 
 touch output/$RUN/.step7_done
-echo "DONE: step7 → stansummary.txt, diagnose.txt, ${MODEL}.png"
+echo "DONE: step7 → stansummary.txt, diagnose.txt, rhat_check.json, ${MODEL}.png"
