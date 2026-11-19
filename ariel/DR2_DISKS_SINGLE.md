@@ -143,6 +143,67 @@ sample's own `select_v2_pull.png`; for reference the combined sample at
 z > 0.01 refit to -21.7 / -18.0, with all five cut parameters moving off the
 spiral values.
 
+### Phase A at z > 0.03 does not produce a usable pull profile (2026-11-19)
+
+Steps 1-2 were run on `data/DR2_TF_disks_v5_all.fits` with `--z_obs_min 0.03`
+(`output/DR2_TF_all_v11a/`). Step 1 is fine: 14,548 valid rows, core component
+at y = -20.05, derived cuts haty -20.84/-19.27, slope_plane -6.593. **Step 2 is
+not.** Its tophat MLE runs away:
+
+| slope bound | slope | sigma_int_x | sigma_int_y |
+|---|---|---|---|
+| `-9` (tophat.stan:696) | **-9.000** at bound | 5e-15 at bound | 0.760 |
+| `-12` (tophat_wideslope.stan) | **-12.000** at bound | 0.061 | **1.000** at bound |
+
+It rails wherever the bound is placed, and at -12 `sigma_int_y` pins at its own
+ceiling as well, so this is a runaway likelihood rather than a clipped fit.
+The pull profile is a monotonic ramp with no flat region (-0.24 -> +0.40 at the
+-9 bound; -0.48 -> +0.53 at -12, i.e. widening the bound makes it worse).
+Step 3 asks a human to read a flat region off that plot, and there isn't one.
+
+Compare the same pipeline on the same galaxies at z > 0.01
+(`DR2_TF_disks_v5_all_2color`): slope -7.470, sigma_int_y 0.442, and a ±0.1
+plateau from -22 to -18. The z cut is what breaks it.
+
+**Why.** The sample is apparent-magnitude limited, and `tophat` truncates at a
+fixed `haty_min`/`haty_max` for every galaxy, so it cannot represent a
+redshift-dependent faint edge:
+
+| z bin | faint edge M_abs (95th pct) | apparent m (95th pct) |
+|---|---|---|
+| 0.010-0.020 | -16.50 | 17.36 |
+| 0.020-0.030 | -17.53 | 17.41 |
+| 0.030-0.040 | -18.21 | 17.42 |
+| 0.040-0.050 | -18.81 | 17.43 |
+| 0.050-0.065 | -19.31 | 17.47 |
+
+Apparent magnitude is flat at ~17.4 across the whole range while the absolute
+faint edge brightens monotonically. Within the z > 0.03 window alone the edge
+sweeps 1.1 mag. Note this is the *diagnostic* step-2 fit; the science models
+(`2color`, `2color_v10`) carry their own selection integral with the trapezoid
+plane cuts, so this does not by itself say the science fit is unidentified.
+
+**Consequence for the plan.** Refitting the cuts at z > 0.03 was a deliberate
+plan decision, with freezing them noted only as a later robustness check. That
+ordering should probably be reversed: `v5_3` is exact precedent for freezing --
+it raised `z_obs_min` 0.01 -> 0.03 while keeping cuts byte-identical to v5
+(haty -22.0/-17.8 and the same three plane values to full precision). The
+frozen values for a combined v11a would be those of
+`configs/dr2_tf_disks_v5_all_2color.json`: haty_min -21.7, haty_max -18.0,
+slope_plane -6.828361758002602, intercept_plane -20.226588970023172,
+intercept_plane2 -18.003480027175254.
+
+`tophat_wideslope.stan` is the diagnostic variant used above: identical to
+`tophat.stan` except the slope lower bound, -9 -> -12. It is not a pipeline
+model, and its compiled binary is gitignored.
+
+> Local builds: run `make` for cmdstan **outside** the `tfpv` conda env. With
+> the env active the link fails -- conda injects `MACOSX_DEPLOYMENT_TARGET=11.0`
+> and its own sysroot against the macOS 26 SDK, giving
+> `libSystem.tbd: unknown architecture` and undefined `___error`/`_strerror`.
+> Outside it, the same build succeeds. Run the Python steps inside the env as
+> usual; only the compile is affected.
+
 Because the cuts are refit, a v11a run differs from
 `DR2_TF_disks_v5_all_2color` in **two** respects (the z cut and the cuts
 themselves), so a difference between them cannot be attributed to the z cut

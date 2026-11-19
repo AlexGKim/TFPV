@@ -13,6 +13,7 @@ doc/*.pdf
 sb_v9*
 color
 tophat
+tophat_*
 !*.stan
 *.hpp
 
