@@ -6,3 +6,4 @@ output*/
 *.aux
 *.log
 !ariel/data
+.DS_Store
