@@ -958,6 +958,25 @@ _V9_COV_COLS = ["S.1.1", "S.1.2", "S.2.2", "gamma_inc"]
 _V10_EXTRA_COLS = ["slope_dz"]
 
 
+def _is_2color_family(model):
+    """True for 2color and its v10 variant.
+
+    2color_v10 IS 2color plus a redshift-dependent TF slope: same rank-1
+    S = w w^T intrinsic covariance, same free-colour parameters, same emitted
+    columns plus `slope_dz`. Every x-only code path below therefore wants the
+    2color branch for it. An exact `model == "2color"` test silently routed
+    v10 into the legacy single-colour branch, which asks for the retired
+    gamma/tau_c/sigma_int_y/sigma_int_z columns and dies with a KeyError --
+    after the 24 h sampling job has already run.
+
+    Note the full-colour predictors are a separate matter: `_reject_v10`
+    blocks those for v10 by design, so the `if full:` branches are left on the
+    exact test.
+    """
+    return model in ("2color", "2color_v10")
+
+
+
 def _alpha_per_galaxy(draws, zobs_star, mean_z):
     """TF slope as (M,1), or (M,G) when the posterior carries slope_dz.
 
@@ -1522,7 +1541,7 @@ def DESI_color(
     # return_mask=True gives the loader's OWN validity mask, which is then the
     # single definition of "valid" for this catalog -- see _sga_ids_for_valid_mask
     # for the 13-row mismatch that reconstructing it separately caused.
-    if model == "2color":
+    if _is_2color_family(model):
         (xhat_star, sigma_x_star, yhat_star, sigma_y_star,  # type: ignore[assignment]
          zhat_star, sigma_z_star, zobs_star,
          ghat_star, sigma_g_star, _valid_mask) = load_xyz_and_uncertainties_from_desi(
@@ -1542,7 +1561,7 @@ def DESI_color(
     # Load posterior draws. keep_cols already covers what the x-only
     # prediction needs (S.1.1/alpha_kcorr_r or the legacy gamma/tau_c
     # fallback) as a subset, so this read happens regardless of `full`.
-    if model == "2color":
+    if _is_2color_family(model):
         draws = read_cmdstan_posterior(
             _p(f"{model}_?.csv"),
             keep=[
@@ -1550,6 +1569,7 @@ def DESI_color(
                 *_S_COV_COLS,
                 "delta_c", "delta_g", "mu_c", "mu_g",
                 "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g",
+                *(_V10_EXTRA_COLS if model.endswith("v10") else []),
             ],
             drop_diagnostics=True,
         )
@@ -1720,6 +1740,7 @@ def DESI_color(
         y_max=y_max,
         zobs_star=zobs_star,
         mean_log1pz=mean_log1pz,
+        mean_z=mean_z,          # [V10] slope pivot; _alpha_per_galaxy needs it
     )
     mean_pred_main_xo, sd_pred_main_xo = _batched_mean_sd(
         ystar_pp_mean_sd_color_xonly_vectorized,
@@ -1731,6 +1752,7 @@ def DESI_color(
         y_max=y_max,
         zobs_star=zobs_main,
         mean_log1pz=mean_log1pz,
+        mean_z=mean_z,          # [V10] slope pivot
     )
     mean_y_xo = mean_pred_xo - yhat_star
     mean_y_main_xo = mean_pred_main_xo - yhat_main
@@ -1967,13 +1989,14 @@ def write_desi_catalog_color(run_dir, fits_path, cfg=None, model="color"):
                       else np.arange(n_rows, dtype=float))
     valid = valid & _subset_mask(_sga_for_subset, input_data)
 
-    if model == "2color":
+    if _is_2color_family(model):
         draws = read_cmdstan_posterior(
             _p(f"{model}_?.csv"),
             keep=["slope", "intercept.1", "sigma_int_x",
                   *_S_COV_COLS,
                   "delta_c", "delta_g", "mu_c", "mu_g",
-                  "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g"],
+                  "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g",
+                  *(_V10_EXTRA_COLS if model.endswith("v10") else [])],
             drop_diagnostics=True,
         )
         ghat_full, sigma_g_full = load_gband_from_desi(fits_path, apply_valid_mask=False)
@@ -3015,7 +3038,7 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     mean_z = float(np.mean(input_data["z_obs"]))          # [V10] slope pivot
 
     # Load MAIN-sample galaxies — for 2color use with_gband=True so all arrays share one mask
-    if model == "2color":
+    if _is_2color_family(model):
         (xhat_full, sigma_x_full, yhat_full, sigma_y_full,  # type: ignore[assignment]
          zhat_full, sigma_z_full, zobs_full,
          ghat_full, sigma_g_full, valid_mask) = load_xyz_and_uncertainties_from_desi(
@@ -3067,7 +3090,7 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
     idx = rng.choice(G, size=n_sub, replace=False)
     idx.sort()
 
-    if model == "2color":
+    if _is_2color_family(model):
         # For large G, write directly to HDF5 in row blocks to avoid OOM.
         import h5py
         draws = read_cmdstan_posterior(
@@ -3075,7 +3098,8 @@ def write_cov_color(run_dir, fits_path, cfg=None, model="color"):
             keep=["slope", "intercept.1", "sigma_int_x",
                   *_S_COV_COLS,
                   "delta_c", "delta_g", "mu_c", "mu_g",
-                  "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g"],
+                  "alpha_kcorr_r", "alpha_kcorr_z", "alpha_kcorr_g",
+                  *(_V10_EXTRA_COLS if model.endswith("v10") else [])],
             drop_diagnostics=True,
         )
         ghat_star = ghat_full[main]
