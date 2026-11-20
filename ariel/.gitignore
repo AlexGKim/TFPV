@@ -10,6 +10,7 @@ doc/*.pdf
 # always wrong somewhere. `2color` itself is tracked for historical reasons; do
 # not add more.
 2color_v*
+2color_nosel
 sb_v9*
 color
 tophat
