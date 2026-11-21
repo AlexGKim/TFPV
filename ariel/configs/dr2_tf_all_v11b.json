@@ -1,0 +1,17 @@
+{
+  "run": "DR2_TF_all_v11b",
+  "fits_file": "data/DR2_TF_disks_v5_all_sizelim.fits",
+  "exe": "2color_v10",
+  "source": "DESI",
+  "model": "2color_v10",
+  "n_sigma": 3.0,
+  "haty_min": -22.0,
+  "haty_max": -19.5,
+  "slope_plane": -6.383989949820185,
+  "intercept_plane": -20.2197146460176,
+  "intercept_plane2": -18.23993087998268,
+  "n_sigma_perp": 3.0,
+  "z_obs_min": 0.03,
+  "z_obs_max": 0.065,
+  "dust_pickle": "data/loa_internalDust_nokcorr_mcmc.pickle"
+}
